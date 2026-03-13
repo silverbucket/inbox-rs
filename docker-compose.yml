@@ -1,13 +1,12 @@
 services:
   armadietto:
-    image: node:20-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.armadietto
     ports:
       - "8000:8000"
     volumes:
       - rs-data:/data
-      - ./armadietto.conf.json:/etc/armadietto/config.json:ro
-    command: >
-      sh -c "npm install -g armadietto && armadietto -c /etc/armadietto/config.json"
 
 volumes:
   rs-data:

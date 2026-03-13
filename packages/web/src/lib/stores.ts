@@ -7,13 +7,18 @@ export const items = writable<Record<string, InboxItem>>({});
 
 async function loadItems() {
   const inbox = (rs as any).inbox;
-  const all = await inbox.getAll();
-  items.set(all);
+  if (!inbox) return;
+  try {
+    const all = await inbox.getAll();
+    items.set(all);
+  } catch {
+    // RS sync/fetch error — keep existing items
+  }
 }
 
 rs.on('connected', () => {
   connected.set(true);
-  loadItems();
+  void loadItems();
 });
 
 rs.on('disconnected', () => {
@@ -25,7 +30,7 @@ rs.on('disconnected', () => {
 const inbox = (rs as any).inbox;
 if (inbox) {
   inbox.onChange(() => {
-    loadItems();
+    void loadItems();
   });
 }
 

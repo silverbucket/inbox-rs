@@ -17,7 +17,7 @@
     {alt}
     onclick={(e) => e.stopPropagation()}
   />
-  <button class="lightbox-close" onclick={onclose}>&times;</button>
+  <button class="lightbox-close" onclick={onclose} aria-label="Close">&times;</button>
 </div>
 
 <style>

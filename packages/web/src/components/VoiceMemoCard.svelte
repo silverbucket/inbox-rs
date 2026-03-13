@@ -9,6 +9,9 @@
 
   $effect(() => {
     loadAudio();
+    return () => {
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
   });
 
   async function loadAudio() {
@@ -16,6 +19,7 @@
       const inbox = (rs as any).inbox;
       const file = await inbox.getFile(item.filePath);
       if (file?.data) {
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
         blobUrl = URL.createObjectURL(new Blob([file.data], { type: item.mimeType }));
       } else {
         error = true;
@@ -46,9 +50,7 @@
     {:else if error}
       <p class="status">Failed to load audio</p>
     {:else if blobUrl}
-      <audio controls src={blobUrl} preload="metadata">
-        <track kind="captions" />
-      </audio>
+      <audio controls src={blobUrl} preload="metadata"></audio>
     {/if}
   </div>
 </div>

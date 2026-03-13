@@ -19,8 +19,13 @@ export function createRS(): RemoteStorage {
  */
 export async function connectViaOAuth(userAddress: string): Promise<RSConfig> {
   // 1. WebFinger discovery
-  const [, host] = userAddress.split('@');
-  const webfingerUrl = `http://${host}/.well-known/webfinger?resource=acct:${encodeURIComponent(userAddress)}`;
+  const parts = userAddress.split('@');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    throw new Error('Invalid remoteStorage address. Expected format: user@host');
+  }
+  const host = parts[1];
+  const scheme = (host === 'localhost' || host.startsWith('localhost:')) ? 'http' : 'https';
+  const webfingerUrl = `${scheme}://${host}/.well-known/webfinger?resource=acct:${encodeURIComponent(userAddress)}`;
   const wfResp = await fetch(webfingerUrl);
   if (!wfResp.ok) throw new Error(`WebFinger failed: ${wfResp.status}`);
   const wfData = await wfResp.json();
