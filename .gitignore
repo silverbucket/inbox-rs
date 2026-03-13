@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+rs-data/
+.context/
+*.local
+.DS_Store

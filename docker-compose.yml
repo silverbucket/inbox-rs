@@ -1,0 +1,12 @@
+services:
+  armadietto:
+    build:
+      context: .
+      dockerfile: Dockerfile.armadietto
+    ports:
+      - "8000:8000"
+    volumes:
+      - rs-data:/data
+
+volumes:
+  rs-data:

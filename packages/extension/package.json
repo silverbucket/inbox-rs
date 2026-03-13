@@ -1,0 +1,23 @@
+{
+  "name": "@inbox-rs/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build",
+    "build:firefox": "BROWSER=firefox vite build"
+  },
+  "dependencies": {
+    "@inbox-rs/rs-module": "*",
+    "remotestoragejs": "^2.0.0-beta.8",
+    "webextension-polyfill": "^0.12.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^4.0.0",
+    "@types/webextension-polyfill": "^0.12.0",
+    "svelte": "^5.0.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.0.0"
+  }
+}
