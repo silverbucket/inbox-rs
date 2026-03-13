@@ -94,7 +94,7 @@ This uses `manifest.firefox.json` instead of `manifest.json`.
 ## Project structure
 
 ```
-miami/
+inbox-rs/
 ├── package.json                    # npm workspaces root
 ├── docker-compose.yml              # Armadietto RS server
 ├── armadietto.conf.json            # Server config
