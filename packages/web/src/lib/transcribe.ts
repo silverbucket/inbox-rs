@@ -6,12 +6,16 @@ async function getTranscriber() {
   if (loadPromise) return loadPromise;
   loadPromise = (async () => {
     try {
+      console.log('[transcribe] Loading @xenova/transformers...');
       const { pipeline } = await import('@xenova/transformers');
+      console.log('[transcribe] Creating whisper pipeline...');
       transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
         quantized: true,
       });
+      console.log('[transcribe] Pipeline ready');
       return transcriber;
     } catch (e) {
+      console.error('[transcribe] Failed to load pipeline:', e);
       loadPromise = null;
       throw e;
     }
