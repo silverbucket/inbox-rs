@@ -5,9 +5,8 @@
   import TodoList from './components/TodoList.svelte';
   import AddEntryBar from './components/AddEntryBar.svelte';
   import AddEntryModal from './components/AddEntryModal.svelte';
-  import { connected, todoItems } from './lib/stores';
+  import { connected } from './lib/stores';
 
-  const hasTodos = $derived($todoItems.length > 0);
 
   let activeModal = $state<InboxItemType | null>(null);
   let editingItem = $state<InboxItem | undefined>(undefined);
@@ -38,23 +37,12 @@
 <main>
   {#if $connected}
     <div class="content-layout">
-      {#if hasTodos}
-        <aside class="sidebar">
-          <TodoList onedit={openEdit} onadd={() => openAdd('todo')} />
-        </aside>
-      {/if}
+      <aside class="sidebar">
+        <TodoList onedit={openEdit} onadd={() => openAdd('todo')} />
+      </aside>
       <div class="inbox-area">
         <div class="inbox-top">
           <AddEntryBar onadd={openAdd} />
-          {#if !hasTodos}
-            <button class="add-todo-btn" onclick={() => openAdd('todo')} title="Add Todo">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="9 11 12 14 22 4"></polyline>
-                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-              </svg>
-              <span>Todo</span>
-            </button>
-          {/if}
         </div>
         <InboxGrid onedit={openEdit} />
       </div>
@@ -118,26 +106,6 @@
     align-items: center;
     gap: 0.5rem;
     margin-bottom: 1rem;
-  }
-
-  .add-todo-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 0.4rem 0.7rem;
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: border-color 0.15s, color 0.15s;
-    white-space: nowrap;
-  }
-
-  .add-todo-btn:hover {
-    border-color: var(--accent);
-    color: var(--accent);
   }
 
   .sidebar {

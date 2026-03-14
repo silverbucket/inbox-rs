@@ -5,8 +5,17 @@
 
   let { onedit, onadd }: { onedit: (item: InboxItem) => void; onadd: () => void } = $props();
   const todos = $derived($todoItems);
+  const openTodos = $derived(todos.filter(t => !t.completed));
+  const completedTodos = $derived(todos.filter(t => t.completed));
+  let expanded = $state(true);
+  let showCompleted = $state(false);
   let deleteTarget = $state<InboxItem | null>(null);
   let deleting = $state(false);
+
+  // Auto-expand when there are open todos, auto-collapse when all are completed or none exist
+  $effect(() => {
+    expanded = openTodos.length > 0;
+  });
 
   async function toggleCompleted(e: Event, todo: InboxItem) {
     e.stopPropagation();
@@ -34,7 +43,15 @@
 
 <div class="todo-list">
   <div class="todo-header">
-    <h2 class="todo-heading">Todos</h2>
+    <button class="btn-toggle" onclick={() => expanded = !expanded} title={expanded ? 'Collapse' : 'Expand'}>
+      <svg class="chevron" class:collapsed={!expanded} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+      <h2 class="todo-heading">Todos</h2>
+      {#if todos.length > 0}
+        <span class="todo-count">{openTodos.length}/{todos.length}</span>
+      {/if}
+    </button>
     <button class="btn-add-todo" onclick={onadd} title="Add Todo">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -42,39 +59,86 @@
       </svg>
     </button>
   </div>
-  {#if todos.length > 0}
-    <ul role="list">
-      {#each todos as todo (todo.id)}
-        <li class="todo-item" class:completed={todo.completed} role="button" tabindex="0"
-          onclick={(e) => {
-            const target = e.target as HTMLElement;
-            if (target.closest('input, button')) return;
-            onedit(todo);
-          }}
-          onkeydown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onedit(todo); }
-          }}>
-          <input
-            type="checkbox"
-            class="checkbox"
-            checked={todo.completed}
-            onclick={(e) => e.stopPropagation()}
-            onchange={(e) => toggleCompleted(e, todo)}
-            aria-label="Mark {todo.title} as {todo.completed ? 'incomplete' : 'complete'}"
-          />
-          <span class="todo-title">{todo.title}</span>
-          {#if typeBadge(todo)}
-            <span class="type-badge">{typeBadge(todo)}</span>
-          {/if}
-          <button class="btn-delete" onclick={(e) => { e.stopPropagation(); deleteTarget = todo; }} title="Delete">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </li>
-      {/each}
-    </ul>
+  {#if expanded}
+    {#if openTodos.length > 0}
+      <ul role="list">
+        {#each openTodos as todo (todo.id)}
+          <li class="todo-item" role="button" tabindex="0"
+            onclick={(e) => {
+              const target = e.target as HTMLElement;
+              if (target.closest('input, button')) return;
+              onedit(todo);
+            }}
+            onkeydown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onedit(todo); }
+            }}>
+            <input
+              type="checkbox"
+              class="checkbox"
+              checked={false}
+              onclick={(e) => e.stopPropagation()}
+              onchange={(e) => toggleCompleted(e, todo)}
+              aria-label="Mark {todo.title} as complete"
+            />
+            <span class="todo-title">{todo.title}</span>
+            {#if typeBadge(todo)}
+              <span class="type-badge">{typeBadge(todo)}</span>
+            {/if}
+            <button class="btn-delete" onclick={(e) => { e.stopPropagation(); deleteTarget = todo; }} title="Delete">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {:else if todos.length === 0}
+      <p class="empty">No todos yet.</p>
+    {/if}
+
+    {#if completedTodos.length > 0}
+      <button class="btn-show-completed" onclick={() => showCompleted = !showCompleted}>
+        <svg class="chevron-sm" class:collapsed={!showCompleted} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+        {completedTodos.length} completed
+      </button>
+      {#if showCompleted}
+        <ul role="list" class="completed-list">
+          {#each completedTodos as todo (todo.id)}
+            <li class="todo-item completed" role="button" tabindex="0"
+              onclick={(e) => {
+                const target = e.target as HTMLElement;
+                if (target.closest('input, button')) return;
+                onedit(todo);
+              }}
+              onkeydown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onedit(todo); }
+              }}>
+              <input
+                type="checkbox"
+                class="checkbox"
+                checked={true}
+                onclick={(e) => e.stopPropagation()}
+                onchange={(e) => toggleCompleted(e, todo)}
+                aria-label="Mark {todo.title} as incomplete"
+              />
+              <span class="todo-title">{todo.title}</span>
+              {#if typeBadge(todo)}
+                <span class="type-badge">{typeBadge(todo)}</span>
+              {/if}
+              <button class="btn-delete" onclick={(e) => { e.stopPropagation(); deleteTarget = todo; }} title="Delete">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    {/if}
   {/if}
 </div>
 
@@ -99,7 +163,27 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 0.75rem;
+  }
+
+  .btn-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: inherit;
+  }
+
+  .chevron {
+    color: var(--text-muted);
+    transition: transform 0.15s;
+    flex-shrink: 0;
+  }
+
+  .chevron.collapsed {
+    transform: rotate(-90deg);
   }
 
   .todo-heading {
@@ -108,6 +192,12 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--text-muted);
+  }
+
+  .todo-count {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    opacity: 0.7;
   }
 
   .btn-add-todo {
@@ -126,13 +216,23 @@
     color: var(--accent);
   }
 
+  .empty {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: 0.75rem 0 0;
+  }
+
   ul {
     list-style: none;
     padding: 0;
-    margin: 0;
+    margin: 0.75rem 0 0;
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
+  }
+
+  .completed-list {
+    margin-top: 0.25rem;
   }
 
   .todo-item {
@@ -201,5 +301,34 @@
 
   .btn-delete:hover {
     color: var(--danger);
+  }
+
+  .btn-show-completed {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    padding: 0.4rem 0.5rem;
+    margin-top: 0.5rem;
+    cursor: pointer;
+    transition: color 0.15s;
+    border-radius: var(--radius-sm);
+  }
+
+  .btn-show-completed:hover {
+    color: var(--text);
+  }
+
+  .chevron-sm {
+    color: var(--text-muted);
+    transition: transform 0.15s;
+    flex-shrink: 0;
+  }
+
+  .chevron-sm.collapsed {
+    transform: rotate(-90deg);
   }
 </style>
