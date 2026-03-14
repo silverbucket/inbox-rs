@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@inbox-rs/rs-module": "*",
+    "remotestorage-module-shares": "^2.1.4",
     "remotestoragejs": "^2.0.0-beta.8"
   },
   "devDependencies": {

@@ -3,7 +3,7 @@
   import { getFileUrl } from '../lib/rs';
   import Lightbox from './Lightbox.svelte';
 
-  let { item }: { item: ImageItem } = $props();
+  let { item, ondelete }: { item: ImageItem; ondelete?: () => void } = $props();
   let showLightbox = $state(false);
 
   const imageSrc = $derived(getFileUrl(item.filePath));
@@ -27,7 +27,7 @@
     {/if}
   </div>
   {#if showLightbox && imageSrc}
-    <Lightbox src={imageSrc} alt={item.title || 'Image'} onclose={() => showLightbox = false} />
+    <Lightbox src={imageSrc} alt={item.title || 'Image'} onclose={() => showLightbox = false} filePath={item.filePath} mimeType={item.mimeType} filename={item.title || undefined} {ondelete} />
   {/if}
   {#if item.sourceUrl}
     <a class="source-link" href={item.sourceUrl} target="_blank" rel="noopener noreferrer">
