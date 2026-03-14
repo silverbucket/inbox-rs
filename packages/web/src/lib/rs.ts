@@ -1,12 +1,14 @@
 import RemoteStorage from 'remotestoragejs';
 import InboxModule from '@inbox-rs/rs-module';
+import SharesModule from 'remotestorage-module-shares';
 
 const rs = new RemoteStorage({
-  modules: [InboxModule],
+  modules: [InboxModule, SharesModule],
   changeEvents: { local: true, window: false, remote: true, conflict: true }
 });
 
 rs.access.claim('inbox', 'rw');
+rs.access.claim('shares', 'rw');
 rs.caching.enable('/inbox/');
 
 /**

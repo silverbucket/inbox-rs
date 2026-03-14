@@ -32,11 +32,11 @@
 <article class="card" onclick={() => onedit(item)}>
   <div class="card-body">
     {#if item.type === 'bookmark'}
-      <BookmarkCard {item} />
+      <BookmarkCard {item} ondelete={handleDelete} />
     {:else if item.type === 'note'}
       <NoteCard {item} />
     {:else if item.type === 'image'}
-      <ImageCard {item} />
+      <ImageCard {item} ondelete={handleDelete} />
     {:else if item.type === 'voice-memo'}
       <VoiceMemoCard {item} />
     {:else if item.type === 'document'}
