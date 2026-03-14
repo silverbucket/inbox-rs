@@ -6,17 +6,11 @@ async function getTranscriber() {
   if (loadPromise) return loadPromise;
   loadPromise = (async () => {
     try {
-      console.log('[transcribe] Loading @xenova/transformers...');
       const { pipeline, env } = await import('@xenova/transformers');
       env.allowLocalModels = false;
-      env.useBrowserCache = false;
-      env.backends.onnx.wasm.numThreads = 1;
-      console.log('[transcribe] env configured, remoteHost:', env.remoteHost);
-      console.log('[transcribe] Creating whisper pipeline...');
       transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
         quantized: true,
       });
-      console.log('[transcribe] Pipeline ready');
       return transcriber;
     } catch (e) {
       console.error('[transcribe] Failed to load pipeline:', e);
