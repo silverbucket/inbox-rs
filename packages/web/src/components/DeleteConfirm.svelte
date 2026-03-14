@@ -6,7 +6,9 @@
   } = $props();
 </script>
 
-<div class="overlay" role="dialog" aria-modal="true">
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="overlay" role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()}>
   <div class="dialog">
     <p>Delete this item?</p>
     <div class="actions">

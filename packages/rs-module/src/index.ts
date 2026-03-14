@@ -1,7 +1,7 @@
-import { bookmarkSchema, noteSchema, imageMetaSchema, voiceMemoMetaSchema } from './schemas.js';
+import { bookmarkSchema, noteSchema, imageMetaSchema, voiceMemoMetaSchema, documentMetaSchema, codeSnippetSchema, todoSchema } from './schemas.js';
 import type { InboxItem } from './types.js';
 
-export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, VoiceMemoItem } from './types.js';
+export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, VoiceMemoItem, DocumentItem, CodeSnippetItem, TodoItem } from './types.js';
 
 export interface InboxModuleExports {
   getAll(): Promise<Record<string, InboxItem>>;
@@ -19,6 +19,9 @@ const InboxModule = {
     privateClient.declareType('note', noteSchema);
     privateClient.declareType('image-meta', imageMetaSchema);
     privateClient.declareType('voice-memo-meta', voiceMemoMetaSchema);
+    privateClient.declareType('document-meta', documentMetaSchema);
+    privateClient.declareType('code-snippet', codeSnippetSchema);
+    privateClient.declareType('todo', todoSchema);
 
     return {
       exports: {
@@ -37,6 +40,7 @@ const InboxModule = {
           }
           const typeAlias = item.type === 'voice-memo' ? 'voice-memo-meta'
             : item.type === 'image' ? 'image-meta'
+            : item.type === 'document' ? 'document-meta'
             : item.type;
           await privateClient.storeObject(typeAlias, `items/${item.id}`, item);
         },

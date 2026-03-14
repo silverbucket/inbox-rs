@@ -1,7 +1,9 @@
 <script lang="ts">
+  import type { InboxItem } from '@inbox-rs/rs-module';
   import { sortedItems } from '../lib/stores';
   import InboxCard from './InboxCard.svelte';
 
+  let { onedit }: { onedit: (item: InboxItem) => void } = $props();
   const items = $derived($sortedItems);
 </script>
 
@@ -13,7 +15,7 @@
 {:else}
   <div class="grid">
     {#each items as item (item.id)}
-      <InboxCard {item} />
+      <InboxCard {item} {onedit} />
     {/each}
   </div>
 {/if}

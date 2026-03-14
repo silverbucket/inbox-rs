@@ -36,8 +36,26 @@ if (inbox) {
 
 export const sortedItems = derived(items, ($items) => {
   return Object.values($items)
+    .filter(i => !i.isTodo && i.type !== 'todo')
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 });
+
+export const todoItems = derived(items, ($items) => {
+  return Object.values($items)
+    .filter(i => i.isTodo || i.type === 'todo')
+    .sort((a, b) => {
+      const aDone = !!a.completed;
+      const bDone = !!b.completed;
+      if (aDone !== bDone) return aDone ? 1 : -1;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+});
+
+export async function storeItem(item: InboxItem, fileData?: ArrayBuffer) {
+  const inbox = (rs as any).inbox;
+  await inbox.store(item, fileData);
+  items.update(current => ({ ...current, [item.id]: item }));
+}
 
 export async function deleteItem(id: string, item?: InboxItem) {
   const inbox = (rs as any).inbox;

@@ -1,7 +1,29 @@
 <script lang="ts">
+  import type { InboxItemType, InboxItem } from '@inbox-rs/rs-module';
   import ConnectWidget from './components/ConnectWidget.svelte';
   import InboxGrid from './components/InboxGrid.svelte';
+  import TodoList from './components/TodoList.svelte';
+  import AddEntryBar from './components/AddEntryBar.svelte';
+  import AddEntryModal from './components/AddEntryModal.svelte';
   import { connected } from './lib/stores';
+
+  let activeModal = $state<InboxItemType | null>(null);
+  let editingItem = $state<InboxItem | undefined>(undefined);
+
+  function openAdd(type: InboxItemType) {
+    editingItem = undefined;
+    activeModal = type;
+  }
+
+  function openEdit(item: InboxItem) {
+    editingItem = item;
+    activeModal = item.type;
+  }
+
+  function closeModal() {
+    activeModal = null;
+    editingItem = undefined;
+  }
 </script>
 
 <header>
@@ -13,7 +35,15 @@
 
 <main>
   {#if $connected}
-    <InboxGrid />
+    <AddEntryBar onadd={openAdd} />
+    <div class="content-layout">
+      <aside class="sidebar">
+        <TodoList onedit={openEdit} />
+      </aside>
+      <div class="inbox-area">
+        <InboxGrid onedit={openEdit} />
+      </div>
+    </div>
   {:else}
     <div class="empty-state">
       <div class="empty-icon">📥</div>
@@ -22,6 +52,10 @@
     </div>
   {/if}
 </main>
+
+{#if activeModal}
+  <AddEntryModal type={activeModal} editItem={editingItem} onclose={closeModal} />
+{/if}
 
 <style>
   header {
@@ -56,6 +90,35 @@
     max-width: 1200px;
     margin: 0 auto;
     padding: 1.5rem;
+  }
+
+  .content-layout {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+    margin-top: 1rem;
+  }
+
+  .sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 5rem;
+  }
+
+  .inbox-area {
+    flex: 1;
+    min-width: 0;
+  }
+
+  @media (max-width: 768px) {
+    .content-layout {
+      flex-direction: column;
+    }
+    .sidebar {
+      width: 100%;
+      position: static;
+    }
   }
 
   .empty-state {
