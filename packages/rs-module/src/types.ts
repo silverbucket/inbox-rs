@@ -1,4 +1,4 @@
-export type InboxItemType = 'bookmark' | 'note' | 'image' | 'voice-memo';
+export type InboxItemType = 'bookmark' | 'note' | 'image' | 'voice-memo' | 'document' | 'code-snippet' | 'todo';
 
 export interface InboxItemBase {
   id: string;
@@ -6,6 +6,9 @@ export interface InboxItemBase {
   title: string;
   description?: string;
   createdAt: string; // ISO 8601
+  isTodo?: boolean;
+  completed?: boolean;
+  completedAt?: string;
 }
 
 export interface BookmarkItem extends InboxItemBase {
@@ -36,6 +39,28 @@ export interface VoiceMemoItem extends InboxItemBase {
   filePath: string;
   mimeType: string;
   duration?: number; // seconds
+  body?: string; // transcription text
 }
 
-export type InboxItem = BookmarkItem | NoteItem | ImageItem | VoiceMemoItem;
+export interface DocumentItem extends InboxItemBase {
+  type: 'document';
+  filePath: string;
+  mimeType: string;
+  fileSize?: number;
+  fileName?: string;
+}
+
+export interface CodeSnippetItem extends InboxItemBase {
+  type: 'code-snippet';
+  body: string;
+  language?: string;
+}
+
+export interface TodoItem extends InboxItemBase {
+  type: 'todo';
+  body?: string;
+  completed: boolean;
+  completedAt?: string;
+}
+
+export type InboxItem = BookmarkItem | NoteItem | ImageItem | VoiceMemoItem | DocumentItem | CodeSnippetItem | TodoItem;
