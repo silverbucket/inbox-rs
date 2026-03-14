@@ -6,10 +6,9 @@ async function getTranscriber() {
   if (loadPromise) return loadPromise;
   loadPromise = (async () => {
     try {
-      const { pipeline } = await import('@huggingface/transformers');
-      transcriber = await pipeline('automatic-speech-recognition', 'onnx-community/whisper-tiny', {
-        dtype: 'q8',
-        device: 'wasm',
+      const { pipeline } = await import('@xenova/transformers');
+      transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
+        quantized: true,
       });
       return transcriber;
     } catch (e) {
