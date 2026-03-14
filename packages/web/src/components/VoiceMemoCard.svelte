@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { VoiceMemoItem } from '@inbox-rs/rs-module';
   import rs from '../lib/rs';
+  import ShareButton from './ShareButton.svelte';
 
   let { item }: { item: VoiceMemoItem } = $props();
   let blobUrl = $state<string | null>(null);
@@ -53,6 +54,7 @@
       <audio controls src={blobUrl} preload="metadata"></audio>
     {/if}
   </div>
+  <ShareButton filePath={item.filePath} mimeType={item.mimeType} filename={item.title || undefined} />
 </div>
 
 <style>

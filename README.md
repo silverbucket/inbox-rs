@@ -4,7 +4,7 @@ A universal inbox for saving URLs, notes, images, and voice memos — backed by 
 
 ## What it does
 
-**Web App** — A Svelte app that displays all your saved items in a masonry grid. Connect to any remoteStorage-compatible server to view, browse, and delete your inbox items.
+**Web App** — A Svelte app that displays all your saved items in a masonry grid. Connect to any remoteStorage-compatible server to view, browse, and delete your inbox items. Includes [Sharesome](https://sharesome.5apps.com) integration — save any image or file from your inbox to Sharesome with one click and get a public sharing link.
 
 **Browser Extension** — A Chrome/Firefox extension for quickly saving things while browsing:
 
@@ -56,7 +56,7 @@ npm run build -w packages/extension  # Build extension, load dist/ in browser
 
 - **Svelte 5** with runes (`$state`, `$derived`, `$effect`, `$props`)
 - **Vite 5** for both web app and extension builds
-- **remotestorage.js** for data sync
+- **remotestorage.js** for data sync + **remotestorage-module-shares** for Sharesome integration
 - **TypeScript** throughout
 - **Chrome Manifest V3** / Firefox WebExtension APIs
 - **Armadietto** as the local dev remoteStorage server
