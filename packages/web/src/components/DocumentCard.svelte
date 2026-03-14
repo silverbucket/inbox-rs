@@ -53,7 +53,7 @@
   {#if item.fileSize}
     <span class="size">{formatSize(item.fileSize)}</span>
   {/if}
-  <button class="download-btn" onclick={download} disabled={loading}>
+  <button class="download-btn" onclick={(e) => { e.stopPropagation(); download(); }} disabled={loading}>
     {loading ? 'Loading...' : 'Download'}
   </button>
 </div>

@@ -26,10 +26,15 @@
   }
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<article class="card" onclick={() => onedit(item)}>
+<article class="card" role="button" tabindex="0"
+  onclick={(e) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('a, button, input, audio, video')) return;
+    onedit(item);
+  }}
+  onkeydown={(e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onedit(item); }
+  }}>
   <div class="card-body">
     {#if item.type === 'bookmark'}
       <BookmarkCard {item} ondelete={handleDelete} />

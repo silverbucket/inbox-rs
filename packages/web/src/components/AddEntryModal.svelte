@@ -29,20 +29,24 @@
   let recordedUrl = $state<string | null>(null);
   let transcript = $state('');
   let transcribing = $state(false);
+  let transcriptionId = 0;
   let mediaRecorder: MediaRecorder | null = null;
   let recordingInterval: ReturnType<typeof setInterval> | null = null;
 
   async function runTranscription(blob: Blob) {
+    const myId = ++transcriptionId;
     transcribing = true;
     try {
-      transcript = await transcribeAudio(blob);
-      if (transcript && !body) {
-        body = transcript;
-      }
+      const result = await transcribeAudio(blob);
+      if (myId !== transcriptionId) return; // discarded
+      transcript = result;
+      if (transcript && !body) body = transcript;
+      if (transcript && !title) title = transcript.slice(0, 50);
     } catch (e) {
+      if (myId !== transcriptionId) return;
       console.warn('Transcription failed:', e);
     } finally {
-      transcribing = false;
+      if (myId === transcriptionId) transcribing = false;
     }
   }
 
@@ -85,6 +89,7 @@
   }
 
   function discardRecording() {
+    transcriptionId++; // cancel in-flight transcription
     if (recordedUrl) URL.revokeObjectURL(recordedUrl);
     recordedBlob = null;
     recordedUrl = null;
@@ -237,7 +242,7 @@
     saving = true;
     error = '';
     try {
-      const updated = { ...editItem!, isTodo: true, completed: false };
+      const updated = { ...editItem!, isTodo: true, completed: false, completedAt: undefined };
       const clean = JSON.parse(JSON.stringify(updated));
       await storeItem(clean);
       onclose();

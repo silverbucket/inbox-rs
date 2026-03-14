@@ -37,20 +37,25 @@
   {#if todos.length === 0}
     <p class="empty">No todos yet.</p>
   {:else}
-    <ul>
+    <ul role="list">
       {#each todos as todo (todo.id)}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-        <li class="todo-item" class:completed={todo.completed} onclick={() => onedit(todo)}>
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <span class="checkbox" onclick={(e) => toggleCompleted(e, todo)}>
-            {#if todo.completed}
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-            {/if}
-          </span>
+        <li class="todo-item" class:completed={todo.completed} role="button" tabindex="0"
+          onclick={(e) => {
+            const target = e.target as HTMLElement;
+            if (target.closest('input, button')) return;
+            onedit(todo);
+          }}
+          onkeydown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onedit(todo); }
+          }}>
+          <input
+            type="checkbox"
+            class="checkbox"
+            checked={todo.completed}
+            onclick={(e) => e.stopPropagation()}
+            onchange={(e) => toggleCompleted(e, todo)}
+            aria-label="Mark {todo.title} as {todo.completed ? 'incomplete' : 'complete'}"
+          />
           <span class="todo-title">{todo.title}</span>
           {#if typeBadge(todo)}
             <span class="type-badge">{typeBadge(todo)}</span>
@@ -122,21 +127,11 @@
   }
 
   .checkbox {
-    width: 18px;
-    height: 18px;
-    border: 2px solid var(--border);
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 16px;
+    height: 16px;
     flex-shrink: 0;
-    transition: border-color 0.15s, background 0.15s;
-    color: var(--accent);
-  }
-
-  .completed .checkbox {
-    border-color: var(--accent);
-    background: rgba(99, 102, 241, 0.15);
+    accent-color: var(--accent);
+    cursor: pointer;
   }
 
   .todo-title {
