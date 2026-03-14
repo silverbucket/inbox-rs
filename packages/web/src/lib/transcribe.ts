@@ -7,7 +7,8 @@ async function getTranscriber() {
   loadPromise = (async () => {
     try {
       console.log('[transcribe] Loading @xenova/transformers...');
-      const { pipeline } = await import('@xenova/transformers');
+      const { pipeline, env } = await import('@xenova/transformers');
+      env.allowLocalModels = false;
       console.log('[transcribe] Creating whisper pipeline...');
       transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
         quantized: true,
