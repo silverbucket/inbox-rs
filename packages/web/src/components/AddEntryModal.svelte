@@ -164,8 +164,9 @@
         item = { id, type: 'note', title: title || body.slice(0, 50), body, description: description || undefined, createdAt };
       } else if (type === 'image') {
         if (file) {
+          const existingPath = isEdit && editItem!.type === 'image' ? editItem!.filePath : undefined;
           const ext = getExtension(file.name);
-          const filePath = `files/${id}${ext}`;
+          const filePath = existingPath || `files/${id}${ext}`;
           fileData = await file.arrayBuffer();
           item = { id, type: 'image', title: title || file.name, filePath, mimeType: file.type, description: description || undefined, createdAt };
         } else if (isEdit && editItem!.type === 'image') {
@@ -175,18 +176,19 @@
         }
       } else if (type === 'voice-memo') {
         if (recordedBlob || file) {
+          const existingPath = isEdit && editItem!.type === 'voice-memo' ? editItem!.filePath : undefined;
           let filePath: string;
           let mimeType: string;
           let duration: number | undefined;
           if (recordedBlob) {
             const ext = recordedBlob.type.includes('webm') ? '.webm' : recordedBlob.type.includes('mp4') ? '.mp4' : '.ogg';
-            filePath = `files/${id}${ext}`;
+            filePath = existingPath || `files/${id}${ext}`;
             mimeType = recordedBlob.type || 'audio/webm';
             fileData = await recordedBlob.arrayBuffer();
             duration = recordingDuration || undefined;
           } else if (file) {
             const ext = getExtension(file.name);
-            filePath = `files/${id}${ext}`;
+            filePath = existingPath || `files/${id}${ext}`;
             mimeType = file.type;
             fileData = await file.arrayBuffer();
           } else {
@@ -202,8 +204,9 @@
         }
       } else if (type === 'document') {
         if (file) {
+          const existingPath = isEdit && editItem!.type === 'document' ? editItem!.filePath : undefined;
           const ext = getExtension(file.name);
-          const filePath = `files/${id}${ext}`;
+          const filePath = existingPath || `files/${id}${ext}`;
           fileData = await file.arrayBuffer();
           item = { id, type: 'document', title: title || file.name, filePath, mimeType: file.type, fileSize: file.size, fileName: file.name, description: description || undefined, createdAt };
         } else if (isEdit && editItem!.type === 'document') {
