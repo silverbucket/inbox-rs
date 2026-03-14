@@ -1,5 +1,6 @@
 <script lang="ts">
-  import rs, { getFileUrl } from '../lib/rs';
+  import rs from '../lib/rs';
+  import { getSharedUrl, saveSharedUrl } from '../lib/shared-state';
 
   let { filePath, mimeType, filename }: {
     filePath: string;
@@ -7,9 +8,17 @@
     filename?: string;
   } = $props();
 
+  const existingUrl = $derived(getSharedUrl(filePath));
   let state = $state<'idle' | 'sharing' | 'done' | 'error'>('idle');
   let publicUrl = $state('');
   let copied = $state(false);
+
+  $effect(() => {
+    if (existingUrl && state === 'idle') {
+      publicUrl = existingUrl;
+      state = 'done';
+    }
+  });
 
   async function share() {
     if (state === 'sharing') return;
@@ -19,20 +28,19 @@
       const shares = (rs as any).shares;
       if (!shares) throw new Error('Shares module not available');
 
-      // Fetch the file binary from the RS server
-      const url = getFileUrl(filePath);
-      if (!url) throw new Error('Not connected');
+      // Read file via RS inbox module (no token-in-URL)
+      const inbox = (rs as any).inbox;
+      if (!inbox) throw new Error('Not connected');
+      const file = await inbox.getFile(filePath);
+      if (!file?.data) throw new Error('File not found');
 
-      const resp = await fetch(url);
-      if (!resp.ok) throw new Error(`Failed to fetch file: ${resp.status}`);
-      const data = await resp.arrayBuffer();
-
-      const resolvedMime = mimeType || resp.headers.get('content-type') || 'application/octet-stream';
+      const resolvedMime = mimeType || file.mimeType || 'application/octet-stream';
       const name = filename || filePath.split('/').pop() || 'file';
 
-      const shareUrl = await shares.storeFile(resolvedMime, name, data);
+      const shareUrl = await shares.storeFile(resolvedMime, name, file.data);
       publicUrl = shareUrl;
       state = 'done';
+      saveSharedUrl(filePath, shareUrl);
     } catch {
       state = 'error';
       setTimeout(() => { state = 'idle'; }, 2000);

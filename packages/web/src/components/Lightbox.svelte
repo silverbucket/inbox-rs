@@ -1,5 +1,6 @@
 <script lang="ts">
   import rs from '../lib/rs';
+  import { getSharedUrl, saveSharedUrl } from '../lib/shared-state';
 
   let { src, alt = '', onclose, filePath, mimeType, filename, ondelete }: {
     src: string;
@@ -11,28 +12,13 @@
     ondelete?: () => void;
   } = $props();
 
-  const STORAGE_KEY = 'inbox-rs-shared';
-
-  function getSharedMap(): Record<string, string> {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
-    catch { return {}; }
-  }
-
-  function storageKey(): string {
-    // Use filePath if available (stable across reconnects), otherwise strip query params from src
+  function stableKey(): string {
     if (filePath) return filePath;
     try { const u = new URL(src); return u.origin + u.pathname; }
     catch { return src; }
   }
 
-  function saveSharedUrl(key: string, url: string) {
-    const map = getSharedMap();
-    map[key] = url;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
-  }
-
-  // Check if already saved — use stable key (no tokens)
-  const existingUrl = $derived(getSharedMap()[storageKey()]);
+  const existingUrl = $derived(getSharedUrl(stableKey()));
   let shareState = $state<'idle' | 'sharing' | 'done' | 'error'>('idle');
   let publicUrl = $state('');
 
@@ -49,6 +35,26 @@
     if (e.key === 'Escape') onclose();
   }
 
+  async function fetchFileData(): Promise<{ data: ArrayBuffer; mime: string }> {
+    // Prefer RS module for inbox files (avoids token-in-URL fetch)
+    if (filePath) {
+      const inbox = (rs as any).inbox;
+      if (inbox) {
+        const file = await inbox.getFile(filePath);
+        if (file?.data) {
+          return { data: file.data, mime: mimeType || file.mimeType || 'application/octet-stream' };
+        }
+      }
+    }
+    // Fallback: direct fetch (for RS URLs or same-origin external URLs)
+    const resp = await fetch(src);
+    if (!resp.ok) throw new Error(`Failed to fetch: ${resp.status}`);
+    return {
+      data: await resp.arrayBuffer(),
+      mime: mimeType || resp.headers.get('content-type') || 'application/octet-stream'
+    };
+  }
+
   async function share() {
     if (shareState === 'sharing') return;
     shareState = 'sharing';
@@ -57,18 +63,13 @@
       const shares = (rs as any).shares;
       if (!shares) throw new Error('Shares module not available');
 
-      // Fetch image data — works for both RS file URLs and external URLs
-      const resp = await fetch(src);
-      if (!resp.ok) throw new Error(`Failed to fetch: ${resp.status}`);
-      const data = await resp.arrayBuffer();
-
-      const resolvedMime = mimeType || resp.headers.get('content-type') || 'application/octet-stream';
+      const { data, mime } = await fetchFileData();
       const name = filename || filePath?.split('/').pop() || 'image.jpg';
 
-      const shareUrl = await shares.storeFile(resolvedMime, name, data);
+      const shareUrl = await shares.storeFile(mime, name, data);
       publicUrl = shareUrl;
       shareState = 'done';
-      saveSharedUrl(storageKey(), shareUrl);
+      saveSharedUrl(stableKey(), shareUrl);
     } catch {
       shareState = 'error';
       setTimeout(() => { shareState = 'idle'; }, 2000);
@@ -79,6 +80,17 @@
     await navigator.clipboard.writeText(publicUrl);
     copied = true;
     setTimeout(() => { copied = false; }, 1500);
+  }
+
+  async function handleDelete() {
+    deleting = true;
+    try {
+      await ondelete?.();
+    } catch {
+      // deletion failed
+    } finally {
+      deleting = false;
+    }
   }
 </script>
 
@@ -105,7 +117,7 @@
         {copied ? 'Copied!' : 'Copy link'}
       </button>
       {#if ondelete}
-        <button class="toolbar-btn toolbar-btn-danger" onclick={async () => { deleting = true; try { await ondelete?.(); } catch { deleting = false; } }} disabled={deleting}>
+        <button class="toolbar-btn toolbar-btn-danger" onclick={handleDelete} disabled={deleting}>
           {#if deleting}
             Deleting...
           {:else}
