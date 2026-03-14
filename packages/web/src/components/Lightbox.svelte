@@ -18,14 +18,21 @@
     catch { return {}; }
   }
 
+  function storageKey(): string {
+    // Use filePath if available (stable across reconnects), otherwise strip query params from src
+    if (filePath) return filePath;
+    try { const u = new URL(src); return u.origin + u.pathname; }
+    catch { return src; }
+  }
+
   function saveSharedUrl(key: string, url: string) {
     const map = getSharedMap();
     map[key] = url;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
   }
 
-  // Check if already saved — use src as key (stable across sessions)
-  const existingUrl = $derived(getSharedMap()[src]);
+  // Check if already saved — use stable key (no tokens)
+  const existingUrl = $derived(getSharedMap()[storageKey()]);
   let shareState = $state<'idle' | 'sharing' | 'done' | 'error'>('idle');
   let publicUrl = $state('');
 
@@ -61,7 +68,7 @@
       const shareUrl = await shares.storeFile(resolvedMime, name, data);
       publicUrl = shareUrl;
       shareState = 'done';
-      saveSharedUrl(src, shareUrl);
+      saveSharedUrl(storageKey(), shareUrl);
     } catch {
       shareState = 'error';
       setTimeout(() => { shareState = 'idle'; }, 2000);
@@ -98,7 +105,7 @@
         {copied ? 'Copied!' : 'Copy link'}
       </button>
       {#if ondelete}
-        <button class="toolbar-btn toolbar-btn-danger" onclick={() => { deleting = true; ondelete?.(); }} disabled={deleting}>
+        <button class="toolbar-btn toolbar-btn-danger" onclick={async () => { deleting = true; try { await ondelete?.(); } catch { deleting = false; } }} disabled={deleting}>
           {#if deleting}
             Deleting...
           {:else}
