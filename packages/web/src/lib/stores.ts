@@ -2,6 +2,9 @@ import { writable, derived } from 'svelte/store';
 import type { InboxItem } from '@inbox-rs/rs-module';
 import rs from './rs';
 
+/** Blob URLs for files that were just uploaded (available before remote sync completes) */
+export const blobUrls = writable<Record<string, string>>({});
+
 export const connected = writable(false);
 export const items = writable<Record<string, InboxItem>>({});
 
@@ -54,6 +57,11 @@ export const todoItems = derived(items, ($items) => {
 export async function storeItem(item: InboxItem, fileData?: ArrayBuffer) {
   const inbox = (rs as any).inbox;
   await inbox.store(item, fileData);
+  if (fileData && 'filePath' in item && item.filePath && 'mimeType' in item) {
+    const blob = new Blob([fileData], { type: (item as any).mimeType });
+    const url = URL.createObjectURL(blob);
+    blobUrls.update(current => ({ ...current, [item.filePath as string]: url }));
+  }
   items.update(current => ({ ...current, [item.id]: item }));
 }
 
