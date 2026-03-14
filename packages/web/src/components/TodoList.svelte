@@ -3,7 +3,7 @@
   import { todoItems, storeItem, deleteItem } from '../lib/stores';
   import DeleteConfirm from './DeleteConfirm.svelte';
 
-  let { onedit }: { onedit: (item: InboxItem) => void } = $props();
+  let { onedit, onadd }: { onedit: (item: InboxItem) => void; onadd: () => void } = $props();
   const todos = $derived($todoItems);
   let deleteTarget = $state<InboxItem | null>(null);
   let deleting = $state(false);
@@ -33,10 +33,16 @@
 </script>
 
 <div class="todo-list">
-  <h2 class="todo-heading">Todos</h2>
-  {#if todos.length === 0}
-    <p class="empty">No todos yet.</p>
-  {:else}
+  <div class="todo-header">
+    <h2 class="todo-heading">Todos</h2>
+    <button class="btn-add-todo" onclick={onadd} title="Add Todo">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>
+    </button>
+  </div>
+  {#if todos.length > 0}
     <ul role="list">
       {#each todos as todo (todo.id)}
         <li class="todo-item" class:completed={todo.completed} role="button" tabindex="0"
@@ -89,18 +95,35 @@
     min-width: 0;
   }
 
+  .todo-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+  }
+
   .todo-heading {
     font-size: 0.85rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--text-muted);
-    margin-bottom: 0.75rem;
   }
 
-  .empty {
-    font-size: 0.85rem;
+  .btn-add-todo {
+    background: none;
+    border: none;
     color: var(--text-muted);
+    padding: 0.2rem;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+
+  .btn-add-todo:hover {
+    color: var(--accent);
   }
 
   ul {

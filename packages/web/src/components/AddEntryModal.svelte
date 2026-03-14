@@ -290,6 +290,7 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="form" onkeydown={(e) => { if (e.key === 'Enter' && !(e.target instanceof HTMLTextAreaElement) && canSubmit) { e.preventDefault(); handleSubmit(); } }}>
       {#if type === 'bookmark'}
+        <p class="info-note">Metadata fetching is not yet available in the web app. Use the browser extension to auto-fill bookmark details. Sockethub integration is planned for a future release.</p>
         <label class="field">
           <span>URL *</span>
           <input use:autofocus type="url" bind:value={url} placeholder="https://..." />
@@ -594,6 +595,17 @@
   .btn-save:disabled {
     opacity: 0.4;
     cursor: default;
+  }
+
+  .info-note {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.75rem;
+    margin: 0 0 0.75rem;
+    line-height: 1.5;
   }
 
   .error {
