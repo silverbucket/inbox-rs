@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import type { InboxItemType, InboxItem } from '@inbox-rs/rs-module';
   import { storeItem } from '../lib/stores';
   import { transcribeAudio } from '../lib/transcribe';
@@ -56,7 +57,8 @@
       mediaRecorder.onstop = () => {
         stream.getTracks().forEach(t => t.stop());
         if (recordedUrl) URL.revokeObjectURL(recordedUrl);
-        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const mimeType = mediaRecorder?.mimeType || 'audio/webm';
+        const blob = new Blob(chunks, { type: mimeType });
         recordedBlob = blob;
         recordedUrl = URL.createObjectURL(blob);
         file = null;
@@ -172,8 +174,9 @@
           let mimeType: string;
           let duration: number | undefined;
           if (recordedBlob) {
-            filePath = `files/${id}.webm`;
-            mimeType = 'audio/webm';
+            const ext = recordedBlob.type.includes('webm') ? '.webm' : recordedBlob.type.includes('mp4') ? '.mp4' : '.ogg';
+            filePath = `files/${id}${ext}`;
+            mimeType = recordedBlob.type || 'audio/webm';
             fileData = await recordedBlob.arrayBuffer();
             duration = recordingDuration || undefined;
           } else if (file) {
@@ -211,13 +214,20 @@
         return;
       }
 
+      // Preserve todo fields when editing
+      if (isEdit) {
+        if (editItem!.isTodo) item.isTodo = true;
+        if (editItem!.completed) item.completed = editItem!.completed;
+        if (editItem!.completedAt) item.completedAt = editItem!.completedAt;
+      }
+
       // Remove undefined values — remoteStorage schema validator rejects them
       const cleanItem = JSON.parse(JSON.stringify(item!));
       await storeItem(cleanItem, fileData);
       onclose();
     } catch (e) {
       console.error('Save failed:', e);
-      error = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e) || 'Failed to save';
+      error = e instanceof Error ? e.message : typeof e === 'string' ? e : String(e) || 'Failed to save';
     } finally {
       saving = false;
     }
@@ -233,7 +243,7 @@
       onclose();
     } catch (e) {
       console.error('Convert failed:', e);
-      error = e instanceof Error ? e.message : typeof e === 'string' ? e : JSON.stringify(e) || 'Failed to convert';
+      error = e instanceof Error ? e.message : typeof e === 'string' ? e : String(e) || 'Failed to convert';
     } finally {
       saving = false;
     }
@@ -242,6 +252,14 @@
   function autofocus(node: HTMLElement) {
     requestAnimationFrame(() => node.focus());
   }
+
+  onDestroy(() => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+    }
+    if (recordingInterval) clearInterval(recordingInterval);
+    if (recordedUrl) URL.revokeObjectURL(recordedUrl);
+  });
 
   const needsFile = $derived(type === 'image' || type === 'document');
   const canSubmit = $derived(

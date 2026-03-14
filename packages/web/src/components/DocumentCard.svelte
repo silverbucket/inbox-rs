@@ -6,6 +6,12 @@
   let blobUrl = $state<string | null>(null);
   let loading = $state(false);
 
+  $effect(() => {
+    return () => {
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  });
+
   function formatSize(bytes?: number): string {
     if (!bytes) return '';
     if (bytes < 1024) return `${bytes} B`;
