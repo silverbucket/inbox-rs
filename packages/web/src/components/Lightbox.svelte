@@ -98,7 +98,7 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="lightbox-overlay" onclick={onclose}>
+<div class="lightbox-overlay" onclick={(e) => { e.stopPropagation(); onclose(); }}>
   <img
     class="lightbox-img"
     {src}
@@ -142,7 +142,7 @@
       </button>
     {/if}
   </div>
-  <button class="lightbox-close" onclick={onclose} aria-label="Close">&times;</button>
+  <button class="lightbox-close" onclick={(e) => { e.stopPropagation(); onclose(); }} aria-label="Close">&times;</button>
 </div>
 
 <style>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { BookmarkItem } from '@inbox-rs/rs-module';
   import { getFileUrl } from '../lib/rs';
+  import { blobUrls } from '../lib/stores';
   import Lightbox from './Lightbox.svelte';
 
   let { item, ondelete }: { item: BookmarkItem; ondelete?: () => void } = $props();
@@ -23,7 +24,7 @@
 
   // Direct URL to stored image (uses token in query string), or ogImage URL fallback
   const imageSrc = $derived(
-    (item.filePath ? getFileUrl(item.filePath) : null) || item.ogImage || null
+    (item.filePath ? ($blobUrls[item.filePath] || getFileUrl(item.filePath)) : null) || item.ogImage || null
   );
 </script>
 
@@ -31,7 +32,7 @@
   {#if imageSrc}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="og-link" onclick={() => showLightbox = true}>
+    <div class="og-link" onclick={(e) => { e.stopPropagation(); showLightbox = true; }}>
       <img
         class="og-image"
         src={imageSrc}
