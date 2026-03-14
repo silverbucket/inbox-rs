@@ -36,23 +36,33 @@
   }
 
   async function fetchFileData(): Promise<{ data: ArrayBuffer; mime: string }> {
-    // Prefer RS module for inbox files (avoids token-in-URL fetch)
+    const mime = mimeType || 'application/octet-stream';
+
+    // Try fetching via the current src (works for blob URLs and RS URLs)
+    try {
+      const resp = await fetch(src);
+      if (resp.ok) {
+        return {
+          data: await resp.arrayBuffer(),
+          mime: mimeType || resp.headers.get('content-type') || mime
+        };
+      }
+    } catch {
+      // src fetch failed, try RS module
+    }
+
+    // Fallback: RS module direct file access
     if (filePath) {
       const inbox = (rs as any).inbox;
       if (inbox) {
         const file = await inbox.getFile(filePath);
         if (file?.data) {
-          return { data: file.data, mime: mimeType || file.mimeType || 'application/octet-stream' };
+          return { data: file.data, mime: mimeType || file.mimeType || mime };
         }
       }
     }
-    // Fallback: direct fetch (for RS URLs or same-origin external URLs)
-    const resp = await fetch(src);
-    if (!resp.ok) throw new Error(`Failed to fetch: ${resp.status}`);
-    return {
-      data: await resp.arrayBuffer(),
-      mime: mimeType || resp.headers.get('content-type') || 'application/octet-stream'
-    };
+
+    throw new Error('Could not load file data');
   }
 
   async function share() {
@@ -70,7 +80,8 @@
       publicUrl = shareUrl;
       shareState = 'done';
       saveSharedUrl(stableKey(), shareUrl);
-    } catch {
+    } catch (e) {
+      console.error('Sharesome save failed:', e);
       shareState = 'error';
       setTimeout(() => { shareState = 'idle'; }, 2000);
     }
