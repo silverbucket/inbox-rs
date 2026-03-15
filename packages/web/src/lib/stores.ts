@@ -13,7 +13,14 @@ async function loadItems() {
   if (!inbox) return;
   try {
     const all = await inbox.getAll();
-    items.set(all);
+    // Filter out invalid entries (folder listings, partial objects without id)
+    const valid: Record<string, InboxItem> = {};
+    for (const [key, item] of Object.entries(all)) {
+      if (item && typeof item === 'object' && 'id' in item && (item as InboxItem).id) {
+        valid[key] = item as InboxItem;
+      }
+    }
+    items.set(valid);
   } catch {
     // RS sync/fetch error — keep existing items
   }
