@@ -5,3 +5,4 @@ rs-data/
 .context/
 *.local
 .DS_Store
+*.xpi
