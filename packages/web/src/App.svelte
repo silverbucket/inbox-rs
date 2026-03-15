@@ -5,11 +5,31 @@
   import TodoList from './components/TodoList.svelte';
   import AddEntryBar from './components/AddEntryBar.svelte';
   import AddEntryModal from './components/AddEntryModal.svelte';
-  import { connected, deleteItem } from './lib/stores';
+  import { connected, deleteItem, todoItems, appConfig, updateConfig } from './lib/stores';
 
 
   let activeModal = $state<InboxItemType | null>(null);
   let editingItem = $state<InboxItem | undefined>(undefined);
+  let todosExpanded = $state(false);
+  let userToggledTodos = false;
+
+  // React to config/todo changes to set default expand state,
+  // but stop once the user has manually toggled.
+  $effect(() => {
+    if (userToggledTodos) return;
+    const config = $appConfig;
+    if (config.todosCollapsed !== undefined) {
+      todosExpanded = !config.todosCollapsed;
+    } else {
+      todosExpanded = $todoItems.some(t => !t.completed);
+    }
+  });
+
+  function handleTodoExpandChange(v: boolean) {
+    userToggledTodos = true;
+    todosExpanded = v;
+    void updateConfig({ todosCollapsed: !v });
+  }
 
   function openAdd(type: InboxItemType) {
     editingItem = undefined;
@@ -36,12 +56,17 @@
 
 <main>
   {#if $connected}
-    <div class="content-layout">
-      <aside class="sidebar">
-        <TodoList onedit={openEdit} onadd={() => openAdd('todo')} />
-      </aside>
+    <div class="content-layout" class:todos-collapsed={!todosExpanded}>
+      {#if todosExpanded}
+        <aside class="sidebar">
+          <TodoList onedit={openEdit} onadd={() => openAdd('todo')} onexpandchange={handleTodoExpandChange} />
+        </aside>
+      {/if}
       <div class="inbox-area">
         <div class="inbox-top">
+          {#if !todosExpanded}
+            <TodoList onedit={openEdit} onadd={() => openAdd('todo')} onexpandchange={handleTodoExpandChange} inline />
+          {/if}
           <AddEntryBar onadd={openAdd} />
         </div>
         <InboxGrid onedit={openEdit} />
@@ -106,6 +131,7 @@
     align-items: center;
     gap: 0.5rem;
     margin-bottom: 1rem;
+    flex-wrap: wrap;
   }
 
   .sidebar {

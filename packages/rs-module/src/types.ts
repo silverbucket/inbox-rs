@@ -64,3 +64,7 @@ export interface TodoItem extends InboxItemBase {
 }
 
 export type InboxItem = BookmarkItem | NoteItem | ImageItem | VoiceMemoItem | DocumentItem | CodeSnippetItem | TodoItem;
+
+export interface AppConfig {
+  todosCollapsed?: boolean;
+}

@@ -3,19 +3,19 @@
   import { todoItems, storeItem, deleteItem } from '../lib/stores';
   import DeleteConfirm from './DeleteConfirm.svelte';
 
-  let { onedit, onadd }: { onedit: (item: InboxItem) => void; onadd: () => void } = $props();
+  let { onedit, onadd, onexpandchange, inline = false }: {
+    onedit: (item: InboxItem) => void;
+    onadd: () => void;
+    onexpandchange?: (expanded: boolean) => void;
+    inline?: boolean;
+  } = $props();
   const todos = $derived($todoItems);
   const openTodos = $derived(todos.filter(t => !t.completed));
   const completedTodos = $derived(todos.filter(t => t.completed));
-  let expanded = $state(true);
+  let expanded = $state(!inline);
   let showCompleted = $state(false);
   let deleteTarget = $state<InboxItem | null>(null);
   let deleting = $state(false);
-
-  // Auto-expand when there are open todos, auto-collapse when all are completed or none exist
-  $effect(() => {
-    expanded = openTodos.length > 0;
-  });
 
   async function toggleCompleted(e: Event, todo: InboxItem) {
     e.stopPropagation();
@@ -41,15 +41,17 @@
   }
 </script>
 
-<div class="todo-list">
+<div class="todo-list" class:inline>
   <div class="todo-header">
-    <button class="btn-toggle" onclick={() => expanded = !expanded} title={expanded ? 'Collapse' : 'Expand'}>
+    <button class="btn-toggle" onclick={() => { expanded = !expanded; onexpandchange?.(expanded); }} title={expanded ? 'Collapse' : 'Expand'}>
       <svg class="chevron" class:collapsed={!expanded} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="6 9 12 15 18 9"></polyline>
       </svg>
       <h2 class="todo-heading">Todos</h2>
-      {#if todos.length > 0}
-        <span class="todo-count">{openTodos.length}/{todos.length}</span>
+      {#if openTodos.length > 0}
+        <span class="todo-badge">{openTodos.length}</span>
+      {:else if expanded && todos.length > 0}
+        <span class="todo-count">0/{todos.length}</span>
       {/if}
     </button>
     <button class="btn-add-todo" onclick={onadd} title="Add Todo">
@@ -159,6 +161,43 @@
     min-width: 0;
   }
 
+  .todo-list.inline {
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+  }
+
+  .todo-list.inline .todo-header {
+    gap: 0.25rem;
+  }
+
+  .todo-list.inline .btn-toggle {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.4rem 0.7rem;
+    font-size: 0.8rem;
+    transition: border-color 0.15s, color 0.15s;
+  }
+
+  .todo-list.inline .btn-toggle:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .todo-list.inline .btn-add-todo {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.4rem;
+    transition: border-color 0.15s, color 0.15s;
+  }
+
+  .todo-list.inline .btn-add-todo:hover {
+    border-color: var(--accent);
+  }
+
   .todo-header {
     display: flex;
     align-items: center;
@@ -198,6 +237,21 @@
     font-size: 0.7rem;
     color: var(--text-muted);
     opacity: 0.7;
+  }
+
+  .todo-badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: white;
+    background: var(--accent);
+    min-width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+    line-height: 1;
   }
 
   .btn-add-todo {

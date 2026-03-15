@@ -104,6 +104,13 @@ export const codeSnippetSchema = {
   required: ['id', 'type', 'title', 'body', 'createdAt']
 };
 
+export const appConfigSchema = {
+  type: 'object',
+  properties: {
+    todosCollapsed: { type: 'boolean' },
+  }
+};
+
 export const todoSchema = {
   type: 'object',
   properties: {
