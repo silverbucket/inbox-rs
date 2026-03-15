@@ -21,6 +21,8 @@
   let description = $state(editItem?.description ?? '');
   let language = $state(editItem && 'language' in editItem ? editItem.language ?? '' : '');
   let completed = $state(editItem && 'completed' in editItem ? editItem.completed : false);
+  let from = $state(editItem && 'from' in editItem ? editItem.from ?? '' : '');
+  let notes = $state(editItem && 'notes' in editItem ? editItem.notes ?? '' : '');
   let file = $state<File | null>(null);
 
   // Voice recording state
@@ -113,6 +115,7 @@
     'document': 'Add File',
     'code-snippet': 'Add Code Snippet',
     'todo': 'Add Todo',
+    'email': 'Add Email',
   };
 
   const editLabels: Record<InboxItemType, string> = {
@@ -123,6 +126,7 @@
     'document': 'Edit File',
     'code-snippet': 'Edit Code Snippet',
     'todo': 'Edit Todo',
+    'email': 'Edit Email',
   };
 
   function handleFileChange(e: Event) {
@@ -217,6 +221,9 @@
         }
       } else if (type === 'code-snippet') {
         item = { id, type: 'code-snippet', title: title || 'Untitled snippet', body, language: language || undefined, description: description || undefined, createdAt };
+      } else if (type === 'email') {
+        const emailMessageUrl = isEdit && editItem!.type === 'email' ? editItem!.messageUrl : undefined;
+        item = { id, type: 'email', title: title || 'Untitled email', body, from: from || undefined, notes: notes || undefined, messageUrl: emailMessageUrl, createdAt };
       } else if (type === 'todo') {
         item = { id, type: 'todo', title, body: body || undefined, completed, completedAt: completed && !(editItem && 'completed' in editItem && editItem.completed) ? new Date().toISOString() : (editItem && 'completedAt' in editItem ? editItem.completedAt : undefined), description: description || undefined, createdAt, isTodo: true };
       } else {
@@ -275,7 +282,7 @@
     : type === 'voice-memo' ? !!(file || recordedBlob || hasExistingFile)
     : needsFile ? !!(file || hasExistingFile)
     : type === 'bookmark' ? !!url
-    : type === 'note' || type === 'code-snippet' ? !!body
+    : type === 'note' || type === 'code-snippet' || type === 'email' ? !!body
     : type === 'todo' ? !!title
     : true
   );
@@ -398,6 +405,24 @@
           <textarea class="code-input" bind:value={body} rows="8" placeholder="Paste your code..."></textarea>
         </label>
 
+      {:else if type === 'email'}
+        <label class="field">
+          <span>Subject</span>
+          <input use:autofocus type="text" bind:value={title} placeholder="Email subject" />
+        </label>
+        <label class="field">
+          <span>From</span>
+          <input type="text" bind:value={from} placeholder="Sender" />
+        </label>
+        <label class="field">
+          <span>Body *</span>
+          <textarea bind:value={body} rows="6" placeholder="Email body..."></textarea>
+        </label>
+        <label class="field">
+          <span>Notes</span>
+          <textarea bind:value={notes} rows="2" placeholder="Optional notes..."></textarea>
+        </label>
+
       {:else if type === 'todo'}
         <label class="field">
           <span>Title *</span>
@@ -427,15 +452,6 @@
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
             </svg>
             Delete
-          </button>
-        {/if}
-        {#if isEdit && type !== 'todo' && !editItem?.isTodo}
-          <button class="btn-todo" disabled={saving} onclick={convertToTodo}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="9 11 12 14 22 4"></polyline>
-              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-            </svg>
-            Make Todo
           </button>
         {/if}
         <button class="btn-cancel" onclick={onclose}>Cancel</button>

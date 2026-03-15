@@ -1,4 +1,4 @@
-export type InboxItemType = 'bookmark' | 'note' | 'image' | 'voice-memo' | 'document' | 'code-snippet' | 'todo';
+export type InboxItemType = 'bookmark' | 'note' | 'image' | 'voice-memo' | 'document' | 'code-snippet' | 'todo' | 'email';
 
 export interface InboxItemBase {
   id: string;
@@ -63,7 +63,15 @@ export interface TodoItem extends InboxItemBase {
   completedAt?: string;
 }
 
-export type InboxItem = BookmarkItem | NoteItem | ImageItem | VoiceMemoItem | DocumentItem | CodeSnippetItem | TodoItem;
+export interface EmailItem extends InboxItemBase {
+  type: 'email';
+  body: string;
+  from?: string;
+  notes?: string;
+  messageUrl?: string; // mid: URI to open in mail client
+}
+
+export type InboxItem = BookmarkItem | NoteItem | ImageItem | VoiceMemoItem | DocumentItem | CodeSnippetItem | TodoItem | EmailItem;
 
 export interface AppConfig {
   todosCollapsed?: boolean;

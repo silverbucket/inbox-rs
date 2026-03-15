@@ -104,6 +104,23 @@ export const codeSnippetSchema = {
   required: ['id', 'type', 'title', 'body', 'createdAt']
 };
 
+export const emailSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    type: { type: 'string', enum: ['email'] },
+    title: { type: 'string' },
+    description: { type: 'string' },
+    body: { type: 'string' },
+    from: { type: 'string' },
+    notes: { type: 'string' },
+    messageUrl: { type: 'string' },
+    createdAt: { type: 'string' },
+    ...todoFields,
+  },
+  required: ['id', 'type', 'title', 'body', 'createdAt']
+};
+
 export const appConfigSchema = {
   type: 'object',
   properties: {

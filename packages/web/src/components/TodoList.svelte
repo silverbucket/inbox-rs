@@ -39,6 +39,13 @@
   function typeBadge(item: InboxItem): string | null {
     return item.type === 'todo' ? null : item.type;
   }
+
+  function todoNote(item: InboxItem): string | null {
+    const notes = ('notes' in item ? (item as any).notes : null) || item.description || ('body' in item ? (item as any).body : null);
+    if (!notes) return null;
+    const firstLine = notes.split('\n')[0].trim();
+    return firstLine.length > 80 ? firstLine.slice(0, 80) + '...' : firstLine;
+  }
 </script>
 
 <div class="todo-list" class:inline>
@@ -82,16 +89,27 @@
               onchange={(e) => toggleCompleted(e, todo)}
               aria-label="Mark {todo.title} as complete"
             />
-            <span class="todo-title">{todo.title}</span>
-            {#if typeBadge(todo)}
-              <span class="type-badge">{typeBadge(todo)}</span>
-            {/if}
-            <button class="btn-delete" onclick={(e) => { e.stopPropagation(); deleteTarget = todo; }} title="Delete">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
+            <div class="todo-content">
+              <div class="todo-title-row">
+                <span class="todo-title">{todo.title}</span>
+                <button class="btn-delete" onclick={(e) => { e.stopPropagation(); deleteTarget = todo; }} title="Delete">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
+              {#if typeBadge(todo) || todoNote(todo)}
+                <div class="todo-meta">
+                  {#if typeBadge(todo)}
+                    <span class="type-badge">{typeBadge(todo)}</span>
+                  {/if}
+                  {#if todoNote(todo)}
+                    <span class="todo-note">{todoNote(todo)}</span>
+                  {/if}
+                </div>
+              {/if}
+            </div>
           </li>
         {/each}
       </ul>
@@ -126,16 +144,27 @@
                 onchange={(e) => toggleCompleted(e, todo)}
                 aria-label="Mark {todo.title} as incomplete"
               />
-              <span class="todo-title">{todo.title}</span>
-              {#if typeBadge(todo)}
-                <span class="type-badge">{typeBadge(todo)}</span>
-              {/if}
-              <button class="btn-delete" onclick={(e) => { e.stopPropagation(); deleteTarget = todo; }} title="Delete">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </button>
+              <div class="todo-content">
+                <div class="todo-title-row">
+                  <span class="todo-title">{todo.title}</span>
+                  <button class="btn-delete" onclick={(e) => { e.stopPropagation(); deleteTarget = todo; }} title="Delete">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+                {#if typeBadge(todo) || todoNote(todo)}
+                  <div class="todo-meta">
+                    {#if typeBadge(todo)}
+                      <span class="type-badge">{typeBadge(todo)}</span>
+                    {/if}
+                    {#if todoNote(todo)}
+                      <span class="todo-note">{todoNote(todo)}</span>
+                    {/if}
+                  </div>
+                {/if}
+              </div>
             </li>
           {/each}
         </ul>
@@ -157,7 +186,7 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 1rem;
+    padding: 0.75rem;
     min-width: 0;
     position: relative;
   }
@@ -280,7 +309,7 @@
   ul {
     list-style: none;
     padding: 0;
-    margin: 0.75rem 0 0;
+    margin: 2rem 0 0;
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
@@ -292,12 +321,40 @@
 
   .todo-item {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.5rem;
-    padding: 0.4rem 0.5rem;
+    padding: 0.4rem 0.3rem;
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: background 0.1s;
+  }
+
+  .todo-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .todo-title-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  .todo-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.15rem;
+  }
+
+  .todo-note {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    opacity: 0.7;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
   }
 
   .todo-item:hover {
@@ -310,15 +367,14 @@
     flex-shrink: 0;
     accent-color: var(--accent);
     cursor: pointer;
+    margin-top: 2px;
   }
 
   .todo-title {
     font-size: 0.9rem;
     flex: 1;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    word-break: break-word;
   }
 
   .completed .todo-title {
@@ -366,7 +422,7 @@
     border: none;
     color: var(--text-muted);
     font-size: 0.75rem;
-    padding: 0.4rem 0.5rem;
+    padding: 0.4rem 0.3rem;
     margin-top: 0.5rem;
     cursor: pointer;
     transition: color 0.15s;
