@@ -1,10 +1,9 @@
 <script lang="ts">
   import type { PendingMigration } from '@inbox-rs/rs-module';
 
-  let { migrations, onrun, ondismiss }: {
+  let { migrations, onrun }: {
     migrations: PendingMigration[];
     onrun: () => void;
-    ondismiss: () => void;
   } = $props();
 
   let running = $state(false);
@@ -29,7 +28,6 @@
     </ul>
   </div>
   <div class="alert-actions">
-    <button class="btn-dismiss" onclick={ondismiss} disabled={running}>Dismiss</button>
     <button class="btn-migrate" onclick={handleMigrate} disabled={running}>
       {running ? 'Migrating...' : 'Migrate'}
     </button>
@@ -70,20 +68,6 @@
     gap: 0.5rem;
   }
 
-  .btn-dismiss {
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    padding: 0.35rem 0.75rem;
-    border-radius: var(--radius-sm);
-    font-size: 0.8rem;
-    cursor: pointer;
-  }
-
-  .btn-dismiss:hover {
-    border-color: var(--text-muted);
-  }
-
   .btn-migrate {
     background: var(--accent);
     border: none;
@@ -100,8 +84,7 @@
     opacity: 0.9;
   }
 
-  .btn-migrate:disabled,
-  .btn-dismiss:disabled {
+  .btn-migrate:disabled {
     opacity: 0.4;
     cursor: default;
   }

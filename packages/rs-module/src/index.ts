@@ -26,7 +26,7 @@ export interface InboxModuleExports {
   setConfig(config: AppConfig): Promise<void>;
   onChange(handler: (event: unknown) => void): void;
   getPendingMigrations(): Promise<PendingMigration[]>;
-  runMigration(migrationId: string): Promise<MigrationResult>;
+  runAllMigrations(): Promise<MigrationResult[]>;
 }
 
 const InboxModule = {
@@ -144,13 +144,13 @@ const InboxModule = {
           return pending;
         },
 
-        async runMigration(migrationId: string): Promise<MigrationResult> {
-          const m = migrations.find(m => m.id === migrationId);
-          if (!m) throw new Error(`Unknown migration: ${migrationId}`);
-
+        async runAllMigrations(): Promise<MigrationResult[]> {
           const allItems = await privateClient.getAll('items/');
-          let migratedCount = 0;
-          if (allItems) {
+          if (!allItems) return [];
+
+          const results: MigrationResult[] = [];
+          for (const m of migrations) {
+            let migratedCount = 0;
             for (const [key, item] of Object.entries(allItems)) {
               if (item && typeof item === 'object' && 'type' in item && (item as any).type === m.oldItemType) {
                 const transformed = m.transform(item);
@@ -162,8 +162,9 @@ const InboxModule = {
                 migratedCount++;
               }
             }
+            results.push({ migrationId: m.id, migratedCount });
           }
-          return { migrationId, migratedCount };
+          return results;
         }
       } satisfies InboxModuleExports
     };

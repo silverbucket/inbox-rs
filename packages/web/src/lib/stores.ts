@@ -1,4 +1,4 @@
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import type { InboxItem, AppConfig, PendingMigration } from '@inbox-rs/rs-module';
 import rs from './rs';
 
@@ -108,13 +108,13 @@ async function checkMigrations() {
 export async function runAllMigrations() {
   const inbox = (rs as any).inbox;
   if (!inbox) return;
-  let current: PendingMigration[] = [];
-  pendingMigrations.subscribe(v => current = v)();
-  for (const m of current) {
-    await inbox.runMigration(m.id);
+  try {
+    await inbox.runAllMigrations();
+  } catch (e) {
+    console.error('[inbox] migration failed:', e);
   }
-  pendingMigrations.set([]);
   await loadItems();
+  await checkMigrations();
 }
 
 export async function updateConfig(patch: Partial<AppConfig>) {
@@ -131,6 +131,7 @@ const inbox = (rs as any).inbox;
 if (inbox) {
   inbox.onChange(() => {
     void loadItems();
+    void checkMigrations();
   });
 }
 

@@ -15,7 +15,6 @@
   let viewingItem = $state<InboxItem | null>(null);
   let todosExpanded = $state(false);
   let userToggledTodos = false;
-  let migrationDismissed = $state(false);
 
   // React to config/todo changes to set default expand state,
   // but stop once the user has manually toggled.
@@ -68,8 +67,8 @@
 </header>
 
 <main>
-  {#if $pendingMigrations.length > 0 && !migrationDismissed}
-    <MigrationAlert migrations={$pendingMigrations} onrun={runAllMigrations} ondismiss={() => migrationDismissed = true} />
+  {#if $pendingMigrations.length > 0}
+    <MigrationAlert migrations={$pendingMigrations} onrun={runAllMigrations} />
   {/if}
 
   {#if $connected}
