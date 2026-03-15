@@ -5,11 +5,13 @@
   import TodoList from './components/TodoList.svelte';
   import AddEntryBar from './components/AddEntryBar.svelte';
   import AddEntryModal from './components/AddEntryModal.svelte';
+  import ViewCardModal from './components/ViewCardModal.svelte';
   import { connected, deleteItem, todoItems, appConfig, updateConfig } from './lib/stores';
 
 
   let activeModal = $state<InboxItemType | null>(null);
   let editingItem = $state<InboxItem | undefined>(undefined);
+  let viewingItem = $state<InboxItem | null>(null);
   let todosExpanded = $state(false);
   let userToggledTodos = false;
 
@@ -36,9 +38,18 @@
     activeModal = type;
   }
 
-  function openEdit(item: InboxItem) {
+  function openView(item: InboxItem) {
+    viewingItem = item;
+  }
+
+  function openEditFromView(item: InboxItem) {
+    viewingItem = null;
     editingItem = item;
     activeModal = item.type;
+  }
+
+  function closeViewModal() {
+    viewingItem = null;
   }
 
   function closeModal() {
@@ -59,17 +70,17 @@
     <div class="content-layout" class:todos-collapsed={!todosExpanded}>
       {#if todosExpanded}
         <aside class="sidebar">
-          <TodoList onedit={openEdit} onadd={() => openAdd('todo')} onexpandchange={handleTodoExpandChange} />
+          <TodoList onselect={openView} onadd={() => openAdd('todo')} onexpandchange={handleTodoExpandChange} />
         </aside>
       {/if}
       <div class="inbox-area">
         <div class="inbox-top">
           {#if !todosExpanded}
-            <TodoList onedit={openEdit} onadd={() => openAdd('todo')} onexpandchange={handleTodoExpandChange} inline />
+            <TodoList onselect={openView} onadd={() => openAdd('todo')} onexpandchange={handleTodoExpandChange} inline />
           {/if}
           <AddEntryBar onadd={openAdd} />
         </div>
-        <InboxGrid onedit={openEdit} />
+        <InboxGrid onselect={openView} />
       </div>
     </div>
   {:else}
@@ -80,6 +91,10 @@
     </div>
   {/if}
 </main>
+
+{#if viewingItem}
+  <ViewCardModal item={viewingItem} onclose={closeViewModal} onedit={openEditFromView} />
+{/if}
 
 {#if activeModal}
   <AddEntryModal type={activeModal} editItem={editingItem} onclose={closeModal} ondelete={async (item) => { await deleteItem(item.id, item); closeModal(); }} />
@@ -135,7 +150,7 @@
   }
 
   .sidebar {
-    width: 260px;
+    width: 280px;
     flex-shrink: 0;
     position: sticky;
     top: 5rem;

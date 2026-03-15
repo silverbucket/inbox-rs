@@ -1,10 +1,10 @@
 # Inbox RS
 
-A universal inbox for saving URLs, notes, images, and voice memos — backed by [remoteStorage](https://remotestorage.io). Your data stays on your own storage server, not someone else's cloud.
+A universal inbox for saving URLs, notes, images, emails, and voice memos — backed by [remoteStorage](https://remotestorage.io). Your data stays on your own storage server, not someone else's cloud.
 
 ## What it does
 
-**Web App** — A Svelte app that displays all your saved items in a masonry grid. Connect to any remoteStorage-compatible server to view, browse, and delete your inbox items. Includes [Sharesome](https://sharesome.5apps.com) integration — save any image or file from your inbox to Sharesome with one click and get a public sharing link.
+**Web App** — A Svelte app that displays all your saved items in a card grid. Connect to any remoteStorage-compatible server to view, browse, and manage your inbox items. Click any card to view full details, edit, convert to a todo, or delete.
 
 **Browser Extension** — A Chrome/Firefox extension for quickly saving things while browsing:
 
@@ -14,16 +14,24 @@ A universal inbox for saving URLs, notes, images, and voice memos — backed by 
 - **Right-click: Save Image** — Downloads and saves the actual image binary (not just the URL).
 - **Right-click: Save Selection** — Saves highlighted text as a note with a link back to the source page.
 
+**Thunderbird Extension** — A Thunderbird MailExtension (128+) for saving emails to your inbox:
+
+- Opens from the message toolbar when reading an email.
+- Pre-fills subject, sender, and body from the current email.
+- Includes an optional notes field for your own annotations.
+- Saves a `mid:` URI link back to the original email in your mail client.
+
 ## Architecture
 
 ```
 packages/
   rs-module/    # Shared remoteStorage data module (types, schemas, CRUD)
-  web/          # Svelte web app (masonry grid, lightbox, delete)
+  web/          # Svelte web app (card grid, view modal, todos)
   extension/    # Chrome MV3 + Firefox WebExtension (popup, context menus, content script)
+  thunderbird/  # Thunderbird MailExtension (message toolbar popup, email saving)
 ```
 
-All three packages share the `@inbox-rs/rs-module` for consistent data types and storage layout.
+All four packages share the `@inbox-rs/rs-module` for consistent data types and storage layout.
 
 ### Storage layout
 
@@ -39,7 +47,11 @@ All three packages share the `@inbox-rs/rs-module` for consistent data types and
 | `bookmark` | URL with title, description, og:image, favicon. Optionally includes `body` (embedded content like tweet text) and `filePath` (downloaded image). |
 | `note` | Freeform text with title and body. |
 | `image` | Downloaded image binary with metadata and optional source URL. |
-| `voice-memo` | Audio recording with duration (planned). |
+| `voice-memo` | Audio recording with duration. |
+| `document` | Uploaded file with metadata. |
+| `code-snippet` | Code with syntax highlighting and language tag. |
+| `email` | Email with subject, body, sender, optional notes, and `mid:` URI link. |
+| `todo` | Task with title, completion status, and optional notes. Any item can be converted to a todo. |
 
 ## Quick start
 
@@ -49,7 +61,8 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for full setup instructions.
 npm install
 docker compose up -d          # Start local remoteStorage server
 npm run dev -w packages/web   # Start web app on localhost:5173
-npm run build -w packages/extension  # Build extension, load dist/ in browser
+npm run build:extension              # Build browser extension, load dist/ in browser
+npm run build:thunderbird            # Build Thunderbird extension, install .xpi
 ```
 
 ## Tech stack
@@ -58,7 +71,7 @@ npm run build -w packages/extension  # Build extension, load dist/ in browser
 - **Vite 5** for both web app and extension builds
 - **remotestorage.js** for data sync + **remotestorage-module-shares** for Sharesome integration
 - **TypeScript** throughout
-- **Chrome Manifest V3** / Firefox WebExtension APIs
+- **Chrome Manifest V3** / Firefox WebExtension APIs / **Thunderbird Manifest V2**
 - **Armadietto** as the local dev remoteStorage server
 
 ## License

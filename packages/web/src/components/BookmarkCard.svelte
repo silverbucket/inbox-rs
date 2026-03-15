@@ -59,14 +59,8 @@
       <span class="domain">{item.siteName || getDomain(item.url)}</span>
     </div>
     <h3 class="title">
-      <a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a>
+      <a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}<svg class="link-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>
     </h3>
-    {#if item.body}
-      <p class="body-text">{item.body}</p>
-    {/if}
-    {#if item.description}
-      <p class="description">{item.description}</p>
-    {/if}
   </div>
 </div>
 
@@ -129,21 +123,14 @@
     color: var(--accent);
   }
 
-  .body-text {
-    margin-top: 0.5rem;
-    font-size: 0.85rem;
-    color: var(--text);
-    line-height: 1.5;
-    white-space: pre-wrap;
+  .title :global(.link-icon) {
+    display: inline;
+    vertical-align: middle;
+    margin-left: 0.3rem;
+    opacity: 0.5;
   }
 
-  .description {
-    margin-top: 0.4rem;
-    font-size: 0.85rem;
-    color: var(--text-muted);
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+  .title a:hover :global(.link-icon) {
+    opacity: 1;
   }
 </style>

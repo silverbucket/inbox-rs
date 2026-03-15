@@ -6,12 +6,17 @@
   import VoiceMemoCard from './VoiceMemoCard.svelte';
   import DocumentCard from './DocumentCard.svelte';
   import CodeSnippetCard from './CodeSnippetCard.svelte';
+  import EmailCard from './EmailCard.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
   import { deleteItem } from '../lib/stores';
 
-  let { item, onedit }: { item: InboxItem; onedit: (item: InboxItem) => void } = $props();
+  let { item, onselect }: { item: InboxItem; onselect: (item: InboxItem) => void } = $props();
   let showDelete = $state(false);
   let deleting = $state(false);
+
+  const cardNotes = $derived(
+    ('notes' in item ? (item as any).notes : null) || item.description || null
+  );
 
   async function handleDelete() {
     deleting = true;
@@ -30,10 +35,10 @@
   onclick={(e) => {
     const target = e.target as HTMLElement;
     if (target.closest('a, button, input, audio, video')) return;
-    onedit(item);
+    onselect(item);
   }}
   onkeydown={(e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onedit(item); }
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onselect(item); }
   }}>
   <div class="card-body">
     {#if item.type === 'bookmark'}
@@ -48,6 +53,11 @@
       <DocumentCard {item} />
     {:else if item.type === 'code-snippet'}
       <CodeSnippetCard {item} />
+    {:else if item.type === 'email'}
+      <EmailCard {item} />
+    {/if}
+    {#if cardNotes}
+      <p class="card-notes">{cardNotes}</p>
     {/if}
   </div>
 
@@ -130,5 +140,17 @@
 
   .btn-delete:hover {
     color: var(--danger);
+  }
+
+  .card-notes {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--accent);
+    line-height: 1.5;
+    font-style: italic;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 </style>

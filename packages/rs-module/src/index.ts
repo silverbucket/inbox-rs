@@ -1,7 +1,7 @@
-import { bookmarkSchema, noteSchema, imageMetaSchema, voiceMemoMetaSchema, documentMetaSchema, codeSnippetSchema, todoSchema, appConfigSchema } from './schemas.js';
+import { bookmarkSchema, noteSchema, imageMetaSchema, voiceMemoMetaSchema, documentMetaSchema, codeSnippetSchema, todoSchema, emailSchema, appConfigSchema } from './schemas.js';
 import type { InboxItem, AppConfig } from './types.js';
 
-export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, VoiceMemoItem, DocumentItem, CodeSnippetItem, TodoItem, AppConfig } from './types.js';
+export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, VoiceMemoItem, DocumentItem, CodeSnippetItem, TodoItem, EmailItem, AppConfig } from './types.js';
 
 export interface InboxModuleExports {
   getAll(): Promise<Record<string, InboxItem>>;
@@ -24,6 +24,7 @@ const InboxModule = {
     privateClient.declareType('document-meta', documentMetaSchema);
     privateClient.declareType('code-snippet', codeSnippetSchema);
     privateClient.declareType('todo', todoSchema);
+    privateClient.declareType('email', emailSchema);
     privateClient.declareType('app-config', appConfigSchema);
 
     return {
