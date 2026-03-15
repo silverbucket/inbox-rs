@@ -5,7 +5,7 @@
   import TodoList from './components/TodoList.svelte';
   import AddEntryBar from './components/AddEntryBar.svelte';
   import AddEntryModal from './components/AddEntryModal.svelte';
-  import { connected } from './lib/stores';
+  import { connected, deleteItem } from './lib/stores';
 
 
   let activeModal = $state<InboxItemType | null>(null);
@@ -57,7 +57,7 @@
 </main>
 
 {#if activeModal}
-  <AddEntryModal type={activeModal} editItem={editingItem} onclose={closeModal} />
+  <AddEntryModal type={activeModal} editItem={editingItem} onclose={closeModal} ondelete={async (item) => { await deleteItem(item.id, item); closeModal(); }} />
 {/if}
 
 <style>

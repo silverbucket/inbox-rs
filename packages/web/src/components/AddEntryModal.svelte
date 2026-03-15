@@ -4,10 +4,11 @@
   import { storeItem } from '../lib/stores';
   import { transcribeAudio } from '../lib/transcribe';
 
-  let { type, editItem = undefined, onclose }: {
+  let { type, editItem = undefined, onclose, ondelete }: {
     type: InboxItemType;
     editItem?: InboxItem;
     onclose: () => void;
+    ondelete?: (item: InboxItem) => void;
   } = $props();
 
   const isEdit = !!editItem;
@@ -420,6 +421,15 @@
       {/if}
 
       <div class="actions">
+        {#if isEdit && ondelete && editItem}
+          <button class="btn-delete-item" disabled={saving} onclick={() => ondelete(editItem!)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            Delete
+          </button>
+        {/if}
         {#if isEdit && type !== 'todo' && !editItem?.isTodo}
           <button class="btn-todo" disabled={saving} onclick={convertToTodo}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -535,6 +545,31 @@
     justify-content: flex-end;
     gap: 0.5rem;
     margin-top: 1rem;
+  }
+
+  .btn-delete-item {
+    margin-right: auto;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--danger, #ef4444);
+    padding: 0.45rem 0.75rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .btn-delete-item:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: var(--danger, #ef4444);
+  }
+
+  .btn-delete-item:disabled {
+    opacity: 0.4;
+    cursor: default;
   }
 
   .btn-todo {
