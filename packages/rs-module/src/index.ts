@@ -36,7 +36,14 @@ const InboxModule = {
 
         async store(item: InboxItem, fileData?: ArrayBuffer): Promise<void> {
           if (fileData && 'filePath' in item && item.filePath && 'mimeType' in item && item.mimeType) {
-            await privateClient.storeFile(item.mimeType, item.filePath, fileData);
+            // Convert ArrayBuffer to binary string because remotestoragejs sync
+            // only pushes string bodies (typeof check in needsRemotePut)
+            const bytes = new Uint8Array(fileData);
+            let binaryString = '';
+            for (let i = 0; i < bytes.length; i++) {
+              binaryString += String.fromCharCode(bytes[i]);
+            }
+            await privateClient.storeFile(item.mimeType, item.filePath, binaryString);
           }
           const typeAlias = item.type === 'voice-memo' ? 'voice-memo-meta'
             : item.type === 'image' ? 'image-meta'
@@ -53,7 +60,17 @@ const InboxModule = {
         },
 
         async getFile(path: string): Promise<{ data: ArrayBuffer; mimeType: string } | undefined> {
-          return privateClient.getFile(path);
+          const file = await privateClient.getFile(path);
+          if (!file?.data) return undefined;
+          // remotestoragejs may return a binary string; convert to ArrayBuffer
+          if (typeof file.data === 'string') {
+            const bytes = new Uint8Array(file.data.length);
+            for (let i = 0; i < file.data.length; i++) {
+              bytes[i] = file.data.charCodeAt(i);
+            }
+            return { data: bytes.buffer, mimeType: file.mimeType || file.contentType };
+          }
+          return { data: file.data, mimeType: file.mimeType || file.contentType };
         },
 
         onChange(handler: (event: unknown) => void): void {
