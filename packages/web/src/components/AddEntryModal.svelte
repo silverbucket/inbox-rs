@@ -246,7 +246,8 @@
     saving = true;
     error = '';
     try {
-      const updated = { ...editItem!, isTodo: true, completed: false, completedAt: undefined };
+      const { completedAt: _, ...rest } = editItem!;
+      const updated = { ...rest, isTodo: true, completed: false };
       const clean = JSON.parse(JSON.stringify(updated));
       await storeItem(clean);
       onclose();
