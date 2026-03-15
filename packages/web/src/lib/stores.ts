@@ -128,7 +128,9 @@ export const todoItems = derived(items, ($items) => {
 
 export async function storeItem(item: InboxItem, fileData?: ArrayBuffer) {
   const inbox = (rs as any).inbox;
-  await inbox.store(item, fileData);
+  // Strip undefined values — remoteStorage schema validator rejects them
+  const cleanItem = JSON.parse(JSON.stringify(item)) as InboxItem;
+  await inbox.store(cleanItem, fileData);
   if (fileData && 'filePath' in item && item.filePath && 'mimeType' in item) {
     const blob = new Blob([fileData], { type: (item as any).mimeType });
     const url = URL.createObjectURL(blob);

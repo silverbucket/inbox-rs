@@ -223,16 +223,15 @@
         return;
       }
 
-      // Preserve todo fields when editing
-      if (isEdit) {
+      // Preserve todo fields when editing non-todo types (converted items).
+      // For actual todo types, the form's completed checkbox is the source of truth.
+      if (isEdit && type !== 'todo') {
         if (editItem!.isTodo) item.isTodo = true;
         if (editItem!.completed) item.completed = editItem!.completed;
         if (editItem!.completedAt) item.completedAt = editItem!.completedAt;
       }
 
-      // Remove undefined values — remoteStorage schema validator rejects them
-      const cleanItem = JSON.parse(JSON.stringify(item!));
-      await storeItem(cleanItem, fileData);
+      await storeItem(item!, fileData);
       onclose();
     } catch (e) {
       console.error('Save failed:', e);
@@ -248,8 +247,7 @@
     try {
       const { completedAt: _, ...rest } = editItem!;
       const updated = { ...rest, isTodo: true, completed: false };
-      const clean = JSON.parse(JSON.stringify(updated));
-      await storeItem(clean);
+      await storeItem(updated as InboxItem);
       onclose();
     } catch (e) {
       console.error('Convert failed:', e);
@@ -286,8 +284,8 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="overlay" onclick={onclose}>
-  <div class="modal" onclick={(e) => e.stopPropagation()}>
-    <h2 class="modal-title">{isEdit ? editLabels[type] : addLabels[type]}</h2>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" onclick={(e) => e.stopPropagation()}>
+    <h2 class="modal-title" id="modal-title">{isEdit ? editLabels[type] : addLabels[type]}</h2>
 
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="form" onkeydown={(e) => { if (e.key === 'Enter' && !(e.target instanceof HTMLTextAreaElement) && canSubmit) { e.preventDefault(); handleSubmit(); } }}>

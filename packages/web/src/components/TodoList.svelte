@@ -142,15 +142,15 @@
       {/if}
     {/if}
   {/if}
-</div>
 
-{#if deleteTarget}
-  <DeleteConfirm
-    onConfirm={handleDelete}
-    onCancel={() => deleteTarget = null}
-    {deleting}
-  />
-{/if}
+  {#if deleteTarget}
+    <DeleteConfirm
+      onConfirm={handleDelete}
+      onCancel={() => deleteTarget = null}
+      {deleting}
+    />
+  {/if}
+</div>
 
 <style>
   .todo-list {
@@ -159,6 +159,7 @@
     border-radius: var(--radius);
     padding: 1rem;
     min-width: 0;
+    position: relative;
   }
 
   .todo-list.inline {
