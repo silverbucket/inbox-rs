@@ -3,8 +3,8 @@
   import { todoItems, storeItem, deleteItem } from '../lib/stores';
   import DeleteConfirm from './DeleteConfirm.svelte';
 
-  let { onedit, onadd, onexpandchange, inline = false }: {
-    onedit: (item: InboxItem) => void;
+  let { onselect, onadd, onexpandchange, inline = false }: {
+    onselect: (item: InboxItem) => void;
     onadd: () => void;
     onexpandchange?: (expanded: boolean) => void;
     inline?: boolean;
@@ -72,14 +72,16 @@
     {#if openTodos.length > 0}
       <ul role="list">
         {#each openTodos as todo (todo.id)}
+          {@const badge = typeBadge(todo)}
+          {@const note = todoNote(todo)}
           <li class="todo-item" role="button" tabindex="0"
             onclick={(e) => {
               const target = e.target as HTMLElement;
               if (target.closest('input, button')) return;
-              onedit(todo);
+              onselect(todo);
             }}
             onkeydown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onedit(todo); }
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onselect(todo); }
             }}>
             <input
               type="checkbox"
@@ -99,13 +101,13 @@
                   </svg>
                 </button>
               </div>
-              {#if typeBadge(todo) || todoNote(todo)}
+              {#if badge || note}
                 <div class="todo-meta">
-                  {#if typeBadge(todo)}
-                    <span class="type-badge">{typeBadge(todo)}</span>
+                  {#if badge}
+                    <span class="type-badge">{badge}</span>
                   {/if}
-                  {#if todoNote(todo)}
-                    <span class="todo-note">{todoNote(todo)}</span>
+                  {#if note}
+                    <span class="todo-note">{note}</span>
                   {/if}
                 </div>
               {/if}
@@ -127,14 +129,16 @@
       {#if showCompleted}
         <ul role="list" class="completed-list">
           {#each completedTodos as todo (todo.id)}
+            {@const badge = typeBadge(todo)}
+            {@const note = todoNote(todo)}
             <li class="todo-item completed" role="button" tabindex="0"
               onclick={(e) => {
                 const target = e.target as HTMLElement;
                 if (target.closest('input, button')) return;
-                onedit(todo);
+                onselect(todo);
               }}
               onkeydown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onedit(todo); }
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onselect(todo); }
               }}>
               <input
                 type="checkbox"
@@ -154,13 +158,13 @@
                     </svg>
                   </button>
                 </div>
-                {#if typeBadge(todo) || todoNote(todo)}
+                {#if badge || note}
                   <div class="todo-meta">
-                    {#if typeBadge(todo)}
-                      <span class="type-badge">{typeBadge(todo)}</span>
+                    {#if badge}
+                      <span class="type-badge">{badge}</span>
                     {/if}
-                    {#if todoNote(todo)}
-                      <span class="todo-note">{todoNote(todo)}</span>
+                    {#if note}
+                      <span class="todo-note">{note}</span>
                     {/if}
                   </div>
                 {/if}

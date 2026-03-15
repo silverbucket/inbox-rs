@@ -34,7 +34,8 @@
             subject = msg.subject;
             author = msg.author;
             if (msg.headerMessageId) {
-              messageUrl = `mid:${msg.headerMessageId}`;
+              const msgId = msg.headerMessageId.replace(/^<|>$/g, '');
+              messageUrl = `mid:${msgId}`;
             }
 
             const full = await messenger.messages.getFull(msg.id);
@@ -104,7 +105,7 @@
         <div class="body-preview">{bodyText.length > 500 ? bodyText.slice(0, 500) + '...' : bodyText}</div>
       {/if}
       <textarea bind:value={notes} placeholder="Add a note (optional)" rows="3"></textarea>
-      <button type="submit" class="btn-primary" disabled={saving}>
+      <button type="submit" class="btn-primary" disabled={saving || !subject.trim()}>
         {saving ? 'Saving...' : 'Save to Inbox'}
       </button>
     </form>

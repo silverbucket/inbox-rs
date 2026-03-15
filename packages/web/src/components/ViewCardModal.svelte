@@ -1,9 +1,7 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
-  import { deleteItem, storeItem } from '../lib/stores';
-  import { getFileUrl } from '../lib/rs';
-  import rs from '../lib/rs';
-  import { blobUrls, connected } from '../lib/stores';
+  import { deleteItem, storeItem, blobUrls, connected } from '../lib/stores';
+  import rs, { getFileUrl } from '../lib/rs';
   import ShareButton from './ShareButton.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
   import hljs from 'highlight.js/lib/core';
@@ -64,10 +62,20 @@
   let docLoading = $state(false);
 
   $effect(() => {
+    // Reset per-item state when item changes
+    if (audioBlobUrl) URL.revokeObjectURL(audioBlobUrl);
+    if (docBlobUrl) URL.revokeObjectURL(docBlobUrl);
+    audioBlobUrl = null;
+    audioLoading = false;
+    audioError = false;
+    highlightedHtml = '';
+    docBlobUrl = null;
+    docLoading = false;
+
     if (item.type === 'voice-memo') {
       loadAudio();
     }
-    if (item.type === 'code-snippet' && item.language) {
+    if (item.type === 'code-snippet') {
       highlightCode();
     }
     return () => {
@@ -203,7 +211,7 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="overlay" onclick={onclose}>
-  <div class="modal" role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()}>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="view-modal-title" onclick={(e) => e.stopPropagation()}>
     <div class="modal-header">
       <span class="type-badge">{item.type}</span>
       <time class="date">{formatDate(item.createdAt)}</time>
@@ -218,7 +226,7 @@
       {/if}
     </div>
 
-    <h2 class="title">
+    <h2 class="title" id="view-modal-title">
       {#if item.type === 'bookmark'}
         <a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}<svg class="link-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>
       {:else if item.type === 'email' && 'messageUrl' in item && item.messageUrl}

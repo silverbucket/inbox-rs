@@ -70,17 +70,17 @@
     <div class="content-layout" class:todos-collapsed={!todosExpanded}>
       {#if todosExpanded}
         <aside class="sidebar">
-          <TodoList onedit={openView} onadd={() => openAdd('todo')} onexpandchange={handleTodoExpandChange} />
+          <TodoList onselect={openView} onadd={() => openAdd('todo')} onexpandchange={handleTodoExpandChange} />
         </aside>
       {/if}
       <div class="inbox-area">
         <div class="inbox-top">
           {#if !todosExpanded}
-            <TodoList onedit={openView} onadd={() => openAdd('todo')} onexpandchange={handleTodoExpandChange} inline />
+            <TodoList onselect={openView} onadd={() => openAdd('todo')} onexpandchange={handleTodoExpandChange} inline />
           {/if}
           <AddEntryBar onadd={openAdd} />
         </div>
-        <InboxGrid onedit={openView} />
+        <InboxGrid onselect={openView} />
       </div>
     </div>
   {:else}

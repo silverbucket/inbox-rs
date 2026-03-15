@@ -10,7 +10,7 @@
   import DeleteConfirm from './DeleteConfirm.svelte';
   import { deleteItem } from '../lib/stores';
 
-  let { item, onedit }: { item: InboxItem; onedit: (item: InboxItem) => void } = $props();
+  let { item, onselect }: { item: InboxItem; onselect: (item: InboxItem) => void } = $props();
   let showDelete = $state(false);
   let deleting = $state(false);
 
@@ -35,10 +35,10 @@
   onclick={(e) => {
     const target = e.target as HTMLElement;
     if (target.closest('a, button, input, audio, video')) return;
-    onedit(item);
+    onselect(item);
   }}
   onkeydown={(e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onedit(item); }
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onselect(item); }
   }}>
   <div class="card-body">
     {#if item.type === 'bookmark'}

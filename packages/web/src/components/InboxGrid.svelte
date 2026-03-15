@@ -3,7 +3,7 @@
   import { sortedItems } from '../lib/stores';
   import InboxCard from './InboxCard.svelte';
 
-  let { onedit }: { onedit: (item: InboxItem) => void } = $props();
+  let { onselect }: { onselect: (item: InboxItem) => void } = $props();
   const items = $derived($sortedItems);
 
 </script>
@@ -23,7 +23,7 @@
   <div class="status-bar">You've got <span class="status-count">{items.length}</span> {items.length === 1 ? 'thing' : 'things'} waiting</div>
   <div class="grid">
     {#each items as item (item.id)}
-      <InboxCard {item} {onedit} />
+      <InboxCard {item} {onselect} />
     {/each}
   </div>
 {/if}
