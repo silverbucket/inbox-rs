@@ -6,7 +6,8 @@
   import AddEntryBar from './components/AddEntryBar.svelte';
   import AddEntryModal from './components/AddEntryModal.svelte';
   import ViewCardModal from './components/ViewCardModal.svelte';
-  import { connected, deleteItem, todoItems, appConfig, updateConfig } from './lib/stores';
+  import MigrationAlert from './components/MigrationAlert.svelte';
+  import { connected, deleteItem, todoItems, appConfig, updateConfig, pendingMigrations, runAllMigrations } from './lib/stores';
 
 
   let activeModal = $state<InboxItemType | null>(null);
@@ -14,6 +15,7 @@
   let viewingItem = $state<InboxItem | null>(null);
   let todosExpanded = $state(false);
   let userToggledTodos = false;
+  let migrationDismissed = $state(false);
 
   // React to config/todo changes to set default expand state,
   // but stop once the user has manually toggled.
@@ -66,6 +68,10 @@
 </header>
 
 <main>
+  {#if $pendingMigrations.length > 0 && !migrationDismissed}
+    <MigrationAlert migrations={$pendingMigrations} onrun={runAllMigrations} ondismiss={() => migrationDismissed = true} />
+  {/if}
+
   {#if $connected}
     <div class="content-layout" class:todos-collapsed={!todosExpanded}>
       {#if todosExpanded}

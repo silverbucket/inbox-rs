@@ -1,5 +1,5 @@
 import { writable, derived } from 'svelte/store';
-import type { InboxItem, AppConfig } from '@inbox-rs/rs-module';
+import type { InboxItem, AppConfig, PendingMigration } from '@inbox-rs/rs-module';
 import rs from './rs';
 
 /** Blob URLs for files that were just uploaded (available before remote sync completes) */
@@ -9,6 +9,7 @@ export const connected = writable(false);
 export const syncing = writable(false);
 export const items = writable<Record<string, InboxItem>>({});
 export const appConfig = writable<AppConfig>({});
+export const pendingMigrations = writable<PendingMigration[]>([]);
 
 async function loadItems() {
   const inbox = (rs as any).inbox;
@@ -84,6 +85,7 @@ rs.on('connected', () => {
   connected.set(true);
   void loadItems();
   void loadConfig();
+  void checkMigrations();
 });
 
 rs.on('disconnected', () => {
@@ -91,6 +93,29 @@ rs.on('disconnected', () => {
   items.set({});
   appConfig.set({});
 });
+
+async function checkMigrations() {
+  const inbox = (rs as any).inbox;
+  if (!inbox) return;
+  try {
+    const pending = await inbox.getPendingMigrations();
+    pendingMigrations.set(pending);
+  } catch {
+    // ignore
+  }
+}
+
+export async function runAllMigrations() {
+  const inbox = (rs as any).inbox;
+  if (!inbox) return;
+  let current: PendingMigration[] = [];
+  pendingMigrations.subscribe(v => current = v)();
+  for (const m of current) {
+    await inbox.runMigration(m.id);
+  }
+  pendingMigrations.set([]);
+  await loadItems();
+}
 
 export async function updateConfig(patch: Partial<AppConfig>) {
   const inbox = (rs as any).inbox;

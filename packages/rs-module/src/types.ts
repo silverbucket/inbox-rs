@@ -1,4 +1,4 @@
-export type InboxItemType = 'bookmark' | 'note' | 'image' | 'voice-memo' | 'document' | 'code-snippet' | 'todo' | 'email';
+export type InboxItemType = 'bookmark' | 'note' | 'image' | 'audio' | 'document' | 'code-snippet' | 'todo' | 'email';
 
 export interface InboxItemBase {
   id: string;
@@ -34,8 +34,8 @@ export interface ImageItem extends InboxItemBase {
   sourceUrl?: string; // original URL the image was saved from
 }
 
-export interface VoiceMemoItem extends InboxItemBase {
-  type: 'voice-memo';
+export interface AudioItem extends InboxItemBase {
+  type: 'audio';
   filePath: string;
   mimeType: string;
   duration?: number; // seconds
@@ -71,7 +71,7 @@ export interface EmailItem extends InboxItemBase {
   messageUrl?: string; // mid: URI to open in mail client
 }
 
-export type InboxItem = BookmarkItem | NoteItem | ImageItem | VoiceMemoItem | DocumentItem | CodeSnippetItem | TodoItem | EmailItem;
+export type InboxItem = BookmarkItem | NoteItem | ImageItem | AudioItem | DocumentItem | CodeSnippetItem | TodoItem | EmailItem;
 
 export interface AppConfig {
   todosCollapsed?: boolean;

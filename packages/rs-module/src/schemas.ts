@@ -55,11 +55,11 @@ export const imageMetaSchema = {
   required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt']
 };
 
-export const voiceMemoMetaSchema = {
+export const audioMetaSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
-    type: { type: 'string', enum: ['voice-memo'] },
+    type: { type: 'string', enum: ['audio'] },
     title: { type: 'string' },
     description: { type: 'string' },
     filePath: { type: 'string' },
