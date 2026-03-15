@@ -1,7 +1,50 @@
 <script lang="ts">
+  import type { InboxItemType, InboxItem } from '@inbox-rs/rs-module';
   import ConnectWidget from './components/ConnectWidget.svelte';
   import InboxGrid from './components/InboxGrid.svelte';
-  import { connected } from './lib/stores';
+  import TodoList from './components/TodoList.svelte';
+  import AddEntryBar from './components/AddEntryBar.svelte';
+  import AddEntryModal from './components/AddEntryModal.svelte';
+  import { connected, deleteItem, todoItems, appConfig, updateConfig } from './lib/stores';
+
+
+  let activeModal = $state<InboxItemType | null>(null);
+  let editingItem = $state<InboxItem | undefined>(undefined);
+  let todosExpanded = $state(false);
+  let userToggledTodos = false;
+
+  // React to config/todo changes to set default expand state,
+  // but stop once the user has manually toggled.
+  $effect(() => {
+    if (userToggledTodos) return;
+    const config = $appConfig;
+    if (config.todosCollapsed !== undefined) {
+      todosExpanded = !config.todosCollapsed;
+    } else {
+      todosExpanded = $todoItems.some(t => !t.completed);
+    }
+  });
+
+  function handleTodoExpandChange(v: boolean) {
+    userToggledTodos = true;
+    todosExpanded = v;
+    void updateConfig({ todosCollapsed: !v });
+  }
+
+  function openAdd(type: InboxItemType) {
+    editingItem = undefined;
+    activeModal = type;
+  }
+
+  function openEdit(item: InboxItem) {
+    editingItem = item;
+    activeModal = item.type;
+  }
+
+  function closeModal() {
+    activeModal = null;
+    editingItem = undefined;
+  }
 </script>
 
 <header>
@@ -13,7 +56,22 @@
 
 <main>
   {#if $connected}
-    <InboxGrid />
+    <div class="content-layout" class:todos-collapsed={!todosExpanded}>
+      {#if todosExpanded}
+        <aside class="sidebar">
+          <TodoList onedit={openEdit} onadd={() => openAdd('todo')} onexpandchange={handleTodoExpandChange} />
+        </aside>
+      {/if}
+      <div class="inbox-area">
+        <div class="inbox-top">
+          {#if !todosExpanded}
+            <TodoList onedit={openEdit} onadd={() => openAdd('todo')} onexpandchange={handleTodoExpandChange} inline />
+          {/if}
+          <AddEntryBar onadd={openAdd} />
+        </div>
+        <InboxGrid onedit={openEdit} />
+      </div>
+    </div>
   {:else}
     <div class="empty-state">
       <div class="empty-icon">📥</div>
@@ -22,6 +80,10 @@
     </div>
   {/if}
 </main>
+
+{#if activeModal}
+  <AddEntryModal type={activeModal} editItem={editingItem} onclose={closeModal} ondelete={async (item) => { await deleteItem(item.id, item); closeModal(); }} />
+{/if}
 
 <style>
   header {
@@ -56,6 +118,42 @@
     max-width: 1200px;
     margin: 0 auto;
     padding: 1.5rem;
+  }
+
+  .content-layout {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+  }
+
+  .inbox-top {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 5rem;
+  }
+
+  .inbox-area {
+    flex: 1;
+    min-width: 0;
+  }
+
+  @media (max-width: 768px) {
+    .content-layout {
+      flex-direction: column;
+    }
+    .sidebar {
+      width: 100%;
+      position: static;
+    }
   }
 
   .empty-state {

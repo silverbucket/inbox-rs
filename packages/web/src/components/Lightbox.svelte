@@ -36,23 +36,33 @@
   }
 
   async function fetchFileData(): Promise<{ data: ArrayBuffer; mime: string }> {
-    // Prefer RS module for inbox files (avoids token-in-URL fetch)
+    const mime = mimeType || 'application/octet-stream';
+
+    // Try fetching via the current src (works for blob URLs and RS URLs)
+    try {
+      const resp = await fetch(src);
+      if (resp.ok) {
+        return {
+          data: await resp.arrayBuffer(),
+          mime: mimeType || resp.headers.get('content-type') || mime
+        };
+      }
+    } catch {
+      // src fetch failed, try RS module
+    }
+
+    // Fallback: RS module direct file access
     if (filePath) {
       const inbox = (rs as any).inbox;
       if (inbox) {
         const file = await inbox.getFile(filePath);
         if (file?.data) {
-          return { data: file.data, mime: mimeType || file.mimeType || 'application/octet-stream' };
+          return { data: file.data, mime: mimeType || file.mimeType || mime };
         }
       }
     }
-    // Fallback: direct fetch (for RS URLs or same-origin external URLs)
-    const resp = await fetch(src);
-    if (!resp.ok) throw new Error(`Failed to fetch: ${resp.status}`);
-    return {
-      data: await resp.arrayBuffer(),
-      mime: mimeType || resp.headers.get('content-type') || 'application/octet-stream'
-    };
+
+    throw new Error('Could not load file data');
   }
 
   async function share() {
@@ -64,15 +74,72 @@
       if (!shares) throw new Error('Shares module not available');
 
       const { data, mime } = await fetchFileData();
-      const name = filename || filePath?.split('/').pop() || 'image.jpg';
+      const baseName = filename || filePath?.split('/').pop() || 'image.jpg';
+      const date = shares._formattedDate(new Date());
+      const name = date + '-' + baseName;
 
-      const shareUrl = await shares.storeFile(mime, name, data);
+      // PUT directly to remote, bypassing the sync layer entirely.
+      // Two reasons: (1) shares module has a sync thumbnail bug that throws
+      // because it reads Image dimensions before onload, and (2) the sync
+      // layer silently fails to push binary file data (same RS bug as inbox files).
+      const remote = (rs as any).remote;
+      if (!remote?.connected) throw new Error('Not connected to remote storage');
+
+      const filePutPath = '/public/shares/' + name;
+      await remote.put(filePutPath, data, mime);
+
+      // Generate and upload thumbnail directly if it's an image
+      if (shares._isImage(mime)) {
+        try {
+          await generateThumbnail(data, mime, name, remote);
+        } catch {
+          // Thumbnail failure is non-critical
+        }
+      }
+
+      const shareUrl = remote.href + filePutPath;
       publicUrl = shareUrl;
       shareState = 'done';
       saveSharedUrl(stableKey(), shareUrl);
-    } catch {
+    } catch (e) {
+      console.error('Sharesome save failed:', e);
       shareState = 'error';
       setTimeout(() => { shareState = 'idle'; }, 2000);
+    }
+  }
+
+  async function generateThumbnail(
+    data: ArrayBuffer, mime: string, name: string, remote: any
+  ) {
+    const blob = new Blob([data], { type: mime });
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = reject;
+        el.src = url;
+      });
+
+      const size = 200;
+      const sw = img.width, sh = img.height;
+      let sx = 0, sy = 0, cropW = sw, cropH = sh;
+      if (sw > sh) { sx = (sw - sh) / 2; cropW = sh; }
+      else if (sh > sw) { sy = (sh - sw) / 2; cropH = sw; }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, sx, sy, cropW, cropH, 0, 0, size, size);
+
+      const thumbBlob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(b => b ? resolve(b) : reject(), 'image/png');
+      });
+      const thumbData = await thumbBlob.arrayBuffer();
+      await remote.put('/public/shares/thumbnails/' + name + '.png', thumbData, 'image/png');
+    } finally {
+      URL.revokeObjectURL(url);
     }
   }
 
@@ -98,7 +165,7 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="lightbox-overlay" onclick={onclose}>
+<div class="lightbox-overlay" onclick={(e) => { e.stopPropagation(); onclose(); }}>
   <img
     class="lightbox-img"
     {src}
@@ -142,7 +209,7 @@
       </button>
     {/if}
   </div>
-  <button class="lightbox-close" onclick={onclose} aria-label="Close">&times;</button>
+  <button class="lightbox-close" onclick={(e) => { e.stopPropagation(); onclose(); }} aria-label="Close">&times;</button>
 </div>
 
 <style>

@@ -1,12 +1,14 @@
 <script lang="ts">
   import type { ImageItem } from '@inbox-rs/rs-module';
   import { getFileUrl } from '../lib/rs';
+  import { blobUrls, connected } from '../lib/stores';
   import Lightbox from './Lightbox.svelte';
 
   let { item, ondelete }: { item: ImageItem; ondelete?: () => void } = $props();
   let showLightbox = $state(false);
 
-  const imageSrc = $derived(getFileUrl(item.filePath));
+  // Re-evaluate URL when connected state changes (token becomes available)
+  const imageSrc = $derived($blobUrls[item.filePath] || ($connected ? getFileUrl(item.filePath) : null));
 </script>
 
 <div class="image-card">
@@ -15,7 +17,7 @@
   {/if}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="image-wrapper" onclick={() => { if (imageSrc) showLightbox = true; }}>
+  <div class="image-wrapper" onclick={(e) => { e.stopPropagation(); if (imageSrc) showLightbox = true; }}>
     {#if imageSrc}
       <img
         src={imageSrc}
