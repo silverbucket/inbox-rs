@@ -2,6 +2,7 @@ import { bookmarkSchema, noteSchema, imageMetaSchema, audioMetaSchema, documentM
 import type { InboxItem, AppConfig } from './types.js';
 import { migrations } from './migrations.js';
 export type { Migration } from './migrations.js';
+export { migrations } from './migrations.js';
 
 export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, AudioItem, DocumentItem, CodeSnippetItem, TodoItem, EmailItem, AppConfig } from './types.js';
 

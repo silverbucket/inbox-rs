@@ -1,5 +1,6 @@
-import { writable, derived, get } from 'svelte/store';
+import { writable, derived } from 'svelte/store';
 import type { InboxItem, AppConfig, PendingMigration } from '@inbox-rs/rs-module';
+import { migrations } from '@inbox-rs/rs-module';
 import rs from './rs';
 
 /** Blob URLs for files that were just uploaded (available before remote sync completes) */
@@ -9,7 +10,20 @@ export const connected = writable(false);
 export const syncing = writable(false);
 export const items = writable<Record<string, InboxItem>>({});
 export const appConfig = writable<AppConfig>({});
-export const pendingMigrations = writable<PendingMigration[]>([]);
+/** Derived from loaded items — no extra getAll call needed */
+export const pendingMigrations = derived(items, ($items) => {
+  const allValues = Object.values($items);
+  const pending: PendingMigration[] = [];
+  for (const m of migrations) {
+    const count = allValues.filter(
+      (item) => item && typeof item === 'object' && 'type' in item && (item as any).type === m.oldItemType
+    ).length;
+    if (count > 0) {
+      pending.push({ id: m.id, description: m.description, itemCount: count });
+    }
+  }
+  return pending;
+});
 
 async function loadItems() {
   const inbox = (rs as any).inbox;
@@ -85,7 +99,6 @@ rs.on('connected', () => {
   connected.set(true);
   void loadItems();
   void loadConfig();
-  void checkMigrations();
 });
 
 rs.on('disconnected', () => {
@@ -93,17 +106,6 @@ rs.on('disconnected', () => {
   items.set({});
   appConfig.set({});
 });
-
-async function checkMigrations() {
-  const inbox = (rs as any).inbox;
-  if (!inbox) return;
-  try {
-    const pending = await inbox.getPendingMigrations();
-    pendingMigrations.set(pending);
-  } catch {
-    // ignore
-  }
-}
 
 export async function runAllMigrations() {
   const inbox = (rs as any).inbox;
@@ -114,7 +116,6 @@ export async function runAllMigrations() {
     console.error('[inbox] migration failed:', e);
   }
   await loadItems();
-  await checkMigrations();
 }
 
 export async function updateConfig(patch: Partial<AppConfig>) {
@@ -131,7 +132,6 @@ const inbox = (rs as any).inbox;
 if (inbox) {
   inbox.onChange(() => {
     void loadItems();
-    void checkMigrations();
   });
 }
 

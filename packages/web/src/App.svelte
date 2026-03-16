@@ -67,11 +67,11 @@
 </header>
 
 <main>
-  {#if $pendingMigrations.length > 0}
-    <MigrationAlert migrations={$pendingMigrations} onrun={runAllMigrations} />
-  {/if}
-
   {#if $connected}
+    {#if $pendingMigrations.length > 0}
+      <MigrationAlert migrations={$pendingMigrations} onrun={runAllMigrations} />
+    {/if}
+
     <div class="content-layout" class:todos-collapsed={!todosExpanded}>
       {#if todosExpanded}
         <aside class="sidebar">
