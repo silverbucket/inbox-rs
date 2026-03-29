@@ -1,14 +1,12 @@
 <script lang="ts">
   import chromeLogo from '../assets/logos/chrome.svg';
-  import braveLogo from '../assets/logos/brave.svg';
   import firefoxLogo from '../assets/logos/firefox.svg';
   import thunderbirdLogo from '../assets/logos/thunderbird.svg';
   import { pluginArtifactVersion, pluginArtifacts } from '../lib/plugin-downloads.generated';
 
-  type PluginCard = {
-    browser: string;
-    eyebrow: string;
-    description: string;
+  type DownloadOption = {
+    name: string;
+    compatibility: string;
     downloadLabel: string;
     downloadHref: string;
     format: string;
@@ -18,141 +16,191 @@
     logoSrc: string;
   };
 
-  const pluginCards: PluginCard[] = [
+  const browserDownloads: DownloadOption[] = [
     {
-      browser: 'Chrome',
-      eyebrow: 'Chromium Build',
-      description: 'Manual install for Chrome with the full extension bundle packaged from this release.',
-      downloadLabel: 'Download Chrome Bundle',
+      name: 'Chromium',
+      compatibility: 'Chrome, Brave, Edge, and other Chromium browsers',
+      downloadLabel: 'Download Chromium Bundle',
       downloadHref: pluginArtifacts.chromium,
       format: 'ZIP',
-      note: 'Chrome does not support direct installation from an arbitrary website; load this bundle as an unpacked extension after extracting it.',
+      note: 'Chromium browsers require loading this as an unpacked extension.',
       steps: [
-        'Download and unzip the bundle.',
-        'Open chrome://extensions and enable Developer mode.',
-        'Choose Load unpacked and select the extracted folder.',
+        'Download and extract the ZIP.',
+        'Open your browser\'s extensions page and enable Developer mode.',
+        'Click Load unpacked and select the extracted folder.',
       ],
       accentClass: 'chrome',
       logoSrc: chromeLogo,
     },
     {
-      browser: 'Brave',
-      eyebrow: 'Chromium Build',
-      description: 'Uses the same Chromium package as Chrome, with Brave-specific install steps.',
-      downloadLabel: 'Download Brave Bundle',
-      downloadHref: pluginArtifacts.chromium,
-      format: 'ZIP',
-      note: 'Brave installs this as an unpacked Chromium extension; it is not a one-click web install.',
-      steps: [
-        'Download and unzip the bundle.',
-        'Open brave://extensions and enable Developer mode.',
-        'Choose Load unpacked and select the extracted folder.',
-      ],
-      accentClass: 'brave',
-      logoSrc: braveLogo,
-    },
-    {
-      browser: 'Firefox',
-      eyebrow: 'Signed-Like Package',
-      description: 'A packaged Firefox add-on build for temporary/manual installation during self-hosted deployment.',
+      name: 'Firefox',
+      compatibility: 'Firefox 109+',
       downloadLabel: 'Download Firefox Add-on',
       downloadHref: pluginArtifacts.firefox,
       format: 'XPI',
-      note: 'Local `.xpi` installation support varies by Firefox context; temporary install via debugging remains the most reliable path for unsigned builds.',
+      note: 'Unsigned builds require temporary installation via the debugging page.',
       steps: [
-        'Download the `.xpi` package.',
+        'Download the .xpi file.',
         'Open about:debugging#/runtime/this-firefox.',
-        'Choose Load Temporary Add-on and select the downloaded `.xpi`.',
+        'Click Load Temporary Add-on and select the file.',
       ],
       accentClass: 'firefox',
       logoSrc: firefoxLogo,
     },
-    {
-      browser: 'Thunderbird',
-      eyebrow: 'MailExtension',
-      description: 'Packaged Thunderbird extension for saving the currently viewed email into Inbox RS.',
-      downloadLabel: 'Download Thunderbird Add-on',
-      downloadHref: pluginArtifacts.thunderbird,
-      format: 'XPI',
-      note: 'Thunderbird can install the packaged add-on directly from the downloaded file.',
-      steps: [
-        'Download the `.xpi` package.',
-        'Open Thunderbird Add-ons and Themes.',
-        'Use the gear menu, choose Install Add-on From File, and select the package.',
-      ],
-      accentClass: 'thunderbird',
-      logoSrc: thunderbirdLogo,
-    },
   ];
+
+  const thunderbirdDownload: DownloadOption = {
+    name: 'Thunderbird',
+    compatibility: 'Thunderbird 128+',
+    downloadLabel: 'Download Thunderbird Add-on',
+    downloadHref: pluginArtifacts.thunderbird,
+    format: 'XPI',
+    note: 'Thunderbird installs the add-on directly from the downloaded file.',
+    steps: [
+      'Download the .xpi file.',
+      'Open Add-ons and Themes from the Thunderbird menu.',
+      'Use the gear menu and choose Install Add-on From File.',
+    ],
+    accentClass: 'thunderbird',
+    logoSrc: thunderbirdLogo,
+  };
 </script>
 
 <section class="plugins-page">
   <div class="hero-panel">
     <div class="hero-copy">
-      <p class="eyebrow">Installers</p>
-      <h2>Take Inbox RS beyond the browser tab.</h2>
+      <p class="eyebrow">Extensions</p>
+      <h2>Clip anything to your inbox.</h2>
       <p class="lede">
-        Download the current plugin builds directly from this deployment. Every installer on this page ships inside the web app output, so a copied `dist` folder still gives users everything they need.
+        Save web pages, emails, and quick notes to your remoteStorage account
+        from wherever you're reading. Every download on this page is bundled
+        with the v{pluginArtifactVersion} release.
       </p>
     </div>
-    <div class="hero-meta">
-      <div class="meta-card">
-        <span class="meta-label">Release</span>
-        <strong>{pluginArtifactVersion}</strong>
-      </div>
-      <div class="meta-card">
-        <span class="meta-label">Included Assets</span>
-        <strong>Chromium ZIP + 2 XPIs</strong>
-      </div>
-    </div>
   </div>
 
-  <div class="cards-grid">
-    {#each pluginCards as plugin}
-      <article class={`plugin-card ${plugin.accentClass}`}>
+  <section class="extension-section">
+    <div class="section-header">
+      <h2>Browser Extension</h2>
+      <p class="section-lede">
+        Save pages, jot quick notes, and right-click any link, image, or
+        selected text to send it to your inbox. The extension captures titles,
+        URLs, descriptions, and preview images automatically — with
+        site-aware extraction for Twitter/X, Reddit, Hacker News, and
+        Mastodon posts.
+      </p>
+      <ul class="feature-list">
+        <li><strong>Save Page</strong> — title, URL, description, and preview image</li>
+        <li><strong>Quick Note</strong> — free-form text, no URL required</li>
+        <li><strong>Context Menu</strong> — right-click to save links, images, or selected text</li>
+        <li><strong>Site-Aware</strong> — extracts tweets, Reddit posts, HN stories, and fediverse statuses</li>
+      </ul>
+    </div>
+
+    <div class="download-grid">
+      <p class="grid-label">Choose your browser</p>
+      {#each browserDownloads as dl}
+        <article class={`download-card ${dl.accentClass}`}>
+          <div class="card-topline">
+            <div class="card-heading">
+              <div class={`logo-badge ${dl.accentClass}`} aria-hidden="true">
+                <img src={dl.logoSrc} alt="" />
+              </div>
+              <div class="card-title-group">
+                <h3>{dl.name}</h3>
+                <span class="compatibility">{dl.compatibility}</span>
+              </div>
+            </div>
+            <span class="file-pill">{dl.format}</span>
+          </div>
+
+          <a class="download-button" href={dl.downloadHref} download>
+            {dl.downloadLabel}
+          </a>
+
+          <details class="install-details">
+            <summary>Installation steps</summary>
+            <p class="install-note">{dl.note}</p>
+            <ol class="steps">
+              {#each dl.steps as step}
+                <li>{step}</li>
+              {/each}
+            </ol>
+          </details>
+        </article>
+      {/each}
+    </div>
+  </section>
+
+  <section class="extension-section compact">
+    <div class="section-header">
+      <h2>Thunderbird Add-on</h2>
+      <p class="section-lede">
+        A toolbar button in the message view for saving emails. Captures the
+        subject, author, and body text, and lets you add your own notes before
+        saving.
+      </p>
+    </div>
+
+    <ul class="feature-list">
+      <li>
+        <strong>One-Click Save</strong> — button appears in the message
+        toolbar whenever you're reading an email
+      </li>
+      <li>
+        <strong>Full Extraction</strong> — pulls subject, sender, and the
+        plain-text message body
+      </li>
+      <li>
+        <strong>Add Notes</strong> — attach your own context before saving to
+        help with future triage
+      </li>
+    </ul>
+
+    <div class="download-grid single">
+      <article class={`download-card ${thunderbirdDownload.accentClass}`}>
         <div class="card-topline">
           <div class="card-heading">
-            <div class={`logo-badge ${plugin.accentClass}`} aria-hidden="true">
-              <img src={plugin.logoSrc} alt="" />
+            <div class={`logo-badge ${thunderbirdDownload.accentClass}`} aria-hidden="true">
+              <img src={thunderbirdDownload.logoSrc} alt="" />
             </div>
-            <span class="card-eyebrow">{plugin.eyebrow}</span>
+            <div class="card-title-group">
+              <h3>{thunderbirdDownload.name}</h3>
+              <span class="compatibility">{thunderbirdDownload.compatibility}</span>
+            </div>
           </div>
-          <span class="file-pill">{plugin.format}</span>
+          <span class="file-pill">{thunderbirdDownload.format}</span>
         </div>
 
-        <div class="card-copy">
-          <h3>{plugin.browser}</h3>
-          <p>{plugin.description}</p>
-        </div>
-
-        <a class="download-button" href={plugin.downloadHref} download>
-          {plugin.downloadLabel}
+        <a class="download-button" href={thunderbirdDownload.downloadHref} download>
+          {thunderbirdDownload.downloadLabel}
         </a>
 
-        <p class="install-note">{plugin.note}</p>
-
-        <ol class="steps">
-          {#each plugin.steps as step}
-            <li>{step}</li>
-          {/each}
-        </ol>
+        <details class="install-details">
+          <summary>Installation steps</summary>
+          <p class="install-note">{thunderbirdDownload.note}</p>
+          <ol class="steps">
+            {#each thunderbirdDownload.steps as step}
+              <li>{step}</li>
+            {/each}
+          </ol>
+        </details>
       </article>
-    {/each}
-  </div>
+    </div>
+  </section>
 </section>
 
 <style>
   .plugins-page {
     display: grid;
-    gap: clamp(1.5rem, 3vw, 2.5rem);
+    gap: clamp(2rem, 4vw, 3rem);
   }
+
+  /* ── Hero ── */
 
   .hero-panel {
     position: relative;
     overflow: hidden;
-    display: grid;
-    grid-template-columns: minmax(0, 1.8fr) minmax(260px, 0.9fr);
-    gap: clamp(1.25rem, 3vw, 2rem);
     padding: clamp(1.4rem, 3vw, 2.2rem);
     border: 1px solid color-mix(in srgb, var(--border) 70%, var(--accent) 30%);
     border-radius: calc(var(--radius) * 1.5);
@@ -180,9 +228,7 @@
     max-width: 42rem;
   }
 
-  .eyebrow,
-  .card-eyebrow,
-  .meta-label {
+  .eyebrow {
     text-transform: uppercase;
     letter-spacing: 0.14em;
     font-size: 0.72rem;
@@ -193,7 +239,7 @@
     font-size: clamp(2rem, 4vw, 3.35rem);
     line-height: 0.96;
     letter-spacing: -0.05em;
-    max-width: 12ch;
+    max-width: 18ch;
   }
 
   .lede {
@@ -202,33 +248,82 @@
     font-size: 1.02rem;
   }
 
-  .hero-meta {
+  /* ── Section ── */
+
+  .extension-section {
     display: grid;
-    gap: 1rem;
-    align-content: end;
+    gap: 1.25rem;
   }
 
-  .meta-card {
+  .extension-section.compact {
+    max-width: calc(50% - 0.5rem);
+  }
+
+  .extension-section.compact .feature-list {
+    grid-template-columns: 1fr;
+  }
+
+  .section-header {
     display: grid;
-    gap: 0.35rem;
-    padding: 1rem 1.1rem;
-    border: 1px solid color-mix(in srgb, var(--border) 78%, white 22%);
-    border-radius: var(--radius);
-    background: color-mix(in srgb, var(--surface) 88%, black 12%);
+    gap: 0.65rem;
   }
 
-  .meta-card strong {
-    font-size: 1.05rem;
-    letter-spacing: -0.02em;
+  .section-header h2 {
+    font-size: 1.5rem;
+    letter-spacing: -0.03em;
   }
 
-  .cards-grid {
+  .section-lede {
+    max-width: 52rem;
+    color: color-mix(in srgb, var(--text) 86%, var(--text-muted) 14%);
+    font-size: 0.95rem;
+    line-height: 1.55;
+  }
+
+  /* ── Feature List ── */
+
+  .feature-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.35rem 1.5rem;
+    margin: 0.25rem 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.88rem;
+    color: color-mix(in srgb, var(--text) 88%, var(--text-muted) 12%);
+  }
+
+  .feature-list li {
+    line-height: 1.45;
+  }
+
+  .feature-list strong {
+    color: var(--text);
+  }
+
+  /* ── Download Grid ── */
+
+  .grid-label {
+    grid-column: 1 / -1;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+
+  .download-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1rem;
   }
 
-  .plugin-card {
+  .download-grid.single {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* ── Download Card ── */
+
+  .download-card {
     position: relative;
     display: grid;
     gap: 1rem;
@@ -241,7 +336,7 @@
     transition: transform 180ms ease, border-color 180ms ease;
   }
 
-  .plugin-card::before {
+  .download-card::before {
     content: '';
     position: absolute;
     inset: 0;
@@ -250,26 +345,24 @@
     pointer-events: none;
   }
 
-  .plugin-card:hover {
+  .download-card:hover {
     transform: translateY(-2px);
     border-color: color-mix(in srgb, var(--accent) 36%, var(--border) 64%);
   }
 
-  .plugin-card.chrome::before {
+  .download-card.chrome::before {
     background: linear-gradient(135deg, rgba(66, 133, 244, 0.16), transparent 46%);
   }
 
-  .plugin-card.brave::before {
-    background: linear-gradient(135deg, rgba(251, 84, 43, 0.18), transparent 48%);
-  }
-
-  .plugin-card.firefox::before {
+  .download-card.firefox::before {
     background: linear-gradient(135deg, rgba(255, 113, 57, 0.18), transparent 48%);
   }
 
-  .plugin-card.thunderbird::before {
+  .download-card.thunderbird::before {
     background: linear-gradient(135deg, rgba(89, 116, 242, 0.2), transparent 48%);
   }
+
+  /* ── Card Internals ── */
 
   .card-topline {
     display: flex;
@@ -283,6 +376,21 @@
     align-items: center;
     gap: 0.95rem;
     min-width: 0;
+  }
+
+  .card-title-group {
+    display: grid;
+    gap: 0.15rem;
+  }
+
+  .card-title-group h3 {
+    font-size: 1.25rem;
+    letter-spacing: -0.02em;
+  }
+
+  .compatibility {
+    font-size: 0.78rem;
+    color: var(--text-muted);
   }
 
   .logo-badge {
@@ -345,20 +453,6 @@
       linear-gradient(180deg, rgba(66, 133, 244, 0.56), rgba(20, 22, 30, 0.2));
   }
 
-  .logo-badge.brave {
-    border-color: rgba(251, 84, 43, 0.44);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.08),
-      0 18px 34px rgba(251, 84, 43, 0.22);
-  }
-
-  .logo-badge.brave::before {
-    background:
-      radial-gradient(circle at 50% 24%, rgba(255, 204, 133, 0.44), transparent 28%),
-      radial-gradient(circle at 50% 72%, rgba(255, 117, 72, 0.32), transparent 34%),
-      linear-gradient(180deg, rgba(251, 84, 43, 0.78), rgba(123, 39, 18, 0.48) 58%, rgba(20, 22, 30, 0.18));
-  }
-
   .logo-badge.firefox {
     border-color: rgba(255, 113, 57, 0.44);
     box-shadow:
@@ -401,20 +495,7 @@
     letter-spacing: 0.04em;
   }
 
-  .card-copy {
-    display: grid;
-    gap: 0.55rem;
-  }
-
-  .card-copy h3 {
-    font-size: 1.45rem;
-    letter-spacing: -0.03em;
-  }
-
-  .card-copy p,
-  .install-note {
-    color: color-mix(in srgb, var(--text) 86%, var(--text-muted) 14%);
-  }
+  /* ── Download Button ── */
 
   .download-button {
     display: inline-flex;
@@ -439,9 +520,37 @@
     border-color: color-mix(in srgb, var(--accent) 70%, transparent);
   }
 
+  /* ── Install Details ── */
+
+  .install-details {
+    font-size: 0.9rem;
+  }
+
+  .install-details summary {
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    letter-spacing: 0.02em;
+    user-select: none;
+  }
+
+  .install-details summary:hover {
+    color: var(--text);
+  }
+
+  .install-details[open] summary {
+    margin-bottom: 0.6rem;
+  }
+
+  .install-note {
+    color: color-mix(in srgb, var(--text) 86%, var(--text-muted) 14%);
+    margin-bottom: 0.5rem;
+    font-size: 0.88rem;
+  }
+
   .steps {
     display: grid;
-    gap: 0.65rem;
+    gap: 0.5rem;
     margin: 0;
     padding-left: 1.25rem;
     color: var(--text);
@@ -452,10 +561,16 @@
     font-weight: 700;
   }
 
+  /* ── Responsive ── */
+
   @media (max-width: 860px) {
-    .hero-panel,
-    .cards-grid {
+    .feature-list,
+    .download-grid {
       grid-template-columns: 1fr;
+    }
+
+    .extension-section.compact {
+      max-width: 100%;
     }
   }
 </style>
