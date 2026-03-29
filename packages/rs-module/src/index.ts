@@ -1,21 +1,10 @@
 import { bookmarkSchema, noteSchema, imageMetaSchema, audioMetaSchema, documentMetaSchema, codeSnippetSchema, todoSchema, emailSchema, appConfigSchema } from './schemas.js';
 import type { InboxItem, AppConfig } from './types.js';
-import { migrations } from './migrations.js';
-export type { Migration } from './migrations.js';
-export { migrations } from './migrations.js';
+import type { MigrateResult } from 'rs-migrate';
+import { migrator, legacySchemas } from './migrations.js';
+export { migrator } from './migrations.js';
 
 export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, AudioItem, DocumentItem, CodeSnippetItem, TodoItem, EmailItem, AppConfig } from './types.js';
-
-export interface MigrationResult {
-  migrationId: string;
-  migratedCount: number;
-}
-
-export interface PendingMigration {
-  id: string;
-  description: string;
-  itemCount: number;
-}
 
 export interface InboxModuleExports {
   getAll(): Promise<Record<string, InboxItem>>;
@@ -26,8 +15,7 @@ export interface InboxModuleExports {
   getConfig(): Promise<AppConfig>;
   setConfig(config: AppConfig): Promise<void>;
   onChange(handler: (event: unknown) => void): void;
-  getPendingMigrations(): Promise<PendingMigration[]>;
-  runAllMigrations(): Promise<MigrationResult[]>;
+  runAllMigrations(): Promise<MigrateResult[]>;
 }
 
 const InboxModule = {
@@ -40,10 +28,8 @@ const InboxModule = {
     privateClient.declareType('document-meta', documentMetaSchema);
 
     // Register legacy schemas so old items can still be read for migration
-    for (const m of migrations) {
-      if (m.oldSchema) {
-        privateClient.declareType(m.oldType, m.oldSchema);
-      }
+    for (const ls of legacySchemas) {
+      privateClient.declareType(ls.type, ls.schema);
     }
     privateClient.declareType('code-snippet', codeSnippetSchema);
     privateClient.declareType('todo', todoSchema);
@@ -126,46 +112,17 @@ const InboxModule = {
           privateClient.on('change', handler);
         },
 
-        async getPendingMigrations(): Promise<PendingMigration[]> {
-          const pending: PendingMigration[] = [];
-          const allItems = await privateClient.getAll('items/');
-          if (!allItems) return pending;
-
-          for (const m of migrations) {
-            let count = 0;
-            for (const item of Object.values(allItems)) {
-              if (item && typeof item === 'object' && 'type' in item && (item as any).type === m.oldItemType) {
-                count++;
-              }
-            }
-            if (count > 0) {
-              pending.push({ id: m.id, description: m.description, itemCount: count });
-            }
-          }
-          return pending;
-        },
-
-        async runAllMigrations(): Promise<MigrationResult[]> {
-          const allItems = await privateClient.getAll('items/');
-          if (!allItems) return [];
-
-          const results: MigrationResult[] = [];
-          for (const m of migrations) {
-            let migratedCount = 0;
-            for (const [key, item] of Object.entries(allItems)) {
-              if (item && typeof item === 'object' && 'type' in item && (item as any).type === m.oldItemType) {
-                const transformed = m.transform(item);
-                const typeAlias = transformed.type === 'audio' ? 'audio-meta'
-                  : transformed.type === 'image' ? 'image-meta'
-                  : transformed.type === 'document' ? 'document-meta'
-                  : transformed.type;
-                await privateClient.storeObject(typeAlias, `items/${key}`, transformed);
-                migratedCount++;
-              }
-            }
-            results.push({ migrationId: m.id, migratedCount });
-          }
-          return results;
+        async runAllMigrations(): Promise<MigrateResult[]> {
+          return migrator.migrateAll('items', {
+            getAll: () => privateClient.getAll('items/').then((r: any) => r || {}),
+            save: async (key: string, doc: any) => {
+              const typeAlias = doc.type === 'audio' ? 'audio-meta'
+                : doc.type === 'image' ? 'image-meta'
+                : doc.type === 'document' ? 'document-meta'
+                : doc.type;
+              await privateClient.storeObject(typeAlias, `items/${key}`, doc);
+            },
+          });
         }
       } satisfies InboxModuleExports
     };

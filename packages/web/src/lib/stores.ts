@@ -1,6 +1,6 @@
 import { writable, derived } from 'svelte/store';
-import type { InboxItem, AppConfig, PendingMigration } from '@inbox-rs/rs-module';
-import { migrations } from '@inbox-rs/rs-module';
+import type { InboxItem, AppConfig } from '@inbox-rs/rs-module';
+import { migrator } from '@inbox-rs/rs-module';
 import rs from './rs';
 
 /** Blob URLs for files that were just uploaded (available before remote sync completes) */
@@ -10,19 +10,11 @@ export const connected = writable(false);
 export const syncing = writable(false);
 export const items = writable<Record<string, InboxItem>>({});
 export const appConfig = writable<AppConfig>({});
-/** Derived from loaded items — no extra getAll call needed */
-export const pendingMigrations = derived(items, ($items) => {
-  const allValues = Object.values($items);
-  const pending: PendingMigration[] = [];
-  for (const m of migrations) {
-    const count = allValues.filter(
-      (item) => item && typeof item === 'object' && 'type' in item && (item as any).type === m.oldItemType
-    ).length;
-    if (count > 0) {
-      pending.push({ id: m.id, description: m.description, itemCount: count });
-    }
-  }
-  return pending;
+/** Derived from loaded items using rs-migrate's getPending */
+export const pendingMigrationCount = derived(items, ($items) => {
+  const docs = Object.values($items);
+  if (docs.length === 0) return 0;
+  return migrator.getPending('items', docs).length;
 });
 
 async function loadItems() {

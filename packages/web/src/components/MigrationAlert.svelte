@@ -1,8 +1,6 @@
 <script lang="ts">
-  import type { PendingMigration } from '@inbox-rs/rs-module';
-
-  let { migrations, onrun }: {
-    migrations: PendingMigration[];
+  let { count, onrun }: {
+    count: number;
     onrun: () => void;
   } = $props();
 
@@ -21,11 +19,7 @@
 <div class="migration-alert" role="alert">
   <div class="alert-content">
     <strong>Data migration available</strong>
-    <ul>
-      {#each migrations as m}
-        <li>{m.description} ({m.itemCount} item{m.itemCount === 1 ? '' : 's'})</li>
-      {/each}
-    </ul>
+    <p>{count} item{count === 1 ? '' : 's'} need{count === 1 ? 's' : ''} to be migrated to the latest format.</p>
   </div>
   <div class="alert-actions">
     <button class="btn-migrate" onclick={handleMigrate} disabled={running}>
@@ -56,9 +50,8 @@
     font-size: 0.9rem;
   }
 
-  .alert-content ul {
+  .alert-content p {
     margin: 0.25rem 0 0;
-    padding-left: 1.25rem;
     font-size: 0.85rem;
     color: var(--text-muted);
   }
