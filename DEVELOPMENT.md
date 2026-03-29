@@ -150,7 +150,7 @@ inbox-rs/
 │   │           ├── BookmarkCard.svelte   # URL cards with images, body text
 │   │           ├── NoteCard.svelte       # Text notes
 │   │           ├── ImageCard.svelte      # Saved images
-│   │           ├── VoiceMemoCard.svelte  # Audio player (planned)
+│   │           ├── AudioCard.svelte      # Audio player
 │   │           ├── Lightbox.svelte       # Fullscreen image viewer
 │   │           ├── ConnectWidget.svelte  # RS connect/disconnect
 │   │           └── DeleteConfirm.svelte  # Delete confirmation dialog

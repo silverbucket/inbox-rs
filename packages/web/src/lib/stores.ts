@@ -1,5 +1,6 @@
 import { writable, derived } from 'svelte/store';
 import type { InboxItem, AppConfig } from '@inbox-rs/rs-module';
+import { migrator } from '@inbox-rs/rs-module';
 import rs from './rs';
 
 /** Blob URLs for files that were just uploaded (available before remote sync completes) */
@@ -9,6 +10,12 @@ export const connected = writable(false);
 export const syncing = writable(false);
 export const items = writable<Record<string, InboxItem>>({});
 export const appConfig = writable<AppConfig>({});
+/** Derived from loaded items using rs-migrate's getPending */
+export const pendingMigrationCount = derived(items, ($items) => {
+  const docs = Object.values($items);
+  if (docs.length === 0) return 0;
+  return migrator.getPending('items', docs).length;
+});
 
 async function loadItems() {
   const inbox = (rs as any).inbox;
@@ -91,6 +98,17 @@ rs.on('disconnected', () => {
   items.set({});
   appConfig.set({});
 });
+
+export async function runAllMigrations() {
+  const inbox = (rs as any).inbox;
+  if (!inbox) return;
+  try {
+    await inbox.runAllMigrations();
+  } catch (e) {
+    console.error('[inbox] migration failed:', e);
+  }
+  await loadItems();
+}
 
 export async function updateConfig(patch: Partial<AppConfig>) {
   const inbox = (rs as any).inbox;

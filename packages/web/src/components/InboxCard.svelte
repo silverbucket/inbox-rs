@@ -3,7 +3,7 @@
   import BookmarkCard from './BookmarkCard.svelte';
   import NoteCard from './NoteCard.svelte';
   import ImageCard from './ImageCard.svelte';
-  import VoiceMemoCard from './VoiceMemoCard.svelte';
+  import AudioCard from './AudioCard.svelte';
   import DocumentCard from './DocumentCard.svelte';
   import CodeSnippetCard from './CodeSnippetCard.svelte';
   import EmailCard from './EmailCard.svelte';
@@ -47,8 +47,8 @@
       <NoteCard {item} />
     {:else if item.type === 'image'}
       <ImageCard {item} ondelete={handleDelete} />
-    {:else if item.type === 'voice-memo'}
-      <VoiceMemoCard {item} />
+    {:else if item.type === 'audio'}
+      <AudioCard {item} />
     {:else if item.type === 'document'}
       <DocumentCard {item} />
     {:else if item.type === 'code-snippet'}

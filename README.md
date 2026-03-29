@@ -1,6 +1,6 @@
 # Inbox RS
 
-A universal inbox for saving URLs, notes, images, emails, and voice memos — backed by [remoteStorage](https://remotestorage.io). Your data stays on your own storage server, not someone else's cloud.
+A universal inbox for saving URLs, notes, images, emails, and audio — backed by [remoteStorage](https://remotestorage.io). Your data stays on your own storage server, not someone else's cloud.
 
 ## What it does
 
@@ -47,7 +47,7 @@ All four packages share the `@inbox-rs/rs-module` for consistent data types and 
 | `bookmark` | URL with title, description, og:image, favicon. Optionally includes `body` (embedded content like tweet text) and `filePath` (downloaded image). |
 | `note` | Freeform text with title and body. |
 | `image` | Downloaded image binary with metadata and optional source URL. |
-| `voice-memo` | Audio recording with duration. |
+| `audio` | Audio recording with duration. |
 | `document` | Uploaded file with metadata. |
 | `code-snippet` | Code with syntax highlighting and language tag. |
 | `email` | Email with subject, body, sender, optional notes, and `mid:` URI link. |

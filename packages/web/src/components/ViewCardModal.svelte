@@ -49,7 +49,7 @@
   let showDelete = $state(false);
   let deleting = $state(false);
 
-  // Voice memo audio
+  // Audio playback
   let audioBlobUrl = $state<string | null>(null);
   let audioLoading = $state(false);
   let audioError = $state(false);
@@ -72,7 +72,7 @@
     docBlobUrl = null;
     docLoading = false;
 
-    if (item.type === 'voice-memo') {
+    if (item.type === 'audio') {
       loadAudio();
     }
     if (item.type === 'code-snippet') {
@@ -85,7 +85,7 @@
   });
 
   async function loadAudio() {
-    if (item.type !== 'voice-memo') return;
+    if (item.type !== 'audio') return;
     audioLoading = true;
     try {
       const inbox = (rs as any).inbox;
@@ -255,7 +255,7 @@
         onerror={(e) => (e.currentTarget as HTMLImageElement).style.display = 'none'} />
     {/if}
 
-    {#if item.type === 'voice-memo'}
+    {#if item.type === 'audio'}
       <div class="player">
         {#if audioLoading}
           <p class="status-text">Loading audio...</p>
@@ -299,7 +299,7 @@
 
     {#if body && item.type !== 'code-snippet'}
       <div class="content-block">
-        <span class="content-label">{item.type === 'voice-memo' ? 'Transcription' : 'Body'}</span>
+        <span class="content-label">{item.type === 'audio' ? 'Transcription' : 'Body'}</span>
         <p class="content-text">{body}</p>
       </div>
     {/if}

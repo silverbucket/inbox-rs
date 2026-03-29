@@ -7,8 +7,9 @@
   import AddEntryBar from './components/AddEntryBar.svelte';
   import AddEntryModal from './components/AddEntryModal.svelte';
   import ViewCardModal from './components/ViewCardModal.svelte';
+  import MigrationAlert from './components/MigrationAlert.svelte';
   import PluginsPage from './components/PluginsPage.svelte';
-  import { connected, deleteItem, todoItems, appConfig, updateConfig } from './lib/stores';
+  import { connected, deleteItem, todoItems, appConfig, updateConfig, pendingMigrationCount, runAllMigrations } from './lib/stores';
 
   type Route = 'home' | 'plugins';
 
@@ -108,6 +109,10 @@
     <PluginsPage />
   {:else}
     {#if $connected}
+      {#if $pendingMigrationCount > 0}
+        <MigrationAlert count={$pendingMigrationCount} onrun={runAllMigrations} />
+      {/if}
+
       <div class="content-layout" class:todos-collapsed={!todosExpanded}>
         {#if todosExpanded}
           <aside class="sidebar">

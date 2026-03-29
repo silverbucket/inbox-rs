@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { VoiceMemoItem } from '@inbox-rs/rs-module';
+  import type { AudioItem } from '@inbox-rs/rs-module';
   import rs from '../lib/rs';
-  let { item }: { item: VoiceMemoItem } = $props();
+  let { item }: { item: AudioItem } = $props();
   let blobUrl = $state<string | null>(null);
   let loading = $state(true);
   let error = $state(false);
@@ -38,7 +38,7 @@
   }
 </script>
 
-<div class="voice-memo">
+<div class="audio">
   <h3 class="title">{item.title}</h3>
   {#if item.duration}
     <span class="duration">{formatDuration(item.duration)}</span>

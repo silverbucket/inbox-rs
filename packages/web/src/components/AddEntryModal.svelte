@@ -111,7 +111,7 @@
     'bookmark': 'Add Bookmark',
     'note': 'Add Note',
     'image': 'Add Image',
-    'voice-memo': 'Add Voice Memo',
+    'audio': 'Add Audio',
     'document': 'Add File',
     'code-snippet': 'Add Code Snippet',
     'todo': 'Add Todo',
@@ -122,7 +122,7 @@
     'bookmark': 'Edit Bookmark',
     'note': 'Edit Note',
     'image': 'Edit Image',
-    'voice-memo': 'Edit Voice Memo',
+    'audio': 'Edit Audio',
     'document': 'Edit File',
     'code-snippet': 'Edit Code Snippet',
     'todo': 'Edit Todo',
@@ -179,9 +179,9 @@
         } else {
           return;
         }
-      } else if (type === 'voice-memo') {
+      } else if (type === 'audio') {
         if (recordedBlob || file) {
-          const existingPath = isEdit && editItem!.type === 'voice-memo' ? editItem!.filePath : undefined;
+          const existingPath = isEdit && editItem!.type === 'audio' ? editItem!.filePath : undefined;
           let filePath: string;
           let mimeType: string;
           let duration: number | undefined;
@@ -200,9 +200,9 @@
             return;
           }
           const memoBody = body || transcript || undefined;
-          const autoTitle = title || transcript || 'Voice memo';
-          item = { id, type: 'voice-memo', title: autoTitle, filePath, mimeType, duration, body: memoBody, description: description || undefined, createdAt };
-        } else if (isEdit && editItem!.type === 'voice-memo') {
+          const autoTitle = title || transcript || 'Audio';
+          item = { id, type: 'audio', title: autoTitle, filePath, mimeType, duration, body: memoBody, description: description || undefined, createdAt };
+        } else if (isEdit && editItem!.type === 'audio') {
           item = { ...editItem!, title: title || editItem!.title, body: body || undefined, description: description || undefined };
         } else {
           return;
@@ -279,7 +279,7 @@
   const needsFile = $derived(type === 'image' || type === 'document');
   const canSubmit = $derived(
     saving || recording ? false
-    : type === 'voice-memo' ? !!(file || recordedBlob || hasExistingFile)
+    : type === 'audio' ? !!(file || recordedBlob || hasExistingFile)
     : needsFile ? !!(file || hasExistingFile)
     : type === 'bookmark' ? !!url
     : type === 'note' || type === 'code-snippet' || type === 'email' ? !!body
@@ -335,7 +335,7 @@
           <textarea bind:value={description} rows="2" placeholder="Optional description..."></textarea>
         </label>
 
-      {:else if type === 'voice-memo'}
+      {:else if type === 'audio'}
         {#if !isEdit}
           <div class="field">
             <span>Record</span>
