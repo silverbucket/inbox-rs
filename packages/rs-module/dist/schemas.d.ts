@@ -124,7 +124,7 @@ export declare const imageMetaSchema: {
     };
     required: string[];
 };
-export declare const voiceMemoMetaSchema: {
+export declare const audioMetaSchema: {
     type: string;
     properties: {
         isTodo: {

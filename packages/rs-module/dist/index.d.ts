@@ -1,5 +1,7 @@
 import type { InboxItem, AppConfig } from './types.js';
-export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, VoiceMemoItem, DocumentItem, CodeSnippetItem, TodoItem, EmailItem, AppConfig } from './types.js';
+import type { MigrateResult } from 'rs-migrate';
+export { migrator } from './migrations.js';
+export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, AudioItem, DocumentItem, CodeSnippetItem, TodoItem, EmailItem, AppConfig } from './types.js';
 export interface InboxModuleExports {
     getAll(): Promise<Record<string, InboxItem>>;
     getById(id: string): Promise<InboxItem | undefined>;
@@ -12,6 +14,7 @@ export interface InboxModuleExports {
     getConfig(): Promise<AppConfig>;
     setConfig(config: AppConfig): Promise<void>;
     onChange(handler: (event: unknown) => void): void;
+    runAllMigrations(): Promise<MigrateResult[]>;
 }
 declare const InboxModule: {
     name: string;
@@ -28,6 +31,7 @@ declare const InboxModule: {
             getConfig(): Promise<AppConfig>;
             setConfig(config: AppConfig): Promise<void>;
             onChange(handler: (event: unknown) => void): void;
+            runAllMigrations(): Promise<MigrateResult[]>;
         };
     };
 };

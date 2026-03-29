@@ -1,12 +1,18 @@
-import { bookmarkSchema, noteSchema, imageMetaSchema, voiceMemoMetaSchema, documentMetaSchema, codeSnippetSchema, todoSchema, emailSchema, appConfigSchema } from './schemas.js';
+import { bookmarkSchema, noteSchema, imageMetaSchema, audioMetaSchema, documentMetaSchema, codeSnippetSchema, todoSchema, emailSchema, appConfigSchema } from './schemas.js';
+import { migrator, legacySchemas } from './migrations.js';
+export { migrator } from './migrations.js';
 const InboxModule = {
     name: 'inbox',
     builder: (privateClient) => {
         privateClient.declareType('bookmark', bookmarkSchema);
         privateClient.declareType('note', noteSchema);
         privateClient.declareType('image-meta', imageMetaSchema);
-        privateClient.declareType('voice-memo-meta', voiceMemoMetaSchema);
+        privateClient.declareType('audio-meta', audioMetaSchema);
         privateClient.declareType('document-meta', documentMetaSchema);
+        // Register legacy schemas so old items can still be read for migration
+        for (const ls of legacySchemas) {
+            privateClient.declareType(ls.type, ls.schema);
+        }
         privateClient.declareType('code-snippet', codeSnippetSchema);
         privateClient.declareType('todo', todoSchema);
         privateClient.declareType('email', emailSchema);
@@ -45,7 +51,7 @@ const InboxModule = {
                             }
                         }
                     }
-                    const typeAlias = item.type === 'voice-memo' ? 'voice-memo-meta'
+                    const typeAlias = item.type === 'audio' ? 'audio-meta'
                         : item.type === 'image' ? 'image-meta'
                             : item.type === 'document' ? 'document-meta'
                                 : item.type;
@@ -79,6 +85,18 @@ const InboxModule = {
                 },
                 onChange(handler) {
                     privateClient.on('change', handler);
+                },
+                async runAllMigrations() {
+                    return migrator.migrateAll('items', {
+                        getAll: () => privateClient.getAll('items/').then((r) => r || {}),
+                        save: async (key, doc) => {
+                            const typeAlias = doc.type === 'audio' ? 'audio-meta'
+                                : doc.type === 'image' ? 'image-meta'
+                                    : doc.type === 'document' ? 'document-meta'
+                                        : doc.type;
+                            await privateClient.storeObject(typeAlias, `items/${key}`, doc);
+                        },
+                    });
                 }
             }
         };

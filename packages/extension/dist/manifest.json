@@ -16,8 +16,14 @@
     "default_title": "Inbox RS"
   },
   "background": {
-    "service_worker": "service-worker.js",
+    "scripts": ["service-worker.js"],
     "type": "module"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "inbox-rs@example.com",
+      "strict_min_version": "109.0"
+    }
   },
   "content_scripts": [
     {
