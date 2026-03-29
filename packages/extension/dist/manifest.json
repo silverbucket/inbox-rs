@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Inbox RS",
+  "version": "0.1.0",
+  "description": "Save links, text, and more to your remoteStorage inbox.",
+  "permissions": [
+    "contextMenus",
+    "activeTab",
+    "storage",
+    "identity",
+    "scripting"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_popup": "src/popup/index.html",
+    "default_title": "Inbox RS"
+  },
+  "background": {
+    "scripts": ["service-worker.js"],
+    "type": "module"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "inbox-rs@example.com",
+      "strict_min_version": "109.0"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content-metadata.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "src/options/index.html",
+  "icons": {
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}
