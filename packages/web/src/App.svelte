@@ -16,13 +16,14 @@
   let editingItem = $state<InboxItem | undefined>(undefined);
   let viewingItem = $state<InboxItem | null>(null);
   let todosExpanded = $state(false);
-  let route = $state<Route>('home');
-  let userToggledTodos = false;
 
   function getRouteFromHash(): Route {
     if (typeof window === 'undefined') return 'home';
     return window.location.hash === '#/plugins' ? 'plugins' : 'home';
   }
+
+  let route = $state<Route>(getRouteFromHash());
+  let userToggledTodos = false;
 
   // React to config/todo changes to set default expand state,
   // but stop once the user has manually toggled.
@@ -94,8 +95,8 @@
         <h1>Inbox <span class="accent">RS</span></h1>
       </a>
       <nav class="header-nav" aria-label="Primary">
-        <a class:active={route === 'home'} href="#/">Inbox</a>
-        <a class:active={route === 'plugins'} href="#/plugins">Plugins</a>
+        <a class:active={route === 'home'} aria-current={route === 'home' ? 'page' : undefined} href="#/">Inbox</a>
+        <a class:active={route === 'plugins'} aria-current={route === 'plugins' ? 'page' : undefined} href="#/plugins">Plugins</a>
       </nav>
     </div>
     <ConnectWidget />
