@@ -14,7 +14,12 @@ export const appConfig = writable<AppConfig>({});
 export const pendingMigrationCount = derived(items, ($items) => {
   const docs = Object.values($items);
   if (docs.length === 0) return 0;
-  return migrator.getPending('items', docs).length;
+  const pending = migrator.getPending('items', docs);
+  let count = 0;
+  for (const r of pending) {
+    if (r.pendingMigrations.length > 0) count++;
+  }
+  return count;
 });
 
 async function loadItems() {
