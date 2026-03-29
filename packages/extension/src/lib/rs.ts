@@ -52,7 +52,7 @@ export async function connectViaOAuth(userAddress: string): Promise<RSConfig> {
     : browser.identity.getRedirectURL();
 
   const oauthParams = new URLSearchParams({
-    client_id: 'inbox-rs-extension',
+    client_id: new URL(redirectUrl).origin,
     redirect_uri: redirectUrl,
     response_type: 'token',
     scope: 'inbox:rw'
