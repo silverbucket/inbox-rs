@@ -4,7 +4,7 @@ A universal inbox for saving URLs, notes, images, emails, and audio — backed b
 
 ## What it does
 
-**Web App** — A Svelte app that displays all your saved items in a card grid. Connect to any remoteStorage-compatible server to view, browse, and manage your inbox items. Click any card to view full details, edit, convert to a todo, or delete.
+**Web App** — A Svelte app that displays all your saved items in a card grid. Connect to any remoteStorage-compatible server to view, browse, and manage your inbox items. Click any card to view full details, edit, convert to a todo, or delete. The header also links to a Plugins page with downloadable browser and Thunderbird builds.
 
 **Browser Extension** — A Chrome/Firefox extension for quickly saving things while browsing:
 
@@ -61,9 +61,28 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for full setup instructions.
 npm install
 docker compose up -d          # Start local remoteStorage server
 npm run dev -w packages/web   # Start web app on localhost:5173
-npm run build:extension              # Build browser extension, load dist/ in browser
-npm run build:thunderbird            # Build Thunderbird extension, install .xpi
+npm run build                 # Build web app and package downloadable plugin artifacts into dist/
+npm run build:extension       # Build browser extension only
+npm run build:thunderbird     # Build Thunderbird extension only
 ```
+
+After `npm run build`, the web app output in `packages/web/dist/` includes:
+
+- `downloads/inbox-rs-chromium-<version>.zip`
+- `downloads/inbox-rs-firefox-<version>.xpi`
+- `downloads/inbox-rs-thunderbird-<version>.xpi`
+
+That makes the built `dist/` folder self-contained for static hosting.
+
+## Versioning
+
+The project currently uses the root `package.json` version as the release version for downloadable plugin artifacts. The packaging script reads that value and emits filenames like:
+
+- `inbox-rs-chromium-0.1.0.zip`
+- `inbox-rs-firefox-0.1.0.xpi`
+- `inbox-rs-thunderbird-0.1.0.xpi`
+
+In practice, that means a release bump should start by updating the root `version` field, then rebuilding so the generated downloads and metadata pick up the new versioned filenames.
 
 ## Tech stack
 
@@ -76,4 +95,4 @@ npm run build:thunderbird            # Build Thunderbird extension, install .xpi
 
 ## License
 
-MIT
+GPL-3.0
