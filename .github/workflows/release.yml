@@ -1,0 +1,66 @@
+name: Release & Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump type
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Bump version
+        id: version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          npm version ${{ inputs.bump }} --no-git-tag-version
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and tag
+        run: |
+          git add package.json package-lock.json
+          git commit -m "v${{ steps.version.outputs.version }}"
+          git tag "v${{ steps.version.outputs.version }}"
+          git push origin HEAD:master --tags
+
+      - name: Build plugins and web app
+        run: |
+          npm run package:plugins
+          npm run build
+
+      - name: Deploy to 5apps
+        env:
+          FIVEAPPS_DEPLOY_KEY: ${{ secrets.FIVEAPPS_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$FIVEAPPS_DEPLOY_KEY" > ~/.ssh/5apps_key
+          chmod 600 ~/.ssh/5apps_key
+          echo -e "Host 5apps.com\n  IdentityFile ~/.ssh/5apps_key\n  StrictHostKeyChecking no" >> ~/.ssh/config
+
+          git remote add 5apps git@5apps.com:silverbucket_inbox-rs.git
+          git add packages/web/dist -f
+          git commit -m "deploy v${{ steps.version.outputs.version }}"
+          git subtree push --prefix=packages/web/dist 5apps master
