@@ -39,9 +39,11 @@ On first run, sign up a test user at `http://localhost:8000/signup` (e.g. userna
 # Development server with HMR (http://localhost:5173)
 npm run dev -w packages/web
 
-# Production build
+# Production build with packaged plugin downloads
 npm run build -w packages/web
 ```
+
+The web app header includes a `Plugins` page at `#/plugins`. Production builds package browser and Thunderbird artifacts into `packages/web/dist/downloads/` so a static deployment of the web `dist/` folder can serve the installers directly.
 
 ### Connecting
 
@@ -90,6 +92,38 @@ BROWSER=firefox npm run build -w packages/extension
 ```
 
 This uses `manifest.firefox.json` instead of `manifest.json`.
+
+## Packaged plugin downloads
+
+```bash
+# Build the deployable web dist, including plugin downloads
+npm run build
+
+# Package plugin artifacts without rebuilding the web app
+npm run package:plugins
+```
+
+`npm run build` and `npm run build -w packages/web` both run the plugin packaging step before the web build. The generated files are copied into `packages/web/public/downloads/` for the build and then emitted to `packages/web/dist/downloads/`.
+
+Expected outputs:
+
+- `inbox-rs-chromium-<version>.zip`
+- `inbox-rs-firefox-<version>.xpi`
+- `inbox-rs-thunderbird-<version>.xpi`
+
+If the packaging step fails early with a message about `zip`, install the `zip` CLI and rerun the build.
+
+## Versioning
+
+The plugin download filenames are derived from the root `package.json` `version` field. Right now there is a single shared release version for the repo, and the packaging script treats that value as the canonical artifact version.
+
+When you want a new downloadable release:
+
+1. Update the root `package.json` version.
+2. Run `npm run build`.
+3. Deploy `packages/web/dist/`.
+
+The generated metadata file at `packages/web/src/lib/plugin-downloads.generated.ts` is rewritten by the packaging script only when its contents change.
 
 ## Project structure
 

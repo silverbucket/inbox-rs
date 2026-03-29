@@ -7,7 +7,8 @@
   ],
   "scripts": {
     "dev": "npm run dev --workspace=packages/web",
-    "build": "npm run build --workspace=packages/rs-module && npm run build --workspace=packages/web",
+    "build": "npm run build --workspace=packages/web",
+    "package:plugins": "node scripts/package-plugins.mjs",
     "build:extension": "npm run build --workspace=packages/extension",
     "build:thunderbird": "npm run build --workspace=packages/thunderbird"
   }

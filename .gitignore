@@ -5,3 +5,4 @@ rs-data/
 *.local
 .DS_Store
 *.xpi
+packages/web/public/downloads/
