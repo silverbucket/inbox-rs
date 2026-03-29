@@ -60,28 +60,27 @@ jobs:
             "
           done
 
-      - name: Commit and tag
-        run: |
-          git add -A
-          git commit -m "v${{ steps.version.outputs.version }}"
-          git tag "v${{ steps.version.outputs.version }}"
-          git push origin HEAD:master --tags
+      - name: Build web app
+        run: npm run build
 
-      - name: Build plugins and web app
-        run: |
-          npm run package:plugins
-          npm run build
-
-      - name: Deploy to 5apps
+      - name: Setup SSH for 5apps
         env:
           FIVEAPPS_DEPLOY_KEY: ${{ secrets.FIVEAPPS_DEPLOY_KEY }}
         run: |
           mkdir -p ~/.ssh
           echo "$FIVEAPPS_DEPLOY_KEY" > ~/.ssh/5apps_key
           chmod 600 ~/.ssh/5apps_key
-          echo -e "Host 5apps.com\n  IdentityFile ~/.ssh/5apps_key\n  StrictHostKeyChecking no" >> ~/.ssh/config
+          ssh-keyscan -H 5apps.com >> ~/.ssh/known_hosts
+          echo -e "Host 5apps.com\n  IdentityFile ~/.ssh/5apps_key" >> ~/.ssh/config
 
-          git remote add 5apps git@5apps.com:silverbucket_inbox-rs.git
+      - name: Deploy to 5apps
+        run: |
+          git remote add 5apps git@5apps.com:silverbucket_inbox-rs.git 2>/dev/null || git remote set-url 5apps git@5apps.com:silverbucket_inbox-rs.git
           git add packages/web/dist -f
           git commit -m "deploy v${{ steps.version.outputs.version }}"
           git subtree push --prefix=packages/web/dist 5apps master
+
+      - name: Tag and push version
+        run: |
+          git tag "v${{ steps.version.outputs.version }}"
+          git push origin HEAD:master --tags
