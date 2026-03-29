@@ -45,9 +45,19 @@ export async function connectViaOAuth(userAddress: string): Promise<RSConfig> {
     interactive: true
   });
 
-  const hash = new URL(resultUrl).hash.substring(1);
-  const params = new URLSearchParams(hash);
-  const token = params.get('access_token');
+  // Extract token from redirect URL
+  const redirectParsed = new URL(resultUrl);
+  const hashParams = new URLSearchParams(redirectParsed.hash.substring(1));
+  const queryParams = redirectParsed.searchParams;
+
+  // Check for OAuth error first
+  const oauthError = hashParams.get('error') || queryParams.get('error');
+  if (oauthError) {
+    const desc = hashParams.get('error_description') || queryParams.get('error_description') || '';
+    throw new Error(`OAuth error: ${oauthError}${desc ? ` — ${desc}` : ''}`);
+  }
+
+  const token = hashParams.get('access_token') || queryParams.get('access_token');
   if (!token) throw new Error('No access token in OAuth response');
 
   return { userAddress, token, href, storageApi };
