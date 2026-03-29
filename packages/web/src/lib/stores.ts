@@ -110,7 +110,7 @@ if (inbox) {
 }
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
+  if (document.visibilityState === 'visible' && (rs as any).remote?.connected) {
     rs.startSync();
   }
 });
