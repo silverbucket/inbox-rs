@@ -78,9 +78,17 @@ jobs:
           git remote add 5apps git@5apps.com:silverbucket_inbox-rs.git 2>/dev/null || git remote set-url 5apps git@5apps.com:silverbucket_inbox-rs.git
           git add packages/web/dist -f
           git commit -m "deploy v${{ steps.version.outputs.version }}"
-          git subtree push --prefix=packages/web/dist 5apps master
+          SPLIT_SHA=$(git subtree split --prefix=packages/web/dist)
+          git push 5apps "$SPLIT_SHA":refs/heads/master --force
 
-      - name: Tag and push version
+      - name: Create version PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git tag "v${{ steps.version.outputs.version }}"
-          git push origin HEAD:master --tags
+          VERSION="${{ steps.version.outputs.version }}"
+          BRANCH="release/v${VERSION}"
+          git checkout -b "$BRANCH"
+          git push origin "$BRANCH"
+          git tag "v${VERSION}"
+          git push origin "v${VERSION}"
+          gh pr create --title "v${VERSION}" --body "Automated version bump to ${VERSION}." --base master --head "$BRANCH"
