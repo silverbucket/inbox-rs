@@ -81,14 +81,7 @@ jobs:
           SPLIT_SHA=$(git subtree split --prefix=packages/web/dist)
           git push 5apps "$SPLIT_SHA":refs/heads/master --force
 
-      - name: Create version PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tag and push version
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          BRANCH="release/v${VERSION}"
-          git checkout -b "$BRANCH"
-          git push origin "$BRANCH"
-          git tag "v${VERSION}"
-          git push origin "v${VERSION}"
-          gh pr create --title "v${VERSION}" --body "Automated version bump to ${VERSION}." --base master --head "$BRANCH"
+          git tag "v${{ steps.version.outputs.version }}"
+          git push origin HEAD:master --tags
