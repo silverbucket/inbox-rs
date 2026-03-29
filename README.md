@@ -76,4 +76,4 @@ npm run build:thunderbird            # Build Thunderbird extension, install .xpi
 
 ## License
 
-MIT
+GPL-3.0
