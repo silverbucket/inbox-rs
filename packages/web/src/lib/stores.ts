@@ -109,6 +109,12 @@ if (inbox) {
   });
 }
 
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    rs.startSync();
+  }
+});
+
 export const sortedItems = derived(items, ($items) => {
   return Object.values($items)
     .filter(i => !i.isTodo && i.type !== 'todo')

@@ -10,6 +10,7 @@ const rs = new RemoteStorage({
 rs.access.claim('inbox', 'rw');
 rs.access.claim('shares', 'rw');
 rs.caching.enable('/inbox/');
+rs.setSyncInterval(3000);
 
 /**
  * Build a direct URL to an RS file that can be used as an img src.
