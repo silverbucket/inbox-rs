@@ -23,9 +23,8 @@ npm run build --workspace=packages/web &&
 git add . &&
 git commit -m "release ${version}" . &&
 git tag ${version} &&
-git push &&
+git push --set-upstream origin release/${version} &&
 git push --tags &&
-git subtree push --prefix=packages/web/dist 5apps master
-
+git subtree push --prefix=packages/web/dist 5apps master &&
 echo "Version ${version} deploy, merge release PR on github page"
 
