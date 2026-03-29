@@ -1,0 +1,86 @@
+name: Release & Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump type
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm install @rollup/rollup-linux-x64-gnu --no-save
+
+      - name: Bump version
+        id: version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          npm version ${{ inputs.bump }} --no-git-tag-version
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Sync version to all packages and manifests
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          for pkg in packages/*/package.json; do
+            node -e "
+              const fs = require('fs');
+              const p = JSON.parse(fs.readFileSync('$pkg','utf8'));
+              p.version = '$VERSION';
+              fs.writeFileSync('$pkg', JSON.stringify(p, null, 2) + '\n');
+            "
+          done
+          for manifest in packages/extension/manifest.json packages/extension/manifest.firefox.json packages/thunderbird/manifest.json; do
+            node -e "
+              const fs = require('fs');
+              const m = JSON.parse(fs.readFileSync('$manifest','utf8'));
+              m.version = '$VERSION';
+              fs.writeFileSync('$manifest', JSON.stringify(m, null, 2) + '\n');
+            "
+          done
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Setup SSH for 5apps
+        env:
+          FIVEAPPS_DEPLOY_KEY: ${{ secrets.FIVEAPPS_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$FIVEAPPS_DEPLOY_KEY" > ~/.ssh/5apps_key
+          chmod 600 ~/.ssh/5apps_key
+          ssh-keyscan -H 5apps.com >> ~/.ssh/known_hosts
+          echo -e "Host 5apps.com\n  IdentityFile ~/.ssh/5apps_key" >> ~/.ssh/config
+
+      - name: Deploy to 5apps
+        run: |
+          git remote add 5apps git@5apps.com:silverbucket_inbox-rs.git 2>/dev/null || git remote set-url 5apps git@5apps.com:silverbucket_inbox-rs.git
+          git add packages/web/dist -f
+          git commit -m "deploy v${{ steps.version.outputs.version }}"
+          git subtree push --prefix=packages/web/dist 5apps master
+
+      - name: Tag and push version
+        run: |
+          git tag "v${{ steps.version.outputs.version }}"
+          git push origin HEAD:master --tags
