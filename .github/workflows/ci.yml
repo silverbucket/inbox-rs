@@ -16,6 +16,7 @@ jobs:
           cache: npm
 
       - run: npm ci
+      - run: npm install @rollup/rollup-linux-x64-gnu --no-save
 
       - run: npm run package:plugins
 
