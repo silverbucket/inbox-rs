@@ -32,5 +32,5 @@ migrator.register({
   version: 1,
   collection: 'items',
   description: 'Rename voice memos to audio',
-  transform: (doc) => { doc.type = 'audio'; return doc; },
+  transform: (doc) => (doc.type === 'voice-memo' ? { ...doc, type: 'audio' } : doc),
 });

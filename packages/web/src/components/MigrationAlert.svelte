@@ -1,7 +1,7 @@
 <script lang="ts">
   let { count, onrun }: {
     count: number;
-    onrun: () => void;
+    onrun: () => Promise<void>;
   } = $props();
 
   let running = $state(false);
