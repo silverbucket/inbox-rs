@@ -39,9 +39,29 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Sync version to all packages and manifests
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          for pkg in packages/*/package.json; do
+            node -e "
+              const fs = require('fs');
+              const p = JSON.parse(fs.readFileSync('$pkg','utf8'));
+              p.version = '$VERSION';
+              fs.writeFileSync('$pkg', JSON.stringify(p, null, 2) + '\n');
+            "
+          done
+          for manifest in packages/extension/manifest.json packages/extension/manifest.firefox.json packages/thunderbird/manifest.json; do
+            node -e "
+              const fs = require('fs');
+              const m = JSON.parse(fs.readFileSync('$manifest','utf8'));
+              m.version = '$VERSION';
+              fs.writeFileSync('$manifest', JSON.stringify(m, null, 2) + '\n');
+            "
+          done
+
       - name: Commit and tag
         run: |
-          git add package.json package-lock.json
+          git add -A
           git commit -m "v${{ steps.version.outputs.version }}"
           git tag "v${{ steps.version.outputs.version }}"
           git push origin HEAD:master --tags
