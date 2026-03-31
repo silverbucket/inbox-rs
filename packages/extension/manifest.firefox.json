@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Inbox RS",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Save links, text, and more to your remoteStorage inbox.",
   "permissions": [
     "contextMenus",
