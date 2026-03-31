@@ -168,7 +168,7 @@ export async function storeItem(item: InboxItem, fileData?: ArrayBuffer) {
     console.log('[inbox] stored file, triggering sync:', item.filePath);
     rs.startSync();
   }
-  items.update(current => ({ ...current, [item.id]: item }));
+  items.update(current => ({ ...current, [cleanItem.id]: cleanItem }));
 }
 
 export async function deleteItem(id: string, item?: InboxItem) {
