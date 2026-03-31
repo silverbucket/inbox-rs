@@ -48,6 +48,11 @@ const InboxModule = {
         },
 
         async store(item: InboxItem, fileData?: ArrayBuffer): Promise<void> {
+          // Stamp new items with the current migration version so they aren't
+          // flagged as needing migration by getPending().
+          if (item._migrateVersion === undefined) {
+            item._migrateVersion = migrator.getLatestVersion('items');
+          }
           if (fileData && 'filePath' in item && item.filePath && 'mimeType' in item && item.mimeType) {
             // Store file locally for immediate access
             const bytes = new Uint8Array(fileData);

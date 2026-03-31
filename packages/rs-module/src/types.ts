@@ -6,6 +6,7 @@ export interface InboxItemBase {
   title: string;
   description?: string;
   createdAt: string; // ISO 8601
+  _migrateVersion?: number; // rs-migrate: tracks which migrations have been applied
   isTodo?: boolean;
   completed?: boolean;
   completedAt?: string;
