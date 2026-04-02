@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { untrack, onDestroy } from 'svelte';
   import type { InboxItem } from '@inbox-rs/rs-module';
   import { deleteItem, storeItem, blobUrls, connected } from '../lib/stores';
   import rs, { getFileUrl } from '../lib/rs';
@@ -84,6 +84,10 @@
     if (currentItem.type === 'code-snippet') {
       highlightCode();
     }
+  });
+
+  onDestroy(() => {
+    if (docBlobUrl) URL.revokeObjectURL(docBlobUrl);
   });
 
   async function handleTranscribe() {
