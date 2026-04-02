@@ -1,29 +1,35 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" fill="#5b52e5"/>
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="#4f46e5"/>
 
-  <!-- Bucket -->
-  <path d="M 295 570 L 258 870 Q 253 906 295 906 L 729 906 Q 771 906 766 870 L 729 570 Z" fill="white" opacity="0.95"/>
-  <rect x="265" y="540" width="494" height="52" rx="26" fill="white"/>
-  <path d="M 305 592 L 270 860 Q 267 886 297 886 L 727 886 Q 757 886 754 860 L 719 592 Z" fill="#5b52e5" opacity="0.1"/>
-  <path d="M 494 660 L 530 660 L 530 700 L 555 700 L 512 748 L 469 700 L 494 700 Z" fill="#5b52e5" opacity="0.25"/>
+  <!-- === ARROW — single unified shape, amber === -->
+  <path d="
+    M 460 148
+    Q 460 130 478 130
+    L 546 130
+    Q 564 130 564 148
+    L 564 350
+    L 660 350
+    L 512 524
+    L 364 350
+    L 460 350
+    Z
+  " fill="#fbbf24"/>
 
-  <!-- Note card (golden, upper-left of cascade) -->
-  <rect x="330" y="120" width="175" height="125" rx="20" fill="#fbbf24"/>
-  <line x1="358" y1="156" x2="478" y2="156" stroke="#78350f" stroke-width="9" stroke-linecap="round"/>
-  <line x1="358" y1="180" x2="450" y2="180" stroke="#78350f" stroke-width="9" stroke-linecap="round" opacity="0.55"/>
-  <line x1="358" y1="204" x2="418" y2="204" stroke="#78350f" stroke-width="9" stroke-linecap="round" opacity="0.3"/>
-
-  <!-- Audio waveform pill (green, upper-right of cascade) -->
-  <rect x="540" y="245" width="175" height="85" rx="42" fill="#34d399"/>
-  <line x1="575" y1="270" x2="575" y2="305" stroke="#064e3b" stroke-width="7.5" stroke-linecap="round"/>
-  <line x1="594" y1="261" x2="594" y2="314" stroke="#064e3b" stroke-width="7.5" stroke-linecap="round"/>
-  <line x1="613" y1="254" x2="613" y2="321" stroke="#064e3b" stroke-width="7.5" stroke-linecap="round"/>
-  <line x1="632" y1="263" x2="632" y2="312" stroke="#064e3b" stroke-width="7.5" stroke-linecap="round"/>
-  <line x1="651" y1="272" x2="651" y2="303" stroke="#064e3b" stroke-width="7.5" stroke-linecap="round"/>
-  <line x1="670" y1="265" x2="670" y2="310" stroke="#064e3b" stroke-width="7.5" stroke-linecap="round"/>
-
-  <!-- Photo card (pink, center, about to drop in) -->
-  <rect x="418" y="385" width="125" height="125" rx="22" fill="#f472b6"/>
-  <polygon points="440,470 466,424 492,452 508,436 526,470" fill="#831843" opacity="0.6"/>
-  <circle cx="502" cy="416" r="13" fill="#fef3c7" opacity="0.9"/>
+  <!-- === INBOX TRAY — single unified path === -->
+  <path d="
+    M 175 570
+    L 295 570
+    L 320 710
+    Q 330 758 380 758
+    L 644 758
+    Q 694 758 704 710
+    L 729 570
+    L 849 570
+    L 849 748
+    Q 849 820 779 820
+    L 245 820
+    Q 175 820 175 748
+    Z
+  " fill="white"/>
 </svg>
