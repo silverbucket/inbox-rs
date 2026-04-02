@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import type { InboxItem } from '@inbox-rs/rs-module';
   import { deleteItem, storeItem, blobUrls, connected } from '../lib/stores';
   import rs, { getFileUrl } from '../lib/rs';
@@ -76,7 +77,7 @@
     transcribing = false;
     transcriptionError = false;
     highlightedHtml = '';
-    if (docBlobUrl) URL.revokeObjectURL(docBlobUrl);
+    untrack(() => { if (docBlobUrl) URL.revokeObjectURL(docBlobUrl); });
     docBlobUrl = null;
     docLoading = false;
 
