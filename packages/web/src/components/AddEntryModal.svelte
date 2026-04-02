@@ -201,7 +201,8 @@
           }
           const memoBody = body || transcript || undefined;
           const autoTitle = title || transcript || 'Audio';
-          item = { id, type: 'audio', title: autoTitle, filePath, mimeType, duration, body: memoBody, description: description || undefined, createdAt };
+          const transcribed = !!(transcript || body) || undefined;
+          item = { id, type: 'audio', title: autoTitle, filePath, mimeType, duration, body: memoBody, transcribed, description: description || undefined, createdAt };
         } else if (isEdit && editItem!.type === 'audio') {
           item = { ...editItem!, title: title || editItem!.title, body: body || undefined, description: description || undefined };
         } else {

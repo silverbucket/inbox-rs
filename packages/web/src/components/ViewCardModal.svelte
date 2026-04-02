@@ -2,6 +2,7 @@
   import type { InboxItem } from '@inbox-rs/rs-module';
   import { deleteItem, storeItem, blobUrls, connected } from '../lib/stores';
   import rs, { getFileUrl } from '../lib/rs';
+  import { transcribeAudio } from '../lib/transcribe';
   import ShareButton from './ShareButton.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
   import hljs from 'highlight.js/lib/core';
@@ -49,10 +50,16 @@
   let showDelete = $state(false);
   let deleting = $state(false);
 
-  // Audio playback
-  let audioBlobUrl = $state<string | null>(null);
-  let audioLoading = $state(false);
-  let audioError = $state(false);
+  // Audio playback — use direct URL like images instead of downloading via getFile
+  const audioSrc = $derived(
+    item.type === 'audio'
+      ? ($blobUrls[item.filePath] || ($connected ? getFileUrl(item.filePath) : null))
+      : null
+  );
+
+  // Audio transcription
+  let transcribing = $state(false);
+  let transcriptionError = $state(false);
 
   // Code highlighting
   let highlightedHtml = $state('');
@@ -62,43 +69,44 @@
   let docLoading = $state(false);
 
   $effect(() => {
-    // Reset per-item state when item changes
-    if (audioBlobUrl) URL.revokeObjectURL(audioBlobUrl);
-    if (docBlobUrl) URL.revokeObjectURL(docBlobUrl);
-    audioBlobUrl = null;
-    audioLoading = false;
-    audioError = false;
+    // Track only item to trigger reloads when it changes
+    const currentItem = item;
+
+    // Reset per-item state
+    transcribing = false;
+    transcriptionError = false;
     highlightedHtml = '';
     docBlobUrl = null;
     docLoading = false;
 
-    if (item.type === 'audio') {
-      loadAudio();
-    }
-    if (item.type === 'code-snippet') {
+    if (currentItem.type === 'code-snippet') {
       highlightCode();
     }
-    return () => {
-      if (audioBlobUrl) URL.revokeObjectURL(audioBlobUrl);
-      if (docBlobUrl) URL.revokeObjectURL(docBlobUrl);
-    };
   });
 
-  async function loadAudio() {
+  async function handleTranscribe() {
     if (item.type !== 'audio') return;
-    audioLoading = true;
+    transcribing = true;
+    transcriptionError = false;
     try {
+      // Fetch audio data for transcription
       const inbox = (rs as any).inbox;
       const file = await inbox.getFile(item.filePath);
-      if (file?.data) {
-        audioBlobUrl = URL.createObjectURL(new Blob([file.data], { type: item.mimeType }));
-      } else {
-        audioError = true;
-      }
-    } catch {
-      audioError = true;
+      if (!file?.data) throw new Error('Could not load audio file');
+      const blob = new Blob([file.data], { type: item.mimeType });
+      const text = await transcribeAudio(blob);
+      const updated = {
+        ...item,
+        body: text || undefined,
+        title: text && item.title === 'Audio' ? text.slice(0, 50) : item.title,
+        transcribed: true,
+      };
+      await storeItem(updated);
+    } catch (e) {
+      console.warn('Transcription failed:', e);
+      transcriptionError = true;
     } finally {
-      audioLoading = false;
+      transcribing = false;
     }
   }
 
@@ -257,15 +265,21 @@
 
     {#if item.type === 'audio'}
       <div class="player">
-        {#if audioLoading}
-          <p class="status-text">Loading audio...</p>
-        {:else if audioError}
-          <p class="status-text">Failed to load audio</p>
-        {:else if audioBlobUrl}
-          <audio controls src={audioBlobUrl} preload="metadata"></audio>
+        {#if audioSrc}
+          <audio controls src={audioSrc} preload="metadata"></audio>
+        {:else}
+          <p class="status-text">Connect to load audio</p>
         {/if}
         {#if item.duration}
           <span class="duration">{formatDuration(item.duration)}</span>
+        {/if}
+        {#if transcribing}
+          <p class="status-text">Transcribing...</p>
+        {:else if transcriptionError}
+          <p class="status-text">Transcription failed</p>
+          <button class="btn-action" onclick={handleTranscribe}>Retry</button>
+        {:else if audioSrc && !item.transcribed && !item.body}
+          <button class="btn-action" onclick={handleTranscribe}>Transcribe</button>
         {/if}
       </div>
     {/if}
