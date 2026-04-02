@@ -41,7 +41,7 @@ export interface AudioItem extends InboxItemBase {
   mimeType: string;
   duration?: number; // seconds
   body?: string; // transcription text
-  transcribed?: boolean; // whether transcription has been attempted
+  transcribed?: boolean; // whether transcription has been handled
 }
 
 export interface DocumentItem extends InboxItemBase {
