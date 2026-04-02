@@ -5,6 +5,16 @@ const todoFields = {
   completedAt: { type: 'string' },
 };
 
+// Shared collection field — any item can belong to a collection
+const collectionFields = {
+  collectionId: { type: 'string' },
+};
+
+// rs-migrate version stamp — must be in every item schema so remoteStorage persists it
+const migrateFields = {
+  _migrateVersion: { type: 'number' },
+};
+
 export const bookmarkSchema = {
   type: 'object',
   properties: {
@@ -21,6 +31,8 @@ export const bookmarkSchema = {
     mimeType: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...collectionFields,
+    ...migrateFields,
   },
   required: ['id', 'type', 'title', 'url', 'createdAt']
 };
@@ -35,6 +47,8 @@ export const noteSchema = {
     body: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...collectionFields,
+    ...migrateFields,
   },
   required: ['id', 'type', 'title', 'body', 'createdAt']
 };
@@ -51,6 +65,8 @@ export const imageMetaSchema = {
     sourceUrl: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...collectionFields,
+    ...migrateFields,
   },
   required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt']
 };
@@ -68,6 +84,8 @@ export const audioMetaSchema = {
     body: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...collectionFields,
+    ...migrateFields,
   },
   required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt']
 };
@@ -85,6 +103,8 @@ export const documentMetaSchema = {
     fileName: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...collectionFields,
+    ...migrateFields,
   },
   required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt']
 };
@@ -100,6 +120,8 @@ export const codeSnippetSchema = {
     language: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...collectionFields,
+    ...migrateFields,
   },
   required: ['id', 'type', 'title', 'body', 'createdAt']
 };
@@ -117,6 +139,8 @@ export const emailSchema = {
     messageUrl: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...collectionFields,
+    ...migrateFields,
   },
   required: ['id', 'type', 'title', 'body', 'createdAt']
 };
@@ -125,6 +149,7 @@ export const appConfigSchema = {
   type: 'object',
   properties: {
     todosCollapsed: { type: 'boolean' },
+    collectionsOrder: { type: 'array', items: { type: 'string' } },
   }
 };
 
@@ -138,7 +163,21 @@ export const todoSchema = {
     body: { type: 'string' },
     completed: { type: 'boolean' },
     completedAt: { type: 'string' },
-    createdAt: { type: 'string' }
+    createdAt: { type: 'string' },
+    ...collectionFields,
   },
   required: ['id', 'type', 'title', 'completed', 'createdAt']
+};
+
+export const collectionSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    description: { type: 'string' },
+    itemIds: { type: 'array', items: { type: 'string' } },
+    createdAt: { type: 'string' },
+    color: { type: 'string' },
+  },
+  required: ['id', 'name', 'itemIds', 'createdAt']
 };

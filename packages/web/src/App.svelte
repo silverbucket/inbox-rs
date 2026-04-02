@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { InboxItemType, InboxItem } from '@inbox-rs/rs-module';
+  import type { InboxItemType, InboxItem, Collection } from '@inbox-rs/rs-module';
   import ConnectWidget from './components/ConnectWidget.svelte';
   import InboxGrid from './components/InboxGrid.svelte';
   import TodoList from './components/TodoList.svelte';
@@ -9,18 +9,27 @@
   import ViewCardModal from './components/ViewCardModal.svelte';
   import MigrationAlert from './components/MigrationAlert.svelte';
   import PluginsPage from './components/PluginsPage.svelte';
-  import { connected, deleteItem, todoItems, appConfig, updateConfig, pendingMigrationCount, runAllMigrations } from './lib/stores';
+  import CollectionsPage from './components/CollectionsPage.svelte';
+  import CollectionFormModal from './components/CollectionFormModal.svelte';
+  import { connected, deleteItem, todoItems, appConfig, updateConfig, pendingMigrationCount, runAllMigrations, storeCollection } from './lib/stores';
 
-  type Route = 'home' | 'plugins';
+  type Route =
+    | { page: 'home' }
+    | { page: 'plugins' }
+    | { page: 'collections' };
 
   let activeModal = $state<InboxItemType | null>(null);
   let editingItem = $state<InboxItem | undefined>(undefined);
   let viewingItem = $state<InboxItem | null>(null);
   let todosExpanded = $state(false);
+  let showCollectionForm = $state(false);
 
   function getRouteFromHash(): Route {
-    if (typeof window === 'undefined') return 'home';
-    return window.location.hash === '#/plugins' ? 'plugins' : 'home';
+    if (typeof window === 'undefined') return { page: 'home' };
+    const hash = window.location.hash;
+    if (hash === '#/plugins') return { page: 'plugins' };
+    if (hash === '#/collections') return { page: 'collections' };
+    return { page: 'home' };
   }
 
   let route = $state<Route>(getRouteFromHash());
@@ -52,7 +61,7 @@
   });
 
   $effect(() => {
-    if (route !== 'plugins') return;
+    if (route.page === 'home') return;
     activeModal = null;
     editingItem = undefined;
     viewingItem = null;
@@ -87,6 +96,11 @@
     activeModal = null;
     editingItem = undefined;
   }
+
+  function handleCreateCollection(col: Collection) {
+    void storeCollection(col);
+    showCollectionForm = false;
+  }
 </script>
 
 <header>
@@ -96,8 +110,9 @@
         <h1>Inbox <span class="accent">RS</span></h1>
       </a>
       <nav class="header-nav" aria-label="Primary">
-        <a class:active={route === 'home'} aria-current={route === 'home' ? 'page' : undefined} href="#/">Inbox</a>
-        <a class:active={route === 'plugins'} aria-current={route === 'plugins' ? 'page' : undefined} href="#/plugins">Plugins</a>
+        <a class:active={route.page === 'home'} aria-current={route.page === 'home' ? 'page' : undefined} href="#/">Inbox</a>
+        <a class:active={route.page === 'collections'} aria-current={route.page === 'collections' ? 'page' : undefined} href="#/collections">Collections</a>
+        <a class:active={route.page === 'plugins'} aria-current={route.page === 'plugins' ? 'page' : undefined} href="#/plugins">Plugins</a>
       </nav>
     </div>
     <ConnectWidget />
@@ -105,8 +120,18 @@
 </header>
 
 <main>
-  {#if route === 'plugins'}
+  {#if route.page === 'plugins'}
     <PluginsPage />
+  {:else if route.page === 'collections'}
+    {#if $connected}
+      <CollectionsPage onselect={openView} oncreate={() => showCollectionForm = true} />
+    {:else}
+      <div class="empty-state">
+        <div class="empty-icon">📥</div>
+        <h2>Connect your storage</h2>
+        <p>Enter your remoteStorage address above to view your collections.</p>
+      </div>
+    {/if}
   {:else}
     {#if $connected}
       {#if $pendingMigrationCount > 0}
@@ -145,6 +170,10 @@
 
 {#if activeModal}
   <AddEntryModal type={activeModal} editItem={editingItem} onclose={closeModal} ondelete={async (item) => { await deleteItem(item.id, item); closeModal(); }} />
+{/if}
+
+{#if showCollectionForm}
+  <CollectionFormModal onclose={() => showCollectionForm = false} onsave={handleCreateCollection} />
 {/if}
 
 <style>

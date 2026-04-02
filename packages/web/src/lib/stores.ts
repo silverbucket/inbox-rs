@@ -1,5 +1,5 @@
 import { writable, derived } from 'svelte/store';
-import type { InboxItem, AppConfig } from '@inbox-rs/rs-module';
+import type { InboxItem, AppConfig, Collection } from '@inbox-rs/rs-module';
 import { migrator } from '@inbox-rs/rs-module';
 import rs from './rs';
 
@@ -10,6 +10,7 @@ export const connected = writable(false);
 export const syncing = writable(false);
 export const items = writable<Record<string, InboxItem>>({});
 export const appConfig = writable<AppConfig>({});
+export const collections = writable<Record<string, Collection>>({});
 /** Derived from loaded items using rs-migrate's getPending */
 export const pendingMigrationCount = derived(items, ($items) => {
   const docs = Object.values($items);
@@ -48,6 +49,23 @@ async function loadConfig() {
     if (config && typeof config === 'object') {
       appConfig.set(config);
     }
+  } catch {
+    // ignore
+  }
+}
+
+async function loadCollections() {
+  const inbox = (rs as any).inbox;
+  if (!inbox) return;
+  try {
+    const all = await inbox.getAllCollections();
+    const valid: Record<string, Collection> = {};
+    for (const [key, col] of Object.entries(all)) {
+      if (col && typeof col === 'object' && 'id' in col && (col as Collection).id) {
+        valid[key] = col as Collection;
+      }
+    }
+    collections.set(valid);
   } catch {
     // ignore
   }
@@ -96,12 +114,14 @@ rs.on('connected', () => {
   connected.set(true);
   void loadItems();
   void loadConfig();
+  void loadCollections();
 });
 
 rs.on('disconnected', () => {
   connected.set(false);
   items.set({});
   appConfig.set({});
+  collections.set({});
 });
 
 export async function runAllMigrations() {
@@ -129,6 +149,7 @@ const inbox = (rs as any).inbox;
 if (inbox) {
   inbox.onChange(() => {
     void loadItems();
+    void loadCollections();
   });
 }
 
@@ -140,19 +161,43 @@ document.addEventListener('visibilitychange', () => {
 
 export const sortedItems = derived(items, ($items) => {
   return Object.values($items)
-    .filter(i => !i.isTodo && i.type !== 'todo')
+    .filter(i => !i.isTodo && i.type !== 'todo' && !i.collectionId)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 });
 
 export const todoItems = derived(items, ($items) => {
   return Object.values($items)
-    .filter(i => i.isTodo || i.type === 'todo')
+    .filter(i => (i.isTodo || i.type === 'todo') && !i.collectionId)
     .sort((a, b) => {
       const aDone = !!a.completed;
       const bDone = !!b.completed;
       if (aDone !== bDone) return aDone ? 1 : -1;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
+});
+
+export const sortedCollections = derived([collections, appConfig], ([$collections, $config]) => {
+  const cols = Object.values($collections);
+  if ($config.collectionsOrder?.length) {
+    const order = $config.collectionsOrder;
+    return cols.sort((a, b) => {
+      const ai = order.indexOf(a.id);
+      const bi = order.indexOf(b.id);
+      return (ai === -1 ? Infinity : ai) - (bi === -1 ? Infinity : bi);
+    });
+  }
+  return cols.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+});
+
+export const collectionItems = derived([items, collections], ([$items, $collections]) => {
+  const result: Record<string, InboxItem[]> = {};
+  const itemMap = new Map(Object.values($items).map(i => [i.id, i]));
+  for (const [cid, col] of Object.entries($collections)) {
+    result[cid] = col.itemIds
+      .map(id => itemMap.get(id))
+      .filter((i): i is InboxItem => i !== undefined);
+  }
+  return result;
 });
 
 export async function storeItem(item: InboxItem, fileData?: ArrayBuffer) {
@@ -185,4 +230,129 @@ export async function deleteItem(id: string, item?: InboxItem) {
     }
     return next;
   });
+}
+
+export async function storeCollection(collection: Collection) {
+  const inbox = (rs as any).inbox;
+  const clean = JSON.parse(JSON.stringify(collection)) as Collection;
+  await inbox.storeCollection(clean);
+  collections.update(current => ({ ...current, [clean.id]: clean }));
+}
+
+export async function deleteCollection(id: string) {
+  const inbox = (rs as any).inbox;
+  // Return orphaned items to inbox
+  let orphanedItems: InboxItem[] = [];
+  items.update(current => {
+    const next = { ...current };
+    for (const key of Object.keys(next)) {
+      if (next[key].collectionId === id) {
+        const updated = { ...next[key] };
+        delete (updated as any).collectionId;
+        next[key] = updated as InboxItem;
+        orphanedItems.push(updated as InboxItem);
+      }
+    }
+    return next;
+  });
+  // Persist orphaned items without collectionId
+  for (const item of orphanedItems) {
+    const cleanItem = JSON.parse(JSON.stringify(item)) as InboxItem;
+    await inbox.store(cleanItem);
+  }
+  await inbox.removeCollection(id);
+  collections.update(current => {
+    const next = { ...current };
+    delete next[id];
+    return next;
+  });
+}
+
+export async function moveItemToCollection(itemId: string, collectionId: string | undefined) {
+  const inbox = (rs as any).inbox;
+  let item: InboxItem | undefined;
+  let oldCollectionId: string | undefined;
+
+  items.update(current => {
+    const next = { ...current };
+    for (const key of Object.keys(next)) {
+      if (next[key].id === itemId) {
+        oldCollectionId = next[key].collectionId;
+        const updated = { ...next[key] };
+        if (collectionId) {
+          updated.collectionId = collectionId;
+        } else {
+          delete (updated as any).collectionId;
+        }
+        next[key] = updated as InboxItem;
+        item = updated as InboxItem;
+        break;
+      }
+    }
+    return next;
+  });
+
+  if (!item) return;
+
+  // Persist item
+  const cleanItem = JSON.parse(JSON.stringify(item)) as InboxItem;
+  await inbox.store(cleanItem);
+
+  // Update source collection's itemIds
+  if (oldCollectionId) {
+    collections.update(current => {
+      const col = current[oldCollectionId!];
+      if (col) {
+        const updated = { ...col, itemIds: col.itemIds.filter(id => id !== itemId) };
+        return { ...current, [oldCollectionId!]: updated };
+      }
+      return current;
+    });
+    let sourceCol: Collection | undefined;
+    collections.subscribe(c => { sourceCol = c[oldCollectionId!]; })();
+    if (sourceCol) {
+      await inbox.storeCollection(JSON.parse(JSON.stringify(sourceCol)));
+    }
+  }
+
+  // Update target collection's itemIds
+  if (collectionId) {
+    collections.update(current => {
+      const col = current[collectionId];
+      if (col && !col.itemIds.includes(itemId)) {
+        const updated = { ...col, itemIds: [...col.itemIds, itemId] };
+        return { ...current, [collectionId]: updated };
+      }
+      return current;
+    });
+    let targetCol: Collection | undefined;
+    collections.subscribe(c => { targetCol = c[collectionId]; })();
+    if (targetCol) {
+      await inbox.storeCollection(JSON.parse(JSON.stringify(targetCol)));
+    }
+  }
+}
+
+export async function removeItemFromCollection(itemId: string, collectionId: string) {
+  return moveItemToCollection(itemId, undefined);
+}
+
+export async function reorderCollectionItems(collectionId: string, newItemIds: string[]) {
+  const inbox = (rs as any).inbox;
+  collections.update(current => {
+    const col = current[collectionId];
+    if (col) {
+      return { ...current, [collectionId]: { ...col, itemIds: newItemIds } };
+    }
+    return current;
+  });
+  let col: Collection | undefined;
+  collections.subscribe(c => { col = c[collectionId]; })();
+  if (col) {
+    await inbox.storeCollection(JSON.parse(JSON.stringify(col)));
+  }
+}
+
+export async function reorderCollections(newOrder: string[]) {
+  await updateConfig({ collectionsOrder: newOrder });
 }

@@ -10,6 +10,7 @@ export interface InboxItemBase {
   isTodo?: boolean;
   completed?: boolean;
   completedAt?: string;
+  collectionId?: string; // undefined = lives in inbox
 }
 
 export interface BookmarkItem extends InboxItemBase {
@@ -76,4 +77,14 @@ export type InboxItem = BookmarkItem | NoteItem | ImageItem | AudioItem | Docume
 
 export interface AppConfig {
   todosCollapsed?: boolean;
+  collectionsOrder?: string[]; // ordered list of collection IDs for nav display
+}
+
+export interface Collection {
+  id: string;
+  name: string;
+  description?: string;
+  itemIds: string[];       // ordered array — controls sort order within collection
+  createdAt: string;       // ISO 8601
+  color?: string;          // optional accent color
 }

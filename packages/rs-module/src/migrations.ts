@@ -33,3 +33,10 @@ migrator.register({
   description: 'Rename voice memos to audio',
   transform: (doc) => (doc.type === 'voice-memo' ? { ...doc, type: 'audio' } : doc),
 });
+
+migrator.register({
+  version: 2,
+  collection: 'items',
+  description: 'Add optional collectionId field (no transform needed)',
+  transform: (doc) => doc,
+});

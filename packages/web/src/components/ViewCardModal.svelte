@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
-  import { deleteItem, storeItem, blobUrls, connected } from '../lib/stores';
+  import { deleteItem, storeItem, blobUrls, connected, sortedCollections, moveItemToCollection } from '../lib/stores';
   import rs, { getFileUrl } from '../lib/rs';
   import ShareButton from './ShareButton.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
@@ -48,6 +48,7 @@
 
   let showDelete = $state(false);
   let deleting = $state(false);
+  let showMoveMenu = $state(false);
 
   // Audio playback
   let audioBlobUrl = $state<string | null>(null);
@@ -163,6 +164,23 @@
   }
 
   const canMakeTodo = $derived(item.type !== 'todo' && !item.isTodo);
+  const canMakeRef = $derived(item.isTodo || item.type === 'todo');
+
+  let convertingRef = $state(false);
+
+  async function convertToReference() {
+    convertingRef = true;
+    try {
+      const updated = { ...item };
+      delete (updated as any).isTodo;
+      delete (updated as any).completed;
+      delete (updated as any).completedAt;
+      await storeItem(updated as InboxItem);
+      onclose();
+    } finally {
+      convertingRef = false;
+    }
+  }
 
   function formatDate(iso: string): string {
     const d = new Date(iso);
@@ -222,6 +240,15 @@
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
           </svg>
           Make Todo
+        </button>
+      {/if}
+      {#if canMakeRef}
+        <button class="btn-todo btn-todo-top" disabled={convertingRef} onclick={convertToReference}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+          </svg>
+          Make Reference
         </button>
       {/if}
     </div>
@@ -325,6 +352,38 @@
         </svg>
         Delete
       </button>
+      <div class="move-container">
+        <button class="btn-move" onclick={() => showMoveMenu = !showMoveMenu}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+          </svg>
+          {item.collectionId ? 'Move' : 'Collect'}
+        </button>
+        {#if showMoveMenu}
+          <div class="move-dropdown">
+            {#if item.collectionId}
+              <button class="move-option" onclick={() => { void moveItemToCollection(item.id, undefined); showMoveMenu = false; onclose(); }}>
+                Return to Inbox
+              </button>
+              <div class="move-divider"></div>
+            {/if}
+            {#each $sortedCollections as col (col.id)}
+              {#if col.id !== item.collectionId}
+                <button class="move-option" onclick={() => { void moveItemToCollection(item.id, col.id); showMoveMenu = false; onclose(); }}>
+                  <span class="move-dot" style="background: {col.color || '#6366f1'}"></span>
+                  {col.name}
+                </button>
+              {/if}
+            {/each}
+            {#if $sortedCollections.length === 0}
+              <div class="move-empty">No collections</div>
+            {/if}
+          </div>
+        {/if}
+      </div>
       <button class="btn-cancel" onclick={onclose}>Close</button>
       <button class="btn-edit" onclick={() => onedit(item)}>Edit</button>
     </div>
@@ -638,5 +697,79 @@
 
   .btn-edit:hover {
     opacity: 0.9;
+  }
+
+  .move-container {
+    position: relative;
+  }
+
+  .btn-move {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 0.45rem 0.75rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  .btn-move:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .move-dropdown {
+    position: absolute;
+    bottom: calc(100% + 0.35rem);
+    left: 0;
+    min-width: 180px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.3rem;
+    z-index: 10;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  }
+
+  .move-option {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+    padding: 0.4rem 0.5rem;
+    border: none;
+    background: none;
+    color: var(--text);
+    font-size: 0.8rem;
+    cursor: pointer;
+    border-radius: 4px;
+    text-align: left;
+  }
+
+  .move-option:hover {
+    background: rgba(99, 102, 241, 0.1);
+  }
+
+  .move-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .move-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 0.2rem 0;
+  }
+
+  .move-empty {
+    padding: 0.4rem 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
   }
 </style>
