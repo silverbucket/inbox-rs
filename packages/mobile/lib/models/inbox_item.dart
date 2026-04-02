@@ -49,6 +49,7 @@ class InboxItem {
       'type': type.value,
       'title': title,
       'createdAt': createdAt,
+      '_migrateVersion': 1,
     };
     if (body != null) map['body'] = body;
     if (description != null) map['description'] = description;
