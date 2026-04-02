@@ -5,6 +5,11 @@ const todoFields = {
   completedAt: { type: 'string' },
 };
 
+// rs-migrate version stamp — must be in every item schema so remoteStorage persists it
+const migrateFields = {
+  _migrateVersion: { type: 'number' },
+};
+
 export const bookmarkSchema = {
   type: 'object',
   properties: {
@@ -21,6 +26,7 @@ export const bookmarkSchema = {
     mimeType: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...migrateFields,
   },
   required: ['id', 'type', 'title', 'url', 'createdAt']
 };
@@ -35,6 +41,7 @@ export const noteSchema = {
     body: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...migrateFields,
   },
   required: ['id', 'type', 'title', 'body', 'createdAt']
 };
@@ -51,6 +58,7 @@ export const imageMetaSchema = {
     sourceUrl: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...migrateFields,
   },
   required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt']
 };
@@ -69,6 +77,7 @@ export const audioMetaSchema = {
     transcribed: { type: 'boolean' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...migrateFields,
   },
   required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt']
 };
@@ -86,6 +95,7 @@ export const documentMetaSchema = {
     fileName: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...migrateFields,
   },
   required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt']
 };
@@ -101,6 +111,7 @@ export const codeSnippetSchema = {
     language: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...migrateFields,
   },
   required: ['id', 'type', 'title', 'body', 'createdAt']
 };
@@ -118,6 +129,7 @@ export const emailSchema = {
     messageUrl: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...migrateFields,
   },
   required: ['id', 'type', 'title', 'body', 'createdAt']
 };
@@ -139,7 +151,8 @@ export const todoSchema = {
     body: { type: 'string' },
     completed: { type: 'boolean' },
     completedAt: { type: 'string' },
-    createdAt: { type: 'string' }
+    createdAt: { type: 'string' },
+    ...migrateFields,
   },
   required: ['id', 'type', 'title', 'completed', 'createdAt']
 };
