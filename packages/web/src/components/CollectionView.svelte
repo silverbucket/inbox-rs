@@ -81,9 +81,7 @@
 </script>
 
 <div class="collection-card" style="--col-color: {collection.color || '#6366f1'}" class:expanded class:has-both={hasBoth} class:todo-only={todoItems.length > 0 && referenceItems.length === 0} class:ref-only={referenceItems.length > 0 && todoItems.length === 0}>
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="card-header" onclick={ontoggle}>
+  <div class="card-header" role="button" tabindex="0" onclick={ontoggle} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ontoggle(); } }} aria-expanded={expanded} aria-label="{expanded ? 'Collapse' : 'Expand'} {collection.name}">
     <svg class="chevron" class:open={expanded} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="6 9 12 15 18 9"></polyline>
     </svg>

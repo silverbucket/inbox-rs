@@ -62,7 +62,12 @@ async function loadCollections() {
     const valid: Record<string, Collection> = {};
     for (const [key, col] of Object.entries(all)) {
       if (col && typeof col === 'object' && 'id' in col && (col as Collection).id) {
-        valid[key] = col as Collection;
+        const collection = col as Collection;
+        if (key !== collection.id) continue;
+        valid[key] = {
+          ...collection,
+          itemIds: Array.isArray(collection.itemIds) ? collection.itemIds : [],
+        };
       }
     }
     collections.set(valid);
@@ -137,11 +142,11 @@ export async function runAllMigrations() {
 
 export async function updateConfig(patch: Partial<AppConfig>) {
   const inbox = (rs as any).inbox;
-  appConfig.update(current => {
-    const updated = { ...current, ...patch };
-    inbox.setConfig(updated);
-    return updated;
-  });
+  let currentConfig: AppConfig = {};
+  appConfig.subscribe(c => { currentConfig = c; })();
+  const updated = { ...currentConfig, ...patch };
+  appConfig.set(updated);
+  await inbox.setConfig(JSON.parse(JSON.stringify(updated)));
 }
 
 // Update items on remote/local changes

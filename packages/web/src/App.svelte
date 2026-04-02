@@ -97,9 +97,13 @@
     editingItem = undefined;
   }
 
-  function handleCreateCollection(col: Collection) {
-    void storeCollection(col);
-    showCollectionForm = false;
+  async function handleCreateCollection(col: Collection) {
+    try {
+      await storeCollection(col);
+      showCollectionForm = false;
+    } catch (error) {
+      console.error('Failed to create collection', error);
+    }
   }
 </script>
 
