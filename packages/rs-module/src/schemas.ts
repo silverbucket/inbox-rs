@@ -72,6 +72,23 @@ export const audioMetaSchema = {
   required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt']
 };
 
+export const videoMetaSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    type: { type: 'string', enum: ['video'] },
+    title: { type: 'string' },
+    description: { type: 'string' },
+    filePath: { type: 'string' },
+    mimeType: { type: 'string' },
+    duration: { type: 'number' },
+    body: { type: 'string' },
+    createdAt: { type: 'string' },
+    ...todoFields,
+  },
+  required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt']
+};
+
 export const documentMetaSchema = {
   type: 'object',
   properties: {

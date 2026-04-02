@@ -1,10 +1,10 @@
-import { bookmarkSchema, noteSchema, imageMetaSchema, audioMetaSchema, documentMetaSchema, codeSnippetSchema, todoSchema, emailSchema, appConfigSchema } from './schemas.js';
+import { bookmarkSchema, noteSchema, imageMetaSchema, audioMetaSchema, videoMetaSchema, documentMetaSchema, codeSnippetSchema, todoSchema, emailSchema, appConfigSchema } from './schemas.js';
 import type { InboxItem, AppConfig } from './types.js';
 import type { MigrateResult } from 'rs-migrate';
 import { migrator, legacySchemas } from './migrations.js';
 export { migrator } from './migrations.js';
 
-export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, AudioItem, DocumentItem, CodeSnippetItem, TodoItem, EmailItem, AppConfig } from './types.js';
+export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, AudioItem, VideoItem, DocumentItem, CodeSnippetItem, TodoItem, EmailItem, AppConfig } from './types.js';
 
 export interface InboxModuleExports {
   getAll(): Promise<Record<string, InboxItem>>;
@@ -25,6 +25,7 @@ const InboxModule = {
     privateClient.declareType('note', noteSchema);
     privateClient.declareType('image-meta', imageMetaSchema);
     privateClient.declareType('audio-meta', audioMetaSchema);
+    privateClient.declareType('video-meta', videoMetaSchema);
     privateClient.declareType('document-meta', documentMetaSchema);
 
     // Register legacy schemas so old items can still be read for migration
@@ -79,6 +80,7 @@ const InboxModule = {
           }
           const typeAlias = item.type === 'audio' ? 'audio-meta'
             : item.type === 'image' ? 'image-meta'
+            : item.type === 'video' ? 'video-meta'
             : item.type === 'document' ? 'document-meta'
             : item.type;
           await privateClient.storeObject(typeAlias, `items/${item.id}`, item);
@@ -123,6 +125,7 @@ const InboxModule = {
             save: async (key: string, doc: any) => {
               const typeAlias = doc.type === 'audio' ? 'audio-meta'
                 : doc.type === 'image' ? 'image-meta'
+                : doc.type === 'video' ? 'video-meta'
                 : doc.type === 'document' ? 'document-meta'
                 : doc.type;
               await privateClient.storeObject(typeAlias, `items/${key}`, doc);

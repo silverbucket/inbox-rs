@@ -1,4 +1,4 @@
-export type InboxItemType = 'bookmark' | 'note' | 'image' | 'audio' | 'document' | 'code-snippet' | 'todo' | 'email';
+export type InboxItemType = 'bookmark' | 'note' | 'image' | 'audio' | 'video' | 'document' | 'code-snippet' | 'todo' | 'email';
 
 export interface InboxItemBase {
   id: string;
@@ -43,6 +43,14 @@ export interface AudioItem extends InboxItemBase {
   body?: string; // transcription text
 }
 
+export interface VideoItem extends InboxItemBase {
+  type: 'video';
+  filePath: string;
+  mimeType: string;
+  duration?: number; // seconds
+  body?: string; // transcription text
+}
+
 export interface DocumentItem extends InboxItemBase {
   type: 'document';
   filePath: string;
@@ -72,7 +80,7 @@ export interface EmailItem extends InboxItemBase {
   messageUrl?: string; // mid: URI to open in mail client
 }
 
-export type InboxItem = BookmarkItem | NoteItem | ImageItem | AudioItem | DocumentItem | CodeSnippetItem | TodoItem | EmailItem;
+export type InboxItem = BookmarkItem | NoteItem | ImageItem | AudioItem | VideoItem | DocumentItem | CodeSnippetItem | TodoItem | EmailItem;
 
 export interface AppConfig {
   todosCollapsed?: boolean;
