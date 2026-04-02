@@ -82,6 +82,7 @@ export const audioMetaSchema = {
     mimeType: { type: 'string' },
     duration: { type: 'number' },
     body: { type: 'string' },
+    transcribed: { type: 'boolean' },
     createdAt: { type: 'string' },
     ...todoFields,
     ...collectionFields,
@@ -165,6 +166,7 @@ export const todoSchema = {
     completedAt: { type: 'string' },
     createdAt: { type: 'string' },
     ...collectionFields,
+    ...migrateFields,
   },
   required: ['id', 'type', 'title', 'completed', 'createdAt']
 };

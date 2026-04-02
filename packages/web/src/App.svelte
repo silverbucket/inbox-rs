@@ -108,6 +108,7 @@
     <div class="header-left">
       <a class="brand-link" href="#/">
         <h1>Inbox <span class="accent">RS</span></h1>
+        <span class="version">v{__APP_VERSION__}</span>
       </a>
       <nav class="header-nav" aria-label="Primary">
         <a class:active={route.page === 'home'} aria-current={route.page === 'home' ? 'page' : undefined} href="#/">Inbox</a>
@@ -205,6 +206,9 @@
 
   .brand-link {
     color: inherit;
+    display: flex;
+    flex-direction: column;
+    line-height: 1;
   }
 
   .brand-link:hover {
@@ -215,6 +219,12 @@
     font-size: 1.25rem;
     font-weight: 700;
     letter-spacing: -0.02em;
+  }
+
+  .version {
+    font-size: 0.65rem;
+    opacity: 0.45;
+    font-weight: 400;
   }
 
   .header-nav {
