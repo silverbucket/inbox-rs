@@ -66,6 +66,7 @@ export const audioMetaSchema = {
     mimeType: { type: 'string' },
     duration: { type: 'number' },
     body: { type: 'string' },
+    transcribed: { type: 'boolean' },
     createdAt: { type: 'string' },
     ...todoFields,
   },
