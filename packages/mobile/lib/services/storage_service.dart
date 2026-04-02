@@ -8,9 +8,10 @@ import '../models/rs_config.dart';
 class StorageService {
   static const _key = 'rs-config';
 
-  // On macOS, flutter_secure_storage requires keychain entitlements that
-  // need a development team. Use file-based storage on macOS instead.
-  // On iOS/Android, use the proper secure storage.
+  // On iOS/Android, token is stored in the platform's secure keychain.
+  // On macOS/Linux, flutter_secure_storage requires keychain entitlements
+  // that need a paid developer team. File-based fallback is used for
+  // desktop dev/testing only — the production targets are iOS and Android.
   bool get _useFallback =>
       defaultTargetPlatform == TargetPlatform.macOS ||
       defaultTargetPlatform == TargetPlatform.linux;

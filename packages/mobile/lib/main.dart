@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'models/rs_config.dart';
@@ -23,6 +24,7 @@ class _InboxRSAppState extends State<InboxRSApp> with WidgetsBindingObserver {
   final _storageService = StorageService();
   final _queue = OfflineQueue();
   final _navigatorKey = GlobalKey<NavigatorState>();
+  StreamSubscription? _connectivitySub;
   RSConfig? _config;
   bool _loading = true;
 
@@ -36,6 +38,7 @@ class _InboxRSAppState extends State<InboxRSApp> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _connectivitySub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -60,7 +63,7 @@ class _InboxRSAppState extends State<InboxRSApp> with WidgetsBindingObserver {
   }
 
   void _listenConnectivity() {
-    Connectivity().onConnectivityChanged.listen((_) {
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((_) {
       _queue.onConnectivityChanged();
     });
   }

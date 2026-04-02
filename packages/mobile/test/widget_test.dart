@@ -2,10 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:inbox_rs_mobile/main.dart';
 
 void main() {
-  testWidgets('App launches', (WidgetTester tester) async {
+  testWidgets('App launches with loading indicator', (WidgetTester tester) async {
     await tester.pumpWidget(const InboxRSApp());
-    await tester.pump();
-    // Settings screen shows when not connected
-    expect(find.text('Connect to remoteStorage'), findsOneWidget);
+    // App shows loading spinner while async init runs
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 }

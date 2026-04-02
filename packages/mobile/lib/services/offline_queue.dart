@@ -81,6 +81,12 @@ class OfflineQueue {
         }
       }
     }
+    // Sort by createdAt to maintain FIFO order across restarts
+    _pending.sort((a, b) {
+      final aTime = a.item['createdAt'] as String? ?? '';
+      final bTime = b.item['createdAt'] as String? ?? '';
+      return aTime.compareTo(bTime);
+    });
     onPendingChanged?.call(_pending.length);
     await _processQueue();
   }

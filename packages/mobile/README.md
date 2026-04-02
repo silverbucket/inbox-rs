@@ -1,17 +1,33 @@
-# inbox_rs_mobile
+# Inbox RS Mobile
 
-A new Flutter project.
+Native iOS/Android capture client for Inbox RS. Drop in text, audio, photos, or video and send to your remoteStorage inbox.
 
-## Getting Started
+## Setup
 
-This project is a starting point for a Flutter application.
+Requires [Flutter](https://flutter.dev/docs/get-started/install) (3.x+).
 
-A few resources to get you started if this is your first Flutter project:
+```bash
+cd packages/mobile
+flutter pub get
+flutter run
+```
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Auth
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+The app authenticates via remoteStorage OAuth:
+
+1. Enter your RS address (`user@host`) on the settings screen
+2. WebFinger discovery finds the storage server
+3. OAuth redirect via `inboxrs://` custom URL scheme
+4. Token stored in platform secure storage (Keychain on iOS, Keystore on Android)
+
+The `inboxrs://` callback scheme is registered in `ios/Runner/Info.plist` and `android/app/src/main/AndroidManifest.xml`.
+
+## Platforms
+
+- **iOS/Android** — primary targets with secure token storage, camera, mic, and gallery access
+- **macOS** — works for development/testing (camera hidden, file-based token storage fallback)
+
+## Offline Queue
+
+Items are saved to disk immediately on send and uploaded in FIFO order when connected. Pending items survive app restarts and sync automatically when connectivity is restored.
