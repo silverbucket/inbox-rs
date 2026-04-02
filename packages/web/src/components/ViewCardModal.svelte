@@ -76,6 +76,7 @@
     transcribing = false;
     transcriptionError = false;
     highlightedHtml = '';
+    if (docBlobUrl) URL.revokeObjectURL(docBlobUrl);
     docBlobUrl = null;
     docLoading = false;
 

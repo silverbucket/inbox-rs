@@ -201,7 +201,7 @@
           }
           const memoBody = body || transcript || undefined;
           const autoTitle = title || transcript || 'Audio';
-          const transcribed = !!(transcript || body) || undefined;
+          const transcribed = !!(recordedBlob || transcript || body) || undefined;
           item = { id, type: 'audio', title: autoTitle, filePath, mimeType, duration, body: memoBody, transcribed, description: description || undefined, createdAt };
         } else if (isEdit && editItem!.type === 'audio') {
           item = { ...editItem!, title: title || editItem!.title, body: body || undefined, description: description || undefined };
