@@ -41,7 +41,7 @@
   }
 
   async function handleRemoveItem(itemId: string) {
-    await removeItemFromCollection(itemId, collection.id);
+    await removeItemFromCollection(itemId);
   }
 
   async function makeTodo(item: InboxItem) {
@@ -55,6 +55,11 @@
     delete (updated as any).isTodo;
     delete (updated as any).completed;
     delete (updated as any).completedAt;
+    // type: 'todo' items require `completed` in the schema — convert to note
+    if (updated.type === 'todo') {
+      (updated as any).type = 'note';
+      if (!(updated as any).body) (updated as any).body = '';
+    }
     await storeItem(updated as InboxItem);
   }
 

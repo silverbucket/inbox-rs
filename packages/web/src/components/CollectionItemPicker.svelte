@@ -9,7 +9,7 @@
 
   let search = $state('');
 
-  const availableItems = $derived(() => {
+  const availableItems = $derived.by(() => {
     const all = [...$sortedItems, ...$todoItems];
     if (!search.trim()) return all;
     const q = search.toLowerCase();
@@ -35,12 +35,12 @@
     />
 
     <div class="item-list">
-      {#if availableItems().length === 0}
+      {#if availableItems.length === 0}
         <div class="empty">
           {search ? 'No matching items' : 'No items in inbox'}
         </div>
       {:else}
-        {#each availableItems() as item (item.id)}
+        {#each availableItems as item (item.id)}
           <button class="item-row" onclick={() => onpick(item)}>
             <span class="type-badge">{item.type}</span>
             <span class="item-title">{item.title}</span>

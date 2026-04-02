@@ -266,6 +266,14 @@ export async function deleteCollection(id: string) {
     delete next[id];
     return next;
   });
+  // Clean up collectionsOrder
+  appConfig.update(current => {
+    if (!current.collectionsOrder?.includes(id)) return current;
+    return { ...current, collectionsOrder: current.collectionsOrder.filter(cid => cid !== id) };
+  });
+  let currentConfig: AppConfig = {};
+  appConfig.subscribe(c => { currentConfig = c; })();
+  await inbox.setConfig(JSON.parse(JSON.stringify(currentConfig)) as AppConfig);
 }
 
 export async function moveItemToCollection(itemId: string, collectionId: string | undefined) {
@@ -333,7 +341,7 @@ export async function moveItemToCollection(itemId: string, collectionId: string 
   }
 }
 
-export async function removeItemFromCollection(itemId: string, collectionId: string) {
+export async function removeItemFromCollection(itemId: string) {
   return moveItemToCollection(itemId, undefined);
 }
 

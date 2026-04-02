@@ -191,6 +191,11 @@
       delete (updated as any).isTodo;
       delete (updated as any).completed;
       delete (updated as any).completedAt;
+      // type: 'todo' items require `completed` in the schema — convert to note
+      if (updated.type === 'todo') {
+        (updated as any).type = 'note';
+        if (!(updated as any).body) (updated as any).body = '';
+      }
       await storeItem(updated as InboxItem);
       onclose();
     } finally {
