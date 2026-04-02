@@ -92,27 +92,27 @@
 
   async function handleTranscribe() {
     if (item.type !== 'audio') return;
+    const target = item; // snapshot to guard against item changing mid-transcription
     transcribing = true;
     transcriptionError = false;
     try {
-      // Fetch audio data for transcription
       const inbox = (rs as any).inbox;
-      const file = await inbox.getFile(item.filePath);
+      const file = await inbox.getFile(target.filePath);
       if (!file?.data) throw new Error('Could not load audio file');
-      const blob = new Blob([file.data], { type: item.mimeType });
+      const blob = new Blob([file.data], { type: target.mimeType });
       const text = await transcribeAudio(blob);
       const updated = {
-        ...item,
+        ...target,
         body: text || undefined,
-        title: text && item.title === 'Audio' ? text.slice(0, 50) : item.title,
+        title: text && target.title === 'Audio' ? text.slice(0, 50) : target.title,
         transcribed: true,
       };
       await storeItem(updated);
     } catch (e) {
       console.warn('Transcription failed:', e);
-      transcriptionError = true;
+      if (item.id === target.id) transcriptionError = true;
     } finally {
-      transcribing = false;
+      if (item.id === target.id) transcribing = false;
     }
   }
 
