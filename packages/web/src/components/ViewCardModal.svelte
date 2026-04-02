@@ -58,7 +58,8 @@
       : null
   );
 
-  // Audio transcription
+  // Audio state
+  let audioError = $state(false);
   let transcribing = $state(false);
   let transcriptionError = $state(false);
 
@@ -74,6 +75,7 @@
     const currentItem = item;
 
     // Reset per-item state
+    audioError = false;
     transcribing = false;
     transcriptionError = false;
     highlightedHtml = '';
@@ -271,8 +273,11 @@
 
     {#if item.type === 'audio'}
       <div class="player">
-        {#if audioSrc}
-          <audio controls src={audioSrc} preload="metadata"></audio>
+        {#if audioError}
+          <p class="status-text">Failed to load audio</p>
+        {:else if audioSrc}
+          <audio controls src={audioSrc} preload="metadata"
+            onerror={() => audioError = true}></audio>
         {:else}
           <p class="status-text">Connect to load audio</p>
         {/if}
