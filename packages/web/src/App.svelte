@@ -10,7 +10,7 @@
   import MigrationAlert from './components/MigrationAlert.svelte';
   import PluginsPage from './components/PluginsPage.svelte';
   import { connected, deleteItem, todoItems, appConfig, updateConfig, pendingMigrationCount, runAllMigrations } from './lib/stores';
-  import shieldLogo from './assets/logos/favicon-shield.svg';
+  import shieldIcon from './assets/logos/favicon-shield.svg';
 
   type Route = 'home' | 'plugins';
 
@@ -94,7 +94,7 @@
   <div class="header-inner">
     <div class="header-left">
       <a class="brand-link" href="#/">
-        <img src={shieldLogo} alt="" class="brand-icon" />
+        <img src={shieldIcon} alt="" class="brand-icon" />
         <div class="brand-text">
           <h1>Inbox <span class="accent">RS</span></h1>
           <span class="version">v{__APP_VERSION__}</span>
