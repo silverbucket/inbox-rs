@@ -1,19 +1,17 @@
 <script lang="ts">
-  import type { Collection } from '@inbox-rs/rs-module';
+  import type { CollectionGroup } from '@inbox-rs/rs-module';
 
-  let { collection = undefined, groupId = undefined, onclose, onsave, ondelete = undefined }: {
-    collection?: Collection;
-    groupId?: string;
+  let { group = undefined, onclose, onsave, ondelete = undefined }: {
+    group?: CollectionGroup;
     onclose: () => void;
-    onsave: (col: Collection) => void;
+    onsave: (group: CollectionGroup) => void;
     ondelete?: () => void;
   } = $props();
 
-  const isEdit = !!collection;
+  const isEdit = !!group;
 
-  let name = $state(collection?.name ?? '');
-  let description = $state(collection?.description ?? '');
-  let color = $state(collection?.color ?? '#6366f1');
+  let name = $state(group?.name ?? '');
+  let color = $state(group?.color ?? '#6366f1');
   let confirmingDelete = $state(false);
 
   const presetColors = [
@@ -25,16 +23,14 @@
 
   function handleSubmit() {
     if (!name.trim()) return;
-    const col: Collection = {
-      id: collection?.id ?? crypto.randomUUID(),
+    const g: CollectionGroup = {
+      id: group?.id ?? crypto.randomUUID(),
       name: name.trim(),
-      description: description.trim() || undefined,
-      itemIds: collection?.itemIds ?? [],
-      createdAt: collection?.createdAt ?? new Date().toISOString(),
+      collectionIds: group?.collectionIds ?? [],
+      createdAt: group?.createdAt ?? new Date().toISOString(),
       color,
-      groupId: collection?.groupId ?? groupId,
     };
-    onsave(col);
+    onsave(g);
   }
 </script>
 
@@ -42,17 +38,12 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="overlay" onclick={onclose}>
   <div class="modal" role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()}>
-    <h2>{isEdit ? 'Edit Collection' : 'New Collection'}</h2>
+    <h2>{isEdit ? 'Edit Group' : 'New Group'}</h2>
 
     <form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
       <label class="field">
         <span class="label">Name</span>
-        <input type="text" bind:value={name} placeholder="e.g. Sockethub Bugs" required />
-      </label>
-
-      <label class="field">
-        <span class="label">Description <span class="optional">(optional)</span></span>
-        <textarea bind:value={description} placeholder="What's this collection for?" rows="2"></textarea>
+        <input type="text" bind:value={name} placeholder="e.g. Work, Bands, Research" required />
       </label>
 
       <fieldset class="field">
@@ -74,7 +65,7 @@
       <div class="actions">
         {#if isEdit && ondelete}
           {#if confirmingDelete}
-            <span class="delete-confirm-text">Delete this collection?</span>
+            <span class="delete-confirm-text">Delete this group?</span>
             <button type="button" class="btn-delete-confirm" onclick={ondelete}>Delete</button>
             <button type="button" class="btn-cancel" onclick={() => confirmingDelete = false}>Cancel</button>
           {:else}
@@ -111,7 +102,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     width: 100%;
-    max-width: 440px;
+    max-width: 400px;
     padding: 1.5rem;
   }
 
@@ -138,12 +129,7 @@
     margin-bottom: 0.3rem;
   }
 
-  .optional {
-    text-transform: none;
-    font-weight: 400;
-  }
-
-  input, textarea {
+  input {
     width: 100%;
     background: var(--bg);
     border: 1px solid var(--border);
@@ -152,10 +138,9 @@
     padding: 0.5rem 0.65rem;
     font-size: 0.9rem;
     font-family: inherit;
-    resize: vertical;
   }
 
-  input:focus, textarea:focus {
+  input:focus {
     outline: none;
     border-color: var(--accent);
   }

@@ -1,19 +1,22 @@
 <script lang="ts">
-  import type { InboxItem, Collection } from '@inbox-rs/rs-module';
+  import type { InboxItem, InboxItemType, Collection } from '@inbox-rs/rs-module';
+  import type { CollectionGroup } from '@inbox-rs/rs-module';
   import {
     collectionItems, storeItem,
-    removeItemFromCollection
+    deleteItem,
+    sortedGroups, moveCollectionToGroup
   } from '../lib/stores';
   import { slide } from 'svelte/transition';
   import InboxCard from './InboxCard.svelte';
   import CollectionItemPicker from './CollectionItemPicker.svelte';
+  import AddEntryBar from './AddEntryBar.svelte';
+  import AddEntryModal from './AddEntryModal.svelte';
 
-  let { collection, expanded = false, onselect, onedit, ondelete, ontoggle }: {
+  let { collection, expanded = false, onselect, onedit, ontoggle }: {
     collection: Collection;
     expanded?: boolean;
     onselect: (item: InboxItem) => void;
     onedit: () => void;
-    ondelete: () => void;
     ontoggle: () => void;
   } = $props();
 
@@ -22,10 +25,18 @@
   const openTodos = $derived(todoItems.filter(t => !t.completed));
   const completedTodos = $derived(todoItems.filter(t => t.completed));
   const referenceItems = $derived(items.filter(i => !i.isTodo && i.type !== 'todo'));
-  const hasBoth = $derived(todoItems.length > 0 && referenceItems.length > 0);
 
   let showCompleted = $state(false);
   let showPicker = $state(false);
+  let addingType = $state<InboxItemType | null>(null);
+  let showMoveMenu = $state(false);
+
+  const availableGroups = $derived($sortedGroups);
+
+  async function handleMoveToGroup(groupId: string | undefined) {
+    showMoveMenu = false;
+    await moveCollectionToGroup(collection.id, groupId);
+  }
 
   async function toggleCompleted(e: Event, item: InboxItem) {
     e.stopPropagation();
@@ -40,10 +51,6 @@
     await storeItem(clean);
   }
 
-  async function handleRemoveItem(itemId: string) {
-    await removeItemFromCollection(itemId);
-  }
-
   async function makeTodo(item: InboxItem) {
     const updated = { ...item, isTodo: true, completed: false };
     delete (updated as any).completedAt;
@@ -55,7 +62,6 @@
     delete (updated as any).isTodo;
     delete (updated as any).completed;
     delete (updated as any).completedAt;
-    // type: 'todo' items require `completed` in the schema — convert to note
     if (updated.type === 'todo') {
       (updated as any).type = 'note';
       if (!(updated as any).body) (updated as any).body = '';
@@ -80,50 +86,122 @@
   }
 </script>
 
-<div class="collection-card" style="--col-color: {collection.color || '#6366f1'}" class:expanded class:has-both={hasBoth} class:todo-only={todoItems.length > 0 && referenceItems.length === 0} class:ref-only={referenceItems.length > 0 && todoItems.length === 0}>
-  <div class="card-header" role="button" tabindex="0" onclick={ontoggle} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ontoggle(); } }} aria-expanded={expanded} aria-label="{expanded ? 'Collapse' : 'Expand'} {collection.name}">
-    <svg class="chevron" class:open={expanded} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+<div class="collection" style="--col-color: {collection.color || '#6366f1'}" class:expanded>
+  <!-- Header bar -->
+  <div
+    class="collection-header"
+    role="button"
+    tabindex="0"
+    onclick={ontoggle}
+    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ontoggle(); } }}
+    aria-expanded={expanded}
+    aria-label="{expanded ? 'Collapse' : 'Expand'} {collection.name}"
+  >
+    <span class="color-indicator"></span>
+    <svg class="chevron" class:open={expanded} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="6 9 12 15 18 9"></polyline>
     </svg>
-    <h3>{collection.name}</h3>
-    <span class="item-count">{items.length}</span>
-    {#if collection.description}
-      <span class="col-description">{collection.description}</span>
-    {/if}
-    <div class="header-buttons">
-      <button class="btn-icon" onclick={(e) => { e.stopPropagation(); showPicker = true; }} aria-label="Add items">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <div class="header-info">
+      <h3>{collection.name}</h3>
+      {#if collection.description && !expanded}
+        <span class="col-description">{collection.description}</span>
+      {/if}
+    </div>
+    <div class="header-badges">
+      {#if openTodos.length > 0}
+        <span class="badge badge-todo" title="{openTodos.length} open {openTodos.length === 1 ? 'todo' : 'todos'}">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          {openTodos.length}
+        </span>
+      {/if}
+      {#if referenceItems.length > 0}
+        <span class="badge badge-ref" title="{referenceItems.length} {referenceItems.length === 1 ? 'item' : 'items'}">
+          {referenceItems.length}
+        </span>
+      {/if}
+      {#if items.length === 0}
+        <span class="badge badge-ref">0</span>
+      {/if}
+    </div>
+    <div class="header-actions">
+      <button class="btn-header" onclick={(e) => { e.stopPropagation(); showPicker = true; }} aria-label="Add items" title="Add from inbox">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="12" y1="5" x2="12" y2="19"></line>
           <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
       </button>
-      <button class="btn-icon" onclick={(e) => { e.stopPropagation(); onedit(); }} aria-label="Edit collection">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <button class="btn-header" onclick={(e) => { e.stopPropagation(); onedit(); }} aria-label="Edit collection" title="Edit">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
         </svg>
       </button>
-      <button class="btn-icon btn-danger" onclick={(e) => { e.stopPropagation(); ondelete(); }} aria-label="Delete collection">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-        </svg>
-      </button>
+      {#if availableGroups.length > 0}
+        <div class="move-menu-wrapper">
+          <button class="btn-header" onclick={(e) => { e.stopPropagation(); showMoveMenu = !showMoveMenu; }} aria-label="Move to group" title="Move to group">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              <line x1="12" y1="11" x2="12" y2="17"></line>
+              <polyline points="9 14 12 11 15 14"></polyline>
+            </svg>
+          </button>
+          {#if showMoveMenu}
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="move-menu-backdrop" onclick={(e) => { e.stopPropagation(); showMoveMenu = false; }}></div>
+            <div class="move-menu" onclick={(e) => e.stopPropagation()}>
+              <div class="move-menu-label">Move to group</div>
+              {#each availableGroups as group (group.id)}
+                <button
+                  class="move-menu-item"
+                  class:current={collection.groupId === group.id}
+                  onclick={() => handleMoveToGroup(group.id)}
+                  disabled={collection.groupId === group.id}
+                >
+                  <span class="move-dot" style="background: {group.color || 'var(--accent)'}"></span>
+                  {group.name}
+                  {#if collection.groupId === group.id}
+                    <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                  {/if}
+                </button>
+              {/each}
+              {#if collection.groupId}
+                <div class="move-menu-divider"></div>
+                <button class="move-menu-item move-menu-ungrouped" onclick={() => handleMoveToGroup(undefined)}>
+                  Remove from group
+                </button>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      {/if}
     </div>
   </div>
 
+  <!-- Expanded body — mirrors the inbox page layout -->
   {#if expanded}
-    <div class="card-body" transition:slide={{ duration: 250 }}>
+    <div class="collection-body" transition:slide={{ duration: 200 }}>
       {#if items.length === 0}
-        <div class="empty-items">
-          <p>No items yet.</p>
-          <button class="btn-action" onclick={() => showPicker = true}>Add Items from Inbox</button>
+        <div class="empty-state">
+          <p>No items yet. Create one or add from your inbox.</p>
+          <div class="empty-actions">
+            <AddEntryBar onadd={(type) => addingType = type} />
+            <button class="btn-accent" onclick={() => showPicker = true}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              Add from Inbox
+            </button>
+          </div>
         </div>
       {:else}
-        <div class="content-layout" class:has-todos={todoItems.length > 0}>
-          <!-- Todo sidebar (left) — mirrors main page TodoList -->
+        <div class="content-layout" class:has-todos={todoItems.length > 0} class:has-refs={referenceItems.length > 0}>
           {#if todoItems.length > 0}
-            <aside class="sidebar">
+            <aside class="todo-panel">
               <div class="todo-header">
                 <h4 class="todo-heading">Todos</h4>
                 {#if openTodos.length > 0}
@@ -158,27 +236,19 @@
                       <div class="todo-content">
                         <div class="todo-title-row">
                           <span class="todo-title">{item.title}</span>
-                          <button class="btn-action-icon" onclick={(e) => { e.stopPropagation(); makeReference(item); }} title="Move to references" aria-label="Make reference">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-                            </svg>
-                          </button>
-                          <button class="btn-action-icon btn-action-danger" onclick={(e) => { e.stopPropagation(); handleRemoveItem(item.id); }} title="Remove from collection" aria-label="Remove">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                              <line x1="18" y1="6" x2="6" y2="18"></line>
-                              <line x1="6" y1="6" x2="18" y2="18"></line>
-                            </svg>
-                          </button>
+                          <div class="todo-actions">
+                            <button class="btn-action-icon" onclick={(e) => { e.stopPropagation(); makeReference(item); }} title="Move to references" aria-label="Make reference">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                              </svg>
+                            </button>
+                          </div>
                         </div>
                         {#if badge || note}
                           <div class="todo-meta">
-                            {#if badge}
-                              <span class="type-badge">{badge}</span>
-                            {/if}
-                            {#if note}
-                              <span class="todo-note">{note}</span>
-                            {/if}
+                            {#if badge}<span class="type-badge">{badge}</span>{/if}
+                            {#if note}<span class="todo-note">{note}</span>{/if}
                           </div>
                         {/if}
                       </div>
@@ -221,27 +291,19 @@
                         <div class="todo-content">
                           <div class="todo-title-row">
                             <span class="todo-title">{item.title}</span>
-                            <button class="btn-action-icon" onclick={(e) => { e.stopPropagation(); makeReference(item); }} title="Move to references" aria-label="Make reference">
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-                              </svg>
-                            </button>
-                            <button class="btn-action-icon btn-action-danger" onclick={(e) => { e.stopPropagation(); handleRemoveItem(item.id); }} title="Remove from collection" aria-label="Remove">
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                              </svg>
-                            </button>
+                            <div class="todo-actions">
+                              <button class="btn-action-icon" onclick={(e) => { e.stopPropagation(); makeReference(item); }} title="Move to references" aria-label="Make reference">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                                </svg>
+                              </button>
+                            </div>
                           </div>
                           {#if badge || note}
                             <div class="todo-meta">
-                              {#if badge}
-                                <span class="type-badge">{badge}</span>
-                              {/if}
-                              {#if note}
-                                <span class="todo-note">{note}</span>
-                              {/if}
+                              {#if badge}<span class="type-badge">{badge}</span>{/if}
+                              {#if note}<span class="todo-note">{note}</span>{/if}
                             </div>
                           {/if}
                         </div>
@@ -253,7 +315,6 @@
             </aside>
           {/if}
 
-          <!-- Reference grid (right) — mirrors main page InboxGrid with masonry -->
           {#if referenceItems.length > 0}
             <div class="ref-area">
               <div class="grid">
@@ -266,12 +327,6 @@
                           <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
                       </button>
-                      <button class="btn-card-action btn-card-danger" onclick={() => handleRemoveItem(item.id)} title="Remove from collection" aria-label="Remove">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <line x1="18" y1="6" x2="6" y2="18"></line>
-                          <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                      </button>
                     </div>
                   </div>
                 {/each}
@@ -279,52 +334,97 @@
             </div>
           {/if}
         </div>
+
+        <div class="collection-toolbar">
+          <AddEntryBar onadd={(type) => addingType = type} />
+          <button class="btn-accent" onclick={() => showPicker = true}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            Add from Inbox
+          </button>
+        </div>
       {/if}
     </div>
   {/if}
 </div>
+
+{#if addingType}
+  <AddEntryModal type={addingType} collectionId={collection.id} onclose={() => addingType = null} ondelete={async (item) => { await deleteItem(item.id, item); addingType = null; }} />
+{/if}
 
 {#if showPicker}
   <CollectionItemPicker onclose={() => showPicker = false} onpick={handlePickItem} />
 {/if}
 
 <style>
-  .collection-card {
-    border: 1px solid var(--border);
-    border-left: 3px solid var(--col-color);
+  /* ================================================================
+     COLLECTION — mirrors the inbox page layout when expanded
+     ================================================================ */
+  .collection {
+    --_col: var(--col-color);
     border-radius: var(--radius);
-    background: var(--surface);
     overflow: hidden;
-    transition: border-color 200ms, box-shadow 200ms;
+    transition: box-shadow 250ms ease;
   }
 
-  .collection-card.expanded {
-    border-left-width: 4px;
-    box-shadow: 0 2px 12px color-mix(in srgb, var(--col-color) 15%, transparent 85%);
+  .collection.expanded {
+    box-shadow:
+      0 1px 0 0 color-mix(in srgb, var(--_col) 20%, transparent 80%),
+      0 4px 24px -4px rgba(0, 0, 0, 0.35);
   }
 
-  .card-header {
+  /* ---- Header bar ---- */
+  .collection-header {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.65rem 0.75rem;
+    padding: 0.75rem 1rem;
     cursor: pointer;
-    transition: background 120ms;
-    background: linear-gradient(90deg, color-mix(in srgb, var(--col-color) 6%, transparent 94%) 0%, transparent 40%);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: background 150ms, border-color 150ms, border-radius 200ms;
+    min-height: 3rem;
+    -webkit-tap-highlight-color: transparent;
   }
 
-  .card-header:hover {
-    background: linear-gradient(90deg, color-mix(in srgb, var(--col-color) 12%, transparent 88%) 0%, color-mix(in srgb, var(--col-color) 4%, transparent 96%) 100%);
+  .expanded .collection-header {
+    border-radius: var(--radius) var(--radius) 0 0;
+    border-bottom-color: transparent;
+  }
+
+  .collection-header:hover {
+    border-color: color-mix(in srgb, var(--_col) 40%, var(--border) 60%);
+  }
+
+  .color-indicator {
+    width: 4px;
+    align-self: stretch;
+    min-height: 1.25rem;
+    border-radius: 2px;
+    background: var(--_col);
+    flex-shrink: 0;
   }
 
   .chevron {
     flex-shrink: 0;
-    transition: transform 250ms ease;
+    transition: transform 250ms cubic-bezier(0.4, 0, 0.2, 1);
     color: var(--text-muted);
   }
 
   .chevron.open {
     transform: rotate(180deg);
+  }
+
+  .header-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
   }
 
   h3 {
@@ -334,85 +434,205 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: color-mix(in srgb, var(--text) 70%, var(--col-color) 30%);
-  }
-
-  .item-count {
-    font-size: 0.7rem;
-    color: var(--col-color);
-    background: color-mix(in srgb, var(--col-color) 15%, transparent 85%);
-    padding: 0.1rem 0.4rem;
-    border-radius: 999px;
-    flex-shrink: 0;
-    font-weight: 600;
+    color: var(--text);
   }
 
   .col-description {
     font-size: 0.78rem;
     color: var(--text-muted);
-    flex: 1;
-    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
+    opacity: 0.7;
   }
 
-  .header-buttons {
+  .header-badges {
     display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex-shrink: 0;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
     gap: 0.2rem;
-    margin-left: auto;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+    line-height: 1.3;
+  }
+
+  .badge-todo {
+    color: white;
+    background: var(--_col);
+  }
+
+  .badge-ref {
+    color: var(--text-muted);
+    background: color-mix(in srgb, var(--text-muted) 12%, transparent 88%);
+    font-weight: 500;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 0.15rem;
     flex-shrink: 0;
     opacity: 0;
     transition: opacity 150ms;
   }
 
-  .card-header:hover .header-buttons {
+  .collection-header:hover .header-actions {
     opacity: 1;
   }
 
-  .btn-icon {
+  /* On touch devices, always show actions */
+  @media (hover: none) {
+    .header-actions {
+      opacity: 1;
+    }
+  }
+
+  .btn-header {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 26px;
-    height: 26px;
+    width: 32px;
+    height: 32px;
     border: none;
     border-radius: var(--radius-sm);
     background: none;
     color: var(--text-muted);
     cursor: pointer;
     transition: color 150ms, background 150ms;
+    -webkit-tap-highlight-color: transparent;
   }
 
-  .btn-icon:hover {
+  .btn-header:hover {
     color: var(--text);
     background: rgba(255, 255, 255, 0.06);
   }
 
-  .btn-danger:hover {
-    color: var(--danger, #ef4444);
+  .btn-header:active {
+    background: rgba(255, 255, 255, 0.1);
   }
 
-  /* Body */
-  .card-body {
-    border-top: 1px solid var(--border);
-    padding: 0.75rem;
+  /* ---- Move menu (dropdown) ---- */
+  .move-menu-wrapper {
+    position: relative;
   }
 
-  /* ---- Main layout: sidebar + grid, mirroring the home page ---- */
+  .move-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 49;
+  }
+
+  .move-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 50;
+    min-width: 180px;
+    margin-top: 0.25rem;
+    padding: 0.35rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  .move-menu-label {
+    font-size: 0.65rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    padding: 0.3rem 0.5rem 0.2rem;
+  }
+
+  .move-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+    padding: 0.5rem;
+    border: none;
+    background: none;
+    color: var(--text);
+    font-size: 0.82rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 120ms;
+    text-align: left;
+    min-height: 2.25rem;
+  }
+
+  .move-menu-item:hover:not(:disabled) {
+    background: rgba(99, 102, 241, 0.1);
+  }
+
+  .move-menu-item:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .move-menu-item.current {
+    color: var(--text-muted);
+  }
+
+  .move-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .check-icon {
+    margin-left: auto;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .move-menu-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 0.25rem 0;
+  }
+
+  .move-menu-ungrouped {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+  }
+
+  /* ================================================================
+     EXPANDED BODY — dark background so cards pop (like inbox page)
+     ================================================================ */
+  .collection-body {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-top: 1px solid color-mix(in srgb, var(--_col) 15%, var(--border) 85%);
+    border-radius: 0 0 var(--radius) var(--radius);
+    padding: 1.25rem;
+  }
+
+  /* ---- Content layout: sidebar + masonry grid (mirrors inbox) ---- */
   .content-layout {
     display: flex;
-    gap: 1.25rem;
+    gap: 1.5rem;
     align-items: flex-start;
   }
 
-  .sidebar {
-    width: 260px;
+  /* ---- Todo panel (sidebar) ---- */
+  .todo-panel {
+    width: 280px;
     flex-shrink: 0;
-    background: var(--bg);
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 0.75rem;
+    padding: 1rem;
   }
 
   .ref-area {
@@ -420,7 +640,7 @@
     min-width: 0;
   }
 
-  /* ---- Todo list (sidebar) — matches main TodoList ---- */
+  /* ---- Todo list styles ---- */
   .todo-header {
     display: flex;
     align-items: center;
@@ -462,7 +682,7 @@
     margin: 0.75rem 0 0;
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0.15rem;
   }
 
   .completed-list {
@@ -473,14 +693,20 @@
     display: flex;
     align-items: flex-start;
     gap: 0.5rem;
-    padding: 0.4rem 0.3rem;
+    padding: 0.5rem 0.4rem;
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: background 0.1s;
+    min-height: 2.5rem;
+    -webkit-tap-highlight-color: transparent;
   }
 
   .todo-item:hover {
     background: rgba(255, 255, 255, 0.04);
+  }
+
+  .todo-item:active {
+    background: rgba(255, 255, 255, 0.06);
   }
 
   .todo-content {
@@ -524,12 +750,12 @@
   }
 
   .checkbox {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     flex-shrink: 0;
-    accent-color: var(--accent);
+    accent-color: var(--_col);
     cursor: pointer;
-    margin-top: 2px;
+    margin-top: 1px;
   }
 
   .type-badge {
@@ -543,29 +769,43 @@
     flex-shrink: 0;
   }
 
+  .todo-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .todo-item:hover .todo-actions {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    .todo-actions {
+      opacity: 1;
+    }
+  }
+
   .btn-action-icon {
     background: none;
     border: none;
     color: var(--text-muted);
-    padding: 0.2rem;
+    padding: 0.3rem;
     border-radius: 4px;
     display: flex;
     align-items: center;
-    opacity: 0;
-    transition: opacity 0.15s, color 0.15s;
+    transition: color 0.15s, background 0.15s;
     cursor: pointer;
-  }
-
-  .todo-item:hover .btn-action-icon {
-    opacity: 1;
+    min-width: 28px;
+    min-height: 28px;
+    justify-content: center;
   }
 
   .btn-action-icon:hover {
     color: var(--accent);
-  }
-
-  .btn-action-danger:hover {
-    color: var(--danger, #ef4444);
+    background: rgba(99, 102, 241, 0.1);
   }
 
   .btn-show-completed {
@@ -576,11 +816,12 @@
     border: none;
     color: var(--text-muted);
     font-size: 0.75rem;
-    padding: 0.4rem 0.3rem;
+    padding: 0.45rem 0.4rem;
     margin-top: 0.5rem;
     cursor: pointer;
     transition: color 0.15s;
     border-radius: var(--radius-sm);
+    min-height: 2rem;
   }
 
   .btn-show-completed:hover {
@@ -603,15 +844,15 @@
     margin: 0.75rem 0 0;
   }
 
-  /* ---- Reference grid (masonry) — matches main InboxGrid ---- */
+  /* ---- Reference grid (masonry — same as InboxGrid) ---- */
   .grid {
-    column-count: 2;
-    column-gap: 0.75rem;
+    column-count: 3;
+    column-gap: 1rem;
   }
 
   .grid-card-wrapper {
     break-inside: avoid;
-    margin-bottom: 0.75rem;
+    margin-bottom: 1rem;
     position: relative;
   }
 
@@ -629,19 +870,25 @@
     opacity: 1;
   }
 
+  @media (hover: none) {
+    .card-actions {
+      opacity: 1;
+    }
+  }
+
   .btn-card-action {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
     border: none;
     border-radius: var(--radius-sm);
     background: var(--surface);
     color: var(--text-muted);
     cursor: pointer;
     transition: color 150ms, background 150ms;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
   }
 
   .btn-card-action:hover {
@@ -649,22 +896,88 @@
     background: var(--bg);
   }
 
-  .btn-card-danger:hover {
-    color: var(--danger, #ef4444);
+  /* ---- Toolbar ---- */
+  .collection-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
   }
 
-  /* ---- Responsive ---- */
-  @media (max-width: 800px) {
+  .btn-accent {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: color-mix(in srgb, var(--_col) 15%, transparent 85%);
+    color: var(--_col);
+    border: none;
+    padding: 0.5rem 0.85rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+    min-height: 2.25rem;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .btn-accent:hover {
+    background: color-mix(in srgb, var(--_col) 25%, transparent 75%);
+  }
+
+  /* ---- Empty state ---- */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 2rem 1rem;
+    text-align: center;
+  }
+
+  .empty-state p {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  .empty-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  /* ================================================================
+     RESPONSIVE — mobile-first breakpoints
+     ================================================================ */
+
+  /* Stacked layout on mobile + tablet */
+  @media (max-width: 900px) {
+    .grid {
+      column-count: 2;
+    }
+  }
+
+  @media (max-width: 768px) {
     .content-layout {
       flex-direction: column;
+      gap: 1rem;
     }
 
-    .sidebar {
+    .todo-panel {
       width: 100%;
     }
 
-    .grid {
-      column-count: 2;
+    .collection-body {
+      padding: 1rem;
+    }
+
+    .col-description {
+      display: none;
     }
   }
 
@@ -672,39 +985,13 @@
     .grid {
       column-count: 1;
     }
-  }
 
-  /* ---- Misc ---- */
-  .btn-action {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    background: rgba(99, 102, 241, 0.15);
-    color: var(--accent);
-    border: none;
-    padding: 0.4rem 0.75rem;
-    border-radius: var(--radius-sm);
-    font-size: 0.8rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
+    .collection-header {
+      padding: 0.65rem 0.75rem;
+    }
 
-  .btn-action:hover {
-    background: rgba(99, 102, 241, 0.25);
-  }
-
-  .empty-items {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 1rem;
-    text-align: center;
-  }
-
-  .empty-items p {
-    color: var(--text-muted);
-    font-size: 0.8rem;
+    .collection-body {
+      padding: 0.75rem;
+    }
   }
 </style>

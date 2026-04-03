@@ -79,6 +79,8 @@ export type InboxItem = BookmarkItem | NoteItem | ImageItem | AudioItem | Docume
 export interface AppConfig {
   todosCollapsed?: boolean;
   collectionsOrder?: string[]; // ordered list of collection IDs for nav display
+  groupsOrder?: string[];      // ordered list of group IDs for nav display
+  expandedCollections?: string[]; // IDs of collections currently expanded
 }
 
 export interface Collection {
@@ -86,6 +88,15 @@ export interface Collection {
   name: string;
   description?: string;
   itemIds: string[];       // ordered array — controls sort order within collection
+  createdAt: string;       // ISO 8601
+  color?: string;          // optional accent color
+  groupId?: string;        // optional group membership
+}
+
+export interface CollectionGroup {
+  id: string;
+  name: string;
+  collectionIds: string[]; // ordered list of collection IDs in this group
   createdAt: string;       // ISO 8601
   color?: string;          // optional accent color
 }

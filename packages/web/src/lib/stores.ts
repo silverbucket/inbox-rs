@@ -1,5 +1,5 @@
 import { writable, derived } from 'svelte/store';
-import type { InboxItem, AppConfig, Collection } from '@inbox-rs/rs-module';
+import type { InboxItem, AppConfig, Collection, CollectionGroup } from '@inbox-rs/rs-module';
 import { migrator } from '@inbox-rs/rs-module';
 import rs from './rs';
 
@@ -11,6 +11,7 @@ export const syncing = writable(false);
 export const items = writable<Record<string, InboxItem>>({});
 export const appConfig = writable<AppConfig>({});
 export const collections = writable<Record<string, Collection>>({});
+export const groups = writable<Record<string, CollectionGroup>>({});
 /** Derived from loaded items using rs-migrate's getPending */
 export const pendingMigrationCount = derived(items, ($items) => {
   const docs = Object.values($items);
@@ -76,6 +77,28 @@ async function loadCollections() {
   }
 }
 
+async function loadGroups() {
+  const inbox = (rs as any).inbox;
+  if (!inbox) return;
+  try {
+    const all = await inbox.getAllGroups();
+    const valid: Record<string, CollectionGroup> = {};
+    for (const [key, grp] of Object.entries(all)) {
+      if (grp && typeof grp === 'object' && 'id' in grp && (grp as CollectionGroup).id) {
+        const group = grp as CollectionGroup;
+        if (key !== group.id) continue;
+        valid[key] = {
+          ...group,
+          collectionIds: Array.isArray(group.collectionIds) ? group.collectionIds : [],
+        };
+      }
+    }
+    groups.set(valid);
+  } catch {
+    // ignore
+  }
+}
+
 // Debounced sync indicator: stays visible for at least 1 second to avoid flicker
 let syncTimeout: ReturnType<typeof setTimeout> | null = null;
 let syncVisibleUntil = 0;
@@ -120,6 +143,7 @@ rs.on('connected', () => {
   void loadItems();
   void loadConfig();
   void loadCollections();
+  void loadGroups();
 });
 
 rs.on('disconnected', () => {
@@ -127,6 +151,7 @@ rs.on('disconnected', () => {
   items.set({});
   appConfig.set({});
   collections.set({});
+  groups.set({});
 });
 
 export async function runAllMigrations() {
@@ -155,6 +180,7 @@ if (inbox) {
   inbox.onChange(() => {
     void loadItems();
     void loadCollections();
+    void loadGroups();
   });
 }
 
@@ -368,4 +394,142 @@ export async function reorderCollectionItems(collectionId: string, newItemIds: s
 
 export async function reorderCollections(newOrder: string[]) {
   await updateConfig({ collectionsOrder: newOrder });
+}
+
+// ---- Groups ----
+
+export const sortedGroups = derived([groups, appConfig], ([$groups, $config]) => {
+  const grps = Object.values($groups);
+  if ($config.groupsOrder?.length) {
+    const order = $config.groupsOrder;
+    return grps.sort((a, b) => {
+      const ai = order.indexOf(a.id);
+      const bi = order.indexOf(b.id);
+      return (ai === -1 ? Infinity : ai) - (bi === -1 ? Infinity : bi);
+    });
+  }
+  return grps.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+});
+
+export const groupCollections = derived([collections, groups, appConfig], ([$collections, $groups, $config]) => {
+  const result: Record<string, Collection[]> = {};
+  for (const [gid, group] of Object.entries($groups)) {
+    result[gid] = group.collectionIds
+      .map(cid => $collections[cid])
+      .filter((c): c is Collection => c !== undefined);
+  }
+  return result;
+});
+
+/** Collections that don't belong to any group */
+export const ungroupedCollections = derived([sortedCollections, groups], ([$sortedCollections, $groups]) => {
+  const grouped = new Set<string>();
+  for (const group of Object.values($groups)) {
+    for (const cid of group.collectionIds) grouped.add(cid);
+  }
+  return $sortedCollections.filter(c => !grouped.has(c.id));
+});
+
+export async function storeGroup(group: CollectionGroup) {
+  const inbox = (rs as any).inbox;
+  const clean = JSON.parse(JSON.stringify(group)) as CollectionGroup;
+  await inbox.storeGroup(clean);
+  groups.update(current => ({ ...current, [clean.id]: clean }));
+}
+
+export async function deleteGroup(id: string) {
+  const inbox = (rs as any).inbox;
+  // Unset groupId on orphaned collections
+  let orphanedCols: Collection[] = [];
+  collections.update(current => {
+    const next = { ...current };
+    for (const key of Object.keys(next)) {
+      if (next[key].groupId === id) {
+        const updated = { ...next[key] };
+        delete (updated as any).groupId;
+        next[key] = updated as Collection;
+        orphanedCols.push(updated as Collection);
+      }
+    }
+    return next;
+  });
+  for (const col of orphanedCols) {
+    const clean = JSON.parse(JSON.stringify(col)) as Collection;
+    await inbox.storeCollection(clean);
+  }
+  await inbox.removeGroup(id);
+  groups.update(current => {
+    const next = { ...current };
+    delete next[id];
+    return next;
+  });
+  // Clean up groupsOrder
+  appConfig.update(current => {
+    if (!current.groupsOrder?.includes(id)) return current;
+    return { ...current, groupsOrder: current.groupsOrder.filter(gid => gid !== id) };
+  });
+  let currentConfig: AppConfig = {};
+  appConfig.subscribe(c => { currentConfig = c; })();
+  await inbox.setConfig(JSON.parse(JSON.stringify(currentConfig)) as AppConfig);
+}
+
+export async function moveCollectionToGroup(collectionId: string, groupId: string | undefined) {
+  const inbox = (rs as any).inbox;
+  let col: Collection | undefined;
+  let oldGroupId: string | undefined;
+
+  collections.update(current => {
+    const next = { ...current };
+    if (next[collectionId]) {
+      oldGroupId = next[collectionId].groupId;
+      const updated = { ...next[collectionId] };
+      if (groupId) {
+        updated.groupId = groupId;
+      } else {
+        delete (updated as any).groupId;
+      }
+      next[collectionId] = updated as Collection;
+      col = updated as Collection;
+    }
+    return next;
+  });
+
+  if (!col) return;
+  await inbox.storeCollection(JSON.parse(JSON.stringify(col)));
+
+  // Remove from old group
+  if (oldGroupId) {
+    groups.update(current => {
+      const grp = current[oldGroupId!];
+      if (grp) {
+        return { ...current, [oldGroupId!]: { ...grp, collectionIds: grp.collectionIds.filter(id => id !== collectionId) } };
+      }
+      return current;
+    });
+    let oldGrp: CollectionGroup | undefined;
+    groups.subscribe(g => { oldGrp = g[oldGroupId!]; })();
+    if (oldGrp) {
+      await inbox.storeGroup(JSON.parse(JSON.stringify(oldGrp)));
+    }
+  }
+
+  // Add to new group
+  if (groupId) {
+    groups.update(current => {
+      const grp = current[groupId];
+      if (grp && !grp.collectionIds.includes(collectionId)) {
+        return { ...current, [groupId]: { ...grp, collectionIds: [...grp.collectionIds, collectionId] } };
+      }
+      return current;
+    });
+    let newGrp: CollectionGroup | undefined;
+    groups.subscribe(g => { newGrp = g[groupId]; })();
+    if (newGrp) {
+      await inbox.storeGroup(JSON.parse(JSON.stringify(newGrp)));
+    }
+  }
+}
+
+export async function reorderGroups(newOrder: string[]) {
+  await updateConfig({ groupsOrder: newOrder });
 }

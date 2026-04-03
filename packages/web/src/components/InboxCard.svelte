@@ -7,23 +7,11 @@
   import DocumentCard from './DocumentCard.svelte';
   import CodeSnippetCard from './CodeSnippetCard.svelte';
   import EmailCard from './EmailCard.svelte';
-  import DeleteConfirm from './DeleteConfirm.svelte';
-  import { deleteItem } from '../lib/stores';
-
   let { item, onselect }: { item: InboxItem; onselect: (item: InboxItem) => void } = $props();
-  let showDelete = $state(false);
-  let deleting = $state(false);
 
   const cardNotes = $derived(
     ('notes' in item ? (item as any).notes : null) || item.description || null
   );
-
-  async function handleDelete() {
-    deleting = true;
-    await deleteItem(item.id, item);
-    showDelete = false;
-    deleting = false;
-  }
 
   function formatDate(iso: string): string {
     const d = new Date(iso);
@@ -42,11 +30,11 @@
   }}>
   <div class="card-body">
     {#if item.type === 'bookmark'}
-      <BookmarkCard {item} ondelete={handleDelete} />
+      <BookmarkCard {item} />
     {:else if item.type === 'note'}
       <NoteCard {item} />
     {:else if item.type === 'image'}
-      <ImageCard {item} ondelete={handleDelete} />
+      <ImageCard {item} />
     {:else if item.type === 'audio'}
       <AudioCard {item} />
     {:else if item.type === 'document'}
@@ -64,21 +52,7 @@
   <footer class="card-footer">
     <time class="date">{formatDate(item.createdAt)}</time>
     <span class="type-badge">{item.type}</span>
-    <button class="btn-delete" onclick={(e) => { e.stopPropagation(); showDelete = true; }} title="Delete">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="3 6 5 6 21 6"></polyline>
-        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-      </svg>
-    </button>
   </footer>
-
-  {#if showDelete}
-    <DeleteConfirm
-      onConfirm={handleDelete}
-      onCancel={() => showDelete = false}
-      {deleting}
-    />
-  {/if}
 </article>
 
 <style>
@@ -123,23 +97,6 @@
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-  }
-
-  .btn-delete {
-    margin-left: auto;
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    padding: 0.25rem;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    transition: color 0.15s;
-    cursor: pointer;
-  }
-
-  .btn-delete:hover {
-    color: var(--danger);
   }
 
   .card-notes {

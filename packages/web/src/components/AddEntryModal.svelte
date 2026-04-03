@@ -1,12 +1,13 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import type { InboxItemType, InboxItem } from '@inbox-rs/rs-module';
-  import { storeItem } from '../lib/stores';
+  import { storeItem, moveItemToCollection } from '../lib/stores';
   import { transcribeAudio } from '../lib/transcribe';
 
-  let { type, editItem = undefined, onclose, ondelete }: {
+  let { type, editItem = undefined, collectionId = undefined, onclose, ondelete }: {
     type: InboxItemType;
     editItem?: InboxItem;
+    collectionId?: string;
     onclose: () => void;
     ondelete?: (item: InboxItem) => void;
   } = $props();
@@ -239,7 +240,13 @@
         if (editItem!.completedAt) item.completedAt = editItem!.completedAt;
       }
 
+      if (collectionId && !isEdit) {
+        item!.collectionId = collectionId;
+      }
       await storeItem(item!, fileData);
+      if (collectionId && !isEdit) {
+        await moveItemToCollection(item!.id, collectionId);
+      }
       onclose();
     } catch (e) {
       console.error('Save failed:', e);

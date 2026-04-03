@@ -1,27 +1,49 @@
 <script lang="ts">
-  import type { InboxItem, Collection } from '@inbox-rs/rs-module';
+  import type { InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
   import { dndzone } from 'svelte-dnd-action';
   import {
-    sortedCollections, storeCollection, deleteCollection, reorderCollections
+    sortedCollections, storeCollection, deleteCollection, reorderCollections,
+    groups, groupCollections, ungroupedCollections, storeGroup, deleteGroup, moveCollectionToGroup,
+    appConfig, updateConfig
   } from '../lib/stores';
   import CollectionView from './CollectionView.svelte';
   import CollectionFormModal from './CollectionFormModal.svelte';
-  import DeleteConfirm from './DeleteConfirm.svelte';
+  import GroupFormModal from './GroupFormModal.svelte';
 
-  let { onselect, oncreate }: {
+  let { onselect, oncreate, groupId = undefined }: {
     onselect: (item: InboxItem) => void;
     oncreate: () => void;
+    groupId?: string;
   } = $props();
 
-  let expandedIds = $state<Set<string>>(new Set());
+  let expandedIds = $state<Set<string>>(new Set($appConfig.expandedCollections ?? []));
   let editingCollection = $state<Collection | null>(null);
-  let deletingCollection = $state<Collection | null>(null);
-  let deleting = $state(false);
+  let editingGroup = $state<CollectionGroup | null>(null);
 
-  // DnD: local mutable copy of sorted collections
+  // Sync expanded state from config when it loads/changes
+  let configInitialized = false;
+  $effect(() => {
+    const saved = $appConfig.expandedCollections;
+    if (saved && !configInitialized) {
+      expandedIds = new Set(saved);
+      configInitialized = true;
+    }
+  });
+
+  const currentGroup = $derived(groupId ? $groups[groupId] : undefined);
+
+  const filteredCollections = $derived.by(() => {
+    if (groupId) {
+      const grpCols = $groupCollections[groupId];
+      return grpCols ?? [];
+    }
+    return $ungroupedCollections;
+  });
+
+  // DnD: local mutable copy of filtered collections
   let dndCollections = $state<Array<Collection & { id: string }>>([]);
   $effect(() => {
-    dndCollections = $sortedCollections.map(c => ({ ...c }));
+    dndCollections = filteredCollections.map(c => ({ ...c }));
   });
 
   function handleDndConsider(e: CustomEvent<{ items: Array<Collection & { id: string }> }>) {
@@ -38,6 +60,7 @@
     if (next.has(id)) next.delete(id);
     else next.add(id);
     expandedIds = next;
+    void updateConfig({ expandedCollections: [...next] });
   }
 
   async function handleEditSave(col: Collection) {
@@ -45,20 +68,46 @@
     editingCollection = null;
   }
 
-  async function handleDelete() {
-    if (!deletingCollection) return;
-    deleting = true;
-    await deleteCollection(deletingCollection.id);
-    expandedIds.delete(deletingCollection.id);
+  async function handleDeleteCollection() {
+    if (!editingCollection) return;
+    const id = editingCollection.id;
+    editingCollection = null;
+    await deleteCollection(id);
+    expandedIds.delete(id);
     expandedIds = new Set(expandedIds);
-    deletingCollection = null;
-    deleting = false;
+  }
+
+  async function handleEditGroup(group: CollectionGroup) {
+    await storeGroup(group);
+    editingGroup = null;
+  }
+
+  async function handleDeleteGroup() {
+    if (!groupId) return;
+    editingGroup = null;
+    await deleteGroup(groupId);
+    window.location.hash = '#/collections';
   }
 </script>
 
 <div class="collections-page">
   <div class="page-header">
-    <h2>Collections</h2>
+    {#if currentGroup}
+      <div class="group-header">
+        <span class="group-dot-lg" style="background: {currentGroup.color || 'var(--accent)'}"></span>
+        <h2>{currentGroup.name}</h2>
+        <div class="group-actions">
+          <button class="btn-icon-sm" onclick={() => editingGroup = currentGroup} title="Edit group" aria-label="Edit group">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    {:else}
+      <h2>Collections</h2>
+    {/if}
     <button class="btn-new" onclick={oncreate}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -70,7 +119,7 @@
 
   {#if dndCollections.length === 0}
     <div class="empty-state">
-      <p>No collections yet. Create one to start organizing your items.</p>
+      <p>{groupId ? 'No collections in this group yet.' : 'No collections yet.'} Create one to start organizing your items.</p>
       <button class="btn-new" onclick={oncreate}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -92,7 +141,6 @@
           expanded={expandedIds.has(col.id)}
           {onselect}
           onedit={() => { editingCollection = col; }}
-          ondelete={() => { deletingCollection = col; }}
           ontoggle={() => toggleExpand(col.id)}
         />
       {/each}
@@ -105,14 +153,16 @@
     collection={editingCollection}
     onclose={() => editingCollection = null}
     onsave={handleEditSave}
+    ondelete={handleDeleteCollection}
   />
 {/if}
 
-{#if deletingCollection}
-  <DeleteConfirm
-    onConfirm={handleDelete}
-    onCancel={() => { deletingCollection = null; }}
-    {deleting}
+{#if editingGroup}
+  <GroupFormModal
+    group={editingGroup}
+    onclose={() => editingGroup = null}
+    onsave={handleEditGroup}
+    ondelete={groupId ? handleDeleteGroup : undefined}
   />
 {/if}
 
@@ -131,6 +181,44 @@
   h2 {
     font-size: 1.3rem;
     font-weight: 700;
+  }
+
+  .group-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .group-dot-lg {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .group-actions {
+    display: flex;
+    gap: 0.15rem;
+    margin-left: 0.25rem;
+  }
+
+  .btn-icon-sm {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 150ms, background 150ms;
+  }
+
+  .btn-icon-sm:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.06);
   }
 
   .btn-new {
@@ -155,7 +243,7 @@
   .collection-list {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.75rem;
   }
 
   .empty-state {

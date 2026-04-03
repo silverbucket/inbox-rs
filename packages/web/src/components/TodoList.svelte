@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
-  import { todoItems, storeItem, deleteItem } from '../lib/stores';
-  import DeleteConfirm from './DeleteConfirm.svelte';
+  import { todoItems, storeItem } from '../lib/stores';
 
   let { onselect, onadd, onexpandchange, inline = false }: {
     onselect: (item: InboxItem) => void;
@@ -14,9 +13,6 @@
   const completedTodos = $derived(todos.filter(t => t.completed));
   let expanded = $state(!inline);
   let showCompleted = $state(false);
-  let deleteTarget = $state<InboxItem | null>(null);
-  let deleting = $state(false);
-
   async function toggleCompleted(e: Event, todo: InboxItem) {
     e.stopPropagation();
     const updated = {
@@ -26,14 +22,6 @@
     };
     const clean = JSON.parse(JSON.stringify(updated));
     await storeItem(clean);
-  }
-
-  async function handleDelete() {
-    if (!deleteTarget) return;
-    deleting = true;
-    await deleteItem(deleteTarget.id, deleteTarget);
-    deleteTarget = null;
-    deleting = false;
   }
 
   function typeBadge(item: InboxItem): string | null {
@@ -94,12 +82,6 @@
             <div class="todo-content">
               <div class="todo-title-row">
                 <span class="todo-title">{todo.title}</span>
-                <button class="btn-delete" onclick={(e) => { e.stopPropagation(); deleteTarget = todo; }} title="Delete">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
-                </button>
               </div>
               {#if badge || note}
                 <div class="todo-meta">
@@ -176,13 +158,6 @@
     {/if}
   {/if}
 
-  {#if deleteTarget}
-    <DeleteConfirm
-      onConfirm={handleDelete}
-      onCancel={() => deleteTarget = null}
-      {deleting}
-    />
-  {/if}
 </div>
 
 <style>
@@ -395,27 +370,6 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
     flex-shrink: 0;
-  }
-
-  .btn-delete {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    padding: 0.2rem;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    opacity: 0;
-    transition: opacity 0.15s, color 0.15s;
-    cursor: pointer;
-  }
-
-  .todo-item:hover .btn-delete {
-    opacity: 1;
-  }
-
-  .btn-delete:hover {
-    color: var(--danger);
   }
 
   .btn-show-completed {

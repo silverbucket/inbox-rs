@@ -151,6 +151,8 @@ export const appConfigSchema = {
   properties: {
     todosCollapsed: { type: 'boolean' },
     collectionsOrder: { type: 'array', items: { type: 'string' } },
+    groupsOrder: { type: 'array', items: { type: 'string' } },
+    expandedCollections: { type: 'array', items: { type: 'string' } },
   }
 };
 
@@ -180,6 +182,19 @@ export const collectionSchema = {
     itemIds: { type: 'array', items: { type: 'string' } },
     createdAt: { type: 'string' },
     color: { type: 'string' },
+    groupId: { type: 'string' },
   },
   required: ['id', 'name', 'itemIds', 'createdAt']
+};
+
+export const collectionGroupSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    collectionIds: { type: 'array', items: { type: 'string' } },
+    createdAt: { type: 'string' },
+    color: { type: 'string' },
+  },
+  required: ['id', 'name', 'collectionIds', 'createdAt']
 };
