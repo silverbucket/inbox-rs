@@ -12,6 +12,8 @@ function copyManifest() {
       copyFileSync(resolve(__dirname, src), resolve(__dirname, 'dist/manifest.json'));
       // Copy icons
       mkdirSync(resolve(__dirname, 'dist/icons'), { recursive: true });
+      copyFileSync(resolve(__dirname, 'icons/icon-16.png'), resolve(__dirname, 'dist/icons/icon-16.png'));
+      copyFileSync(resolve(__dirname, 'icons/icon-32.png'), resolve(__dirname, 'dist/icons/icon-32.png'));
       copyFileSync(resolve(__dirname, 'icons/icon-48.png'), resolve(__dirname, 'dist/icons/icon-48.png'));
       copyFileSync(resolve(__dirname, 'icons/icon-128.png'), resolve(__dirname, 'dist/icons/icon-128.png'));
     }
