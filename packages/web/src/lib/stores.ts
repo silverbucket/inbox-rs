@@ -171,17 +171,29 @@ export async function updateConfig(patch: Partial<AppConfig>) {
   appConfig.subscribe(c => { currentConfig = c; })();
   const updated = { ...currentConfig, ...patch };
   appConfig.set(updated);
-  await inbox.setConfig(JSON.parse(JSON.stringify(updated)));
+  try {
+    await inbox.setConfig(JSON.parse(JSON.stringify(updated)));
+  } catch (e) {
+    appConfig.set(currentConfig);
+    console.error('[inbox] failed to persist config update:', e);
+    throw e;
+  }
 }
 
-// Update items on remote/local changes
-const inbox = (rs as any).inbox;
-if (inbox) {
-  inbox.onChange(() => {
+// Update items on remote/local changes — debounced to avoid redundant reloads during sync
+const inboxRef = (rs as any).inbox;
+let reloadTimeout: ReturnType<typeof setTimeout> | undefined;
+function scheduleReload() {
+  if (reloadTimeout) clearTimeout(reloadTimeout);
+  reloadTimeout = setTimeout(() => {
+    reloadTimeout = undefined;
     void loadItems();
     void loadCollections();
     void loadGroups();
-  });
+  }, 100);
+}
+if (inboxRef) {
+  inboxRef.onChange(scheduleReload);
 }
 
 document.addEventListener('visibilitychange', () => {
@@ -210,11 +222,11 @@ export const todoItems = derived(items, ($items) => {
 export const sortedCollections = derived([collections, appConfig], ([$collections, $config]) => {
   const cols = Object.values($collections);
   if ($config.collectionsOrder?.length) {
-    const order = $config.collectionsOrder;
+    const orderIndex = new Map($config.collectionsOrder.map((id, i) => [id, i]));
     return cols.sort((a, b) => {
-      const ai = order.indexOf(a.id);
-      const bi = order.indexOf(b.id);
-      return (ai === -1 ? Infinity : ai) - (bi === -1 ? Infinity : bi);
+      const ai = orderIndex.get(a.id) ?? Infinity;
+      const bi = orderIndex.get(b.id) ?? Infinity;
+      return ai - bi;
     });
   }
   return cols.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -309,6 +321,17 @@ export async function deleteCollection(id: string) {
 
 export async function moveItemToCollection(itemId: string, collectionId: string | undefined) {
   const inbox = (rs as any).inbox;
+
+  // Validate target collection exists
+  if (collectionId) {
+    let exists = false;
+    collections.subscribe(c => { exists = !!c[collectionId]; })();
+    if (!exists) {
+      console.error('[inbox] moveItemToCollection: target collection does not exist:', collectionId);
+      return;
+    }
+  }
+
   let item: InboxItem | undefined;
   let oldCollectionId: string | undefined;
 
@@ -401,11 +424,11 @@ export async function reorderCollections(newOrder: string[]) {
 export const sortedGroups = derived([groups, appConfig], ([$groups, $config]) => {
   const grps = Object.values($groups);
   if ($config.groupsOrder?.length) {
-    const order = $config.groupsOrder;
+    const orderIndex = new Map($config.groupsOrder.map((id, i) => [id, i]));
     return grps.sort((a, b) => {
-      const ai = order.indexOf(a.id);
-      const bi = order.indexOf(b.id);
-      return (ai === -1 ? Infinity : ai) - (bi === -1 ? Infinity : bi);
+      const ai = orderIndex.get(a.id) ?? Infinity;
+      const bi = orderIndex.get(b.id) ?? Infinity;
+      return ai - bi;
     });
   }
   return grps.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -527,6 +550,22 @@ export async function moveCollectionToGroup(collectionId: string, groupId: strin
     if (newGrp) {
       await inbox.storeGroup(JSON.parse(JSON.stringify(newGrp)));
     }
+  }
+}
+
+export async function reorderGroupCollections(groupId: string, newCollectionIds: string[]) {
+  const inbox = (rs as any).inbox;
+  groups.update(current => {
+    const grp = current[groupId];
+    if (grp) {
+      return { ...current, [groupId]: { ...grp, collectionIds: newCollectionIds } };
+    }
+    return current;
+  });
+  let grp: CollectionGroup | undefined;
+  groups.subscribe(g => { grp = g[groupId]; })();
+  if (grp) {
+    await inbox.storeGroup(JSON.parse(JSON.stringify(grp)));
   }
 }
 

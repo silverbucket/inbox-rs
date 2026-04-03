@@ -395,14 +395,14 @@
         {#if showMoveMenu}
           <div class="move-dropdown">
             {#if item.collectionId}
-              <button class="move-option" onclick={() => { void moveItemToCollection(item.id, undefined); showMoveMenu = false; onclose(); }}>
+              <button class="move-option" onclick={() => { moveItemToCollection(item.id, undefined).catch(e => console.error('Move failed:', e)); showMoveMenu = false; onclose(); }}>
                 Return to Inbox
               </button>
               <div class="move-divider"></div>
             {/if}
             {#each $sortedCollections as col (col.id)}
               {#if col.id !== item.collectionId}
-                <button class="move-option" onclick={() => { void moveItemToCollection(item.id, col.id); showMoveMenu = false; onclose(); }}>
+                <button class="move-option" onclick={() => { moveItemToCollection(item.id, col.id).catch(e => console.error('Move failed:', e)); showMoveMenu = false; onclose(); }}>
                   <span class="move-dot" style="background: {col.color || '#6366f1'}"></span>
                   {col.name}
                 </button>

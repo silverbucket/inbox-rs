@@ -240,9 +240,6 @@
         if (editItem!.completedAt) item.completedAt = editItem!.completedAt;
       }
 
-      if (collectionId && !isEdit) {
-        item!.collectionId = collectionId;
-      }
       await storeItem(item!, fileData);
       if (collectionId && !isEdit) {
         await moveItemToCollection(item!.id, collectionId);

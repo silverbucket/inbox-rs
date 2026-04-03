@@ -4,7 +4,7 @@
   import {
     sortedCollections, storeCollection, deleteCollection, reorderCollections,
     groups, groupCollections, ungroupedCollections, storeGroup, deleteGroup, moveCollectionToGroup,
-    appConfig, updateConfig
+    appConfig, updateConfig, reorderGroupCollections
   } from '../lib/stores';
   import CollectionView from './CollectionView.svelte';
   import CollectionFormModal from './CollectionFormModal.svelte';
@@ -50,9 +50,26 @@
     dndCollections = e.detail.items;
   }
 
-  function handleDndFinalize(e: CustomEvent<{ items: Array<Collection & { id: string }> }>) {
+  async function handleDndFinalize(e: CustomEvent<{ items: Array<Collection & { id: string }> }>) {
+    const previous = filteredCollections.map(c => ({ ...c }));
     dndCollections = e.detail.items;
-    void reorderCollections(dndCollections.map(c => c.id));
+    const newIds = dndCollections.map(c => c.id);
+    try {
+      if (groupId) {
+        await reorderGroupCollections(groupId, newIds);
+      } else {
+        // Merge reordered subset into full order, preserving grouped collections' positions
+        let currentOrder: string[] = [];
+        appConfig.subscribe(c => { currentOrder = c.collectionsOrder ?? []; })();
+        const reorderedSet = new Set(newIds);
+        const merged = currentOrder.filter(id => !reorderedSet.has(id));
+        merged.push(...newIds);
+        await reorderCollections(merged);
+      }
+    } catch (error) {
+      console.error('Failed to reorder collections', error);
+      dndCollections = previous;
+    }
   }
 
   function toggleExpand(id: string) {
@@ -60,7 +77,9 @@
     if (next.has(id)) next.delete(id);
     else next.add(id);
     expandedIds = next;
-    void updateConfig({ expandedCollections: [...next] });
+    void updateConfig({ expandedCollections: [...next] }).catch(e => {
+      console.error('Failed to persist expanded state', e);
+    });
   }
 
   async function handleEditSave(col: Collection) {
