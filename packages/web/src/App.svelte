@@ -13,6 +13,7 @@
   import CollectionFormModal from './components/CollectionFormModal.svelte';
   import GroupFormModal from './components/GroupFormModal.svelte';
   import { connected, deleteItem, todoItems, appConfig, updateConfig, pendingMigrationCount, runAllMigrations, storeCollection, sortedGroups, storeGroup, moveCollectionToGroup } from './lib/stores';
+  import shieldIcon from './assets/logos/favicon-shield.svg';
 
   type Route =
     | { page: 'home' }
@@ -130,6 +131,7 @@
     <div class="header-left">
       <div class="brand">
         <a class="brand-link" href="#/">
+          <img src={shieldIcon} alt="" class="brand-icon" />
           <h1>Inbox <span class="accent">RS</span> <span class="version">v{__APP_VERSION__}</span></h1>
         </a>
         <a class="downloads-link" class:active={route.page === 'plugins'} href="#/plugins">
@@ -272,13 +274,19 @@
 
   .brand {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
     line-height: 1;
     gap: 0.35rem;
   }
 
   .brand-link {
     color: inherit;
+  }
+
+  .brand-icon {
+    width: 24px;
+    height: 24px;
   }
 
   .brand-link:hover {
