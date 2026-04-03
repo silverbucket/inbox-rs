@@ -10,6 +10,7 @@
   import MigrationAlert from './components/MigrationAlert.svelte';
   import PluginsPage from './components/PluginsPage.svelte';
   import { connected, deleteItem, todoItems, appConfig, updateConfig, pendingMigrationCount, runAllMigrations } from './lib/stores';
+  import shieldLogo from './assets/logos/favicon-shield.svg';
 
   type Route = 'home' | 'plugins';
 
@@ -93,8 +94,11 @@
   <div class="header-inner">
     <div class="header-left">
       <a class="brand-link" href="#/">
-        <h1>Inbox <span class="accent">RS</span></h1>
-        <span class="version">v{__APP_VERSION__}</span>
+        <img src={shieldLogo} alt="" class="brand-icon" />
+        <div class="brand-text">
+          <h1>Inbox <span class="accent">RS</span></h1>
+          <span class="version">v{__APP_VERSION__}</span>
+        </div>
       </a>
       <nav class="header-nav" aria-label="Primary">
         <a class:active={route === 'home'} aria-current={route === 'home' ? 'page' : undefined} href="#/">Inbox</a>
@@ -178,8 +182,19 @@
   .brand-link {
     color: inherit;
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
     line-height: 1;
+  }
+
+  .brand-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .brand-text {
+    display: flex;
+    flex-direction: column;
   }
 
   .brand-link:hover {

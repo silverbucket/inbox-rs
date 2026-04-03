@@ -1,0 +1,9 @@
+<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!-- Shield shape -->
+  <path d="M16 2 L28 7 L28 16 Q28 26 16 30 Q4 26 4 16 L4 7 Z" fill="#6366f1"/>
+  <!-- Inbox tray inside shield -->
+  <path d="M8 15 L10.5 23 L13 23 L13 20 Q13 19 14.5 19 L17.5 19 Q19 19 19 20 L19 23 L21.5 23 L24 15 Z" fill="#818cf8"/>
+  <!-- Down arrow -->
+  <path d="M16 7 L16 14" stroke="#e4e6eb" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M13 11.5 L16 14.5 L19 11.5" stroke="#e4e6eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>
