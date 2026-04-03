@@ -53,15 +53,15 @@ const marked = new Marked({
 export async function renderMarkdown(source: string): Promise<string> {
   // Collect code block languages so we can load them before rendering
   const langsToLoad = new Set<string>();
-  const langPattern = /^```(\w+)/gm;
+  const langPattern = /^```([\w+#.-]+)/gm;
   let match;
   while ((match = langPattern.exec(source)) !== null) {
     langsToLoad.add(match[1].toLowerCase());
   }
 
-  // Load all languages in parallel
+  // Load all languages in parallel, tolerating individual failures
   const loaded = new Map<string, string>();
-  await Promise.all(
+  await Promise.allSettled(
     [...langsToLoad].map(async (lang) => {
       const resolved = await ensureLanguage(lang);
       if (resolved) loaded.set(lang, resolved);

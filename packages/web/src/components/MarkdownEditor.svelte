@@ -4,23 +4,8 @@
   import StarterKit from '@tiptap/starter-kit';
   import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
   import { Markdown } from 'tiptap-markdown';
-  import { createLowlight } from 'lowlight';
+  import { common, createLowlight } from 'lowlight';
   import 'highlight.js/styles/github-dark.min.css';
-
-  // Import languages for code block highlighting
-  import javascript from 'highlight.js/lib/languages/javascript';
-  import typescript from 'highlight.js/lib/languages/typescript';
-  import python from 'highlight.js/lib/languages/python';
-  import rust from 'highlight.js/lib/languages/rust';
-  import go from 'highlight.js/lib/languages/go';
-  import bash from 'highlight.js/lib/languages/bash';
-  import shell from 'highlight.js/lib/languages/shell';
-  import json from 'highlight.js/lib/languages/json';
-  import xml from 'highlight.js/lib/languages/xml';
-  import css from 'highlight.js/lib/languages/css';
-  import sql from 'highlight.js/lib/languages/sql';
-  import java from 'highlight.js/lib/languages/java';
-  import yaml from 'highlight.js/lib/languages/yaml';
 
   let {
     value = $bindable(''),
@@ -36,26 +21,7 @@
   let editor: Editor | null = null;
   let previewHtml = $state('');
 
-  const lowlight = createLowlight();
-  lowlight.register('javascript', javascript);
-  lowlight.register('js', javascript);
-  lowlight.register('typescript', typescript);
-  lowlight.register('ts', typescript);
-  lowlight.register('python', python);
-  lowlight.register('py', python);
-  lowlight.register('rust', rust);
-  lowlight.register('go', go);
-  lowlight.register('bash', bash);
-  lowlight.register('sh', bash);
-  lowlight.register('shell', shell);
-  lowlight.register('json', json);
-  lowlight.register('html', xml);
-  lowlight.register('xml', xml);
-  lowlight.register('css', css);
-  lowlight.register('sql', sql);
-  lowlight.register('java', java);
-  lowlight.register('yaml', yaml);
-  lowlight.register('yml', yaml);
+  const lowlight = createLowlight(common);
 
   onMount(() => {
     editor = new Editor({
@@ -99,9 +65,10 @@
       }
     }
     if (mode === 'preview') {
-      import('../lib/markdown').then(({ renderMarkdown }) => {
-        renderMarkdown(value).then((html) => { previewHtml = html; });
-      });
+      import('../lib/markdown')
+        .then(({ renderMarkdown }) => renderMarkdown(value))
+        .then((html) => { previewHtml = html; })
+        .catch(() => { previewHtml = ''; });
     }
   });
 
