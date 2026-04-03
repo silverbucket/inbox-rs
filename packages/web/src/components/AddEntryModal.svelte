@@ -3,6 +3,7 @@
   import type { InboxItemType, InboxItem } from '@inbox-rs/rs-module';
   import { storeItem, moveItemToCollection } from '../lib/stores';
   import { transcribeAudio } from '../lib/transcribe';
+  import MarkdownEditor from './MarkdownEditor.svelte';
 
   let { type, editItem = undefined, collectionId = undefined, onclose, ondelete }: {
     type: InboxItemType;
@@ -25,6 +26,9 @@
   let from = $state(editItem && 'from' in editItem ? editItem.from ?? '' : '');
   let notes = $state(editItem && 'notes' in editItem ? editItem.notes ?? '' : '');
   let file = $state<File | null>(null);
+
+  // Markdown editor mode for notes
+  let editorMode = $state<'visual' | 'write' | 'preview'>('visual');
 
   // Voice recording state
   let recording = $state(false);
@@ -300,11 +304,11 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="overlay" onclick={onclose}>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" onclick={(e) => e.stopPropagation()}>
+  <div class="modal" class:modal-note={type === 'note'} role="dialog" aria-modal="true" aria-labelledby="modal-title" onclick={(e) => e.stopPropagation()}>
     <h2 class="modal-title" id="modal-title">{isEdit ? editLabels[type] : addLabels[type]}</h2>
 
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="form" onkeydown={(e) => { if (e.key === 'Enter' && !(e.target instanceof HTMLTextAreaElement) && canSubmit) { e.preventDefault(); handleSubmit(); } }}>
+    <div class="form" onkeydown={(e) => { if (e.key === 'Enter' && !(e.target instanceof HTMLTextAreaElement) && !(e.target as HTMLElement)?.closest?.('.tiptap-editor') && canSubmit) { e.preventDefault(); handleSubmit(); } }}>
       {#if type === 'bookmark'}
         <p class="info-note">Metadata fetching is not yet available in the web app. Use the browser extension to auto-fill bookmark details. Sockethub integration is planned for a future release.</p>
         <label class="field">
@@ -325,10 +329,17 @@
           <span>Title</span>
           <input type="text" bind:value={title} placeholder="Note title" />
         </label>
-        <label class="field">
-          <span>Content *</span>
-          <textarea use:autofocus bind:value={body} rows="6" placeholder="Write your note..."></textarea>
-        </label>
+        <div class="field note-editor-field">
+          <div class="field-header">
+            <span>Content *</span>
+            <div class="editor-tabs">
+              <button type="button" class="tab" class:active={editorMode === 'visual'} onclick={() => editorMode = 'visual'}>Visual</button>
+              <button type="button" class="tab" class:active={editorMode === 'write'} onclick={() => editorMode = 'write'}>Markdown</button>
+              <button type="button" class="tab" class:active={editorMode === 'preview'} onclick={() => editorMode = 'preview'}>Preview</button>
+            </div>
+          </div>
+          <MarkdownEditor bind:value={body} bind:mode={editorMode} placeholder="Write your note..." />
+        </div>
 
       {:else if type === 'image'}
         <label class="field">
@@ -506,6 +517,22 @@
       border: none;
       border-radius: 0;
     }
+  }
+
+  .modal-note {
+    max-width: 720px;
+    height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .modal-note .form {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .modal-title {
@@ -769,5 +796,44 @@
     padding: 0.5rem 0.75rem;
     white-space: pre-wrap;
     margin: 0;
+  }
+
+  .field-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .editor-tabs {
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .tab {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 0.15rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  .tab:hover {
+    color: var(--text);
+    border-color: var(--text-muted);
+  }
+
+  .tab.active {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .note-editor-field {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
   }
 </style>
