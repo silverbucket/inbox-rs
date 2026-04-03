@@ -183,18 +183,19 @@
     color: inherit;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.6rem;
     line-height: 1;
   }
 
   .brand-icon {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
   }
 
   .brand-text {
     display: flex;
     flex-direction: column;
+    padding-top: 0.05rem;
   }
 
   .brand-link:hover {
