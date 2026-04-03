@@ -54,7 +54,7 @@ export async function renderMarkdown(source: string): Promise<string> {
   // Collect code block languages so we can load them before rendering
   const langsToLoad = new Set<string>();
   const langPattern = /^```([\w+#.-]+)/gm;
-  let match;
+  let match: RegExpExecArray | null = null;
   while ((match = langPattern.exec(source)) !== null) {
     langsToLoad.add(match[1].toLowerCase());
   }

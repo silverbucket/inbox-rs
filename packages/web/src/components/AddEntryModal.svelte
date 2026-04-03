@@ -308,7 +308,7 @@
     <h2 class="modal-title" id="modal-title">{isEdit ? editLabels[type] : addLabels[type]}</h2>
 
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="form" onkeydown={(e) => { if (e.key === 'Enter' && !(e.target instanceof HTMLTextAreaElement) && !(e.target as HTMLElement)?.closest?.('.tiptap-editor') && canSubmit) { e.preventDefault(); handleSubmit(); } }}>
+    <div class="form" onkeydown={(e) => { if (e.key === 'Enter' && e.target instanceof HTMLInputElement && e.target.type === 'text' && canSubmit) { e.preventDefault(); handleSubmit(); } }}>
       {#if type === 'bookmark'}
         <p class="info-note">Metadata fetching is not yet available in the web app. Use the browser extension to auto-fill bookmark details. Sockethub integration is planned for a future release.</p>
         <label class="field">
