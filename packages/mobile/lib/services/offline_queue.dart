@@ -40,7 +40,7 @@ class OfflineQueue {
 
   Future<String> get _queueDir async {
     if (_cachedQueueDir != null) return _cachedQueueDir!;
-    final appDir = await getApplicationDocumentsDirectory();
+    final appDir = await getApplicationSupportDirectory();
     final dir = p.join(appDir.path, 'queue');
     await Directory(dir).create(recursive: true);
     _cachedQueueDir = dir;
