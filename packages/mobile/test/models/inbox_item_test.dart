@@ -25,7 +25,7 @@ void main() {
       expect(json['type'], 'note');
       expect(json['title'], 'Test note');
       expect(json['createdAt'], '2026-04-04T00:00:00.000Z');
-      expect(json['_migrateVersion'], 1);
+      expect(json.containsKey('_migrateVersion'), false);
     });
 
     test('toJson omits null optional fields', () {

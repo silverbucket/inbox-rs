@@ -52,7 +52,9 @@ class OfflineQueue {
   }
 
   void _notifyListeners() {
-    _pendingController.add(_pending.length);
+    if (!_pendingController.isClosed) {
+      _pendingController.add(_pending.length);
+    }
   }
 
   Future<void> enqueue({
