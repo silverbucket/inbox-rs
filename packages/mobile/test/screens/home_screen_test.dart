@@ -28,7 +28,8 @@ void main() {
       await tester.pumpWidget(wrap(
         HomeScreen(config: config, queue: queue, onConfigChanged: (_) {}),
       ));
-      expect(find.text('Inbox RS'), findsOneWidget);
+      expect(find.text('Inbox '), findsOneWidget);
+      expect(find.text('RS'), findsOneWidget);
     });
 
     testWidgets('shows text input with hint', (tester) async {

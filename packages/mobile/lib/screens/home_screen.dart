@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:uuid/uuid.dart';
 import '../models/attachment.dart';
 import '../models/inbox_item.dart';
@@ -196,7 +197,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Inbox RS'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SvgPicture.asset('assets/shield-icon.svg', height: 26),
+            const SizedBox(width: 8),
+            Text('Inbox ', style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: colorScheme.onSurface,
+            )),
+            Text('RS', style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: colorScheme.primary,
+            )),
+          ],
+        ),
         centerTitle: false,
         actions: [
           if (_pendingCount > 0)
