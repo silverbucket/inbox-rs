@@ -138,6 +138,8 @@ rs.on('sync-done', (e: any) => {
 rs.on('wire-busy', () => console.log('[inbox] wire-busy'));
 rs.on('wire-done', () => console.log('[inbox] wire-done'));
 
+let reloadTimeout: ReturnType<typeof setTimeout> | undefined;
+
 rs.on('connected', () => {
   connected.set(true);
   void loadItems();
@@ -148,6 +150,10 @@ rs.on('connected', () => {
 
 rs.on('disconnected', () => {
   connected.set(false);
+  if (reloadTimeout) {
+    clearTimeout(reloadTimeout);
+    reloadTimeout = undefined;
+  }
   items.set({});
   appConfig.set({});
   collections.set({});
@@ -182,7 +188,6 @@ export async function updateConfig(patch: Partial<AppConfig>) {
 
 // Update items on remote/local changes — debounced to avoid redundant reloads during sync
 const inboxRef = (rs as any).inbox;
-let reloadTimeout: ReturnType<typeof setTimeout> | undefined;
 function scheduleReload() {
   if (reloadTimeout) clearTimeout(reloadTimeout);
   reloadTimeout = setTimeout(() => {
@@ -309,14 +314,12 @@ export async function deleteCollection(id: string) {
     delete next[id];
     return next;
   });
-  // Clean up collectionsOrder
-  appConfig.update(current => {
-    if (!current.collectionsOrder?.includes(id)) return current;
-    return { ...current, collectionsOrder: current.collectionsOrder.filter(cid => cid !== id) };
-  });
-  let currentConfig: AppConfig = {};
-  appConfig.subscribe(c => { currentConfig = c; })();
-  await inbox.setConfig(JSON.parse(JSON.stringify(currentConfig)) as AppConfig);
+  // Clean up collectionsOrder via updateConfig for consistent rollback on failure
+  let currentOrder: string[] = [];
+  appConfig.subscribe(c => { currentOrder = c.collectionsOrder ?? []; })();
+  if (currentOrder.includes(id)) {
+    await updateConfig({ collectionsOrder: currentOrder.filter(cid => cid !== id) });
+  }
 }
 
 export async function moveItemToCollection(itemId: string, collectionId: string | undefined) {
@@ -331,6 +334,12 @@ export async function moveItemToCollection(itemId: string, collectionId: string 
       return;
     }
   }
+
+  // Snapshot stores for rollback
+  let prevItems: Record<string, InboxItem> = {};
+  items.subscribe(v => { prevItems = v; })();
+  let prevCollections: Record<string, Collection> = {};
+  collections.subscribe(v => { prevCollections = v; })();
 
   let item: InboxItem | undefined;
   let oldCollectionId: string | undefined;
@@ -356,42 +365,49 @@ export async function moveItemToCollection(itemId: string, collectionId: string 
 
   if (!item) return;
 
-  // Persist item
-  const cleanItem = JSON.parse(JSON.stringify(item)) as InboxItem;
-  await inbox.store(cleanItem);
+  try {
+    // Persist item
+    const cleanItem = JSON.parse(JSON.stringify(item)) as InboxItem;
+    await inbox.store(cleanItem);
 
-  // Update source collection's itemIds
-  if (oldCollectionId) {
-    collections.update(current => {
-      const col = current[oldCollectionId!];
-      if (col) {
-        const updated = { ...col, itemIds: col.itemIds.filter(id => id !== itemId) };
-        return { ...current, [oldCollectionId!]: updated };
+    // Update source collection's itemIds
+    if (oldCollectionId) {
+      collections.update(current => {
+        const col = current[oldCollectionId!];
+        if (col) {
+          const updated = { ...col, itemIds: col.itemIds.filter(id => id !== itemId) };
+          return { ...current, [oldCollectionId!]: updated };
+        }
+        return current;
+      });
+      let sourceCol: Collection | undefined;
+      collections.subscribe(c => { sourceCol = c[oldCollectionId!]; })();
+      if (sourceCol) {
+        await inbox.storeCollection(JSON.parse(JSON.stringify(sourceCol)));
       }
-      return current;
-    });
-    let sourceCol: Collection | undefined;
-    collections.subscribe(c => { sourceCol = c[oldCollectionId!]; })();
-    if (sourceCol) {
-      await inbox.storeCollection(JSON.parse(JSON.stringify(sourceCol)));
     }
-  }
 
-  // Update target collection's itemIds
-  if (collectionId) {
-    collections.update(current => {
-      const col = current[collectionId];
-      if (col && !col.itemIds.includes(itemId)) {
-        const updated = { ...col, itemIds: [...col.itemIds, itemId] };
-        return { ...current, [collectionId]: updated };
+    // Update target collection's itemIds
+    if (collectionId) {
+      collections.update(current => {
+        const col = current[collectionId];
+        if (col && !col.itemIds.includes(itemId)) {
+          const updated = { ...col, itemIds: [...col.itemIds, itemId] };
+          return { ...current, [collectionId]: updated };
+        }
+        return current;
+      });
+      let targetCol: Collection | undefined;
+      collections.subscribe(c => { targetCol = c[collectionId]; })();
+      if (targetCol) {
+        await inbox.storeCollection(JSON.parse(JSON.stringify(targetCol)));
       }
-      return current;
-    });
-    let targetCol: Collection | undefined;
-    collections.subscribe(c => { targetCol = c[collectionId]; })();
-    if (targetCol) {
-      await inbox.storeCollection(JSON.parse(JSON.stringify(targetCol)));
     }
+  } catch (e) {
+    items.set(prevItems);
+    collections.set(prevCollections);
+    console.error('[inbox] moveItemToCollection failed, rolling back:', e);
+    throw e;
   }
 }
 
@@ -486,18 +502,23 @@ export async function deleteGroup(id: string) {
     delete next[id];
     return next;
   });
-  // Clean up groupsOrder
-  appConfig.update(current => {
-    if (!current.groupsOrder?.includes(id)) return current;
-    return { ...current, groupsOrder: current.groupsOrder.filter(gid => gid !== id) };
-  });
-  let currentConfig: AppConfig = {};
-  appConfig.subscribe(c => { currentConfig = c; })();
-  await inbox.setConfig(JSON.parse(JSON.stringify(currentConfig)) as AppConfig);
+  // Clean up groupsOrder via updateConfig for consistent rollback on failure
+  let currentOrder: string[] = [];
+  appConfig.subscribe(c => { currentOrder = c.groupsOrder ?? []; })();
+  if (currentOrder.includes(id)) {
+    await updateConfig({ groupsOrder: currentOrder.filter(gid => gid !== id) });
+  }
 }
 
 export async function moveCollectionToGroup(collectionId: string, groupId: string | undefined) {
   const inbox = (rs as any).inbox;
+
+  // Snapshot stores for rollback
+  let prevCollections: Record<string, Collection> = {};
+  collections.subscribe(v => { prevCollections = v; })();
+  let prevGroups: Record<string, CollectionGroup> = {};
+  groups.subscribe(v => { prevGroups = v; })();
+
   let col: Collection | undefined;
   let oldGroupId: string | undefined;
 
@@ -518,38 +539,46 @@ export async function moveCollectionToGroup(collectionId: string, groupId: strin
   });
 
   if (!col) return;
-  await inbox.storeCollection(JSON.parse(JSON.stringify(col)));
 
-  // Remove from old group
-  if (oldGroupId) {
-    groups.update(current => {
-      const grp = current[oldGroupId!];
-      if (grp) {
-        return { ...current, [oldGroupId!]: { ...grp, collectionIds: grp.collectionIds.filter(id => id !== collectionId) } };
-      }
-      return current;
-    });
-    let oldGrp: CollectionGroup | undefined;
-    groups.subscribe(g => { oldGrp = g[oldGroupId!]; })();
-    if (oldGrp) {
-      await inbox.storeGroup(JSON.parse(JSON.stringify(oldGrp)));
-    }
-  }
+  try {
+    await inbox.storeCollection(JSON.parse(JSON.stringify(col)));
 
-  // Add to new group
-  if (groupId) {
-    groups.update(current => {
-      const grp = current[groupId];
-      if (grp && !grp.collectionIds.includes(collectionId)) {
-        return { ...current, [groupId]: { ...grp, collectionIds: [...grp.collectionIds, collectionId] } };
+    // Remove from old group
+    if (oldGroupId) {
+      groups.update(current => {
+        const grp = current[oldGroupId!];
+        if (grp) {
+          return { ...current, [oldGroupId!]: { ...grp, collectionIds: grp.collectionIds.filter(id => id !== collectionId) } };
+        }
+        return current;
+      });
+      let oldGrp: CollectionGroup | undefined;
+      groups.subscribe(g => { oldGrp = g[oldGroupId!]; })();
+      if (oldGrp) {
+        await inbox.storeGroup(JSON.parse(JSON.stringify(oldGrp)));
       }
-      return current;
-    });
-    let newGrp: CollectionGroup | undefined;
-    groups.subscribe(g => { newGrp = g[groupId]; })();
-    if (newGrp) {
-      await inbox.storeGroup(JSON.parse(JSON.stringify(newGrp)));
     }
+
+    // Add to new group
+    if (groupId) {
+      groups.update(current => {
+        const grp = current[groupId];
+        if (grp && !grp.collectionIds.includes(collectionId)) {
+          return { ...current, [groupId]: { ...grp, collectionIds: [...grp.collectionIds, collectionId] } };
+        }
+        return current;
+      });
+      let newGrp: CollectionGroup | undefined;
+      groups.subscribe(g => { newGrp = g[groupId]; })();
+      if (newGrp) {
+        await inbox.storeGroup(JSON.parse(JSON.stringify(newGrp)));
+      }
+    }
+  } catch (e) {
+    collections.set(prevCollections);
+    groups.set(prevGroups);
+    console.error('[inbox] moveCollectionToGroup failed, rolling back:', e);
+    throw e;
   }
 }
 
