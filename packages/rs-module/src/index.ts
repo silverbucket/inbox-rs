@@ -1,8 +1,14 @@
 import { bookmarkSchema, noteSchema, imageMetaSchema, audioMetaSchema, videoMetaSchema, documentMetaSchema, codeSnippetSchema, todoSchema, emailSchema, appConfigSchema, collectionSchema, collectionGroupSchema } from './schemas.js';
-import type { InboxItem, AppConfig, Collection, CollectionGroup } from './types.js';
+import type { InboxItem, InboxItemType, AppConfig, Collection, CollectionGroup } from './types.js';
 import type { MigrateResult } from 'rs-migrate';
 import { migrator, legacySchemas } from './migrations.js';
 export { migrator } from './migrations.js';
+
+/** Current item types — legacy types like 'voice-memo' are excluded */
+const CURRENT_TYPES: Set<string> = new Set<string>([
+  'bookmark', 'note', 'image', 'audio', 'video',
+  'document', 'code-snippet', 'todo', 'email',
+] satisfies InboxItemType[]);
 
 export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, AudioItem, VideoItem, DocumentItem, CodeSnippetItem, TodoItem, EmailItem, AppConfig, Collection, CollectionGroup } from './types.js';
 
@@ -66,9 +72,13 @@ const InboxModule = {
           // Stamp _migrateVersion on items that lack it (e.g. written by
           // the mobile app's direct HTTP client) so they aren't falsely
           // flagged as needing migration by getPending().
+          // Only stamp current types — legacy types (e.g. voice-memo) must
+          // remain unstamped so their migrations still run.
           const latestVersion = migrator.getLatestVersion('items');
           for (const item of Object.values(items) as InboxItem[]) {
-            if (item && typeof item === 'object' && item._migrateVersion === undefined) {
+            if (item && typeof item === 'object'
+                && item._migrateVersion === undefined
+                && CURRENT_TYPES.has(item.type)) {
               item._migrateVersion = latestVersion;
             }
           }
@@ -77,7 +87,7 @@ const InboxModule = {
 
         async getById(id: string): Promise<InboxItem | undefined> {
           const item = await privateClient.getObject(`items/${id}`);
-          if (item && item._migrateVersion === undefined) {
+          if (item && item._migrateVersion === undefined && CURRENT_TYPES.has(item.type)) {
             item._migrateVersion = migrator.getLatestVersion('items');
           }
           return item;
