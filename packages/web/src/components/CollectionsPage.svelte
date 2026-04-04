@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
+  import { get } from 'svelte/store';
   import { dndzone } from 'svelte-dnd-action';
   import {
     sortedCollections, storeCollection, deleteCollection, reorderCollections,
@@ -60,7 +61,7 @@
       } else {
         // Merge reordered subset into full order, preserving grouped collections' positions
         let currentOrder: string[] = [];
-        appConfig.subscribe(c => { currentOrder = c.collectionsOrder ?? []; })();
+        currentOrder = get(appConfig).collectionsOrder ?? [];
         const reorderedSet = new Set(newIds);
         const merged = currentOrder.filter(id => !reorderedSet.has(id));
         merged.push(...newIds);

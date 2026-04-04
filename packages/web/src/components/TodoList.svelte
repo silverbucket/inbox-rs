@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
   import { todoItems, storeItem } from '../lib/stores';
+  import { cleanForStorage } from '../lib/clean-for-storage';
+  import { typeBadge } from '../lib/item-utils';
 
   let { onselect, onadd, onexpandchange, inline = false }: {
     onselect: (item: InboxItem) => void;
@@ -20,12 +22,7 @@
       completed: !todo.completed,
       completedAt: !todo.completed ? new Date().toISOString() : undefined
     };
-    const clean = JSON.parse(JSON.stringify(updated));
-    await storeItem(clean);
-  }
-
-  function typeBadge(item: InboxItem): string | null {
-    return item.type === 'todo' ? null : item.type;
+    await storeItem(cleanForStorage(updated));
   }
 
   function todoNote(item: InboxItem): string | null {

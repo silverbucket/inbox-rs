@@ -4,8 +4,11 @@
   import {
     collectionItems, storeItem,
     deleteItem,
-    sortedGroups, moveCollectionToGroup
+    sortedGroups, moveCollectionToGroup,
+    moveItemToCollection
   } from '../lib/stores';
+  import { makeTodo, makeReference, typeBadge, todoNote } from '../lib/item-utils';
+  import { cleanForStorage } from '../lib/clean-for-storage';
   import { slide } from 'svelte/transition';
   import InboxCard from './InboxCard.svelte';
   import CollectionItemPicker from './CollectionItemPicker.svelte';
@@ -47,42 +50,11 @@
       completed: nowCompleted,
       completedAt: nowCompleted ? new Date().toISOString() : undefined,
     };
-    const clean = JSON.parse(JSON.stringify(updated));
-    await storeItem(clean);
-  }
-
-  async function makeTodo(item: InboxItem) {
-    const updated = { ...item, isTodo: true, completed: false };
-    delete (updated as any).completedAt;
-    await storeItem(updated as InboxItem);
-  }
-
-  async function makeReference(item: InboxItem) {
-    const updated = { ...item };
-    delete (updated as any).isTodo;
-    delete (updated as any).completed;
-    delete (updated as any).completedAt;
-    if (updated.type === 'todo') {
-      (updated as any).type = 'note';
-      if (!(updated as any).body) (updated as any).body = '';
-    }
-    await storeItem(updated as InboxItem);
+    await storeItem(cleanForStorage(updated));
   }
 
   async function handlePickItem(item: InboxItem) {
-    const { moveItemToCollection } = await import('../lib/stores');
     await moveItemToCollection(item.id, collection.id);
-  }
-
-  function typeBadge(item: InboxItem): string | null {
-    return item.type === 'todo' ? null : item.type;
-  }
-
-  function todoNote(item: InboxItem): string | null {
-    const notes = ('notes' in item ? (item as any).notes : null) || item.description || ('body' in item ? (item as any).body : null);
-    if (!notes) return null;
-    const firstLine = notes.split('\n')[0].trim();
-    return firstLine.length > 80 ? firstLine.slice(0, 80) + '...' : firstLine;
   }
 </script>
 

@@ -1,7 +1,13 @@
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
+import type { Writable, Readable } from 'svelte/store';
 import type { InboxItem, AppConfig, Collection, CollectionGroup } from '@inbox-rs/rs-module';
 import { migrator } from '@inbox-rs/rs-module';
+import { cleanForStorage } from './clean-for-storage';
 import rs from './rs';
+
+function getInbox() {
+  return (rs as any).inbox;
+}
 
 /** Blob URLs for files that were just uploaded (available before remote sync completes) */
 export const blobUrls = writable<Record<string, string>>({});
@@ -24,12 +30,64 @@ export const pendingMigrationCount = derived(items, ($items) => {
   return count;
 });
 
+// ---- Generic helpers ----
+
+async function loadEntities<T extends { id: string }>(
+  fetchAll: () => Promise<Record<string, unknown>>,
+  store: Writable<Record<string, T>>,
+  arrayField?: keyof T,
+): Promise<void> {
+  const inbox = getInbox();
+  if (!inbox) return;
+  try {
+    const all = await fetchAll.call(inbox);
+    const valid: Record<string, T> = {};
+    for (const [key, raw] of Object.entries(all)) {
+      if (raw && typeof raw === 'object' && 'id' in raw && (raw as T).id) {
+        const entity = raw as T;
+        if (key !== entity.id) continue;
+        if (arrayField) {
+          valid[key] = { ...entity, [arrayField]: Array.isArray(entity[arrayField]) ? entity[arrayField] : [] };
+        } else {
+          valid[key] = entity;
+        }
+      }
+    }
+    store.set(valid);
+  } catch {
+    // RS sync/fetch error — keep existing data
+  }
+}
+
+function orderedDerived<T extends { id: string; createdAt: string }>(
+  entityStore: Readable<Record<string, T>>,
+  configOrderKey: 'collectionsOrder' | 'groupsOrder',
+): Readable<T[]> {
+  return derived([entityStore, appConfig], ([$entities, $config]) => {
+    const items = Object.values($entities);
+    const order = $config[configOrderKey];
+    if (order?.length) {
+      const orderIndex = new Map(order.map((id, i) => [id, i]));
+      return items.sort((a, b) => (orderIndex.get(a.id) ?? Infinity) - (orderIndex.get(b.id) ?? Infinity));
+    }
+    return items.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  });
+}
+
+async function removeFromOrderConfig(id: string, key: 'collectionsOrder' | 'groupsOrder') {
+  const currentOrder = get(appConfig)[key] ?? [];
+  if (currentOrder.includes(id)) {
+    await updateConfig({ [key]: currentOrder.filter((x: string) => x !== id) });
+  }
+}
+
+// ---- Loaders ----
+
 async function loadItems() {
-  const inbox = (rs as any).inbox;
+  const inbox = getInbox();
   if (!inbox) return;
   try {
     const all = await inbox.getAll();
-    // Filter out invalid entries (folder listings, partial objects without id)
     const valid: Record<string, InboxItem> = {};
     for (const [key, item] of Object.entries(all)) {
       if (item && typeof item === 'object' && 'id' in item && (item as InboxItem).id) {
@@ -43,7 +101,7 @@ async function loadItems() {
 }
 
 async function loadConfig() {
-  const inbox = (rs as any).inbox;
+  const inbox = getInbox();
   if (!inbox) return;
   try {
     const config = await inbox.getConfig();
@@ -56,47 +114,13 @@ async function loadConfig() {
 }
 
 async function loadCollections() {
-  const inbox = (rs as any).inbox;
-  if (!inbox) return;
-  try {
-    const all = await inbox.getAllCollections();
-    const valid: Record<string, Collection> = {};
-    for (const [key, col] of Object.entries(all)) {
-      if (col && typeof col === 'object' && 'id' in col && (col as Collection).id) {
-        const collection = col as Collection;
-        if (key !== collection.id) continue;
-        valid[key] = {
-          ...collection,
-          itemIds: Array.isArray(collection.itemIds) ? collection.itemIds : [],
-        };
-      }
-    }
-    collections.set(valid);
-  } catch {
-    // ignore
-  }
+  const inbox = getInbox();
+  await loadEntities<Collection>(() => inbox.getAllCollections(), collections, 'itemIds');
 }
 
 async function loadGroups() {
-  const inbox = (rs as any).inbox;
-  if (!inbox) return;
-  try {
-    const all = await inbox.getAllGroups();
-    const valid: Record<string, CollectionGroup> = {};
-    for (const [key, grp] of Object.entries(all)) {
-      if (grp && typeof grp === 'object' && 'id' in grp && (grp as CollectionGroup).id) {
-        const group = grp as CollectionGroup;
-        if (key !== group.id) continue;
-        valid[key] = {
-          ...group,
-          collectionIds: Array.isArray(group.collectionIds) ? group.collectionIds : [],
-        };
-      }
-    }
-    groups.set(valid);
-  } catch {
-    // ignore
-  }
+  const inbox = getInbox();
+  await loadEntities<CollectionGroup>(() => inbox.getAllGroups(), groups, 'collectionIds');
 }
 
 // Debounced sync indicator: stays visible for at least 1 second to avoid flicker
@@ -161,7 +185,7 @@ rs.on('disconnected', () => {
 });
 
 export async function runAllMigrations() {
-  const inbox = (rs as any).inbox;
+  const inbox = getInbox();
   if (!inbox) return;
   try {
     await inbox.runAllMigrations();
@@ -172,13 +196,12 @@ export async function runAllMigrations() {
 }
 
 export async function updateConfig(patch: Partial<AppConfig>) {
-  const inbox = (rs as any).inbox;
-  let currentConfig: AppConfig = {};
-  appConfig.subscribe(c => { currentConfig = c; })();
+  const inbox = getInbox();
+  const currentConfig = get(appConfig);
   const updated = { ...currentConfig, ...patch };
   appConfig.set(updated);
   try {
-    await inbox.setConfig(JSON.parse(JSON.stringify(updated)));
+    await inbox.setConfig(cleanForStorage(updated));
   } catch (e) {
     appConfig.set(currentConfig);
     console.error('[inbox] failed to persist config update:', e);
@@ -187,7 +210,7 @@ export async function updateConfig(patch: Partial<AppConfig>) {
 }
 
 // Update items on remote/local changes — debounced to avoid redundant reloads during sync
-const inboxRef = (rs as any).inbox;
+const inboxRef = getInbox();
 function scheduleReload() {
   if (reloadTimeout) clearTimeout(reloadTimeout);
   reloadTimeout = setTimeout(() => {
@@ -207,6 +230,8 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
+// ---- Derived stores ----
+
 export const sortedItems = derived(items, ($items) => {
   return Object.values($items)
     .filter(i => !i.isTodo && i.type !== 'todo' && !i.collectionId)
@@ -224,18 +249,7 @@ export const todoItems = derived(items, ($items) => {
     });
 });
 
-export const sortedCollections = derived([collections, appConfig], ([$collections, $config]) => {
-  const cols = Object.values($collections);
-  if ($config.collectionsOrder?.length) {
-    const orderIndex = new Map($config.collectionsOrder.map((id, i) => [id, i]));
-    return cols.sort((a, b) => {
-      const ai = orderIndex.get(a.id) ?? Infinity;
-      const bi = orderIndex.get(b.id) ?? Infinity;
-      return ai - bi;
-    });
-  }
-  return cols.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-});
+export const sortedCollections = orderedDerived<Collection>(collections, 'collectionsOrder');
 
 export const collectionItems = derived([items, collections], ([$items, $collections]) => {
   const result: Record<string, InboxItem[]> = {};
@@ -248,16 +262,16 @@ export const collectionItems = derived([items, collections], ([$items, $collecti
   return result;
 });
 
+// ---- Item operations ----
+
 export async function storeItem(item: InboxItem, fileData?: ArrayBuffer) {
-  const inbox = (rs as any).inbox;
-  // Strip undefined values — remoteStorage schema validator rejects them
-  const cleanItem = JSON.parse(JSON.stringify(item)) as InboxItem;
+  const inbox = getInbox();
+  const cleanItem = cleanForStorage(item);
   await inbox.store(cleanItem, fileData);
   if (fileData && 'filePath' in item && item.filePath && 'mimeType' in item) {
     const blob = new Blob([fileData], { type: (item as any).mimeType });
     const url = URL.createObjectURL(blob);
     blobUrls.update(current => ({ ...current, [item.filePath as string]: url }));
-    // Force sync to push file to server immediately
     console.log('[inbox] stored file, triggering sync:', item.filePath);
     rs.startSync();
   }
@@ -265,11 +279,10 @@ export async function storeItem(item: InboxItem, fileData?: ArrayBuffer) {
 }
 
 export async function deleteItem(id: string, item?: InboxItem) {
-  const inbox = (rs as any).inbox;
+  const inbox = getInbox();
   await inbox.remove(id, item);
   items.update(current => {
     const next = { ...current };
-    // Remove by matching id in values
     for (const key of Object.keys(next)) {
       if (next[key].id === id) {
         delete next[key];
@@ -280,15 +293,17 @@ export async function deleteItem(id: string, item?: InboxItem) {
   });
 }
 
+// ---- Collection operations ----
+
 export async function storeCollection(collection: Collection) {
-  const inbox = (rs as any).inbox;
-  const clean = JSON.parse(JSON.stringify(collection)) as Collection;
+  const inbox = getInbox();
+  const clean = cleanForStorage(collection);
   await inbox.storeCollection(clean);
   collections.update(current => ({ ...current, [clean.id]: clean }));
 }
 
 export async function deleteCollection(id: string) {
-  const inbox = (rs as any).inbox;
+  const inbox = getInbox();
   // Return orphaned items to inbox
   let orphanedItems: InboxItem[] = [];
   items.update(current => {
@@ -303,10 +318,8 @@ export async function deleteCollection(id: string) {
     }
     return next;
   });
-  // Persist orphaned items without collectionId
   for (const item of orphanedItems) {
-    const cleanItem = JSON.parse(JSON.stringify(item)) as InboxItem;
-    await inbox.store(cleanItem);
+    await inbox.store(cleanForStorage(item));
   }
   await inbox.removeCollection(id);
   collections.update(current => {
@@ -314,32 +327,21 @@ export async function deleteCollection(id: string) {
     delete next[id];
     return next;
   });
-  // Clean up collectionsOrder via updateConfig for consistent rollback on failure
-  let currentOrder: string[] = [];
-  appConfig.subscribe(c => { currentOrder = c.collectionsOrder ?? []; })();
-  if (currentOrder.includes(id)) {
-    await updateConfig({ collectionsOrder: currentOrder.filter(cid => cid !== id) });
-  }
+  await removeFromOrderConfig(id, 'collectionsOrder');
 }
 
 export async function moveItemToCollection(itemId: string, collectionId: string | undefined) {
-  const inbox = (rs as any).inbox;
+  const inbox = getInbox();
 
   // Validate target collection exists
-  if (collectionId) {
-    let exists = false;
-    collections.subscribe(c => { exists = !!c[collectionId]; })();
-    if (!exists) {
-      console.error('[inbox] moveItemToCollection: target collection does not exist:', collectionId);
-      return;
-    }
+  if (collectionId && !get(collections)[collectionId]) {
+    console.error('[inbox] moveItemToCollection: target collection does not exist:', collectionId);
+    return;
   }
 
   // Snapshot stores for rollback
-  let prevItems: Record<string, InboxItem> = {};
-  items.subscribe(v => { prevItems = v; })();
-  let prevCollections: Record<string, Collection> = {};
-  collections.subscribe(v => { prevCollections = v; })();
+  const prevItems = get(items);
+  const prevCollections = get(collections);
 
   let item: InboxItem | undefined;
   let oldCollectionId: string | undefined;
@@ -366,24 +368,20 @@ export async function moveItemToCollection(itemId: string, collectionId: string 
   if (!item) return;
 
   try {
-    // Persist item
-    const cleanItem = JSON.parse(JSON.stringify(item)) as InboxItem;
-    await inbox.store(cleanItem);
+    await inbox.store(cleanForStorage(item));
 
     // Update source collection's itemIds
     if (oldCollectionId) {
       collections.update(current => {
         const col = current[oldCollectionId!];
         if (col) {
-          const updated = { ...col, itemIds: col.itemIds.filter(id => id !== itemId) };
-          return { ...current, [oldCollectionId!]: updated };
+          return { ...current, [oldCollectionId!]: { ...col, itemIds: col.itemIds.filter(id => id !== itemId) } };
         }
         return current;
       });
-      let sourceCol: Collection | undefined;
-      collections.subscribe(c => { sourceCol = c[oldCollectionId!]; })();
+      const sourceCol = get(collections)[oldCollectionId];
       if (sourceCol) {
-        await inbox.storeCollection(JSON.parse(JSON.stringify(sourceCol)));
+        await inbox.storeCollection(cleanForStorage(sourceCol));
       }
     }
 
@@ -392,15 +390,13 @@ export async function moveItemToCollection(itemId: string, collectionId: string 
       collections.update(current => {
         const col = current[collectionId];
         if (col && !col.itemIds.includes(itemId)) {
-          const updated = { ...col, itemIds: [...col.itemIds, itemId] };
-          return { ...current, [collectionId]: updated };
+          return { ...current, [collectionId]: { ...col, itemIds: [...col.itemIds, itemId] } };
         }
         return current;
       });
-      let targetCol: Collection | undefined;
-      collections.subscribe(c => { targetCol = c[collectionId]; })();
+      const targetCol = get(collections)[collectionId];
       if (targetCol) {
-        await inbox.storeCollection(JSON.parse(JSON.stringify(targetCol)));
+        await inbox.storeCollection(cleanForStorage(targetCol));
       }
     }
   } catch (e) {
@@ -416,7 +412,7 @@ export async function removeItemFromCollection(itemId: string) {
 }
 
 export async function reorderCollectionItems(collectionId: string, newItemIds: string[]) {
-  const inbox = (rs as any).inbox;
+  const inbox = getInbox();
   collections.update(current => {
     const col = current[collectionId];
     if (col) {
@@ -424,10 +420,9 @@ export async function reorderCollectionItems(collectionId: string, newItemIds: s
     }
     return current;
   });
-  let col: Collection | undefined;
-  collections.subscribe(c => { col = c[collectionId]; })();
+  const col = get(collections)[collectionId];
   if (col) {
-    await inbox.storeCollection(JSON.parse(JSON.stringify(col)));
+    await inbox.storeCollection(cleanForStorage(col));
   }
 }
 
@@ -435,20 +430,9 @@ export async function reorderCollections(newOrder: string[]) {
   await updateConfig({ collectionsOrder: newOrder });
 }
 
-// ---- Groups ----
+// ---- Group operations ----
 
-export const sortedGroups = derived([groups, appConfig], ([$groups, $config]) => {
-  const grps = Object.values($groups);
-  if ($config.groupsOrder?.length) {
-    const orderIndex = new Map($config.groupsOrder.map((id, i) => [id, i]));
-    return grps.sort((a, b) => {
-      const ai = orderIndex.get(a.id) ?? Infinity;
-      const bi = orderIndex.get(b.id) ?? Infinity;
-      return ai - bi;
-    });
-  }
-  return grps.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-});
+export const sortedGroups = orderedDerived<CollectionGroup>(groups, 'groupsOrder');
 
 export const groupCollections = derived([collections, groups, appConfig], ([$collections, $groups, $config]) => {
   const result: Record<string, Collection[]> = {};
@@ -470,14 +454,14 @@ export const ungroupedCollections = derived([sortedCollections, groups], ([$sort
 });
 
 export async function storeGroup(group: CollectionGroup) {
-  const inbox = (rs as any).inbox;
-  const clean = JSON.parse(JSON.stringify(group)) as CollectionGroup;
+  const inbox = getInbox();
+  const clean = cleanForStorage(group);
   await inbox.storeGroup(clean);
   groups.update(current => ({ ...current, [clean.id]: clean }));
 }
 
 export async function deleteGroup(id: string) {
-  const inbox = (rs as any).inbox;
+  const inbox = getInbox();
   // Unset groupId on orphaned collections
   let orphanedCols: Collection[] = [];
   collections.update(current => {
@@ -493,8 +477,7 @@ export async function deleteGroup(id: string) {
     return next;
   });
   for (const col of orphanedCols) {
-    const clean = JSON.parse(JSON.stringify(col)) as Collection;
-    await inbox.storeCollection(clean);
+    await inbox.storeCollection(cleanForStorage(col));
   }
   await inbox.removeGroup(id);
   groups.update(current => {
@@ -502,22 +485,15 @@ export async function deleteGroup(id: string) {
     delete next[id];
     return next;
   });
-  // Clean up groupsOrder via updateConfig for consistent rollback on failure
-  let currentOrder: string[] = [];
-  appConfig.subscribe(c => { currentOrder = c.groupsOrder ?? []; })();
-  if (currentOrder.includes(id)) {
-    await updateConfig({ groupsOrder: currentOrder.filter(gid => gid !== id) });
-  }
+  await removeFromOrderConfig(id, 'groupsOrder');
 }
 
 export async function moveCollectionToGroup(collectionId: string, groupId: string | undefined) {
-  const inbox = (rs as any).inbox;
+  const inbox = getInbox();
 
   // Snapshot stores for rollback
-  let prevCollections: Record<string, Collection> = {};
-  collections.subscribe(v => { prevCollections = v; })();
-  let prevGroups: Record<string, CollectionGroup> = {};
-  groups.subscribe(v => { prevGroups = v; })();
+  const prevCollections = get(collections);
+  const prevGroups = get(groups);
 
   let col: Collection | undefined;
   let oldGroupId: string | undefined;
@@ -541,7 +517,7 @@ export async function moveCollectionToGroup(collectionId: string, groupId: strin
   if (!col) return;
 
   try {
-    await inbox.storeCollection(JSON.parse(JSON.stringify(col)));
+    await inbox.storeCollection(cleanForStorage(col));
 
     // Remove from old group
     if (oldGroupId) {
@@ -552,10 +528,9 @@ export async function moveCollectionToGroup(collectionId: string, groupId: strin
         }
         return current;
       });
-      let oldGrp: CollectionGroup | undefined;
-      groups.subscribe(g => { oldGrp = g[oldGroupId!]; })();
+      const oldGrp = get(groups)[oldGroupId];
       if (oldGrp) {
-        await inbox.storeGroup(JSON.parse(JSON.stringify(oldGrp)));
+        await inbox.storeGroup(cleanForStorage(oldGrp));
       }
     }
 
@@ -568,10 +543,9 @@ export async function moveCollectionToGroup(collectionId: string, groupId: strin
         }
         return current;
       });
-      let newGrp: CollectionGroup | undefined;
-      groups.subscribe(g => { newGrp = g[groupId]; })();
+      const newGrp = get(groups)[groupId];
       if (newGrp) {
-        await inbox.storeGroup(JSON.parse(JSON.stringify(newGrp)));
+        await inbox.storeGroup(cleanForStorage(newGrp));
       }
     }
   } catch (e) {
@@ -583,7 +557,7 @@ export async function moveCollectionToGroup(collectionId: string, groupId: strin
 }
 
 export async function reorderGroupCollections(groupId: string, newCollectionIds: string[]) {
-  const inbox = (rs as any).inbox;
+  const inbox = getInbox();
   groups.update(current => {
     const grp = current[groupId];
     if (grp) {
@@ -591,10 +565,9 @@ export async function reorderGroupCollections(groupId: string, newCollectionIds:
     }
     return current;
   });
-  let grp: CollectionGroup | undefined;
-  groups.subscribe(g => { grp = g[groupId]; })();
+  const grp = get(groups)[groupId];
   if (grp) {
-    await inbox.storeGroup(JSON.parse(JSON.stringify(grp)));
+    await inbox.storeGroup(cleanForStorage(grp));
   }
 }
 
