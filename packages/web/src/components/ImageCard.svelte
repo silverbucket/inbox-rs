@@ -4,7 +4,7 @@
   import { blobUrls, connected } from '../lib/stores';
   import Lightbox from './Lightbox.svelte';
 
-  let { item, ondelete }: { item: ImageItem; ondelete?: () => void } = $props();
+  let { item }: { item: ImageItem } = $props();
   let showLightbox = $state(false);
 
   // Re-evaluate URL when connected state changes (token becomes available)
@@ -29,7 +29,7 @@
     {/if}
   </div>
   {#if showLightbox && imageSrc}
-    <Lightbox src={imageSrc} alt={item.title || 'Image'} onclose={() => showLightbox = false} filePath={item.filePath} mimeType={item.mimeType} filename={item.title || undefined} {ondelete} />
+    <Lightbox src={imageSrc} alt={item.title || 'Image'} onclose={() => showLightbox = false} filePath={item.filePath} mimeType={item.mimeType} filename={item.title || undefined} />
   {/if}
   {#if item.sourceUrl}
     <a class="source-link" href={item.sourceUrl} target="_blank" rel="noopener noreferrer">

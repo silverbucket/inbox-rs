@@ -2,14 +2,13 @@
   import rs from '../lib/rs';
   import { getSharedUrl, saveSharedUrl } from '../lib/shared-state';
 
-  let { src, alt = '', onclose, filePath, mimeType, filename, ondelete }: {
+  let { src, alt = '', onclose, filePath, mimeType, filename }: {
     src: string;
     alt?: string;
     onclose: () => void;
     filePath?: string;
     mimeType?: string;
     filename?: string;
-    ondelete?: () => void;
   } = $props();
 
   function stableKey(): string {
@@ -29,7 +28,6 @@
     }
   });
   let copied = $state(false);
-  let deleting = $state(false);
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') onclose();
@@ -149,16 +147,7 @@
     setTimeout(() => { copied = false; }, 1500);
   }
 
-  async function handleDelete() {
-    deleting = true;
-    try {
-      await ondelete?.();
-    } catch {
-      // deletion failed
-    } finally {
-      deleting = false;
-    }
-  }
+
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -183,16 +172,6 @@
       <button class="toolbar-btn" onclick={copyUrl}>
         {copied ? 'Copied!' : 'Copy link'}
       </button>
-      {#if ondelete}
-        <button class="toolbar-btn toolbar-btn-danger" onclick={handleDelete} disabled={deleting}>
-          {#if deleting}
-            Deleting...
-          {:else}
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            Delete from inbox
-          {/if}
-        </button>
-      {/if}
     {:else}
       <span class="save-label">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
@@ -263,15 +242,6 @@
   .toolbar-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-  }
-
-  .toolbar-btn-danger {
-    border-color: rgba(239, 68, 68, 0.4);
-    color: #fca5a5;
-  }
-
-  .toolbar-btn-danger:hover:not(:disabled) {
-    background: rgba(239, 68, 68, 0.25);
   }
 
   .save-label {

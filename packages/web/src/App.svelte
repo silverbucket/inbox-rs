@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { InboxItemType, InboxItem } from '@inbox-rs/rs-module';
+  import type { InboxItemType, InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
   import ConnectWidget from './components/ConnectWidget.svelte';
   import InboxGrid from './components/InboxGrid.svelte';
   import TodoList from './components/TodoList.svelte';
@@ -9,19 +9,33 @@
   import ViewCardModal from './components/ViewCardModal.svelte';
   import MigrationAlert from './components/MigrationAlert.svelte';
   import PluginsPage from './components/PluginsPage.svelte';
-  import { connected, deleteItem, todoItems, appConfig, updateConfig, pendingMigrationCount, runAllMigrations } from './lib/stores';
+  import CollectionsPage from './components/CollectionsPage.svelte';
+  import CollectionFormModal from './components/CollectionFormModal.svelte';
+  import GroupFormModal from './components/GroupFormModal.svelte';
+  import { connected, deleteItem, todoItems, appConfig, updateConfig, pendingMigrationCount, runAllMigrations, storeCollection, sortedGroups, storeGroup, moveCollectionToGroup } from './lib/stores';
   import shieldIcon from './assets/logos/favicon-shield.svg';
 
-  type Route = 'home' | 'plugins';
+  type Route =
+    | { page: 'home' }
+    | { page: 'plugins' }
+    | { page: 'collections' }
+    | { page: 'group'; groupId: string };
 
   let activeModal = $state<InboxItemType | null>(null);
   let editingItem = $state<InboxItem | undefined>(undefined);
   let viewingItem = $state<InboxItem | null>(null);
   let todosExpanded = $state(false);
+  let showCollectionForm = $state(false);
+  let showGroupForm = $state(false);
 
   function getRouteFromHash(): Route {
-    if (typeof window === 'undefined') return 'home';
-    return window.location.hash === '#/plugins' ? 'plugins' : 'home';
+    if (typeof window === 'undefined') return { page: 'home' };
+    const hash = window.location.hash;
+    if (hash === '#/plugins') return { page: 'plugins' };
+    if (hash === '#/collections') return { page: 'collections' };
+    const groupMatch = hash.match(/^#\/group\/(.+)$/);
+    if (groupMatch) return { page: 'group', groupId: groupMatch[1] };
+    return { page: 'home' };
   }
 
   let route = $state<Route>(getRouteFromHash());
@@ -53,7 +67,7 @@
   });
 
   $effect(() => {
-    if (route !== 'plugins') return;
+    if (route.page === 'home') return;
     activeModal = null;
     editingItem = undefined;
     viewingItem = null;
@@ -88,30 +102,101 @@
     activeModal = null;
     editingItem = undefined;
   }
+
+  async function handleCreateCollection(col: Collection) {
+    try {
+      await storeCollection(col);
+      if (col.groupId) {
+        await moveCollectionToGroup(col.id, col.groupId);
+      }
+      showCollectionForm = false;
+    } catch (error) {
+      console.error('Failed to create collection', error);
+    }
+  }
+
+  async function handleCreateGroup(group: CollectionGroup) {
+    try {
+      await storeGroup(group);
+      showGroupForm = false;
+      window.location.hash = `#/group/${group.id}`;
+    } catch (error) {
+      console.error('Failed to create group', error);
+    }
+  }
 </script>
 
 <header>
   <div class="header-inner">
     <div class="header-left">
-      <a class="brand-link" href="#/">
-        <img src={shieldIcon} alt="" class="brand-icon" />
-        <div class="brand-text">
-          <h1>Inbox <span class="accent">RS</span></h1>
-          <span class="version">v{__APP_VERSION__}</span>
-        </div>
-      </a>
+      <div class="brand">
+        <a class="brand-link" href="#/">
+          <img src={shieldIcon} alt="" class="brand-icon" />
+          <h1>Inbox <span class="accent">RS</span> <span class="version">v{__APP_VERSION__}</span></h1>
+        </a>
+        <a class="downloads-link" class:active={route.page === 'plugins'} href="#/plugins">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Downloads
+        </a>
+      </div>
       <nav class="header-nav" aria-label="Primary">
-        <a class:active={route === 'home'} aria-current={route === 'home' ? 'page' : undefined} href="#/">Inbox</a>
-        <a class:active={route === 'plugins'} aria-current={route === 'plugins' ? 'page' : undefined} href="#/plugins">Plugins</a>
+        <a class:active={route.page === 'home'} aria-current={route.page === 'home' ? 'page' : undefined} href="#/">Inbox</a>
+        <a class:active={route.page === 'collections'} aria-current={route.page === 'collections' ? 'page' : undefined} href="#/collections">Collections</a>
+        {#if $connected}
+          {#each $sortedGroups as group (group.id)}
+            <a
+              class="group-link"
+              class:active={route.page === 'group' && route.groupId === group.id}
+              aria-current={route.page === 'group' && route.groupId === group.id ? 'page' : undefined}
+              href="#/group/{group.id}"
+              style="--group-color: {group.color || 'var(--accent)'}"
+            >
+              <span class="group-dot"></span>
+              {group.name}
+            </a>
+          {/each}
+          <button class="nav-add-group" onclick={() => showGroupForm = true} title="New group" aria-label="Create new group">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+        {/if}
       </nav>
     </div>
-    <ConnectWidget />
+    <div class="header-right">
+      <ConnectWidget />
+    </div>
   </div>
 </header>
 
 <main>
-  {#if route === 'plugins'}
+  {#if route.page === 'plugins'}
     <PluginsPage />
+  {:else if route.page === 'collections'}
+    {#if $connected}
+      <CollectionsPage onselect={openView} oncreate={() => showCollectionForm = true} />
+    {:else}
+      <div class="empty-state">
+        <div class="empty-icon">📥</div>
+        <h2>Connect your storage</h2>
+        <p>Enter your remoteStorage address above to view your collections.</p>
+      </div>
+    {/if}
+  {:else if route.page === 'group'}
+    {#if $connected}
+      <CollectionsPage onselect={openView} oncreate={() => showCollectionForm = true} groupId={route.groupId} />
+    {:else}
+      <div class="empty-state">
+        <div class="empty-icon">📥</div>
+        <h2>Connect your storage</h2>
+        <p>Enter your remoteStorage address above to view your collections.</p>
+      </div>
+    {/if}
   {:else}
     {#if $connected}
       {#if $pendingMigrationCount > 0}
@@ -152,6 +237,14 @@
   <AddEntryModal type={activeModal} editItem={editingItem} onclose={closeModal} ondelete={async (item) => { await deleteItem(item.id, item); closeModal(); }} />
 {/if}
 
+{#if showCollectionForm}
+  <CollectionFormModal onclose={() => showCollectionForm = false} onsave={handleCreateCollection} groupId={route.page === 'group' ? route.groupId : undefined} />
+{/if}
+
+{#if showGroupForm}
+  <GroupFormModal onclose={() => showGroupForm = false} onsave={handleCreateGroup} />
+{/if}
+
 <style>
   header {
     position: sticky;
@@ -174,28 +267,26 @@
 
   .header-left {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     gap: 1rem;
     min-width: 0;
   }
 
-  .brand-link {
-    color: inherit;
+  .brand {
     display: flex;
     align-items: center;
     gap: 0.6rem;
     line-height: 1;
+    gap: 0.35rem;
+  }
+
+  .brand-link {
+    color: inherit;
   }
 
   .brand-icon {
     width: 24px;
     height: 24px;
-  }
-
-  .brand-text {
-    display: flex;
-    flex-direction: column;
-    padding-top: 0.05rem;
   }
 
   .brand-link:hover {
@@ -210,8 +301,10 @@
 
   .version {
     font-size: 0.65rem;
-    opacity: 0.45;
     font-weight: 400;
+    opacity: 0.4;
+    vertical-align: middle;
+    margin-left: 0.15rem;
   }
 
   .header-nav {
@@ -243,6 +336,75 @@
   .header-nav a.active {
     color: var(--text);
     background: color-mix(in srgb, var(--accent) 18%, var(--surface) 82%);
+  }
+
+  .header-nav .group-link {
+    gap: 0.35rem;
+  }
+
+  .header-nav .group-link.active {
+    background: color-mix(in srgb, var(--group-color) 18%, var(--surface) 82%);
+  }
+
+  .group-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--group-color);
+    flex-shrink: 0;
+  }
+
+  .nav-add-group {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 150ms, background 150ms;
+    flex-shrink: 0;
+    opacity: 0.5;
+  }
+
+  .nav-add-group:hover {
+    color: var(--accent);
+    background: rgba(99, 102, 241, 0.1);
+    opacity: 1;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .downloads-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    padding: 0.1rem 0.4rem;
+    border-radius: var(--radius-sm, 6px);
+    transition: color 150ms, background 150ms;
+  }
+
+  .downloads-link:hover {
+    color: var(--accent);
+    background: rgba(99, 102, 241, 0.1);
+  }
+
+  .downloads-link.active {
+    color: var(--accent);
+  }
+
+  .downloads-link svg {
+    flex-shrink: 0;
   }
 
   .accent {
@@ -282,15 +444,25 @@
   }
 
   @media (max-width: 768px) {
-    .header-inner,
+    .header-inner {
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
     .header-left {
       align-items: flex-start;
       flex-direction: column;
+      width: 100%;
     }
 
     .header-nav {
       width: 100%;
       justify-content: space-between;
+    }
+
+    .header-right {
+      width: 100%;
+      justify-content: flex-end;
     }
 
     .content-layout {

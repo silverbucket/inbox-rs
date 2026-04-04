@@ -4,7 +4,7 @@
   import { blobUrls } from '../lib/stores';
   import Lightbox from './Lightbox.svelte';
 
-  let { item, ondelete }: { item: BookmarkItem; ondelete?: () => void } = $props();
+  let { item }: { item: BookmarkItem } = $props();
   let showLightbox = $state(false);
 
   function getDomain(url: string): string {
@@ -42,7 +42,7 @@
     </div>
   {/if}
   {#if showLightbox && imageSrc}
-    <Lightbox src={imageSrc} alt={item.title} onclose={() => showLightbox = false} filePath={item.filePath} mimeType={item.mimeType} filename={item.title || undefined} {ondelete} />
+    <Lightbox src={imageSrc} alt={item.title} onclose={() => showLightbox = false} filePath={item.filePath} mimeType={item.mimeType} filename={item.title || undefined} />
   {/if}
   <div class="bookmark-body">
     <div class="bookmark-header">
