@@ -10,6 +10,7 @@ export interface InboxItemBase {
   isTodo?: boolean;
   completed?: boolean;
   completedAt?: string;
+  collectionId?: string; // undefined = lives in inbox
 }
 
 export interface BookmarkItem extends InboxItemBase {
@@ -41,6 +42,7 @@ export interface AudioItem extends InboxItemBase {
   mimeType: string;
   duration?: number; // seconds
   body?: string; // transcription text
+  transcribed?: boolean; // whether transcription has been handled
 }
 
 export interface VideoItem extends InboxItemBase {
@@ -84,4 +86,25 @@ export type InboxItem = BookmarkItem | NoteItem | ImageItem | AudioItem | VideoI
 
 export interface AppConfig {
   todosCollapsed?: boolean;
+  collectionsOrder?: string[]; // ordered list of collection IDs for nav display
+  groupsOrder?: string[];      // ordered list of group IDs for nav display
+  expandedCollections?: string[]; // IDs of collections currently expanded
+}
+
+export interface Collection {
+  id: string;
+  name: string;
+  description?: string;
+  itemIds: string[];       // ordered array — controls sort order within collection
+  createdAt: string;       // ISO 8601
+  color?: string;          // optional accent color
+  groupId?: string;        // optional group membership
+}
+
+export interface CollectionGroup {
+  id: string;
+  name: string;
+  collectionIds: string[]; // ordered list of collection IDs in this group
+  createdAt: string;       // ISO 8601
+  color?: string;          // optional accent color
 }

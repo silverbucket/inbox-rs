@@ -9,6 +9,8 @@ function copyManifestAndIcons() {
     closeBundle() {
       copyFileSync(resolve(__dirname, 'manifest.json'), resolve(__dirname, 'dist/manifest.json'));
       mkdirSync(resolve(__dirname, 'dist/icons'), { recursive: true });
+      copyFileSync(resolve(__dirname, 'icons/icon-16.png'), resolve(__dirname, 'dist/icons/icon-16.png'));
+      copyFileSync(resolve(__dirname, 'icons/icon-32.png'), resolve(__dirname, 'dist/icons/icon-32.png'));
       copyFileSync(resolve(__dirname, 'icons/icon-48.png'), resolve(__dirname, 'dist/icons/icon-48.png'));
       copyFileSync(resolve(__dirname, 'icons/icon-128.png'), resolve(__dirname, 'dist/icons/icon-128.png'));
     }

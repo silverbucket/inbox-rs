@@ -1,10 +1,10 @@
-import { bookmarkSchema, noteSchema, imageMetaSchema, audioMetaSchema, videoMetaSchema, documentMetaSchema, codeSnippetSchema, todoSchema, emailSchema, appConfigSchema } from './schemas.js';
-import type { InboxItem, AppConfig } from './types.js';
+import { bookmarkSchema, noteSchema, imageMetaSchema, audioMetaSchema, videoMetaSchema, documentMetaSchema, codeSnippetSchema, todoSchema, emailSchema, appConfigSchema, collectionSchema, collectionGroupSchema } from './schemas.js';
+import type { InboxItem, AppConfig, Collection, CollectionGroup } from './types.js';
 import type { MigrateResult } from 'rs-migrate';
 import { migrator, legacySchemas } from './migrations.js';
 export { migrator } from './migrations.js';
 
-export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, AudioItem, VideoItem, DocumentItem, CodeSnippetItem, TodoItem, EmailItem, AppConfig } from './types.js';
+export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, AudioItem, VideoItem, DocumentItem, CodeSnippetItem, TodoItem, EmailItem, AppConfig, Collection, CollectionGroup } from './types.js';
 
 export interface InboxModuleExports {
   getAll(): Promise<Record<string, InboxItem>>;
@@ -14,6 +14,14 @@ export interface InboxModuleExports {
   getFile(path: string): Promise<{ data: ArrayBuffer; mimeType: string } | undefined>;
   getConfig(): Promise<AppConfig>;
   setConfig(config: AppConfig): Promise<void>;
+  getAllCollections(): Promise<Record<string, Collection>>;
+  getCollectionById(id: string): Promise<Collection | undefined>;
+  storeCollection(collection: Collection): Promise<void>;
+  removeCollection(id: string): Promise<void>;
+  getAllGroups(): Promise<Record<string, CollectionGroup>>;
+  getGroupById(id: string): Promise<CollectionGroup | undefined>;
+  storeGroup(group: CollectionGroup): Promise<void>;
+  removeGroup(id: string): Promise<void>;
   onChange(handler: (event: unknown) => void): void;
   runAllMigrations(): Promise<MigrateResult[]>;
 }
@@ -36,6 +44,8 @@ const InboxModule = {
     privateClient.declareType('todo', todoSchema);
     privateClient.declareType('email', emailSchema);
     privateClient.declareType('app-config', appConfigSchema);
+    privateClient.declareType('collection', collectionSchema);
+    privateClient.declareType('collection-group', collectionGroupSchema);
 
     return {
       exports: {
@@ -113,6 +123,40 @@ const InboxModule = {
 
         async setConfig(config: AppConfig): Promise<void> {
           await privateClient.storeObject('app-config', 'config/app', config);
+        },
+
+        async getAllCollections(): Promise<Record<string, Collection>> {
+          const cols = await privateClient.getAll('collections/');
+          return cols || {};
+        },
+
+        async getCollectionById(id: string): Promise<Collection | undefined> {
+          return privateClient.getObject(`collections/${id}`);
+        },
+
+        async storeCollection(collection: Collection): Promise<void> {
+          await privateClient.storeObject('collection', `collections/${collection.id}`, collection);
+        },
+
+        async removeCollection(id: string): Promise<void> {
+          await privateClient.remove(`collections/${id}`);
+        },
+
+        async getAllGroups(): Promise<Record<string, CollectionGroup>> {
+          const groups = await privateClient.getAll('groups/');
+          return groups || {};
+        },
+
+        async getGroupById(id: string): Promise<CollectionGroup | undefined> {
+          return privateClient.getObject(`groups/${id}`);
+        },
+
+        async storeGroup(group: CollectionGroup): Promise<void> {
+          await privateClient.storeObject('collection-group', `groups/${group.id}`, group);
+        },
+
+        async removeGroup(id: string): Promise<void> {
+          await privateClient.remove(`groups/${id}`);
         },
 
         onChange(handler: (event: unknown) => void): void {
