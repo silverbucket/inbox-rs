@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import '../utils/mime.dart';
+import '../utils/mime.dart' show guessMime;
 
 class MediaPickerBar extends StatelessWidget {
   final void Function(String path, String mimeType, bool isVideo) onMediaPicked;
@@ -27,45 +27,12 @@ class MediaPickerBar extends StatelessWidget {
       return _pickFromGallery(context);
     }
 
-    final source = await showModalBottomSheet<String>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_camera),
-              title: const Text('Take Photo'),
-              onTap: () => Navigator.pop(ctx, 'photo'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.videocam),
-              title: const Text('Record Video'),
-              onTap: () => Navigator.pop(ctx, 'video'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (source == null) return;
-
     try {
       final picker = ImagePicker();
-      final XFile? file;
-      if (source == 'photo') {
-        file = await picker.pickImage(source: ImageSource.camera, imageQuality: 85);
-      } else {
-        file = await picker.pickVideo(
-          source: ImageSource.camera,
-          maxDuration: const Duration(seconds: 60),
-        );
-      }
-
+      final file = await picker.pickImage(source: ImageSource.camera, imageQuality: 85);
       if (file != null) {
-        final isVideo = source == 'video';
-        final mimeType = guessMime(file.path, isVideo: isVideo);
-        onMediaPicked(file.path, mimeType, isVideo);
+        final mimeType = guessMime(file.path);
+        onMediaPicked(file.path, mimeType, false);
       }
     } catch (e) {
       debugPrint('[media_picker] camera error: $e');
@@ -82,11 +49,10 @@ class MediaPickerBar extends StatelessWidget {
 
     try {
       final picker = ImagePicker();
-      final file = await picker.pickMedia();
+      final file = await picker.pickImage(source: ImageSource.gallery);
       if (file != null) {
-        final isVideo = isVideoPath(file.path);
-        final mimeType = guessMime(file.path, isVideo: isVideo);
-        onMediaPicked(file.path, mimeType, isVideo);
+        final mimeType = guessMime(file.path);
+        onMediaPicked(file.path, mimeType, false);
       }
     } catch (e) {
       debugPrint('[media_picker] gallery error: $e');
