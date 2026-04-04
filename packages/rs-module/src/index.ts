@@ -1,10 +1,16 @@
-import { bookmarkSchema, noteSchema, imageMetaSchema, audioMetaSchema, documentMetaSchema, codeSnippetSchema, todoSchema, emailSchema, appConfigSchema, collectionSchema, collectionGroupSchema } from './schemas.js';
-import type { InboxItem, AppConfig, Collection, CollectionGroup } from './types.js';
+import { bookmarkSchema, noteSchema, imageMetaSchema, audioMetaSchema, videoMetaSchema, documentMetaSchema, codeSnippetSchema, todoSchema, emailSchema, appConfigSchema, collectionSchema, collectionGroupSchema } from './schemas.js';
+import type { InboxItem, InboxItemType, AppConfig, Collection, CollectionGroup } from './types.js';
 import type { MigrateResult } from 'rs-migrate';
 import { migrator, legacySchemas } from './migrations.js';
 export { migrator } from './migrations.js';
 
-export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, AudioItem, DocumentItem, CodeSnippetItem, TodoItem, EmailItem, AppConfig, Collection, CollectionGroup } from './types.js';
+/** Current item types — legacy types like 'voice-memo' are excluded */
+const CURRENT_TYPES: Set<string> = new Set<string>([
+  'bookmark', 'note', 'image', 'audio', 'video',
+  'document', 'code-snippet', 'todo', 'email',
+] satisfies InboxItemType[]);
+
+export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, AudioItem, VideoItem, DocumentItem, CodeSnippetItem, TodoItem, EmailItem, AppConfig, Collection, CollectionGroup } from './types.js';
 
 export interface InboxModuleExports {
   getAll(): Promise<Record<string, InboxItem>>;
@@ -26,6 +32,17 @@ export interface InboxModuleExports {
   runAllMigrations(): Promise<MigrateResult[]>;
 }
 
+/** Maps item type to remoteStorage schema alias */
+function schemaAlias(type: string): string {
+  switch (type) {
+    case 'audio': return 'audio-meta';
+    case 'image': return 'image-meta';
+    case 'video': return 'video-meta';
+    case 'document': return 'document-meta';
+    default: return type;
+  }
+}
+
 const InboxModule = {
   name: 'inbox',
   builder: (privateClient: any) => {
@@ -33,6 +50,7 @@ const InboxModule = {
     privateClient.declareType('note', noteSchema);
     privateClient.declareType('image-meta', imageMetaSchema);
     privateClient.declareType('audio-meta', audioMetaSchema);
+    privateClient.declareType('video-meta', videoMetaSchema);
     privateClient.declareType('document-meta', documentMetaSchema);
 
     // Register legacy schemas so old items can still be read for migration
@@ -50,11 +68,29 @@ const InboxModule = {
       exports: {
         async getAll(): Promise<Record<string, InboxItem>> {
           const items = await privateClient.getAll('items/');
-          return items || {};
+          if (!items) return {};
+          // Stamp _migrateVersion on items that lack it (e.g. written by
+          // the mobile app's direct HTTP client) so they aren't falsely
+          // flagged as needing migration by getPending().
+          // Only stamp current types — legacy types (e.g. voice-memo) must
+          // remain unstamped so their migrations still run.
+          const latestVersion = migrator.getLatestVersion('items');
+          for (const item of Object.values(items) as InboxItem[]) {
+            if (item && typeof item === 'object'
+                && item._migrateVersion === undefined
+                && CURRENT_TYPES.has(item.type)) {
+              item._migrateVersion = latestVersion;
+            }
+          }
+          return items;
         },
 
         async getById(id: string): Promise<InboxItem | undefined> {
-          return privateClient.getObject(`items/${id}`);
+          const item = await privateClient.getObject(`items/${id}`);
+          if (item && item._migrateVersion === undefined && CURRENT_TYPES.has(item.type)) {
+            item._migrateVersion = migrator.getLatestVersion('items');
+          }
+          return item;
         },
 
         async store(item: InboxItem, fileData?: ArrayBuffer): Promise<void> {
@@ -87,11 +123,7 @@ const InboxModule = {
               }
             }
           }
-          const typeAlias = item.type === 'audio' ? 'audio-meta'
-            : item.type === 'image' ? 'image-meta'
-            : item.type === 'document' ? 'document-meta'
-            : item.type;
-          await privateClient.storeObject(typeAlias, `items/${item.id}`, item);
+          await privateClient.storeObject(schemaAlias(item.type), `items/${item.id}`, item);
         },
 
         async remove(id: string, item?: InboxItem): Promise<void> {
@@ -165,11 +197,7 @@ const InboxModule = {
           return migrator.migrateAll('items', {
             getAll: () => privateClient.getAll('items/').then((r: any) => r || {}),
             save: async (key: string, doc: any) => {
-              const typeAlias = doc.type === 'audio' ? 'audio-meta'
-                : doc.type === 'image' ? 'image-meta'
-                : doc.type === 'document' ? 'document-meta'
-                : doc.type;
-              await privateClient.storeObject(typeAlias, `items/${key}`, doc);
+              await privateClient.storeObject(schemaAlias(doc.type), `items/${key}`, doc);
             },
           });
         }
