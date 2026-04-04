@@ -197,6 +197,7 @@ export async function runAllMigrations() {
 
 export async function updateConfig(patch: Partial<AppConfig>) {
   const inbox = getInbox();
+  if (!inbox) throw new Error('Cannot update config: storage not connected');
   const currentConfig = get(appConfig);
   const updated = { ...currentConfig, ...patch };
   appConfig.set(updated);
@@ -304,6 +305,9 @@ export async function storeCollection(collection: Collection) {
 
 export async function deleteCollection(id: string) {
   const inbox = getInbox();
+  const prevItems = get(items);
+  const prevCollections = get(collections);
+
   // Return orphaned items to inbox
   let orphanedItems: InboxItem[] = [];
   items.update(current => {
@@ -318,16 +322,24 @@ export async function deleteCollection(id: string) {
     }
     return next;
   });
-  for (const item of orphanedItems) {
-    await inbox.store(cleanForStorage(item));
+
+  try {
+    for (const item of orphanedItems) {
+      await inbox.store(cleanForStorage(item));
+    }
+    await inbox.removeCollection(id);
+    collections.update(current => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+    await removeFromOrderConfig(id, 'collectionsOrder');
+  } catch (e) {
+    items.set(prevItems);
+    collections.set(prevCollections);
+    console.error('[inbox] deleteCollection failed, rolling back:', e);
+    throw e;
   }
-  await inbox.removeCollection(id);
-  collections.update(current => {
-    const next = { ...current };
-    delete next[id];
-    return next;
-  });
-  await removeFromOrderConfig(id, 'collectionsOrder');
 }
 
 export async function moveItemToCollection(itemId: string, collectionId: string | undefined) {
@@ -413,6 +425,7 @@ export async function removeItemFromCollection(itemId: string) {
 
 export async function reorderCollectionItems(collectionId: string, newItemIds: string[]) {
   const inbox = getInbox();
+  const prevCollections = get(collections);
   collections.update(current => {
     const col = current[collectionId];
     if (col) {
@@ -420,9 +433,15 @@ export async function reorderCollectionItems(collectionId: string, newItemIds: s
     }
     return current;
   });
-  const col = get(collections)[collectionId];
-  if (col) {
-    await inbox.storeCollection(cleanForStorage(col));
+  try {
+    const col = get(collections)[collectionId];
+    if (col) {
+      await inbox.storeCollection(cleanForStorage(col));
+    }
+  } catch (e) {
+    collections.set(prevCollections);
+    console.error('[inbox] reorderCollectionItems failed, rolling back:', e);
+    throw e;
   }
 }
 
@@ -462,6 +481,9 @@ export async function storeGroup(group: CollectionGroup) {
 
 export async function deleteGroup(id: string) {
   const inbox = getInbox();
+  const prevCollections = get(collections);
+  const prevGroups = get(groups);
+
   // Unset groupId on orphaned collections
   let orphanedCols: Collection[] = [];
   collections.update(current => {
@@ -476,16 +498,24 @@ export async function deleteGroup(id: string) {
     }
     return next;
   });
-  for (const col of orphanedCols) {
-    await inbox.storeCollection(cleanForStorage(col));
+
+  try {
+    for (const col of orphanedCols) {
+      await inbox.storeCollection(cleanForStorage(col));
+    }
+    await inbox.removeGroup(id);
+    groups.update(current => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+    await removeFromOrderConfig(id, 'groupsOrder');
+  } catch (e) {
+    collections.set(prevCollections);
+    groups.set(prevGroups);
+    console.error('[inbox] deleteGroup failed, rolling back:', e);
+    throw e;
   }
-  await inbox.removeGroup(id);
-  groups.update(current => {
-    const next = { ...current };
-    delete next[id];
-    return next;
-  });
-  await removeFromOrderConfig(id, 'groupsOrder');
 }
 
 export async function moveCollectionToGroup(collectionId: string, groupId: string | undefined) {
@@ -558,6 +588,7 @@ export async function moveCollectionToGroup(collectionId: string, groupId: strin
 
 export async function reorderGroupCollections(groupId: string, newCollectionIds: string[]) {
   const inbox = getInbox();
+  const prevGroups = get(groups);
   groups.update(current => {
     const grp = current[groupId];
     if (grp) {
@@ -565,9 +596,15 @@ export async function reorderGroupCollections(groupId: string, newCollectionIds:
     }
     return current;
   });
-  const grp = get(groups)[groupId];
-  if (grp) {
-    await inbox.storeGroup(cleanForStorage(grp));
+  try {
+    const grp = get(groups)[groupId];
+    if (grp) {
+      await inbox.storeGroup(cleanForStorage(grp));
+    }
+  } catch (e) {
+    groups.set(prevGroups);
+    console.error('[inbox] reorderGroupCollections failed, rolling back:', e);
+    throw e;
   }
 }
 
