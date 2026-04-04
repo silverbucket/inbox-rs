@@ -3,7 +3,10 @@
   "version": "0.4.0",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/extension",
+    "packages/rs-module",
+    "packages/thunderbird",
+    "packages/web"
   ],
   "scripts": {
     "dev": "npm run dev --workspace=packages/web",

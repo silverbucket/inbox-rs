@@ -10,8 +10,8 @@ void main() {
     });
 
     test('rejects empty address', () async {
-      expect(
-        () => authService.connect(''),
+      await expectLater(
+        () async => authService.connect(''),
         throwsA(isA<Exception>().having(
           (e) => e.toString(),
           'message',
@@ -21,8 +21,8 @@ void main() {
     });
 
     test('rejects address without @', () async {
-      expect(
-        () => authService.connect('nope'),
+      await expectLater(
+        () async => authService.connect('nope'),
         throwsA(isA<Exception>().having(
           (e) => e.toString(),
           'message',
@@ -32,8 +32,8 @@ void main() {
     });
 
     test('rejects address with empty user part', () async {
-      expect(
-        () => authService.connect('@example.com'),
+      await expectLater(
+        () async => authService.connect('@example.com'),
         throwsA(isA<Exception>().having(
           (e) => e.toString(),
           'message',
@@ -43,8 +43,8 @@ void main() {
     });
 
     test('rejects address with empty host part', () async {
-      expect(
-        () => authService.connect('user@'),
+      await expectLater(
+        () async => authService.connect('user@'),
         throwsA(isA<Exception>().having(
           (e) => e.toString(),
           'message',
@@ -54,8 +54,8 @@ void main() {
     });
 
     test('rejects address with multiple @', () async {
-      expect(
-        () => authService.connect('user@host@extra'),
+      await expectLater(
+        () async => authService.connect('user@host@extra'),
         throwsA(isA<Exception>().having(
           (e) => e.toString(),
           'message',
