@@ -104,6 +104,8 @@ export const videoMetaSchema = {
     body: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...collectionFields,
+    ...migrateFields,
   },
   required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt']
 };
