@@ -1,35 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <!-- Background -->
-  <rect width="1024" height="1024" fill="#4f46e5"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Solid indigo background -->
+  <rect width="128" height="128" fill="#6366f1"/>
 
-  <!-- === ARROW — single unified shape, amber === -->
-  <path d="
-    M 460 148
-    Q 460 130 478 130
-    L 546 130
-    Q 564 130 564 148
-    L 564 350
-    L 660 350
-    L 512 524
-    L 364 350
-    L 460 350
-    Z
-  " fill="#fbbf24"/>
-
-  <!-- === INBOX TRAY — single unified path === -->
-  <path d="
-    M 175 570
-    L 295 570
-    L 320 710
-    Q 330 758 380 758
-    L 644 758
-    Q 694 758 704 710
-    L 729 570
-    L 849 570
-    L 849 748
-    Q 849 820 779 820
-    L 245 820
-    Q 175 820 175 748
-    Z
-  " fill="white"/>
+  <!-- Inbox tray shape in white, matching extension icon -->
+  <!-- Left ear -->
+  <rect x="20" y="28" width="24" height="28" fill="white"/>
+  <!-- Right ear -->
+  <rect x="84" y="28" width="24" height="28" fill="white"/>
+  <!-- Main box body -->
+  <rect x="20" y="52" width="88" height="52" rx="4" fill="white"/>
 </svg>

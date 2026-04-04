@@ -47,7 +47,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Navigator.of(context).pop();
       }
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _connecting = false);
     }
@@ -77,6 +77,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildConnected() {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -85,8 +87,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               width: 10,
               height: 10,
-              decoration: const BoxDecoration(
-                color: Colors.green,
+              decoration: BoxDecoration(
+                color: colorScheme.primary,
                 shape: BoxShape.circle,
               ),
             ),
@@ -99,8 +101,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           widget.currentConfig!.userAddress,
           style: TextStyle(
             fontSize: 14,
-            color: Colors.grey[600],
+            color: colorScheme.onSurfaceVariant,
           ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 32),
         SizedBox(
@@ -108,8 +112,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: OutlinedButton(
             onPressed: _disconnect,
             style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.red,
-              side: const BorderSide(color: Colors.red),
+              foregroundColor: colorScheme.error,
+              side: BorderSide(color: colorScheme.error),
             ),
             child: const Text('Disconnect'),
           ),
@@ -119,6 +123,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildLogin() {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -129,7 +135,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 8),
         Text(
           'Enter your remoteStorage address to start sending items to your inbox.',
-          style: TextStyle(color: Colors.grey[600]),
+          style: TextStyle(color: colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 24),
         TextField(
@@ -149,7 +155,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 12),
           Text(
             _error!,
-            style: const TextStyle(color: Colors.red, fontSize: 13),
+            style: TextStyle(color: colorScheme.error, fontSize: 13),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
         const SizedBox(height: 16),
@@ -159,12 +167,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: FilledButton(
             onPressed: _connecting ? null : _connect,
             child: _connecting
-                ? const SizedBox(
+                ? SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Colors.white,
+                      color: colorScheme.onPrimary,
                     ),
                   )
                 : const Text('Connect'),

@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import '../models/rs_config.dart';
 
 class DirectRS {
+  static const _timeout = Duration(seconds: 60);
+
   final RSConfig config;
 
   DirectRS(this.config);
@@ -15,22 +18,26 @@ class DirectRS {
   Uri _uri(String path) => Uri.parse('${config.href}/inbox/$path');
 
   Future<void> storeObject(String path, Map<String, dynamic> obj) async {
-    final resp = await http.put(
-      _uri(path),
-      headers: {..._headers, 'Content-Type': 'application/json'},
-      body: jsonEncode(obj),
-    );
+    final resp = await http
+        .put(
+          _uri(path),
+          headers: {..._headers, 'Content-Type': 'application/json'},
+          body: jsonEncode(obj),
+        )
+        .timeout(_timeout);
     if (resp.statusCode >= 300) {
       throw Exception('Store failed: ${resp.statusCode} ${resp.body}');
     }
   }
 
   Future<void> storeFile(String path, Uint8List data, String mimeType) async {
-    final resp = await http.put(
-      _uri(path),
-      headers: {..._headers, 'Content-Type': mimeType},
-      body: data,
-    );
+    final resp = await http
+        .put(
+          _uri(path),
+          headers: {..._headers, 'Content-Type': '$mimeType; charset=binary'},
+          body: data,
+        )
+        .timeout(_timeout);
     if (resp.statusCode >= 300) {
       throw Exception('Store file failed: ${resp.statusCode}');
     }

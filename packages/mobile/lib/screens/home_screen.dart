@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+import '../models/attachment.dart';
 import '../models/inbox_item.dart';
 import '../models/rs_config.dart';
 import '../services/offline_queue.dart';
+import '../utils/mime.dart';
 import '../widgets/send_button.dart';
 import '../widgets/queue_badge.dart';
 import '../widgets/media_preview.dart';
@@ -35,23 +38,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   SendState _sendState = SendState.idle;
   int _pendingCount = 0;
-
-  // Attachment state
-  String? _attachmentPath;
-  String? _attachmentMimeType;
-  InboxItemType? _attachmentType;
-  double? _attachmentDuration;
+  Attachment? _attachment;
+  StreamSubscription<int>? _pendingSub;
 
   @override
   void initState() {
     super.initState();
     _pendingCount = widget.queue.pendingCount;
-    widget.queue.onPendingChanged = (count) {
+    _pendingSub = widget.queue.pendingChanges.listen((count) {
       if (mounted) setState(() => _pendingCount = count);
-    };
-    // Re-evaluate _canSend whenever text changes
-    _bodyController.addListener(() => setState(() {}));
-    // Auto-focus body field after build
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (widget.config != null) _bodyFocusNode.requestFocus();
     });
@@ -59,14 +55,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _pendingSub?.cancel();
     _bodyController.dispose();
     _bodyFocusNode.dispose();
     super.dispose();
   }
 
-  bool get _canSend {
+  bool _canSend(String text) {
     if (widget.config == null) return false;
-    return _bodyController.text.trim().isNotEmpty || _attachmentPath != null;
+    return text.trim().isNotEmpty || _attachment != null;
   }
 
   static const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -87,33 +84,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  String _extFromMime(String mime) {
-    switch (mime) {
-      case 'image/jpeg':
-        return 'jpg';
-      case 'image/png':
-        return 'png';
-      case 'image/heic':
-        return 'heic';
-      case 'image/webp':
-        return 'webp';
-      case 'video/mp4':
-        return 'mp4';
-      case 'video/quicktime':
-        return 'mov';
-      case 'audio/wav':
-      case 'audio/x-wav':
-        return 'wav';
-      case 'audio/mp4':
-      case 'audio/aac':
-        return 'm4a';
-      default:
-        return mime.split('/').last;
-    }
-  }
+  static String _truncate(String s, int max) =>
+      s.length > max ? '${s.substring(0, max)}...' : s;
 
   Future<void> _send() async {
-    if (!_canSend) return;
+    if (!_canSend(_bodyController.text)) return;
 
     setState(() => _sendState = SendState.sending);
 
@@ -121,80 +96,85 @@ class _HomeScreenState extends State<HomeScreen> {
       final id = _uuid.v4();
       final createdAt = DateTime.now().toUtc().toIso8601String();
       final body = _bodyController.text.trim();
+      final att = _attachment;
 
-      if (_attachmentPath != null) {
-        final type = _attachmentType!;
-        final mime = _attachmentMimeType!;
-        final ext = _extFromMime(mime);
+      if (att != null) {
+        final ext = extFromMime(att.mimeType);
         final filePath = 'files/$id.$ext';
-        final fileBytes = await File(_attachmentPath!).readAsBytes();
+        final attachPath = att.path;
+        final fileBytes = await compute(_readFileBytes, attachPath);
 
-        final item = <String, dynamic>{
-          'id': id,
-          'type': type.value,
-          'title': body.isNotEmpty
-              ? (body.length > 50 ? '${body.substring(0, 50)}...' : body)
-              : _autoTitle(type),
-          'filePath': filePath,
-          'mimeType': mime,
-          'createdAt': createdAt,
-        };
-        if (body.isNotEmpty) item['body'] = body;
-        if (_attachmentDuration != null) item['duration'] = _attachmentDuration;
-
-        await widget.queue.enqueue(item: item, fileData: Uint8List.fromList(fileBytes));
+        final item = InboxItem(
+          id: id,
+          type: att.type,
+          title: body.isNotEmpty ? _truncate(body, 50) : _autoTitle(att.type),
+          createdAt: createdAt,
+          body: body.isNotEmpty ? body : null,
+          filePath: filePath,
+          mimeType: att.mimeType,
+          duration: att.duration,
+        );
+        await widget.queue.enqueue(item: item.toJson(), fileData: fileBytes);
       } else {
-        final title = body.length > 50 ? '${body.substring(0, 50)}...' : body;
-        final item = <String, dynamic>{
-          'id': id,
-          'type': 'note',
-          'title': title,
-          'body': body,
-          'createdAt': createdAt,
-        };
-        await widget.queue.enqueue(item: item);
+        final item = InboxItem(
+          id: id,
+          type: InboxItemType.note,
+          title: _truncate(body, 50),
+          createdAt: createdAt,
+          body: body,
+        );
+        await widget.queue.enqueue(item: item.toJson());
       }
 
+      if (!mounted) return;
       setState(() => _sendState = SendState.sent);
       await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
       _reset();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Failed: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
         );
+        setState(() => _sendState = SendState.idle);
       }
-      setState(() => _sendState = SendState.idle);
     }
+  }
+
+  static Uint8List _readFileBytes(String path) {
+    return File(path).readAsBytesSync();
   }
 
   void _reset() {
     _bodyController.clear();
     setState(() {
       _sendState = SendState.idle;
-      _attachmentPath = null;
-      _attachmentMimeType = null;
-      _attachmentType = null;
-      _attachmentDuration = null;
+      _attachment = null;
     });
     _bodyFocusNode.requestFocus();
   }
 
   void _onMediaPicked(String path, String mimeType, bool isVideo) {
     setState(() {
-      _attachmentPath = path;
-      _attachmentMimeType = mimeType;
-      _attachmentType = isVideo ? InboxItemType.video : InboxItemType.image;
-      _attachmentDuration = null;
+      _attachment = Attachment(
+        path: path,
+        mimeType: mimeType,
+        type: isVideo ? InboxItemType.video : InboxItemType.image,
+      );
     });
   }
 
   void _onRecordingComplete(String path, double duration) {
     setState(() {
-      _attachmentPath = path;
-      _attachmentMimeType = 'audio/wav';
-      _attachmentType = InboxItemType.audio;
-      _attachmentDuration = duration;
+      _attachment = Attachment(
+        path: path,
+        mimeType: 'audio/mp4',
+        type: InboxItemType.audio,
+        duration: duration,
+      );
     });
   }
 
@@ -212,6 +192,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final isConnected = widget.config != null;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -226,7 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: Icon(
               Icons.settings,
-              color: isConnected ? null : Colors.red,
+              color: isConnected ? null : colorScheme.error,
             ),
             onPressed: _openSettings,
           ),
@@ -239,12 +220,12 @@ class _HomeScreenState extends State<HomeScreen> {
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                color: Colors.orange.shade50,
+                color: colorScheme.errorContainer,
                 child: GestureDetector(
                   onTap: _openSettings,
                   child: Text(
                     'Tap to connect to your remoteStorage server',
-                    style: TextStyle(color: Colors.orange.shade900),
+                    style: TextStyle(color: colorScheme.onErrorContainer),
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -264,30 +245,30 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-            if (_attachmentPath != null)
+            if (_attachment != null)
               MediaPreview(
-                filePath: _attachmentPath!,
-                type: _attachmentType!,
-                duration: _attachmentDuration,
-                onRemove: () => setState(() {
-                  _attachmentPath = null;
-                  _attachmentMimeType = null;
-                  _attachmentType = null;
-                  _attachmentDuration = null;
-                }),
+                filePath: _attachment!.path,
+                type: _attachment!.type,
+                duration: _attachment!.duration,
+                onRemove: () => setState(() => _attachment = null),
               ),
             const Divider(height: 1),
             MediaPickerBar(
               onMediaPicked: _onMediaPicked,
+              enabled: _attachment == null,
               audioRecorder: AudioRecorderWidget(
                 onRecordingComplete: _onRecordingComplete,
+                enabled: _attachment == null,
               ),
             ),
             const Divider(height: 1),
-            SendButton(
-              state: _sendState,
-              enabled: _canSend,
-              onPressed: _send,
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _bodyController,
+              builder: (context, value, _) => SendButton(
+                state: _sendState,
+                enabled: _canSend(value.text),
+                onPressed: _send,
+              ),
             ),
           ],
         ),

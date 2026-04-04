@@ -21,7 +21,9 @@ class AuthService {
     // 1. WebFinger discovery
     final webfingerUrl =
         '$scheme://$host/.well-known/webfinger?resource=acct:${Uri.encodeComponent(userAddress)}';
-    final wfResp = await http.get(Uri.parse(webfingerUrl));
+    final wfResp = await http
+        .get(Uri.parse(webfingerUrl))
+        .timeout(const Duration(seconds: 30));
     if (wfResp.statusCode >= 300) {
       throw Exception('WebFinger failed: ${wfResp.statusCode}');
     }
@@ -29,14 +31,18 @@ class AuthService {
 
     // Find remoteStorage link
     final links = (wfData['links'] as List?)?.cast<Map<String, dynamic>>();
-    final rsLink = links?.firstWhere(
+    if (links == null || links.isEmpty) {
+      throw Exception('No links found in WebFinger response');
+    }
+    final rsLink = links.firstWhere(
       (l) =>
           l['rel'] == 'http://tools.ietf.org/id/draft-dejong-remotestorage' ||
           l['rel'] == 'remotestorage',
       orElse: () => throw Exception('No remoteStorage link found in WebFinger'),
     );
 
-    final href = rsLink!['href'] as String;
+    final href = rsLink['href'] as String?;
+    if (href == null) throw Exception('remoteStorage link missing href');
     final storageApi = (rsLink['type'] as String?) ??
         (rsLink['properties'] as Map<String, dynamic>?)?['http://remotestorage.io/spec/version'] as String?;
 

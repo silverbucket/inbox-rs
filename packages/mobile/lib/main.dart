@@ -39,6 +39,7 @@ class _InboxRSAppState extends State<InboxRSApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     _connectivitySub?.cancel();
+    _queue.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -81,7 +82,8 @@ class _InboxRSAppState extends State<InboxRSApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: _theme,
+      theme: _theme(Brightness.light),
+      darkTheme: _theme(Brightness.dark),
       navigatorKey: _navigatorKey,
       home: _loading
           ? const Scaffold(body: Center(child: CircularProgressIndicator()))
@@ -98,10 +100,10 @@ class _InboxRSAppState extends State<InboxRSApp> with WidgetsBindingObserver {
     );
   }
 
-  ThemeData get _theme => ThemeData(
+  ThemeData _theme(Brightness brightness) => ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.indigo,
-          brightness: Brightness.light,
+          brightness: brightness,
         ),
         useMaterial3: true,
         appBarTheme: const AppBarTheme(

@@ -17,6 +17,8 @@ class SendButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: SizedBox(
@@ -31,19 +33,19 @@ class SendButton extends StatelessWidget {
               : null,
           style: FilledButton.styleFrom(
             backgroundColor: state == SendState.sent
-                ? Colors.green
-                : Theme.of(context).colorScheme.primary,
+                ? colorScheme.tertiary
+                : colorScheme.primary,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
             ),
           ),
-          child: _buildChild(),
+          child: _buildChild(colorScheme),
         ),
       ),
     );
   }
 
-  Widget _buildChild() {
+  Widget _buildChild(ColorScheme colorScheme) {
     switch (state) {
       case SendState.idle:
         return const Text(
@@ -55,16 +57,16 @@ class SendButton extends StatelessWidget {
           ),
         );
       case SendState.sending:
-        return const SizedBox(
+        return SizedBox(
           width: 22,
           height: 22,
           child: CircularProgressIndicator(
             strokeWidth: 2.5,
-            color: Colors.white,
+            color: colorScheme.onPrimary,
           ),
         );
       case SendState.sent:
-        return const Icon(Icons.check, size: 28, color: Colors.white);
+        return Icon(Icons.check, size: 28, color: colorScheme.onTertiary);
     }
   }
 }

@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'direct_rs.dart';
@@ -10,17 +11,27 @@ class QueuedItem {
   final String id;
   final Map<String, dynamic> item;
   final bool hasFile;
+  int retryCount;
 
-  QueuedItem({required this.id, required this.item, required this.hasFile});
+  static const maxRetries = 5;
+
+  QueuedItem({
+    required this.id,
+    required this.item,
+    required this.hasFile,
+    this.retryCount = 0,
+  });
 }
 
 class OfflineQueue {
   DirectRS? _rs;
   final List<QueuedItem> _pending = [];
   bool _processing = false;
-  void Function(int pendingCount)? onPendingChanged;
+  String? _cachedQueueDir;
+  final _pendingController = StreamController<int>.broadcast();
 
   int get pendingCount => _pending.length;
+  Stream<int> get pendingChanges => _pendingController.stream;
 
   void setDirectRS(DirectRS? rs) {
     _rs = rs;
@@ -28,13 +39,22 @@ class OfflineQueue {
   }
 
   Future<String> get _queueDir async {
+    if (_cachedQueueDir != null) return _cachedQueueDir!;
     final appDir = await getApplicationDocumentsDirectory();
     final dir = p.join(appDir.path, 'queue');
     await Directory(dir).create(recursive: true);
+    _cachedQueueDir = dir;
     return dir;
   }
 
-  /// Enqueue an item for sending. Saves locally first, then attempts upload.
+  void dispose() {
+    _pendingController.close();
+  }
+
+  void _notifyListeners() {
+    _pendingController.add(_pending.length);
+  }
+
   Future<void> enqueue({
     required Map<String, dynamic> item,
     Uint8List? fileData,
@@ -44,22 +64,27 @@ class OfflineQueue {
     final itemDir = p.join(dir, id);
     await Directory(itemDir).create(recursive: true);
 
-    // Write item JSON
-    await File(p.join(itemDir, 'item.json')).writeAsString(jsonEncode(item));
+    try {
+      await File(p.join(itemDir, 'item.json'))
+          .writeAsString(jsonEncode(item));
 
-    // Write file data if present
-    if (fileData != null) {
-      await File(p.join(itemDir, 'file.bin')).writeAsBytes(fileData);
+      if (fileData != null) {
+        await File(p.join(itemDir, 'file.bin')).writeAsBytes(fileData);
+      }
+    } catch (e) {
+      try {
+        await Directory(itemDir).delete(recursive: true);
+      } catch (_) {}
+      rethrow;
     }
 
     _pending.add(QueuedItem(id: id, item: item, hasFile: fileData != null));
-    onPendingChanged?.call(_pending.length);
+    _notifyListeners();
 
-    // Attempt immediate upload
-    await _processQueue();
+    // Attempt upload in background — don't block the caller
+    _processQueue();
   }
 
-  /// Load any unprocessed items from disk on app startup.
   Future<void> loadFromDisk() async {
     final dir = await _queueDir;
     final queueDir = Directory(dir);
@@ -70,13 +95,21 @@ class OfflineQueue {
       if (entry is Directory) {
         final itemFile = File(p.join(entry.path, 'item.json'));
         if (await itemFile.exists()) {
-          final item =
-              jsonDecode(await itemFile.readAsString()) as Map<String, dynamic>;
-          final id = item['id'] as String;
-          final hasFile = await File(p.join(entry.path, 'file.bin')).exists();
-          // Avoid duplicates
-          if (!_pending.any((q) => q.id == id)) {
-            _pending.add(QueuedItem(id: id, item: item, hasFile: hasFile));
+          try {
+            final item = jsonDecode(await itemFile.readAsString())
+                as Map<String, dynamic>;
+            final id = item['id'] as String;
+            final hasFile =
+                await File(p.join(entry.path, 'file.bin')).exists();
+            if (!_pending.any((q) => q.id == id)) {
+              _pending.add(
+                  QueuedItem(id: id, item: item, hasFile: hasFile));
+            }
+          } catch (e) {
+            debugPrint('[offline_queue] Corrupted item at ${entry.path}, removing: $e');
+            try {
+              await entry.delete(recursive: true);
+            } catch (_) {}
           }
         }
       }
@@ -87,15 +120,13 @@ class OfflineQueue {
       final bTime = b.item['createdAt'] as String? ?? '';
       return aTime.compareTo(bTime);
     });
-    onPendingChanged?.call(_pending.length);
+    _notifyListeners();
     await _processQueue();
   }
 
-  /// Process all pending items in FIFO order.
   Future<void> _processQueue() async {
     if (_processing || _rs == null || _pending.isEmpty) return;
 
-    // Check connectivity
     final connectivity = await Connectivity().checkConnectivity();
     if (connectivity.contains(ConnectivityResult.none)) return;
 
@@ -103,6 +134,15 @@ class OfflineQueue {
     try {
       while (_pending.isNotEmpty) {
         final queued = _pending.first;
+
+        if (queued.retryCount >= QueuedItem.maxRetries) {
+          debugPrint('[offline_queue] Skipping ${queued.id} after ${queued.retryCount} retries');
+          _pending.removeAt(0);
+          await _removeFromDisk(queued.id);
+          _notifyListeners();
+          continue;
+        }
+
         try {
           Uint8List? fileData;
           if (queued.hasFile) {
@@ -113,12 +153,12 @@ class OfflineQueue {
 
           await _rs!.store(queued.item, fileData);
 
-          // Success -- remove from queue and disk
           _pending.removeAt(0);
           await _removeFromDisk(queued.id);
-          onPendingChanged?.call(_pending.length);
+          _notifyListeners();
         } catch (e) {
-          // Upload failed -- stop processing, will retry later
+          debugPrint('[offline_queue] Upload failed for ${queued.id} (attempt ${queued.retryCount + 1}): $e');
+          queued.retryCount++;
           break;
         }
       }
@@ -135,7 +175,6 @@ class OfflineQueue {
     }
   }
 
-  /// Call when connectivity changes to retry pending items.
   void onConnectivityChanged() {
     _processQueue();
   }

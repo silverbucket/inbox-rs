@@ -22,7 +22,7 @@ class MediaPreview extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        color: Colors.grey.shade100,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
       ),
       child: Stack(
         children: [
