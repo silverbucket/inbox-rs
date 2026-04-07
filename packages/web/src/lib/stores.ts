@@ -276,12 +276,17 @@ export function loadFileBlobUrl(filePath: string): void {
   if (get(blobUrls)[filePath] || pendingBlobLoads.has(filePath)) return;
   if (!get(connected)) return;
   pendingBlobLoads.add(filePath);
-  fetchFileBlobUrl(filePath).then((url) => {
-    pendingBlobLoads.delete(filePath);
-    if (url) {
-      blobUrls.update(current => ({ ...current, [filePath]: url }));
-    }
-  });
+  fetchFileBlobUrl(filePath)
+    .then((url) => {
+      if (url) {
+        const old = get(blobUrls)[filePath];
+        if (old) URL.revokeObjectURL(old);
+        blobUrls.update(current => ({ ...current, [filePath]: url }));
+      }
+    })
+    .finally(() => {
+      pendingBlobLoads.delete(filePath);
+    });
 }
 
 // ---- Item operations ----

@@ -30,7 +30,7 @@ export interface SaveImageParams {
 /** Save the current page as an ImageItem (for direct image pages) */
 export async function saveAsImage(params: SaveImageParams): Promise<ImageItem | null> {
   const { rs, id, pageUrl, pageTitle, pageNote, createdAt } = params;
-  const guessedExt = pageUrl.match(/\.(png|jpe?g|gif|webp|avif|svg)/i)?.[1] || 'jpg';
+  const guessedExt = pageUrl.match(/\.(png|jpe?g|gif|webp|avif|svg|bmp|ico|tiff?)/i)?.[1] || 'jpg';
   const filePath = `files/${id}.${guessedExt}`;
 
   const result = await browser.runtime.sendMessage({

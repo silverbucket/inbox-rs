@@ -2,7 +2,7 @@
   import browser from 'webextension-polyfill';
   import { DirectRS } from '../lib/rs';
   import { getConfig } from '../lib/storage';
-  import { isImageUrl, isDirectImagePage, saveAsImage, saveAsBookmark } from './save-logic';
+  import { isImageUrl, saveAsImage, saveAsBookmark } from './save-logic';
   import type { NoteItem } from '@inbox-rs/rs-module';
 
   type Mode = 'page' | 'note';
