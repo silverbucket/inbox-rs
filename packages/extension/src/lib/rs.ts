@@ -124,7 +124,7 @@ export class DirectRS {
   async storeFile(path: string, data: ArrayBuffer, mimeType: string): Promise<void> {
     const resp = await fetch(this.url(path), {
       method: 'PUT',
-      headers: { ...this.headers, 'Content-Type': `${mimeType}; charset=binary` },
+      headers: { ...this.headers, 'Content-Type': mimeType },
       body: data
     });
     if (!resp.ok) throw new Error(`Store file failed: ${resp.status}`);

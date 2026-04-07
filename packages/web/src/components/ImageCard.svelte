@@ -1,14 +1,17 @@
 <script lang="ts">
   import type { ImageItem } from '@inbox-rs/rs-module';
-  import { getFileUrl } from '../lib/rs';
-  import { blobUrls, connected } from '../lib/stores';
+  import { blobUrls, connected, loadFileBlobUrl } from '../lib/stores';
   import Lightbox from './Lightbox.svelte';
 
   let { item }: { item: ImageItem } = $props();
   let showLightbox = $state(false);
 
-  // Re-evaluate URL when connected state changes (token becomes available)
-  const imageSrc = $derived($blobUrls[item.filePath] || ($connected ? getFileUrl(item.filePath) : null));
+  const imageSrc = $derived($blobUrls[item.filePath] || null);
+
+  // Fetch file via Authorization header when connected (works on all RS servers)
+  $effect(() => {
+    if ($connected && item.filePath) loadFileBlobUrl(item.filePath);
+  });
 </script>
 
 <div class="image-card">

@@ -33,6 +33,7 @@ function getMetadata() {
     description: getMeta('og:description') || getMeta('description') || '',
     ogImage: getMeta('og:image') || getMeta('twitter:image') || undefined,
     siteName: getMeta('og:site_name') || undefined,
+    contentType: document.contentType,
     favicon,
     embeddedContent,
     tweetImages

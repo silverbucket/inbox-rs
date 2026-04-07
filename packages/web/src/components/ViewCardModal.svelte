@@ -1,8 +1,8 @@
 <script lang="ts">
   import { untrack, onDestroy } from 'svelte';
   import type { InboxItem } from '@inbox-rs/rs-module';
-  import { deleteItem, storeItem, blobUrls, connected, sortedCollections, moveItemToCollection } from '../lib/stores';
-  import rs, { getFileUrl } from '../lib/rs';
+  import { deleteItem, storeItem, blobUrls, connected, sortedCollections, moveItemToCollection, loadFileBlobUrl } from '../lib/stores';
+  import rs from '../lib/rs';
   import { transcribeAudio } from '../lib/transcribe';
   import ShareButton from './ShareButton.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
@@ -52,10 +52,10 @@
   let deleting = $state(false);
   let showMoveMenu = $state(false);
 
-  // Audio playback — use direct URL like images instead of downloading via getFile
+  // Audio playback
   const audioSrc = $derived(
     item.type === 'audio'
-      ? ($blobUrls[item.filePath] || ($connected ? getFileUrl(item.filePath) : null))
+      ? ($blobUrls[item.filePath] || null)
       : null
   );
 
@@ -240,11 +240,19 @@
 
   const imageSrc = $derived(
     item.type === 'bookmark'
-      ? ((item.filePath ? ($blobUrls[item.filePath] || ($connected ? getFileUrl(item.filePath) : null)) : null) || item.ogImage || null)
+      ? ((item.filePath ? ($blobUrls[item.filePath] || null) : null) || item.ogImage || null)
       : item.type === 'image'
-        ? ($blobUrls[item.filePath] || ($connected ? getFileUrl(item.filePath) : null))
+        ? ($blobUrls[item.filePath] || null)
         : null
   );
+
+  // Fetch file-backed items via Authorization header (works on all RS servers)
+  $effect(() => {
+    if (!$connected) return;
+    if (item.type === 'image' && item.filePath) loadFileBlobUrl(item.filePath);
+    if (item.type === 'audio' && item.filePath) loadFileBlobUrl(item.filePath);
+    if (item.type === 'bookmark' && 'filePath' in item && item.filePath) loadFileBlobUrl(item.filePath);
+  });
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
