@@ -196,6 +196,31 @@ describe('saveAsImage', () => {
 
     expect(result!.filePath).toBe('files/img-noext.jpg');
   });
+
+  it('uses correct MIME type fallback when service worker omits mimeType', async () => {
+    mockSendMessage.mockResolvedValue({ ok: true }); // no mimeType
+    mockFetch.mockResolvedValue({ ok: true });
+
+    const rs = makeRS();
+
+    const svgResult = await saveAsImage({
+      rs, id: 'img-svg', pageUrl: 'https://cdn.example.com/logo.svg',
+      pageTitle: '', pageNote: '', createdAt: '2026-01-01T00:00:00.000Z',
+    });
+    expect(svgResult!.mimeType).toBe('image/svg+xml');
+
+    const icoResult = await saveAsImage({
+      rs, id: 'img-ico', pageUrl: 'https://cdn.example.com/favicon.ico',
+      pageTitle: '', pageNote: '', createdAt: '2026-01-01T00:00:00.000Z',
+    });
+    expect(icoResult!.mimeType).toBe('image/x-icon');
+
+    const jpgResult = await saveAsImage({
+      rs, id: 'img-jpg', pageUrl: 'https://cdn.example.com/photo.jpg',
+      pageTitle: '', pageNote: '', createdAt: '2026-01-01T00:00:00.000Z',
+    });
+    expect(jpgResult!.mimeType).toBe('image/jpeg');
+  });
 });
 
 describe('saveAsBookmark', () => {

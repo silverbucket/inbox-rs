@@ -2,6 +2,14 @@ import browser from 'webextension-polyfill';
 import { DirectRS } from '../lib/rs';
 import type { BookmarkItem, ImageItem } from '@inbox-rs/rs-module';
 
+const EXT_TO_MIME: Record<string, string> = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg',
+  png: 'image/png', gif: 'image/gif',
+  webp: 'image/webp', avif: 'image/avif',
+  svg: 'image/svg+xml', bmp: 'image/bmp',
+  ico: 'image/x-icon', tif: 'image/tiff', tiff: 'image/tiff',
+};
+
 /** Check if a URL points directly to an image file */
 export function isImageUrl(url: string): boolean {
   try {
@@ -46,7 +54,7 @@ export async function saveAsImage(params: SaveImageParams): Promise<ImageItem | 
     type: 'image',
     title: pageTitle || pageUrl.split('/').pop() || 'Saved image',
     filePath,
-    mimeType: result.mimeType || `image/${guessedExt}`,
+    mimeType: result.mimeType || EXT_TO_MIME[guessedExt.toLowerCase()] || 'image/jpeg',
     sourceUrl: pageUrl,
     createdAt,
     ...(pageNote ? { description: pageNote } : {})
@@ -98,7 +106,7 @@ export async function saveAsBookmark(params: SavePageParams): Promise<BookmarkIt
       });
       if (result?.ok) {
         filePath = candidatePath;
-        mimeType = result.mimeType || `image/${guessedExt}`;
+        mimeType = result.mimeType || EXT_TO_MIME[guessedExt.toLowerCase()] || 'image/jpeg';
       }
     } catch {
       // Image save failed, bookmark will still be saved without local image
