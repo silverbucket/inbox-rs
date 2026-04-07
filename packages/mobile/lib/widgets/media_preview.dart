@@ -18,6 +18,7 @@ class MediaPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (type == InboxItemType.note) return const SizedBox.shrink();
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       decoration: BoxDecoration(

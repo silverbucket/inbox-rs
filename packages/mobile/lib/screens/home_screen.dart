@@ -232,12 +232,12 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           children: [
             if (!isConnected)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                color: colorScheme.errorContainer,
-                child: GestureDetector(
-                  onTap: _openSettings,
+              GestureDetector(
+                onTap: _openSettings,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  color: colorScheme.errorContainer,
                   child: Text(
                     'Tap to connect to your remoteStorage server',
                     style: TextStyle(color: colorScheme.onErrorContainer),
