@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Inbox RS",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Save emails to your remoteStorage inbox.",
   "applications": {
     "gecko": {
