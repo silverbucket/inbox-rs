@@ -8,8 +8,8 @@ void main() {
   group('QueueBadge', () {
     testWidgets('renders nothing when count is 0', (tester) async {
       await tester.pumpWidget(wrap(const QueueBadge(count: 0)));
-      expect(find.byType(SizedBox), findsOneWidget);
       expect(find.text('0 pending'), findsNothing);
+      expect(find.byIcon(Icons.cloud_upload_outlined), findsNothing);
     });
 
     testWidgets('shows count and upload icon when count > 0', (tester) async {

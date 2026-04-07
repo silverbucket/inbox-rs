@@ -29,18 +29,16 @@ class MediaPreview extends StatelessWidget {
         children: [
           _buildPreview(),
           Positioned(
-            top: 6,
-            right: 6,
-            child: GestureDetector(
-              onTap: onRemove,
-              child: Container(
+            top: 2,
+            right: 2,
+            child: IconButton(
+              onPressed: onRemove,
+              icon: const Icon(Icons.close, size: 16, color: Colors.white),
+              tooltip: 'Remove attachment',
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.black.withValues(alpha: 0.6),
                 padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.6),
-                  shape: BoxShape.circle,
-                ),
-                child:
-                    const Icon(Icons.close, size: 16, color: Colors.white),
+                minimumSize: const Size(28, 28),
               ),
             ),
           ),
