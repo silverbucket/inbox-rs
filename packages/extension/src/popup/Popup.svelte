@@ -2,7 +2,8 @@
   import browser from 'webextension-polyfill';
   import { DirectRS } from '../lib/rs';
   import { getConfig } from '../lib/storage';
-  import type { BookmarkItem, NoteItem } from '@inbox-rs/rs-module';
+  import { isImageUrl, saveAsImage, saveAsBookmark } from './save-logic';
+  import type { NoteItem } from '@inbox-rs/rs-module';
 
   type Mode = 'page' | 'note';
 
@@ -22,6 +23,7 @@
   let pageDescription = $state('');
   let embeddedContent = $state('');
   let tweetImages = $state<string[]>([]);
+  let isDirectImage = $state(false);
   let pageNote = $state('');
 
   // Note mode fields
@@ -56,10 +58,16 @@
             if (meta.siteName) siteName = meta.siteName;
             if (meta.embeddedContent) embeddedContent = meta.embeddedContent;
             if (meta.tweetImages?.length) tweetImages = meta.tweetImages;
+            if (meta.contentType?.startsWith('image/')) isDirectImage = true;
           }
         } catch {
           // Content script not available on this page
         }
+      }
+
+      // Fallback: detect image pages by URL extension (content script may not inject on raw image pages)
+      if (!isDirectImage && isImageUrl(pageUrl)) {
+        isDirectImage = true;
       }
     }
   }
@@ -76,49 +84,25 @@
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
 
-    // Build description from user note + og:description (body handles embedded content)
-    const desc = [pageNote, pageDescription].filter(Boolean).join('\n\n') || undefined;
-
-    // Download + store image via service worker (avoids binary message passing).
-    // For tweets: only save actual tweet images, not the generic Twitter og:image.
-    // For other sites: save the og:image.
-    const isTweetPage = embeddedContent || tweetImages.length > 0;
-    const imageToSave = isTweetPage ? (tweetImages[0] || '') : (ogImage || '');
-    let filePath: string | undefined;
-    let mimeType: string | undefined;
-
-    if (imageToSave) {
-      // Guess extension from URL or default to jpg
-      const guessedExt = imageToSave.match(/\.(png|jpg|jpeg|gif|webp|avif)/i)?.[1] || 'jpg';
-      const candidatePath = `files/${id}.${guessedExt}`;
+    // Direct image page: save as ImageItem instead of BookmarkItem
+    if (isDirectImage) {
       try {
-        const result = await browser.runtime.sendMessage({
-          type: 'download-and-store-image',
-          url: imageToSave,
-          filePath: candidatePath
-        });
-        if (result?.ok) {
-          filePath = candidatePath;
-          mimeType = result.mimeType || `image/${guessedExt}`;
+        const result = await saveAsImage({ rs, id, pageUrl, pageTitle, pageNote, createdAt });
+        if (result) {
+          saving = false;
+          saved = true;
+          setTimeout(() => window.close(), 800);
+          return;
         }
       } catch {
-        // Image save failed, bookmark will still be saved without local image
+        // Fall through to bookmark save as fallback
       }
     }
 
-    // Skip generic/default og:image URLs (Twitter's default card, etc.)
-    const isUsefulOgImage = ogImage && !ogImage.includes('/default/') && !ogImage.includes('placeholder');
-
-    const item: BookmarkItem = {
-      id, type: 'bookmark', title: pageTitle || pageUrl, url: pageUrl, createdAt,
-      ...(desc ? { description: desc } : {}),
-      ...(embeddedContent ? { body: embeddedContent } : {}),
-      ...(filePath ? { filePath, mimeType } : {}),
-      ...(isUsefulOgImage ? { ogImage } : {}),
-      ...(favicon ? { favicon } : {}),
-      ...(siteName ? { siteName } : {})
-    };
-    await rs.store(item);
+    await saveAsBookmark({
+      rs, id, pageUrl, pageTitle, pageNote, pageDescription,
+      embeddedContent, tweetImages, ogImage, favicon, siteName, createdAt
+    });
 
     saving = false;
     saved = true;
@@ -177,7 +161,9 @@
 
     {#if mode === 'page'}
       <form class="save-form" onsubmit={(e) => { e.preventDefault(); savePage(); }}>
-        {#if tweetImages[0]}
+        {#if isDirectImage}
+          <img class="preview-image" src={pageUrl} alt="" />
+        {:else if tweetImages[0]}
           <img class="preview-image" src={tweetImages[0]} alt="" />
         {:else if ogImage && !ogImage.includes('/default/') && !ogImage.includes('placeholder')}
           <img class="preview-image" src={ogImage} alt="" />
@@ -192,7 +178,7 @@
         {/if}
         <textarea bind:value={pageNote} placeholder="Add a note (optional)" rows="2"></textarea>
         <button type="submit" class="btn-primary" disabled={saving || !pageUrl}>
-          {saving ? 'Saving...' : 'Save Page'}
+          {saving ? 'Saving...' : isDirectImage ? 'Save Image' : 'Save Page'}
         </button>
       </form>
     {:else}

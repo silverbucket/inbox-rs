@@ -3,7 +3,7 @@ import type { Writable, Readable } from 'svelte/store';
 import type { InboxItem, AppConfig, Collection, CollectionGroup } from '@inbox-rs/rs-module';
 import { migrator } from '@inbox-rs/rs-module';
 import { cleanForStorage } from './clean-for-storage';
-import rs from './rs';
+import rs, { fetchFileBlobUrl } from './rs';
 
 function getInbox() {
   return (rs as any).inbox;
@@ -262,6 +262,32 @@ export const collectionItems = derived([items, collections], ([$items, $collecti
   }
   return result;
 });
+
+// ---- File blob URL loading ----
+
+const pendingBlobLoads = new Set<string>();
+
+/**
+ * Fetch a file from RS and create a blob URL, stored in blobUrls for reactive display.
+ * No-ops if already loaded or in progress. Components should call this on mount.
+ */
+export function loadFileBlobUrl(filePath: string): void {
+  if (!filePath) return;
+  if (get(blobUrls)[filePath] || pendingBlobLoads.has(filePath)) return;
+  if (!get(connected)) return;
+  pendingBlobLoads.add(filePath);
+  fetchFileBlobUrl(filePath)
+    .then((url) => {
+      if (url) {
+        const old = get(blobUrls)[filePath];
+        if (old) URL.revokeObjectURL(old);
+        blobUrls.update(current => ({ ...current, [filePath]: url }));
+      }
+    })
+    .finally(() => {
+      pendingBlobLoads.delete(filePath);
+    });
+}
 
 // ---- Item operations ----
 
