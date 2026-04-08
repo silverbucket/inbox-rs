@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { InboxItem, InboxItemType, Collection } from '@inbox-rs/rs-module';
-  import type { CollectionGroup } from '@inbox-rs/rs-module';
   import {
     collectionItems, storeItem,
     deleteItem,
