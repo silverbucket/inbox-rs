@@ -14,6 +14,8 @@ A universal inbox for saving URLs, notes, images, emails, and audio — backed b
 - **Right-click: Save Image** — Downloads and saves the actual image binary (not just the URL).
 - **Right-click: Save Selection** — Saves highlighted text as a note with a link back to the source page.
 
+**[Mobile App](https://github.com/silverbucket/inbox-rs-mobile)** — A native iOS/Android app (Flutter) for quick capture on the go. Drop in text notes, audio recordings, or photos and send to your remoteStorage inbox. Includes offline queue with automatic sync.
+
 **Thunderbird Extension** — A Thunderbird MailExtension (128+) for saving emails to your inbox:
 
 - Opens from the message toolbar when reading an email.
