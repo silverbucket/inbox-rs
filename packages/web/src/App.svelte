@@ -129,11 +129,13 @@
 <header>
   <div class="header-inner">
     <div class="header-left">
-      <div class="brand">
-        <a class="brand-link" href="#/">
-          <img src={shieldIcon} alt="" class="brand-icon" />
-          <h1>Inbox <span class="accent">RS</span> <span class="version">v{__APP_VERSION__}</span></h1>
-        </a>
+      <div class="brand-row">
+        <div class="brand">
+          <a class="brand-link" href="#/">
+            <img src={shieldIcon} alt="" class="brand-icon" />
+            <h1>Inbox <span class="accent">RS</span> <span class="version">v{__APP_VERSION__}</span></h1>
+          </a>
+        </div>
         <a class="downloads-link" class:active={route.page === 'plugins'} href="#/plugins">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -272,12 +274,16 @@
     min-width: 0;
   }
 
+  .brand-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
   .brand {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
     line-height: 1;
-    gap: 0.35rem;
   }
 
   .brand-link {
@@ -453,6 +459,11 @@
       align-items: flex-start;
       flex-direction: column;
       width: 100%;
+    }
+
+    .brand-row {
+      width: 100%;
+      justify-content: space-between;
     }
 
     .header-nav {
