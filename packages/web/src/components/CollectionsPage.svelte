@@ -21,6 +21,15 @@
   let editingCollection = $state<Collection | null>(null);
   let editingGroup = $state<CollectionGroup | null>(null);
 
+  let isTouchDevice = $state(false);
+  $effect(() => {
+    const mql = window.matchMedia('(pointer: coarse)');
+    isTouchDevice = mql.matches;
+    const handler = (e: MediaQueryListEvent) => { isTouchDevice = e.matches; };
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  });
+
   // Sync expanded state from config when it loads/changes
   let configInitialized = false;
   $effect(() => {
@@ -151,7 +160,7 @@
   {:else}
     <div
       class="collection-list"
-      use:dndzone={{ items: dndCollections, flipDurationMs: 200, dropTargetStyle: {} }}
+      use:dndzone={{ items: dndCollections, flipDurationMs: 200, dropTargetStyle: {}, dragDisabled: isTouchDevice }}
       onconsider={handleDndConsider}
       onfinalize={handleDndFinalize}
     >
@@ -160,6 +169,7 @@
           collection={col}
           expanded={expandedIds.has(col.id)}
           {onselect}
+          {isTouchDevice}
           onedit={() => { editingCollection = col; }}
           ontoggle={() => toggleExpand(col.id)}
         />

@@ -1,26 +1,24 @@
 <script lang="ts">
   import type { InboxItem, InboxItemType, Collection } from '@inbox-rs/rs-module';
-  import type { CollectionGroup } from '@inbox-rs/rs-module';
   import {
     collectionItems, storeItem,
     deleteItem,
-    sortedGroups, moveCollectionToGroup,
-    moveItemToCollection
+    sortedGroups, moveCollectionToGroup
   } from '../lib/stores';
   import { makeTodo, makeReference, typeBadge, todoNote } from '../lib/item-utils';
   import { cleanForStorage } from '../lib/clean-for-storage';
   import { slide } from 'svelte/transition';
   import InboxCard from './InboxCard.svelte';
-  import CollectionItemPicker from './CollectionItemPicker.svelte';
   import AddEntryBar from './AddEntryBar.svelte';
   import AddEntryModal from './AddEntryModal.svelte';
 
-  let { collection, expanded = false, onselect, onedit, ontoggle }: {
+  let { collection, expanded = false, onselect, onedit, ontoggle, isTouchDevice = false }: {
     collection: Collection;
     expanded?: boolean;
     onselect: (item: InboxItem) => void;
     onedit: () => void;
     ontoggle: () => void;
+    isTouchDevice?: boolean;
   } = $props();
 
   const items = $derived($collectionItems[collection.id] ?? []);
@@ -30,7 +28,6 @@
   const referenceItems = $derived(items.filter(i => !i.isTodo && i.type !== 'todo'));
 
   let showCompleted = $state(false);
-  let showPicker = $state(false);
   let addingType = $state<InboxItemType | null>(null);
   let showMoveMenu = $state(false);
 
@@ -53,9 +50,6 @@
     await storeItem(cleanForStorage(updated));
   }
 
-  async function handlePickItem(item: InboxItem) {
-    await moveItemToCollection(item.id, collection.id);
-  }
 </script>
 
 <div class="collection" style="--col-color: {collection.color || '#6366f1'}" class:expanded>
@@ -96,12 +90,6 @@
       {/if}
     </div>
     <div class="header-actions">
-      <button class="btn-header" onclick={(e) => { e.stopPropagation(); showPicker = true; }} aria-label="Add items" title="Add from inbox">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-      </button>
       <button class="btn-header" onclick={(e) => { e.stopPropagation(); onedit(); }} aria-label="Edit collection" title="Edit">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -154,20 +142,12 @@
 
   <!-- Expanded body — mirrors the inbox page layout -->
   {#if expanded}
-    <div class="collection-body" transition:slide={{ duration: 200 }}>
+    <div class="collection-body" transition:slide={{ duration: isTouchDevice ? 0 : 200 }}>
       {#if items.length === 0}
         <div class="empty-state">
-          <p>No items yet. Create one or add from your inbox.</p>
+          <p>No items yet — create one below.</p>
           <div class="empty-actions">
             <AddEntryBar onadd={(type) => addingType = type} />
-            <button class="btn-accent" onclick={() => showPicker = true}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="17 8 12 3 7 8"></polyline>
-                <line x1="12" y1="3" x2="12" y2="15"></line>
-              </svg>
-              Add from Inbox
-            </button>
           </div>
         </div>
       {:else}
@@ -309,14 +289,6 @@
 
         <div class="collection-toolbar">
           <AddEntryBar onadd={(type) => addingType = type} />
-          <button class="btn-accent" onclick={() => showPicker = true}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="17 8 12 3 7 8"></polyline>
-              <line x1="12" y1="3" x2="12" y2="15"></line>
-            </svg>
-            Add from Inbox
-          </button>
         </div>
       {/if}
     </div>
@@ -327,10 +299,6 @@
   <AddEntryModal type={addingType} collectionId={collection.id} onclose={() => addingType = null} ondelete={async (item) => { await deleteItem(item.id, item); addingType = null; }} />
 {/if}
 
-{#if showPicker}
-  <CollectionItemPicker onclose={() => showPicker = false} onpick={handlePickItem} />
-{/if}
-
 <style>
   /* ================================================================
      COLLECTION — mirrors the inbox page layout when expanded
@@ -338,8 +306,13 @@
   .collection {
     --_col: var(--col-color);
     border-radius: var(--radius);
-    overflow: hidden;
     transition: box-shadow 250ms ease;
+  }
+
+  @media (pointer: fine) {
+    .collection {
+      overflow: hidden;
+    }
   }
 
   .collection.expanded {
@@ -877,27 +850,6 @@
     margin-top: 1.25rem;
     padding-top: 1rem;
     border-top: 1px solid var(--border);
-  }
-
-  .btn-accent {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    background: color-mix(in srgb, var(--_col) 15%, transparent 85%);
-    color: var(--_col);
-    border: none;
-    padding: 0.5rem 0.85rem;
-    border-radius: var(--radius-sm);
-    font-size: 0.8rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.15s;
-    min-height: 2.25rem;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .btn-accent:hover {
-    background: color-mix(in srgb, var(--_col) 25%, transparent 75%);
   }
 
   /* ---- Empty state ---- */
