@@ -13,7 +13,7 @@
   import CollectionFormModal from './components/CollectionFormModal.svelte';
   import GroupFormModal from './components/GroupFormModal.svelte';
   import { connected, deleteItem, todoItems, appConfig, updateConfig, pendingMigrationCount, runAllMigrations, storeCollection, sortedGroups, storeGroup, moveCollectionToGroup } from './lib/stores';
-  import shieldIcon from './assets/logos/favicon-shield.svg';
+  import logoShield from './assets/logos/logo-shield.svg';
 
   type Route =
     | { page: 'home' }
@@ -128,48 +128,47 @@
 
 <header>
   <div class="header-inner">
-    <div class="header-left">
-      <div class="brand-row">
-        <div class="brand">
-          <a class="brand-link" href="#/">
-            <img src={shieldIcon} alt="" class="brand-icon" />
-            <h1>Inbox <span class="accent">RS</span> <span class="version">v{__APP_VERSION__}</span></h1>
-          </a>
-        </div>
-        <a class="downloads-link" class:active={route.page === 'plugins'} href="#/plugins">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <div class="brand">
+      <a class="brand-link" href="#/">
+        <h1 class="sr-only">Inbox RS</h1>
+        <img src={logoShield} alt="" aria-hidden="true" class="brand-logo" />
+      </a>
+      <div class="brand-meta">
+        <span class="version">v{__APP_VERSION__}</span>
+        <a class="extras-link" class:active={route.page === 'plugins'} href="#/plugins" aria-label="Downloads">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="7 10 12 15 17 10"></polyline>
             <line x1="12" y1="15" x2="12" y2="3"></line>
           </svg>
-          Downloads
+          <span class="extras-label">Downloads</span>
         </a>
       </div>
-      <nav class="header-nav" aria-label="Primary">
-        <a class:active={route.page === 'home'} aria-current={route.page === 'home' ? 'page' : undefined} href="#/">Inbox</a>
-        <a class:active={route.page === 'collections'} aria-current={route.page === 'collections' ? 'page' : undefined} href="#/collections">Collections</a>
-        {#if $connected}
-          {#each $sortedGroups as group (group.id)}
-            <a
-              class="group-link"
-              class:active={route.page === 'group' && route.groupId === group.id}
-              aria-current={route.page === 'group' && route.groupId === group.id ? 'page' : undefined}
-              href="#/group/{group.id}"
-              style="--group-color: {group.color || 'var(--accent)'}"
-            >
-              <span class="group-dot"></span>
-              {group.name}
-            </a>
-          {/each}
-          <button class="nav-add-group" onclick={() => showGroupForm = true} title="New group" aria-label="Create new group">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-          </button>
-        {/if}
-      </nav>
     </div>
+    <nav class="header-nav" aria-label="Primary">
+      <a class:active={route.page === 'home'} aria-current={route.page === 'home' ? 'page' : undefined} href="#/">Inbox</a>
+      <a class:active={route.page === 'collections'} aria-current={route.page === 'collections' ? 'page' : undefined} href="#/collections">Collections</a>
+      {#if $connected}
+        {#each $sortedGroups as group (group.id)}
+          <a
+            class="group-link"
+            class:active={route.page === 'group' && route.groupId === group.id}
+            aria-current={route.page === 'group' && route.groupId === group.id ? 'page' : undefined}
+            href="#/group/{group.id}"
+            style="--group-color: {group.color || 'var(--accent)'}"
+          >
+            <span class="group-dot"></span>
+            <span class="group-name">{group.name}</span>
+          </a>
+        {/each}
+        <button class="nav-add-group" onclick={() => showGroupForm = true} title="New group" aria-label="Create new group">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+      {/if}
+    </nav>
     <div class="header-right">
       <ConnectWidget />
     </div>
@@ -248,6 +247,20 @@
 {/if}
 
 <style>
+  /* ── Accessibility ─────────────────────────── */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* ── Header shell ──────────────────────────── */
   header {
     position: sticky;
     top: 0;
@@ -267,60 +280,80 @@
     justify-content: space-between;
   }
 
-  .header-left {
-    display: flex;
-    align-items: flex-end;
-    gap: 1rem;
-    min-width: 0;
-  }
-
-  .brand-row {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-  }
-
+  /* ── Brand (zone 1) ────────────────────────── */
   .brand {
     display: flex;
-    align-items: center;
-    line-height: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+    flex-shrink: 0;
   }
 
   .brand-link {
+    display: flex;
+    align-items: center;
     color: inherit;
-  }
-
-  .brand-icon {
-    width: 24px;
-    height: 24px;
   }
 
   .brand-link:hover {
     color: inherit;
   }
 
-  h1 {
-    font-size: 1.25rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
+  .brand-logo {
+    height: 28px;
+    width: auto;
   }
 
-  .version {
-    font-size: 0.65rem;
-    font-weight: 400;
-    opacity: 0.4;
-    vertical-align: middle;
-    margin-left: 0.15rem;
-  }
-
-  .header-nav {
+  .brand-meta {
     display: flex;
     align-items: center;
     gap: 0.4rem;
+    margin-left: 0.2rem;
+  }
+
+  .version {
+    font-size: 0.6rem;
+    font-weight: 400;
+    opacity: 0.4;
+  }
+
+  .extras-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: 0.6rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    opacity: 0.5;
+    transition: opacity 150ms, color 150ms;
+  }
+
+  .extras-link:hover {
+    opacity: 1;
+    color: var(--accent);
+  }
+
+  .extras-link.active {
+    opacity: 1;
+    color: var(--accent);
+  }
+
+  .extras-link svg {
+    flex-shrink: 0;
+  }
+
+  /* ── Navigation (zone 2) ───────────────────── */
+  .header-nav {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.3rem;
     padding: 0.25rem;
     border: 1px solid var(--border);
-    border-radius: 999px;
+    border-radius: 1rem;
     background: color-mix(in srgb, var(--surface) 88%, black 12%);
+    min-width: 0;
+    flex-shrink: 1;
   }
 
   .header-nav a {
@@ -332,6 +365,8 @@
     color: var(--text-muted);
     font-size: 0.92rem;
     font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
     transition: background 180ms ease, color 180ms ease;
   }
 
@@ -344,8 +379,18 @@
     background: color-mix(in srgb, var(--accent) 18%, var(--surface) 82%);
   }
 
+  /* Group links — truncate long names */
   .header-nav .group-link {
     gap: 0.35rem;
+    max-width: 10rem;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  .group-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .header-nav .group-link.active {
@@ -382,41 +427,15 @@
     opacity: 1;
   }
 
+  /* ── Connection controls (zone 3) ──────────── */
   .header-right {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-  }
-
-  .downloads-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--text-muted);
-    padding: 0.1rem 0.4rem;
-    border-radius: var(--radius-sm, 6px);
-    transition: color 150ms, background 150ms;
-  }
-
-  .downloads-link:hover {
-    color: var(--accent);
-    background: rgba(99, 102, 241, 0.1);
-  }
-
-  .downloads-link.active {
-    color: var(--accent);
-  }
-
-  .downloads-link svg {
     flex-shrink: 0;
   }
 
-  .accent {
-    color: var(--accent);
-  }
-
+  /* ── Main content ──────────────────────────── */
   main {
     max-width: 1200px;
     margin: 0 auto;
@@ -449,31 +468,68 @@
     min-width: 0;
   }
 
+  /* ── Mobile ────────────────────────────────── */
   @media (max-width: 768px) {
     .header-inner {
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      grid-template-rows: auto auto;
       gap: 0.5rem;
+      padding: 0.75rem 1rem;
     }
 
-    .header-left {
-      align-items: flex-start;
-      flex-direction: column;
-      width: 100%;
+    /* Row 1, left: brand */
+    .brand {
+      grid-column: 1;
+      grid-row: 1;
     }
 
-    .brand-row {
-      width: 100%;
-      justify-content: space-between;
+    .brand-logo {
+      height: 22px;
     }
 
-    .header-nav {
-      width: 100%;
-      justify-content: space-between;
+    .brand-meta {
+      gap: 0.3rem;
+      margin-left: 0.1rem;
     }
 
+    .version {
+      font-size: 0.55rem;
+    }
+
+    .extras-label {
+      display: none;
+    }
+
+    .extras-link {
+      font-size: 0.55rem;
+    }
+
+    /* Row 1, right: connection controls */
     .header-right {
-      width: 100%;
+      grid-column: 2;
+      grid-row: 1;
+      align-items: flex-start;
       justify-content: flex-end;
+    }
+
+    /* Row 2, full width: navigation */
+    .header-nav {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      border-radius: 0.75rem;
+      gap: 0.25rem;
+      padding: 0.2rem;
+    }
+
+    .header-nav a {
+      min-height: 1.75rem;
+      padding: 0 0.6rem;
+      font-size: 0.82rem;
+    }
+
+    .header-nav .group-link {
+      max-width: 7rem;
     }
 
     .content-layout {
