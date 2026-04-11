@@ -4,8 +4,8 @@
   "description": "A universal inbox for saving URLs, notes, images, emails, and audio — backed by remoteStorage.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f1117",
-  "theme_color": "#0f1117",
+  "background_color": "#f8f9fb",
+  "theme_color": "#4f46e5",
   "icons": [
     {
       "src": "/favicon-32.png",
