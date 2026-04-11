@@ -26,16 +26,16 @@
 
 {#if $connected}
   <div class="widget connected">
-    {#if $syncing}
-      <svg class="sync-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <span class="status-row">
+      <svg class="sync-icon" class:spinning={$syncing} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="23 4 23 10 17 10"></polyline>
         <polyline points="1 20 1 14 7 14"></polyline>
         <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
         <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
       </svg>
-    {/if}
-    <span class="status-dot"></span>
-    <span class="status-text">Connected</span>
+      <span class="status-dot"></span>
+      <span class="status-text">Connected</span>
+    </span>
     <button class="btn-disconnect" onclick={handleDisconnect}>Disconnect</button>
   </div>
 {:else}
@@ -74,12 +74,24 @@
   .sync-icon {
     color: var(--accent);
     flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .sync-icon.spinning {
+    opacity: 1;
     animation: spin 1s linear infinite;
   }
 
   @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+  }
+
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
 
   .status-text {
@@ -139,5 +151,53 @@
   .btn-disconnect:hover {
     color: var(--danger);
     border-color: var(--danger);
+  }
+
+  @media (max-width: 768px) {
+    /* Connected: status stacks above disconnect, right-aligned */
+    .widget.connected {
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.2rem;
+      font-size: 0.8rem;
+    }
+
+    .widget.connected .status-text {
+      font-size: 0.75rem;
+    }
+
+    .widget.connected .btn-disconnect {
+      font-size: 0.7rem;
+      padding: 0.15rem 0.5rem;
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      opacity: 0.7;
+    }
+
+    .widget.connected .btn-disconnect:hover {
+      opacity: 1;
+      color: var(--danger);
+    }
+
+    /* Disconnected: full-width stacked form */
+    form.widget {
+      flex-direction: column;
+      align-items: stretch;
+      width: 100%;
+      gap: 0.35rem;
+    }
+
+    form.widget input {
+      width: 100%;
+      font-size: 0.82rem;
+      padding: 0.4rem 0.6rem;
+    }
+
+    form.widget .btn-connect {
+      width: 100%;
+      font-size: 0.82rem;
+      padding: 0.4rem 0.75rem;
+    }
   }
 </style>
