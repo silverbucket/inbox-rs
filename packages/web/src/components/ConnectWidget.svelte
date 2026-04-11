@@ -26,16 +26,18 @@
 
 {#if $connected}
   <div class="widget connected">
-    {#if $syncing}
-      <svg class="sync-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="23 4 23 10 17 10"></polyline>
-        <polyline points="1 20 1 14 7 14"></polyline>
-        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
-        <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
-      </svg>
-    {/if}
-    <span class="status-dot"></span>
-    <span class="status-text">Connected</span>
+    <span class="status-row">
+      {#if $syncing}
+        <svg class="sync-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <polyline points="1 20 1 14 7 14"></polyline>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
+          <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
+        </svg>
+      {/if}
+      <span class="status-dot"></span>
+      <span class="status-text">Connected</span>
+    </span>
     <button class="btn-disconnect" onclick={handleDisconnect}>Disconnect</button>
   </div>
 {:else}
@@ -80,6 +82,12 @@
   @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+  }
+
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
 
   .status-text {
@@ -139,5 +147,38 @@
   .btn-disconnect:hover {
     color: var(--danger);
     border-color: var(--danger);
+  }
+
+  @media (max-width: 768px) {
+    .widget {
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.25rem;
+    }
+
+    .connected {
+      font-size: 0.8rem;
+    }
+
+    .status-text {
+      font-size: 0.75rem;
+    }
+
+    .btn-disconnect {
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+    }
+
+    input {
+      width: 100%;
+      font-size: 0.8rem;
+      padding: 0.4rem 0.6rem;
+    }
+
+    .btn-connect {
+      width: 100%;
+      font-size: 0.8rem;
+      padding: 0.4rem 0.75rem;
+    }
   }
 </style>

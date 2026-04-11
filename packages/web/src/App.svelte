@@ -13,7 +13,7 @@
   import CollectionFormModal from './components/CollectionFormModal.svelte';
   import GroupFormModal from './components/GroupFormModal.svelte';
   import { connected, deleteItem, todoItems, appConfig, updateConfig, pendingMigrationCount, runAllMigrations, storeCollection, sortedGroups, storeGroup, moveCollectionToGroup } from './lib/stores';
-  import shieldIcon from './assets/logos/favicon-shield.svg';
+  import logoShield from './assets/logos/logo-shield.svg';
 
   type Route =
     | { page: 'home' }
@@ -128,48 +128,44 @@
 
 <header>
   <div class="header-inner">
-    <div class="header-left">
-      <div class="brand-row">
-        <div class="brand">
-          <a class="brand-link" href="#/">
-            <img src={shieldIcon} alt="" class="brand-icon" />
-            <h1>Inbox <span class="accent">RS</span> <span class="version">v{__APP_VERSION__}</span></h1>
-          </a>
-        </div>
-        <a class="downloads-link" class:active={route.page === 'plugins'} href="#/plugins">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-          Downloads
-        </a>
-      </div>
-      <nav class="header-nav" aria-label="Primary">
-        <a class:active={route.page === 'home'} aria-current={route.page === 'home' ? 'page' : undefined} href="#/">Inbox</a>
-        <a class:active={route.page === 'collections'} aria-current={route.page === 'collections' ? 'page' : undefined} href="#/collections">Collections</a>
-        {#if $connected}
-          {#each $sortedGroups as group (group.id)}
-            <a
-              class="group-link"
-              class:active={route.page === 'group' && route.groupId === group.id}
-              aria-current={route.page === 'group' && route.groupId === group.id ? 'page' : undefined}
-              href="#/group/{group.id}"
-              style="--group-color: {group.color || 'var(--accent)'}"
-            >
-              <span class="group-dot"></span>
-              {group.name}
-            </a>
-          {/each}
-          <button class="nav-add-group" onclick={() => showGroupForm = true} title="New group" aria-label="Create new group">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-          </button>
-        {/if}
-      </nav>
+    <div class="brand">
+      <a class="brand-link" href="#/">
+        <img src={logoShield} alt="Inbox RS" class="brand-logo" />
+      </a>
+      <span class="version">v{__APP_VERSION__}</span>
+      <a class="downloads-link" class:active={route.page === 'plugins'} href="#/plugins">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        Downloads
+      </a>
     </div>
+    <nav class="header-nav" aria-label="Primary">
+      <a class:active={route.page === 'home'} aria-current={route.page === 'home' ? 'page' : undefined} href="#/">Inbox</a>
+      <a class:active={route.page === 'collections'} aria-current={route.page === 'collections' ? 'page' : undefined} href="#/collections">Collections</a>
+      {#if $connected}
+        {#each $sortedGroups as group (group.id)}
+          <a
+            class="group-link"
+            class:active={route.page === 'group' && route.groupId === group.id}
+            aria-current={route.page === 'group' && route.groupId === group.id ? 'page' : undefined}
+            href="#/group/{group.id}"
+            style="--group-color: {group.color || 'var(--accent)'}"
+          >
+            <span class="group-dot"></span>
+            {group.name}
+          </a>
+        {/each}
+        <button class="nav-add-group" onclick={() => showGroupForm = true} title="New group" aria-label="Create new group">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+      {/if}
+    </nav>
     <div class="header-right">
       <ConnectWidget />
     </div>
@@ -267,60 +263,47 @@
     justify-content: space-between;
   }
 
-  .header-left {
-    display: flex;
-    align-items: flex-end;
-    gap: 1rem;
-    min-width: 0;
-  }
-
-  .brand-row {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-  }
-
   .brand {
     display: flex;
-    align-items: center;
-    line-height: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+    flex-shrink: 0;
   }
 
   .brand-link {
+    display: flex;
+    align-items: center;
     color: inherit;
-  }
-
-  .brand-icon {
-    width: 24px;
-    height: 24px;
   }
 
   .brand-link:hover {
     color: inherit;
   }
 
-  h1 {
-    font-size: 1.25rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
+  .brand-logo {
+    height: 28px;
+    width: auto;
   }
 
   .version {
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     font-weight: 400;
     opacity: 0.4;
-    vertical-align: middle;
-    margin-left: 0.15rem;
+    margin-left: 0.2rem;
   }
 
   .header-nav {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    flex-wrap: wrap;
+    gap: 0.3rem;
     padding: 0.25rem;
     border: 1px solid var(--border);
-    border-radius: 999px;
+    border-radius: 1rem;
     background: color-mix(in srgb, var(--surface) 88%, black 12%);
+    min-width: 0;
+    flex-shrink: 1;
   }
 
   .header-nav a {
@@ -332,6 +315,8 @@
     color: var(--text-muted);
     font-size: 0.92rem;
     font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
     transition: background 180ms ease, color 180ms ease;
   }
 
@@ -386,6 +371,7 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    flex-shrink: 0;
   }
 
   .downloads-link {
@@ -411,10 +397,6 @@
 
   .downloads-link svg {
     flex-shrink: 0;
-  }
-
-  .accent {
-    color: var(--accent);
   }
 
   main {
@@ -453,27 +435,43 @@
     .header-inner {
       flex-wrap: wrap;
       gap: 0.5rem;
+      padding: 0.75rem 1rem;
     }
 
-    .header-left {
-      align-items: flex-start;
-      flex-direction: column;
-      width: 100%;
+    .brand {
+      flex-direction: row;
+      align-items: center;
+      gap: 0.5rem;
     }
 
-    .brand-row {
-      width: 100%;
-      justify-content: space-between;
+    .brand-logo {
+      height: 24px;
+    }
+
+    .version {
+      font-size: 0.55rem;
+    }
+
+    .downloads-link {
+      font-size: 0.7rem;
+      padding: 0.05rem 0.3rem;
     }
 
     .header-nav {
+      order: 3;
       width: 100%;
-      justify-content: space-between;
+      border-radius: 0.75rem;
+      gap: 0.25rem;
+    }
+
+    .header-nav a {
+      min-height: 1.75rem;
+      padding: 0 0.6rem;
+      font-size: 0.82rem;
     }
 
     .header-right {
-      width: 100%;
-      justify-content: flex-end;
+      margin-left: auto;
     }
 
     .content-layout {
