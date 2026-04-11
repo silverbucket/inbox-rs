@@ -130,21 +130,22 @@
   <div class="header-inner">
     <div class="brand">
       <a class="brand-link" href="#/">
+        <h1 class="sr-only">Inbox RS</h1>
         <img src={logoShield} alt="Inbox RS" class="brand-logo" />
       </a>
       <span class="version">v{__APP_VERSION__}</span>
-      <a class="downloads-link" class:active={route.page === 'plugins'} href="#/plugins">
+    </div>
+    <nav class="header-nav" aria-label="Primary">
+      <a class:active={route.page === 'home'} aria-current={route.page === 'home' ? 'page' : undefined} href="#/">Inbox</a>
+      <a class:active={route.page === 'collections'} aria-current={route.page === 'collections' ? 'page' : undefined} href="#/collections">Collections</a>
+      <a class="downloads-nav-link" class:active={route.page === 'plugins'} aria-current={route.page === 'plugins' ? 'page' : undefined} href="#/plugins">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
           <polyline points="7 10 12 15 17 10"></polyline>
           <line x1="12" y1="15" x2="12" y2="3"></line>
         </svg>
-        Downloads
+        <span class="downloads-label">Downloads</span>
       </a>
-    </div>
-    <nav class="header-nav" aria-label="Primary">
-      <a class:active={route.page === 'home'} aria-current={route.page === 'home' ? 'page' : undefined} href="#/">Inbox</a>
-      <a class:active={route.page === 'collections'} aria-current={route.page === 'collections' ? 'page' : undefined} href="#/collections">Collections</a>
       {#if $connected}
         {#each $sortedGroups as group (group.id)}
           <a
@@ -155,7 +156,7 @@
             style="--group-color: {group.color || 'var(--accent)'}"
           >
             <span class="group-dot"></span>
-            {group.name}
+            <span class="group-name">{group.name}</span>
           </a>
         {/each}
         <button class="nav-add-group" onclick={() => showGroupForm = true} title="New group" aria-label="Create new group">
@@ -244,6 +245,20 @@
 {/if}
 
 <style>
+  /* ── Accessibility ─────────────────────────── */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* ── Header shell ──────────────────────────── */
   header {
     position: sticky;
     top: 0;
@@ -263,6 +278,7 @@
     justify-content: space-between;
   }
 
+  /* ── Brand (zone 1) ────────────────────────── */
   .brand {
     display: flex;
     flex-direction: column;
@@ -293,6 +309,7 @@
     margin-left: 0.2rem;
   }
 
+  /* ── Navigation (zone 2) ───────────────────── */
   .header-nav {
     display: flex;
     align-items: center;
@@ -329,8 +346,27 @@
     background: color-mix(in srgb, var(--accent) 18%, var(--surface) 82%);
   }
 
+  /* Downloads inside nav */
+  .downloads-nav-link {
+    gap: 0.3rem;
+  }
+
+  .downloads-nav-link svg {
+    flex-shrink: 0;
+  }
+
+  /* Group links — truncate long names */
   .header-nav .group-link {
     gap: 0.35rem;
+    max-width: 10rem;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  .group-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .header-nav .group-link.active {
@@ -367,6 +403,7 @@
     opacity: 1;
   }
 
+  /* ── Connection controls (zone 3) ──────────── */
   .header-right {
     display: flex;
     align-items: center;
@@ -374,31 +411,7 @@
     flex-shrink: 0;
   }
 
-  .downloads-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--text-muted);
-    padding: 0.1rem 0.4rem;
-    border-radius: var(--radius-sm, 6px);
-    transition: color 150ms, background 150ms;
-  }
-
-  .downloads-link:hover {
-    color: var(--accent);
-    background: rgba(99, 102, 241, 0.1);
-  }
-
-  .downloads-link.active {
-    color: var(--accent);
-  }
-
-  .downloads-link svg {
-    flex-shrink: 0;
-  }
-
+  /* ── Main content ──────────────────────────── */
   main {
     max-width: 1200px;
     margin: 0 auto;
@@ -431,37 +444,48 @@
     min-width: 0;
   }
 
+  /* ── Mobile ────────────────────────────────── */
   @media (max-width: 768px) {
     .header-inner {
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      grid-template-rows: auto auto;
       gap: 0.5rem;
       padding: 0.75rem 1rem;
     }
 
+    /* Row 1, left: brand */
     .brand {
+      grid-column: 1;
+      grid-row: 1;
       flex-direction: row;
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.4rem;
     }
 
     .brand-logo {
-      height: 24px;
+      height: 22px;
     }
 
     .version {
       font-size: 0.55rem;
     }
 
-    .downloads-link {
-      font-size: 0.7rem;
-      padding: 0.05rem 0.3rem;
+    /* Row 1, right: connection controls */
+    .header-right {
+      grid-column: 2;
+      grid-row: 1;
+      align-items: flex-start;
+      justify-content: flex-end;
     }
 
+    /* Row 2, full width: navigation */
     .header-nav {
-      order: 3;
-      width: 100%;
+      grid-column: 1 / -1;
+      grid-row: 2;
       border-radius: 0.75rem;
       gap: 0.25rem;
+      padding: 0.2rem;
     }
 
     .header-nav a {
@@ -470,8 +494,17 @@
       font-size: 0.82rem;
     }
 
-    .header-right {
-      margin-left: auto;
+    .header-nav .group-link {
+      max-width: 7rem;
+    }
+
+    /* Downloads: icon-only on mobile */
+    .downloads-label {
+      display: none;
+    }
+
+    .downloads-nav-link {
+      gap: 0;
     }
 
     .content-layout {

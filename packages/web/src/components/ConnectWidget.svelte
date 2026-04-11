@@ -150,34 +150,49 @@
   }
 
   @media (max-width: 768px) {
-    .widget {
+    /* Connected: status stacks above disconnect, right-aligned */
+    .widget.connected {
       flex-direction: column;
       align-items: flex-end;
-      gap: 0.25rem;
-    }
-
-    .connected {
+      gap: 0.2rem;
       font-size: 0.8rem;
     }
 
-    .status-text {
+    .widget.connected .status-text {
       font-size: 0.75rem;
     }
 
-    .btn-disconnect {
+    .widget.connected .btn-disconnect {
       font-size: 0.7rem;
-      padding: 0.2rem 0.5rem;
+      padding: 0.15rem 0.5rem;
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      opacity: 0.7;
     }
 
-    input {
+    .widget.connected .btn-disconnect:hover {
+      opacity: 1;
+      color: var(--danger);
+    }
+
+    /* Disconnected: full-width stacked form */
+    form.widget {
+      flex-direction: column;
+      align-items: stretch;
       width: 100%;
-      font-size: 0.8rem;
+      gap: 0.35rem;
+    }
+
+    form.widget input {
+      width: 100%;
+      font-size: 0.82rem;
       padding: 0.4rem 0.6rem;
     }
 
-    .btn-connect {
+    form.widget .btn-connect {
       width: 100%;
-      font-size: 0.8rem;
+      font-size: 0.82rem;
       padding: 0.4rem 0.75rem;
     }
   }
