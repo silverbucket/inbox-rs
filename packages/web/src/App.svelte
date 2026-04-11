@@ -131,11 +131,11 @@
     <div class="brand">
       <a class="brand-link" href="#/">
         <h1 class="sr-only">Inbox RS</h1>
-        <img src={logoShield} alt="Inbox RS" class="brand-logo" />
+        <img src={logoShield} alt="" aria-hidden="true" class="brand-logo" />
       </a>
       <div class="brand-meta">
         <span class="version">v{__APP_VERSION__}</span>
-        <a class="extras-link" class:active={route.page === 'plugins'} href="#/plugins">
+        <a class="extras-link" class:active={route.page === 'plugins'} href="#/plugins" aria-label="Downloads">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="7 10 12 15 17 10"></polyline>
