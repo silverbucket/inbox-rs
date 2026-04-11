@@ -473,7 +473,7 @@
     position: fixed;
     inset: 0;
     z-index: 200;
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--overlay);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -583,7 +583,7 @@
   }
 
   .btn-delete-item:hover {
-    background: rgba(239, 68, 68, 0.1);
+    background: color-mix(in srgb, var(--danger) 10%, transparent 90%);
     border-color: var(--danger, #ef4444);
   }
 

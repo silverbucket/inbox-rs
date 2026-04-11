@@ -248,14 +248,14 @@
 
   .btn-icon-sm:hover {
     color: var(--text);
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--surface-tint);
   }
 
   .btn-new {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    background: rgba(99, 102, 241, 0.15);
+    background: var(--accent-subtle);
     color: var(--accent);
     border: none;
     padding: 0.45rem 0.85rem;
@@ -267,7 +267,7 @@
   }
 
   .btn-new:hover {
-    background: rgba(99, 102, 241, 0.25);
+    background: var(--accent-subtle-strong);
   }
 
   .collection-list {

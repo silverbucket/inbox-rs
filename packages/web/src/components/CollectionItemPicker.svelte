@@ -64,7 +64,7 @@
     position: fixed;
     inset: 0;
     z-index: 200;
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--overlay);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -129,11 +129,11 @@
   }
 
   .item-row:hover {
-    background: rgba(99, 102, 241, 0.1);
+    background: var(--accent-subtler);
   }
 
   .type-badge {
-    background: rgba(99, 102, 241, 0.15);
+    background: var(--accent-subtle);
     color: var(--accent);
     padding: 0.1rem 0.4rem;
     border-radius: 999px;

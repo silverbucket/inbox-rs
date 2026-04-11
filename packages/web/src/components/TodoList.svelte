@@ -361,7 +361,7 @@
   .type-badge {
     font-size: 0.6rem;
     color: var(--accent);
-    background: rgba(99, 102, 241, 0.15);
+    background: var(--accent-subtle);
     padding: 0.1rem 0.35rem;
     border-radius: 999px;
     text-transform: uppercase;

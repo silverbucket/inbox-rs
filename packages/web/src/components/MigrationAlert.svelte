@@ -30,7 +30,7 @@
 
 <style>
   .migration-alert {
-    background: rgba(99, 102, 241, 0.1);
+    background: var(--accent-subtler);
     border: 1px solid var(--accent);
     border-radius: var(--radius);
     padding: 1rem;

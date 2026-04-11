@@ -441,7 +441,7 @@
     position: fixed;
     inset: 0;
     z-index: 200;
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--overlay);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -467,7 +467,7 @@
   }
 
   .type-badge {
-    background: rgba(99, 102, 241, 0.15);
+    background: var(--accent-subtle);
     color: var(--accent);
     padding: 0.15rem 0.5rem;
     border-radius: 999px;
@@ -562,7 +562,7 @@
 
   .language-badge {
     display: inline-block;
-    background: rgba(99, 102, 241, 0.15);
+    background: var(--accent-subtle);
     color: var(--accent);
     padding: 0.1rem 0.4rem;
     border-radius: 999px;
@@ -573,7 +573,8 @@
   }
 
   .code {
-    background: #0d1117;
+    background: var(--bg);
+    border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: 0.75rem;
     font-size: 0.8rem;
@@ -588,7 +589,7 @@
 
   .code code {
     font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
-    color: #e6edf3;
+    color: var(--text);
   }
 
   :global(.code .hljs) {
@@ -630,7 +631,7 @@
   }
 
   .btn-action {
-    background: rgba(99, 102, 241, 0.15);
+    background: var(--accent-subtle);
     color: var(--accent);
     border: none;
     padding: 0.35rem 0.75rem;
@@ -642,7 +643,7 @@
   }
 
   .btn-action:hover {
-    background: rgba(99, 102, 241, 0.25);
+    background: var(--accent-subtle-strong);
   }
 
   .btn-action:disabled {
@@ -675,7 +676,7 @@
   }
 
   .btn-delete:hover {
-    background: rgba(239, 68, 68, 0.1);
+    background: color-mix(in srgb, var(--danger) 10%, transparent 90%);
     border-color: var(--danger, #ef4444);
   }
 
@@ -770,7 +771,7 @@
     border-radius: var(--radius-sm);
     padding: 0.3rem;
     z-index: 10;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 16px var(--shadow);
   }
 
   .move-option {
@@ -789,7 +790,7 @@
   }
 
   .move-option:hover {
-    background: rgba(99, 102, 241, 0.1);
+    background: var(--accent-subtler);
   }
 
   .move-dot {

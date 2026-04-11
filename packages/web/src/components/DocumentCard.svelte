@@ -75,7 +75,7 @@
 
   .download-btn {
     margin-top: 0.5rem;
-    background: rgba(99, 102, 241, 0.15);
+    background: var(--accent-subtle);
     color: var(--accent);
     border: none;
     padding: 0.35rem 0.75rem;
@@ -86,7 +86,7 @@
   }
 
   .download-btn:hover {
-    background: rgba(99, 102, 241, 0.25);
+    background: var(--accent-subtle-strong);
   }
 
   .download-btn:disabled {

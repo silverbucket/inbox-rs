@@ -25,7 +25,7 @@
   .overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--overlay);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -40,7 +40,7 @@
     text-align: center;
     max-width: 340px;
     width: 100%;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 12px 40px var(--shadow);
   }
 
   p {
