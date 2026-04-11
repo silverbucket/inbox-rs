@@ -378,7 +378,7 @@
 
   .nav-add-group:hover {
     color: var(--accent);
-    background: rgba(99, 102, 241, 0.1);
+    background: var(--accent-subtler);
     opacity: 1;
   }
 
@@ -402,7 +402,7 @@
 
   .downloads-link:hover {
     color: var(--accent);
-    background: rgba(99, 102, 241, 0.1);
+    background: var(--accent-subtler);
   }
 
   .downloads-link.active {

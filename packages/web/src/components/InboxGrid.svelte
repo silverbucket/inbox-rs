@@ -88,7 +88,7 @@
     width: 200px;
     height: 200px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(99, 102, 241, 0.12) 0%, transparent 70%);
+    background: radial-gradient(circle, var(--accent-subtler) 0%, transparent 70%);
     top: 50%;
     left: 50%;
     transform: translate(-50%, -60%);

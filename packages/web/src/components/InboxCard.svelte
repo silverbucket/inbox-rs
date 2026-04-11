@@ -68,7 +68,7 @@
 
   .card:hover {
     border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent), 0 4px 16px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0 0 1px var(--accent), 0 4px 16px var(--shadow);
   }
 
   .card-body {
@@ -89,7 +89,7 @@
   }
 
   .type-badge {
-    background: rgba(99, 102, 241, 0.15);
+    background: var(--accent-subtle);
     color: var(--accent);
     padding: 0.15rem 0.5rem;
     border-radius: 999px;

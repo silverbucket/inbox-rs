@@ -318,7 +318,7 @@
   .collection.expanded {
     box-shadow:
       0 1px 0 0 color-mix(in srgb, var(--_col) 20%, transparent 80%),
-      0 4px 24px -4px rgba(0, 0, 0, 0.35);
+      0 4px 24px -4px var(--shadow);
   }
 
   /* ---- Header bar ---- */
@@ -457,11 +457,11 @@
 
   .btn-header:hover {
     color: var(--text);
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--surface-tint);
   }
 
   .btn-header:active {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--surface-tint-hover);
   }
 
   /* ---- Move menu (dropdown) ---- */
@@ -486,7 +486,7 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 8px 24px var(--shadow);
   }
 
   .move-menu-label {
@@ -516,7 +516,7 @@
   }
 
   .move-menu-item:hover:not(:disabled) {
-    background: rgba(99, 102, 241, 0.1);
+    background: var(--accent-subtler);
   }
 
   .move-menu-item:disabled {
@@ -647,11 +647,11 @@
   }
 
   .todo-item:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--surface-tint);
   }
 
   .todo-item:active {
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--surface-tint-hover);
   }
 
   .todo-content {
@@ -706,7 +706,7 @@
   .type-badge {
     font-size: 0.6rem;
     color: var(--accent);
-    background: rgba(99, 102, 241, 0.15);
+    background: var(--accent-subtle);
     padding: 0.1rem 0.35rem;
     border-radius: 999px;
     text-transform: uppercase;
@@ -750,7 +750,7 @@
 
   .btn-action-icon:hover {
     color: var(--accent);
-    background: rgba(99, 102, 241, 0.1);
+    background: var(--accent-subtler);
   }
 
   .btn-show-completed {
@@ -833,7 +833,7 @@
     color: var(--text-muted);
     cursor: pointer;
     transition: color 150ms, background 150ms;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 1px 4px var(--shadow);
   }
 
   .btn-card-action:hover {
