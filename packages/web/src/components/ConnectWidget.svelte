@@ -27,14 +27,12 @@
 {#if $connected}
   <div class="widget connected">
     <span class="status-row">
-      {#if $syncing}
-        <svg class="sync-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="23 4 23 10 17 10"></polyline>
-          <polyline points="1 20 1 14 7 14"></polyline>
-          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
-          <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
-        </svg>
-      {/if}
+      <svg class="sync-icon" class:spinning={$syncing} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"></polyline>
+        <polyline points="1 20 1 14 7 14"></polyline>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
+        <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
+      </svg>
       <span class="status-dot"></span>
       <span class="status-text">Connected</span>
     </span>
@@ -76,6 +74,12 @@
   .sync-icon {
     color: var(--accent);
     flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .sync-icon.spinning {
+    opacity: 1;
     animation: spin 1s linear infinite;
   }
 
