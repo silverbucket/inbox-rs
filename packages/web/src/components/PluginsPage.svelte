@@ -2,6 +2,7 @@
   import chromeLogo from '../assets/logos/chrome.svg';
   import firefoxLogo from '../assets/logos/firefox.svg';
   import thunderbirdLogo from '../assets/logos/thunderbird.svg';
+  import mobileLogo from '../assets/logos/mobile.svg';
   import { pluginArtifactVersion, pluginArtifacts } from '../lib/plugin-downloads.generated';
 
   type DownloadOption = {
@@ -49,6 +50,22 @@
     },
   ];
 
+  type MobileDownload = {
+    name: string;
+    compatibility: string;
+    repoUrl: string;
+    accentClass: string;
+    logoSrc: string;
+  };
+
+  const mobileDownload: MobileDownload = {
+    name: 'Mobile App',
+    compatibility: 'iOS & Android',
+    repoUrl: 'https://github.com/silverbucket/inbox-rs-mobile',
+    accentClass: 'mobile',
+    logoSrc: mobileLogo,
+  };
+
   const thunderbirdDownload: DownloadOption = {
     name: 'Thunderbird',
     compatibility: 'Thunderbird 128+',
@@ -73,8 +90,8 @@
       <h2>Clip anything to your inbox.</h2>
       <p class="lede">
         Save web pages, emails, and quick notes to your remoteStorage account
-        from wherever you're reading. Every download on this page is bundled
-        with the v{pluginArtifactVersion} release.
+        from wherever you're reading — on desktop, mobile, or in your
+        email client.
       </p>
     </div>
   </div>
@@ -188,6 +205,80 @@
       </article>
     </div>
   </section>
+
+  <section class="extension-section compact">
+    <div class="section-header">
+      <h2>Mobile App</h2>
+      <p class="section-lede">
+        A native capture client for iOS and Android, built with Flutter.
+        Quickly save links, notes, and images to your remoteStorage inbox
+        from your phone — with share-sheet integration so you can send
+        content from any app.
+      </p>
+    </div>
+
+    <ul class="feature-list">
+      <li>
+        <strong>Share Sheet</strong> — send links and text from any app
+        directly to your inbox
+      </li>
+      <li>
+        <strong>Quick Capture</strong> — open the app, type a note, and save
+        in seconds
+      </li>
+      <li>
+        <strong>Cross-Platform</strong> — runs natively on both iOS and
+        Android
+      </li>
+    </ul>
+
+    <div class="download-grid single">
+      <article class={`download-card ${mobileDownload.accentClass}`}>
+        <div class="card-topline">
+          <div class="card-heading">
+            <div class={`logo-badge ${mobileDownload.accentClass}`} aria-hidden="true">
+              <img src={mobileDownload.logoSrc} alt="" />
+            </div>
+            <div class="card-title-group">
+              <h3>{mobileDownload.name}</h3>
+              <span class="compatibility">{mobileDownload.compatibility}</span>
+            </div>
+          </div>
+          <span class="file-pill">SOURCE</span>
+        </div>
+
+        <a class="download-button" href={mobileDownload.repoUrl} target="_blank" rel="noopener noreferrer">
+          View on GitHub
+        </a>
+
+        <details class="install-details">
+          <summary>Build instructions</summary>
+          <p class="install-note">The mobile app is built from source using Flutter. Pre-built binaries are not yet available.</p>
+          <ol class="steps">
+            <li>Clone the repository from GitHub.</li>
+            <li>Install Flutter and run <code>flutter pub get</code>.</li>
+            <li>Build for your target platform with <code>flutter build</code>.</li>
+          </ol>
+        </details>
+      </article>
+    </div>
+  </section>
+
+  <footer class="page-footer">
+    <div class="footer-meta">
+      <span class="footer-version">v{pluginArtifactVersion}</span>
+      <span class="footer-sep">·</span>
+      <span class="footer-note">Browser extensions and Thunderbird add-on bundled with this release</span>
+    </div>
+    <a class="footer-downloads-link" href={pluginArtifacts.chromium} download>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      All downloads
+    </a>
+  </footer>
 </section>
 
 <style>
@@ -362,6 +453,10 @@
     background: linear-gradient(135deg, rgba(89, 116, 242, 0.2), transparent 48%);
   }
 
+  .download-card.mobile::before {
+    background: linear-gradient(135deg, rgba(80, 200, 120, 0.18), transparent 48%);
+  }
+
   /* ── Card Internals ── */
 
   .card-topline {
@@ -481,6 +576,20 @@
       linear-gradient(180deg, rgba(89, 116, 242, 0.7), rgba(37, 52, 140, 0.42) 58%, rgba(20, 22, 30, 0.18));
   }
 
+  .logo-badge.mobile {
+    border-color: rgba(80, 200, 120, 0.42);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 18px 34px rgba(80, 200, 120, 0.2);
+  }
+
+  .logo-badge.mobile::before {
+    background:
+      radial-gradient(circle at 40% 28%, rgba(80, 200, 120, 0.6), transparent 32%),
+      radial-gradient(circle at 62% 72%, rgba(34, 197, 94, 0.4), transparent 36%),
+      linear-gradient(180deg, rgba(80, 200, 120, 0.58), rgba(22, 101, 52, 0.38) 60%, rgba(20, 22, 30, 0.18));
+  }
+
   .file-pill {
     display: inline-flex;
     align-items: center;
@@ -571,6 +680,72 @@
 
     .extension-section.compact {
       max-width: 100%;
+    }
+  }
+
+  /* ── Page Footer ── */
+
+  .page-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    border-top: 1px solid var(--border);
+    border-radius: calc(var(--radius) * 1.25);
+    background: color-mix(in srgb, var(--surface) 92%, black 8%);
+  }
+
+  .footer-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+
+  .footer-version {
+    font-weight: 700;
+    font-size: 0.78rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--border) 75%, white 25%);
+    background: color-mix(in srgb, var(--surface) 86%, black 14%);
+    letter-spacing: 0.02em;
+  }
+
+  .footer-sep {
+    opacity: 0.35;
+  }
+
+  .footer-note {
+    font-size: 0.78rem;
+  }
+
+  .footer-downloads-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    transition: color 150ms;
+  }
+
+  .footer-downloads-link:hover {
+    color: var(--accent);
+  }
+
+  @media (max-width: 860px) {
+    .page-footer {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.65rem;
+      padding: 1rem;
+    }
+
+    .footer-meta {
+      flex-wrap: wrap;
     }
   }
 </style>
