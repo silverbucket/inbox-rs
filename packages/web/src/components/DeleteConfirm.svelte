@@ -27,8 +27,6 @@
     inset: 0;
     background: var(--overlay);
     display: flex;
-    align-items: safe center;
-    justify-content: center;
     z-index: 200;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -43,6 +41,7 @@
     max-width: 340px;
     width: 100%;
     box-shadow: 0 12px 40px var(--shadow);
+    margin: auto;
   }
 
   p {

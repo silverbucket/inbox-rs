@@ -499,8 +499,6 @@
     z-index: 200;
     background: var(--overlay);
     display: flex;
-    align-items: safe center;
-    justify-content: center;
     padding: 1rem;
     overflow-y: auto;
     overscroll-behavior: contain;
