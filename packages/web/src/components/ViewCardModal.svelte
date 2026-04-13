@@ -93,6 +93,7 @@
 
   onDestroy(() => {
     if (docBlobUrl) URL.revokeObjectURL(docBlobUrl);
+    removeMoveMenuListeners();
   });
 
   async function handleTranscribe() {
@@ -186,17 +187,46 @@
 
   function toggleMoveMenu() {
     showMoveMenu = !showMoveMenu;
-    if (showMoveMenu && moveButtonEl) {
-      const rect = moveButtonEl.getBoundingClientRect();
-      const spaceAbove = rect.top;
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const dropdownMaxHeight = 240;
+    if (showMoveMenu) {
+      updateDropdownPosition();
+      window.addEventListener('scroll', closeMoveMenu, true);
+      window.addEventListener('resize', closeMoveMenu);
+    } else {
+      removeMoveMenuListeners();
+    }
+  }
 
-      if (spaceAbove > spaceBelow && spaceAbove > dropdownMaxHeight) {
-        dropdownStyle = `bottom: ${window.innerHeight - rect.top + 4}px; left: ${rect.left}px; max-height: ${Math.min(spaceAbove - 16, dropdownMaxHeight)}px;`;
-      } else {
-        dropdownStyle = `top: ${rect.bottom + 4}px; left: ${rect.left}px; max-height: ${Math.min(spaceBelow - 16, dropdownMaxHeight)}px;`;
-      }
+  function closeMoveMenu() {
+    showMoveMenu = false;
+    removeMoveMenuListeners();
+  }
+
+  function removeMoveMenuListeners() {
+    window.removeEventListener('scroll', closeMoveMenu, true);
+    window.removeEventListener('resize', closeMoveMenu);
+  }
+
+  function updateDropdownPosition() {
+    if (!moveButtonEl) return;
+    const rect = moveButtonEl.getBoundingClientRect();
+    const spaceAbove = rect.top;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const dropdownMaxHeight = 240;
+    const viewportPadding = 16;
+    const gap = 4;
+
+    const openUpward = spaceAbove > spaceBelow;
+    const available = openUpward ? spaceAbove : spaceBelow;
+    const maxHeight = Math.max(80, Math.min(available - viewportPadding, dropdownMaxHeight));
+
+    // Clamp horizontal position to keep dropdown on-screen
+    const dropdownWidth = 200; // min-width from CSS
+    const left = Math.max(viewportPadding, Math.min(rect.left, window.innerWidth - dropdownWidth - viewportPadding));
+
+    if (openUpward) {
+      dropdownStyle = `bottom: ${window.innerHeight - rect.top + gap}px; left: ${left}px; max-height: ${maxHeight}px;`;
+    } else {
+      dropdownStyle = `top: ${rect.bottom + gap}px; left: ${left}px; max-height: ${maxHeight}px;`;
     }
   }
 
@@ -434,10 +464,14 @@
 </div>
 
 {#if showMoveMenu}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="move-backdrop" onclick={() => showMoveMenu = false}></div>
-  <div class="move-dropdown" style={dropdownStyle}>
+  <button
+    type="button"
+    class="move-backdrop"
+    aria-label="Close move menu"
+    onclick={() => closeMoveMenu()}
+    onkeydown={(e) => { if (e.key === 'Escape') closeMoveMenu(); }}
+  ></button>
+  <div class="move-dropdown" role="listbox" style={dropdownStyle}>
     {#if item.collectionId}
       <button class="move-option" onclick={() => { moveItemToCollection(item.id, undefined).catch(e => console.error('Move failed:', e)); showMoveMenu = false; onclose(); }}>
         Return to Inbox
@@ -800,6 +834,10 @@
     position: fixed;
     inset: 0;
     z-index: 250;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: default;
   }
 
   .move-option {
