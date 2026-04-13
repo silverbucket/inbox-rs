@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
-  import { todoItems, storeItem } from '../lib/stores';
+  import { todoItems, storeItem, activeCollectionTodos } from '../lib/stores';
   import { cleanForStorage } from '../lib/clean-for-storage';
   import { typeBadge } from '../lib/item-utils';
 
@@ -13,6 +13,8 @@
   const todos = $derived($todoItems);
   const openTodos = $derived(todos.filter(t => !t.completed));
   const completedTodos = $derived(todos.filter(t => t.completed));
+  const collectionTodos = $derived($activeCollectionTodos);
+  const totalOpenCount = $derived(openTodos.length + collectionTodos.length);
   let expanded = $state(!inline);
   let showCompleted = $state(false);
   async function toggleCompleted(e: Event, todo: InboxItem) {
@@ -40,8 +42,8 @@
         <polyline points="6 9 12 15 18 9"></polyline>
       </svg>
       <h2 class="todo-heading">Todos</h2>
-      {#if openTodos.length > 0}
-        <span class="todo-badge">{openTodos.length}</span>
+      {#if totalOpenCount > 0}
+        <span class="todo-badge">{totalOpenCount}</span>
       {:else if expanded && todos.length > 0}
         <span class="todo-count">0/{todos.length}</span>
       {/if}
@@ -96,6 +98,54 @@
       </ul>
     {:else if todos.length === 0}
       <p class="empty">No todos yet.</p>
+    {/if}
+
+    {#if collectionTodos.length > 0}
+      <ul role="list" class="collection-todos-list">
+        {#each collectionTodos as ct (ct.item.id)}
+          {@const badge = typeBadge(ct.item)}
+          {@const note = todoNote(ct.item)}
+          <li class="todo-item" role="button" tabindex="0"
+            onclick={(e) => {
+              const target = e.target as HTMLElement;
+              if (target.closest('input, button')) return;
+              onselect(ct.item);
+            }}
+            onkeydown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onselect(ct.item); }
+            }}>
+            <input
+              type="checkbox"
+              class="checkbox"
+              checked={false}
+              onclick={(e) => e.stopPropagation()}
+              onchange={(e) => toggleCompleted(e, ct.item)}
+              aria-label="Mark {ct.item.title} as complete"
+            />
+            <div class="todo-content">
+              <div class="todo-title-row">
+                <span class="todo-title">{ct.item.title}</span>
+              </div>
+              <div class="todo-meta">
+                <span
+                  class="origin-pill"
+                  title="{ct.groupColor ? 'Group' : ''} › {ct.collectionName}"
+                  style="--pill-left: {ct.groupColor || ct.collectionColor}; --pill-right: {ct.collectionColor}"
+                >
+                  <span class="pill-half pill-left"></span><span class="pill-half pill-right"></span>
+                  <span class="pill-label">{ct.collectionName}</span>
+                </span>
+                {#if badge}
+                  <span class="type-badge">{badge}</span>
+                {/if}
+                {#if note}
+                  <span class="todo-note">{note}</span>
+                {/if}
+              </div>
+            </div>
+          </li>
+        {/each}
+      </ul>
     {/if}
 
     {#if completedTodos.length > 0}
@@ -396,5 +446,50 @@
 
   .chevron-sm.collapsed {
     transform: rotate(-90deg);
+  }
+
+  /* ---- Active collection todos ---- */
+  .collection-todos-list {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent 40%);
+  }
+
+  .origin-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    height: 18px;
+    border-radius: 999px;
+    overflow: hidden;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .pill-half {
+    width: 7px;
+    height: 100%;
+  }
+
+  .pill-left {
+    background: var(--pill-left);
+    border-radius: 999px 0 0 999px;
+  }
+
+  .pill-right {
+    background: var(--pill-right);
+    border-radius: 0 999px 999px 0;
+  }
+
+  .pill-label {
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text-muted);
+    padding-right: 0.4rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 10rem;
   }
 </style>
