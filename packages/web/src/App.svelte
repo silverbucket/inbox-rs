@@ -159,21 +159,11 @@
         <h1 class="sr-only">Inbox RS</h1>
         <img src={logoShield} alt="" aria-hidden="true" class="brand-logo" />
       </a>
-      <div class="brand-meta">
-        <span class="version">v{__APP_VERSION__}</span>
-        <a class="extras-link" class:active={route.page === 'plugins'} href="#/plugins" aria-label="Downloads">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-          <span class="extras-label">Downloads</span>
-        </a>
-      </div>
     </div>
     <nav class="header-nav" aria-label="Primary">
       <a class:active={route.page === 'home'} aria-current={route.page === 'home' ? 'page' : undefined} href="#/">Inbox</a>
       <a class:active={route.page === 'collections'} aria-current={route.page === 'collections' ? 'page' : undefined} href="#/collections">Collections</a>
+      <a class:active={route.page === 'plugins'} aria-current={route.page === 'plugins' ? 'page' : undefined} href="#/plugins">Downloads</a>
       {#if $connected}
         {#each $sortedGroups as group (group.id)}
           <a
@@ -326,46 +316,8 @@
   }
 
   .brand-logo {
-    height: 28px;
+    height: 38px;
     width: auto;
-  }
-
-  .brand-meta {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    margin-left: 0.2rem;
-  }
-
-  .version {
-    font-size: 0.6rem;
-    font-weight: 400;
-    opacity: 0.4;
-  }
-
-  .extras-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.2rem;
-    font-size: 0.6rem;
-    font-weight: 500;
-    color: var(--text-muted);
-    opacity: 0.5;
-    transition: opacity 150ms, color 150ms;
-  }
-
-  .extras-link:hover {
-    opacity: 1;
-    color: var(--accent);
-  }
-
-  .extras-link.active {
-    opacity: 1;
-    color: var(--accent);
-  }
-
-  .extras-link svg {
-    flex-shrink: 0;
   }
 
   /* ── Navigation (zone 2) ───────────────────── */
@@ -520,24 +472,7 @@
     }
 
     .brand-logo {
-      height: 22px;
-    }
-
-    .brand-meta {
-      gap: 0.3rem;
-      margin-left: 0.1rem;
-    }
-
-    .version {
-      font-size: 0.55rem;
-    }
-
-    .extras-label {
-      display: none;
-    }
-
-    .extras-link {
-      font-size: 0.55rem;
+      height: 30px;
     }
 
     /* Row 1, right: connection controls */
