@@ -86,3 +86,8 @@ jobs:
         run: |
           git tag "v${{ steps.version.outputs.version }}"
           git push origin HEAD:master --tags
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "v${{ steps.version.outputs.version }}" --generate-notes
