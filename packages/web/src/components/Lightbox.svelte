@@ -202,6 +202,7 @@
     justify-content: center;
     padding: 2rem;
     cursor: zoom-out;
+    overscroll-behavior: contain;
   }
 
   .lightbox-img {

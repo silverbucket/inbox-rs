@@ -79,6 +79,17 @@
     void updateConfig({ todosCollapsed: !v });
   }
 
+  // Lock body scroll when any modal is open
+  const anyModalOpen = $derived(!!viewingItem || !!activeModal || showCollectionForm || showGroupForm);
+
+  $effect(() => {
+    if (anyModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+  });
+
   function openAdd(type: InboxItemType) {
     editingItem = undefined;
     activeModal = type;
