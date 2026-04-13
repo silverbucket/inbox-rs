@@ -101,7 +101,7 @@
       </button>
       {#if availableGroups.length > 0}
         <div class="move-menu-wrapper">
-          <button class="btn-header" onclick={(e) => { e.stopPropagation(); showMoveMenu = !showMoveMenu; }} aria-label="Move to group" title="Move to group">
+          <button class="btn-header" aria-label="Move to group" aria-haspopup="menu" aria-expanded={showMoveMenu} title="Move to group" onclick={(e) => { e.stopPropagation(); showMoveMenu = !showMoveMenu; }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
               <line x1="12" y1="11" x2="12" y2="17"></line>
@@ -114,6 +114,21 @@
             <div class="move-menu-backdrop" onclick={(e) => { e.stopPropagation(); showMoveMenu = false; }}></div>
             <div class="move-menu" onclick={(e) => e.stopPropagation()}>
               <div class="move-menu-label">Move to group</div>
+              <button
+                class="move-menu-item"
+                class:current={!collection.groupId}
+                onclick={() => handleMoveToGroup(undefined)}
+                disabled={!collection.groupId}
+              >
+                <span class="move-dot" style="background: var(--text-muted)"></span>
+                Collections
+                {#if !collection.groupId}
+                  <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                {/if}
+              </button>
+              <div class="move-menu-divider"></div>
               {#each availableGroups as group (group.id)}
                 <button
                   class="move-menu-item"
@@ -130,12 +145,6 @@
                   {/if}
                 </button>
               {/each}
-              {#if collection.groupId}
-                <div class="move-menu-divider"></div>
-                <button class="move-menu-item move-menu-ungrouped" onclick={() => handleMoveToGroup(undefined)}>
-                  Remove from group
-                </button>
-              {/if}
             </div>
           {/if}
         </div>
@@ -563,11 +572,6 @@
     height: 1px;
     background: var(--border);
     margin: 0.25rem 0;
-  }
-
-  .move-menu-ungrouped {
-    color: var(--text-muted);
-    font-size: 0.78rem;
   }
 
   /* ================================================================
