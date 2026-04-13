@@ -3,7 +3,7 @@
   import firefoxLogo from '../assets/logos/firefox.svg';
   import thunderbirdLogo from '../assets/logos/thunderbird.svg';
   import mobileLogo from '../assets/logos/mobile.svg';
-  import { pluginArtifactVersion, pluginArtifacts } from '../lib/plugin-downloads.generated';
+  import { pluginArtifacts } from '../lib/plugin-downloads.generated';
 
   type DownloadOption = {
     name: string;
@@ -264,13 +264,6 @@
     </div>
   </section>
 
-  <footer class="page-footer">
-    <div class="footer-meta">
-      <span class="footer-version">v{pluginArtifactVersion}</span>
-      <span class="footer-sep">·</span>
-      <span class="footer-note">Browser extensions and Thunderbird add-on bundled with this release</span>
-    </div>
-  </footer>
 </section>
 
 <style>
