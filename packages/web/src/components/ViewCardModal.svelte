@@ -499,9 +499,17 @@
     z-index: 200;
     background: var(--overlay);
     display: flex;
+    flex-direction: column;
+    align-items: center;
     padding: 1rem;
     overflow-y: auto;
     overscroll-behavior: contain;
+  }
+
+  .overlay::before,
+  .overlay::after {
+    content: '';
+    flex: 1;
   }
 
   .modal {
@@ -511,7 +519,7 @@
     width: 100%;
     max-width: 560px;
     padding: 1.5rem;
-    margin: auto;
+    flex-shrink: 0;
   }
 
   .modal-header {
