@@ -278,12 +278,12 @@ export const activeCollectionTodos = derived(
       const groupColor = group?.color || undefined;
       const groupName = group?.name || undefined;
 
-      // Get todos from this collection, open ones only
-      const colTodos = col.itemIds
-        .map(id => itemMap.get(id))
-        .filter((i): i is InboxItem => i !== undefined && (i.isTodo || i.type === 'todo') && !i.completed);
-
-      for (const item of colTodos.slice(0, MAX_PER_COLLECTION)) {
+      // Collect open todos from this collection, stopping at MAX_PER_COLLECTION
+      let count = 0;
+      for (const id of col.itemIds) {
+        if (count >= MAX_PER_COLLECTION) break;
+        const item = itemMap.get(id);
+        if (!item || !(item.isTodo || item.type === 'todo') || item.completed) continue;
         result.push({
           item,
           collectionId: col.id,
@@ -292,6 +292,7 @@ export const activeCollectionTodos = derived(
           groupName,
           groupColor,
         });
+        count++;
       }
     }
 
