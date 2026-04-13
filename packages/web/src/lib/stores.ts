@@ -259,21 +259,24 @@ export interface ActiveCollectionTodo {
   collectionId: string;
   collectionName: string;
   collectionColor: string;
+  groupName: string | undefined;
   groupColor: string | undefined;
 }
 
 export const activeCollectionTodos = derived(
-  [items, collections, groups],
-  ([$items, $collections, $groups]): ActiveCollectionTodo[] => {
+  [items, sortedCollections, groups],
+  ([$items, $sortedCollections, $groups]): ActiveCollectionTodo[] => {
     const MAX_PER_COLLECTION = 5;
     const result: ActiveCollectionTodo[] = [];
     const itemMap = new Map(Object.values($items).map(i => [i.id, i]));
 
-    for (const col of Object.values($collections)) {
+    for (const col of $sortedCollections) {
       if (!col.active) continue;
 
       // Resolve group color if the collection belongs to a group
-      const groupColor = col.groupId ? ($groups[col.groupId]?.color || undefined) : undefined;
+      const group = col.groupId ? $groups[col.groupId] : undefined;
+      const groupColor = group?.color || undefined;
+      const groupName = group?.name || undefined;
 
       // Get todos from this collection, open ones only
       const colTodos = col.itemIds
@@ -286,6 +289,7 @@ export const activeCollectionTodos = derived(
           collectionId: col.id,
           collectionName: col.name,
           collectionColor: col.color || '#6366f1',
+          groupName,
           groupColor,
         });
       }

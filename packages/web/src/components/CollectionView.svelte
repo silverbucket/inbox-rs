@@ -61,7 +61,7 @@
     onclick={ontoggle}
     onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ontoggle(); } }}
     aria-expanded={expanded}
-    aria-label="{expanded ? 'Collapse' : 'Expand'} {collection.name}"
+    aria-label="{expanded ? 'Collapse' : 'Expand'} {collection.name}{collection.active ? ' (active)' : ''}"
   >
     <span class="color-indicator"></span>
     {#if collection.active}

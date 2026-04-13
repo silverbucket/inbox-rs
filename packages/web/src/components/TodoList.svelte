@@ -96,7 +96,7 @@
           </li>
         {/each}
       </ul>
-    {:else if todos.length === 0}
+    {:else if todos.length === 0 && collectionTodos.length === 0}
       <p class="empty">No todos yet.</p>
     {/if}
 
@@ -129,7 +129,7 @@
               <div class="todo-meta">
                 <span
                   class="origin-pill"
-                  title="{ct.groupColor ? 'Group' : ''} › {ct.collectionName}"
+                  title={ct.groupName ? `${ct.groupName} › ${ct.collectionName}` : ct.collectionName}
                   style="--pill-left: {ct.groupColor || ct.collectionColor}; --pill-right: {ct.collectionColor}"
                 >
                   <span class="pill-half pill-left"></span><span class="pill-half pill-right"></span>
