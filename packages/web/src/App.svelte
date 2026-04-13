@@ -82,16 +82,19 @@
   // Lock body scroll when any modal is open (including iOS Safari)
   const anyModalOpen = $derived(!!viewingItem || !!activeModal || showCollectionForm || showGroupForm);
   let savedScrollY = 0;
+  let wasModalOpen = false;
 
   $effect(() => {
-    if (anyModalOpen) {
+    if (anyModalOpen && !wasModalOpen) {
+      // false→true: capture scroll position and lock
       savedScrollY = window.scrollY;
       document.body.style.position = 'fixed';
       document.body.style.top = `-${savedScrollY}px`;
       document.body.style.left = '0';
       document.body.style.right = '0';
       document.body.style.overflow = 'hidden';
-    } else {
+    } else if (!anyModalOpen && wasModalOpen) {
+      // true→false: unlock and restore scroll position
       document.body.style.position = '';
       document.body.style.top = '';
       document.body.style.left = '';
@@ -99,6 +102,7 @@
       document.body.style.overflow = '';
       window.scrollTo(0, savedScrollY);
     }
+    wasModalOpen = anyModalOpen;
   });
 
   function openAdd(type: InboxItemType) {
@@ -368,7 +372,7 @@
   .header-nav {
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 0.3rem;
     padding: 0.25rem;
     border: 1px solid var(--border);

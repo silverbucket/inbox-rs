@@ -189,11 +189,22 @@
     showMoveMenu = !showMoveMenu;
     if (showMoveMenu) {
       updateDropdownPosition();
-      window.addEventListener('scroll', closeMoveMenu, true);
+      window.addEventListener('scroll', handleMoveMenuScroll, true);
       window.addEventListener('resize', closeMoveMenu);
+      window.addEventListener('keydown', handleMoveMenuKeydown);
     } else {
       removeMoveMenuListeners();
     }
+  }
+
+  function handleMoveMenuScroll(event: Event) {
+    const target = event.target;
+    if (target instanceof Element && target.closest('.move-dropdown')) return;
+    closeMoveMenu();
+  }
+
+  function handleMoveMenuKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') closeMoveMenu();
   }
 
   function closeMoveMenu() {
@@ -202,8 +213,9 @@
   }
 
   function removeMoveMenuListeners() {
-    window.removeEventListener('scroll', closeMoveMenu, true);
+    window.removeEventListener('scroll', handleMoveMenuScroll, true);
     window.removeEventListener('resize', closeMoveMenu);
+    window.removeEventListener('keydown', handleMoveMenuKeydown);
   }
 
   function updateDropdownPosition() {
@@ -217,10 +229,10 @@
 
     const openUpward = spaceAbove > spaceBelow;
     const available = openUpward ? spaceAbove : spaceBelow;
-    const maxHeight = Math.max(80, Math.min(available - viewportPadding, dropdownMaxHeight));
+    const maxHeight = Math.max(0, Math.min(available - viewportPadding, dropdownMaxHeight));
 
-    // Clamp horizontal position to keep dropdown on-screen
-    const dropdownWidth = 200; // min-width from CSS
+    // Clamp horizontal position using max possible rendered width
+    const dropdownWidth = Math.min(280, window.innerWidth - viewportPadding * 2);
     const left = Math.max(viewportPadding, Math.min(rect.left, window.innerWidth - dropdownWidth - viewportPadding));
 
     if (openUpward) {
@@ -469,9 +481,8 @@
     class="move-backdrop"
     aria-label="Close move menu"
     onclick={() => closeMoveMenu()}
-    onkeydown={(e) => { if (e.key === 'Escape') closeMoveMenu(); }}
   ></button>
-  <div class="move-dropdown" role="listbox" style={dropdownStyle}>
+  <div class="move-dropdown" style={dropdownStyle}>
     {#if item.collectionId}
       <button class="move-option" onclick={() => { moveItemToCollection(item.id, undefined).catch(e => console.error('Move failed:', e)); showMoveMenu = false; onclose(); }}>
         Return to Inbox
