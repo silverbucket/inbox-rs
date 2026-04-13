@@ -51,6 +51,8 @@
   let showDelete = $state(false);
   let deleting = $state(false);
   let showMoveMenu = $state(false);
+  let moveButtonEl = $state<HTMLButtonElement | null>(null);
+  let dropdownStyle = $state('');
 
   // Audio playback
   const audioSrc = $derived(
@@ -181,6 +183,22 @@
 
   const canMakeTodo = $derived(item.type !== 'todo' && !item.isTodo);
   const canMakeRef = $derived(item.isTodo || item.type === 'todo');
+
+  function toggleMoveMenu() {
+    showMoveMenu = !showMoveMenu;
+    if (showMoveMenu && moveButtonEl) {
+      const rect = moveButtonEl.getBoundingClientRect();
+      const spaceAbove = rect.top;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const dropdownMaxHeight = 240;
+
+      if (spaceAbove > spaceBelow && spaceAbove > dropdownMaxHeight) {
+        dropdownStyle = `bottom: ${window.innerHeight - rect.top + 4}px; left: ${rect.left}px; max-height: ${Math.min(spaceAbove - 16, dropdownMaxHeight)}px;`;
+      } else {
+        dropdownStyle = `top: ${rect.bottom + 4}px; left: ${rect.left}px; max-height: ${Math.min(spaceBelow - 16, dropdownMaxHeight)}px;`;
+      }
+    }
+  }
 
   let convertingRef = $state(false);
 
@@ -391,7 +409,7 @@
         Delete
       </button>
       <div class="move-container">
-        <button class="btn-move" onclick={() => showMoveMenu = !showMoveMenu}>
+        <button class="btn-move" bind:this={moveButtonEl} onclick={toggleMoveMenu}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="7" height="7"></rect>
             <rect x="14" y="3" width="7" height="7"></rect>
@@ -400,27 +418,6 @@
           </svg>
           {item.collectionId ? 'Move' : 'Collect'}
         </button>
-        {#if showMoveMenu}
-          <div class="move-dropdown">
-            {#if item.collectionId}
-              <button class="move-option" onclick={() => { moveItemToCollection(item.id, undefined).catch(e => console.error('Move failed:', e)); showMoveMenu = false; onclose(); }}>
-                Return to Inbox
-              </button>
-              <div class="move-divider"></div>
-            {/if}
-            {#each $sortedCollections as col (col.id)}
-              {#if col.id !== item.collectionId}
-                <button class="move-option" onclick={() => { moveItemToCollection(item.id, col.id).catch(e => console.error('Move failed:', e)); showMoveMenu = false; onclose(); }}>
-                  <span class="move-dot" style="background: {col.color || '#6366f1'}"></span>
-                  {col.name}
-                </button>
-              {/if}
-            {/each}
-            {#if $sortedCollections.length === 0}
-              <div class="move-empty">No collections</div>
-            {/if}
-          </div>
-        {/if}
       </div>
       <button class="btn-cancel" onclick={onclose}>Close</button>
       <button class="btn-edit" onclick={() => onedit(item)}>Edit</button>
@@ -435,6 +432,31 @@
     {/if}
   </div>
 </div>
+
+{#if showMoveMenu}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="move-backdrop" onclick={() => showMoveMenu = false}></div>
+  <div class="move-dropdown" style={dropdownStyle}>
+    {#if item.collectionId}
+      <button class="move-option" onclick={() => { moveItemToCollection(item.id, undefined).catch(e => console.error('Move failed:', e)); showMoveMenu = false; onclose(); }}>
+        Return to Inbox
+      </button>
+      <div class="move-divider"></div>
+    {/if}
+    {#each $sortedCollections as col (col.id)}
+      {#if col.id !== item.collectionId}
+        <button class="move-option" onclick={() => { moveItemToCollection(item.id, col.id).catch(e => console.error('Move failed:', e)); showMoveMenu = false; onclose(); }}>
+          <span class="move-dot" style="background: {col.color || '#6366f1'}"></span>
+          {col.name}
+        </button>
+      {/if}
+    {/each}
+    {#if $sortedCollections.length === 0}
+      <div class="move-empty">No collections</div>
+    {/if}
+  </div>
+{/if}
 
 <style>
   .overlay {
@@ -762,16 +784,22 @@
   }
 
   .move-dropdown {
-    position: absolute;
-    bottom: calc(100% + 0.35rem);
-    left: 0;
-    min-width: 180px;
+    position: fixed;
+    min-width: 200px;
+    max-width: 280px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: 0.3rem;
-    z-index: 10;
-    box-shadow: 0 4px 16px var(--shadow);
+    z-index: 300;
+    box-shadow: 0 8px 24px var(--shadow);
+    overflow-y: auto;
+  }
+
+  .move-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 250;
   }
 
   .move-option {

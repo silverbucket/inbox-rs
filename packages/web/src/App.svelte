@@ -267,7 +267,7 @@
     z-index: 100;
     background: var(--bg);
     border-bottom: 1px solid var(--border);
-    backdrop-filter: blur(12px);
+    width: 100%;
   }
 
   .header-inner {
@@ -354,6 +354,14 @@
     background: color-mix(in srgb, var(--surface) 88%, black 12%);
     min-width: 0;
     flex-shrink: 1;
+    overflow-x: auto;
+    max-width: 100%;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .header-nav::-webkit-scrollbar {
+    display: none;
   }
 
   .header-nav a {
@@ -440,6 +448,7 @@
     max-width: 1200px;
     margin: 0 auto;
     padding: 1.5rem;
+    width: 100%;
   }
 
   .content-layout {
