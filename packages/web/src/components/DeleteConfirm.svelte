@@ -27,9 +27,10 @@
     inset: 0;
     background: var(--overlay);
     display: flex;
-    align-items: center;
+    align-items: safe center;
     justify-content: center;
     z-index: 200;
+    overflow-y: auto;
     overscroll-behavior: contain;
   }
 

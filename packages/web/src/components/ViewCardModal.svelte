@@ -499,9 +499,10 @@
     z-index: 200;
     background: var(--overlay);
     display: flex;
-    align-items: center;
+    align-items: safe center;
     justify-content: center;
     padding: 1rem;
+    overflow-y: auto;
     overscroll-behavior: contain;
   }
 
@@ -511,9 +512,8 @@
     border-radius: var(--radius);
     width: 100%;
     max-width: 560px;
-    max-height: 90vh;
-    overflow-y: auto;
     padding: 1.5rem;
+    margin: auto;
   }
 
   .modal-header {
