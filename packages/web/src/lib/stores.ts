@@ -252,6 +252,54 @@ export const todoItems = derived(items, ($items) => {
 
 export const sortedCollections = orderedDerived<Collection>(collections, 'collectionsOrder');
 
+/** Todos from active collections, surfaced for the main todo list.
+ *  Each todo is annotated with its source collection info. */
+export interface ActiveCollectionTodo {
+  item: InboxItem;
+  collectionId: string;
+  collectionName: string;
+  collectionColor: string;
+  groupName: string | undefined;
+  groupColor: string | undefined;
+}
+
+export const activeCollectionTodos = derived(
+  [items, sortedCollections, groups],
+  ([$items, $sortedCollections, $groups]): ActiveCollectionTodo[] => {
+    const MAX_PER_COLLECTION = 5;
+    const result: ActiveCollectionTodo[] = [];
+    const itemMap = new Map(Object.values($items).map(i => [i.id, i]));
+
+    for (const col of $sortedCollections) {
+      if (!col.active) continue;
+
+      // Resolve group color if the collection belongs to a group
+      const group = col.groupId ? $groups[col.groupId] : undefined;
+      const groupColor = group?.color || undefined;
+      const groupName = group?.name || undefined;
+
+      // Collect open todos from this collection, stopping at MAX_PER_COLLECTION
+      let count = 0;
+      for (const id of col.itemIds) {
+        if (count >= MAX_PER_COLLECTION) break;
+        const item = itemMap.get(id);
+        if (!item || !(item.isTodo || item.type === 'todo') || item.completed) continue;
+        result.push({
+          item,
+          collectionId: col.id,
+          collectionName: col.name,
+          collectionColor: col.color || '#6366f1',
+          groupName,
+          groupColor,
+        });
+        count++;
+      }
+    }
+
+    return result;
+  }
+);
+
 export const collectionItems = derived([items, collections], ([$items, $collections]) => {
   const result: Record<string, InboxItem[]> = {};
   const itemMap = new Map(Object.values($items).map(i => [i.id, i]));

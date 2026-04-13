@@ -99,6 +99,7 @@ export interface Collection {
   createdAt: string;       // ISO 8601
   color?: string;          // optional accent color
   groupId?: string;        // optional group membership
+  active?: boolean;        // when true, top todos surface in main todo list
 }
 
 export interface CollectionGroup {

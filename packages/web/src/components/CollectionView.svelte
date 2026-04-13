@@ -61,9 +61,12 @@
     onclick={ontoggle}
     onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ontoggle(); } }}
     aria-expanded={expanded}
-    aria-label="{expanded ? 'Collapse' : 'Expand'} {collection.name}"
+    aria-label="{expanded ? 'Collapse' : 'Expand'} {collection.name}{collection.active ? ' (active)' : ''}"
   >
     <span class="color-indicator"></span>
+    {#if collection.active}
+      <span class="active-dot" title="Active — todos surfaced in main list"></span>
+    {/if}
     <svg class="chevron" class:open={expanded} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="6 9 12 15 18 9"></polyline>
     </svg>
@@ -352,6 +355,21 @@
     border-radius: 2px;
     background: var(--_col);
     flex-shrink: 0;
+  }
+
+  .active-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--_col);
+    flex-shrink: 0;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--_col) 30%, transparent 70%);
+    animation: pulse-active 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-active {
+    0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--_col) 30%, transparent 70%); }
+    50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--_col) 15%, transparent 85%); }
   }
 
   .chevron {

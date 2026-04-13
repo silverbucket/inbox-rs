@@ -9,6 +9,8 @@
     color = $bindable('#6366f1'),
     showDescription = false,
     description = $bindable(''),
+    showActive = false,
+    active = $bindable(false),
     namePlaceholder = '',
     descriptionPlaceholder = '',
     maxWidth = '440px',
@@ -23,6 +25,8 @@
     color: string;
     showDescription?: boolean;
     description?: string;
+    showActive?: boolean;
+    active?: boolean;
     namePlaceholder?: string;
     descriptionPlaceholder?: string;
     maxWidth?: string;
@@ -70,6 +74,25 @@
           {/each}
         </div>
       </fieldset>
+
+      {#if showActive}
+        <label class="field field-toggle">
+          <span class="toggle-text">
+            <span class="label">Active</span>
+            <span class="toggle-hint">Surface top todos in the main todo list</span>
+          </span>
+          <button
+            type="button"
+            class="toggle-switch"
+            class:on={active}
+            onclick={() => active = !active}
+            role="switch"
+            aria-checked={active}
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </label>
+      {/if}
 
       <div class="actions">
         {#if isEdit && ondelete}
@@ -266,5 +289,62 @@
 
   .actions-spacer {
     flex: 1;
+  }
+
+  .field-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    cursor: pointer;
+  }
+
+  .toggle-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
+  .toggle-text .label {
+    margin-bottom: 0;
+  }
+
+  .toggle-hint {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    opacity: 0.7;
+  }
+
+  .toggle-switch {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    border-radius: 999px;
+    border: none;
+    background: color-mix(in srgb, var(--text-muted) 25%, var(--bg) 75%);
+    cursor: pointer;
+    transition: background 200ms;
+    flex-shrink: 0;
+    padding: 0;
+  }
+
+  .toggle-switch.on {
+    background: var(--accent);
+  }
+
+  .toggle-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: white;
+    transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+
+  .toggle-switch.on .toggle-knob {
+    transform: translateX(18px);
   }
 </style>

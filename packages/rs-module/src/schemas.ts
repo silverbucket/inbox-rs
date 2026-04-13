@@ -202,6 +202,7 @@ export const collectionSchema = {
     createdAt: { type: 'string' },
     color: { type: 'string' },
     groupId: { type: 'string' },
+    active: { type: 'boolean' },
   },
   required: ['id', 'name', 'itemIds', 'createdAt']
 };
