@@ -132,7 +132,7 @@
                   title={ct.groupName ? `${ct.groupName} › ${ct.collectionName}` : ct.collectionName}
                   style="--pill-left: {ct.groupColor || ct.collectionColor}; --pill-right: {ct.collectionColor}"
                 >
-                  <span class="pill-half pill-left"></span><span class="pill-half pill-right"></span>
+                  <span class="pill-swatch"></span>
                   <span class="pill-label">{ct.collectionName}</span>
                 </span>
                 {#if badge}
@@ -458,27 +458,16 @@
   .origin-pill {
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
-    height: 18px;
-    border-radius: 999px;
-    overflow: hidden;
+    gap: 0.35rem;
     flex-shrink: 0;
-    position: relative;
   }
 
-  .pill-half {
-    width: 7px;
-    height: 100%;
-  }
-
-  .pill-left {
-    background: var(--pill-left);
-    border-radius: 999px 0 0 999px;
-  }
-
-  .pill-right {
-    background: var(--pill-right);
-    border-radius: 0 999px 999px 0;
+  .pill-swatch {
+    width: 20px;
+    height: 10px;
+    border-radius: 999px;
+    background: linear-gradient(to right, var(--pill-left) 50%, var(--pill-right) 50%);
+    flex-shrink: 0;
   }
 
   .pill-label {
@@ -486,7 +475,6 @@
     font-weight: 600;
     letter-spacing: 0.02em;
     color: var(--text-muted);
-    padding-right: 0.4rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
