@@ -472,36 +472,37 @@
         {deleting}
       />
     {/if}
+
+    {#if showMoveMenu}
+      <button
+        type="button"
+        class="move-backdrop"
+        tabindex="-1"
+        aria-label="Close move menu"
+        onclick={() => closeMoveMenu()}
+      ></button>
+      <div class="move-dropdown" style={dropdownStyle}>
+        {#if item.collectionId}
+          <button class="move-option" onclick={() => { moveItemToCollection(item.id, undefined).catch(e => console.error('Move failed:', e)); showMoveMenu = false; onclose(); }}>
+            Return to Inbox
+          </button>
+          <div class="move-divider"></div>
+        {/if}
+        {#each $sortedCollections as col (col.id)}
+          {#if col.id !== item.collectionId}
+            <button class="move-option" onclick={() => { moveItemToCollection(item.id, col.id).catch(e => console.error('Move failed:', e)); showMoveMenu = false; onclose(); }}>
+              <span class="move-dot" style="background: {col.color || '#6366f1'}"></span>
+              {col.name}
+            </button>
+          {/if}
+        {/each}
+        {#if $sortedCollections.length === 0}
+          <div class="move-empty">No collections</div>
+        {/if}
+      </div>
+    {/if}
   </div>
 </div>
-
-{#if showMoveMenu}
-  <button
-    type="button"
-    class="move-backdrop"
-    aria-label="Close move menu"
-    onclick={() => closeMoveMenu()}
-  ></button>
-  <div class="move-dropdown" style={dropdownStyle}>
-    {#if item.collectionId}
-      <button class="move-option" onclick={() => { moveItemToCollection(item.id, undefined).catch(e => console.error('Move failed:', e)); showMoveMenu = false; onclose(); }}>
-        Return to Inbox
-      </button>
-      <div class="move-divider"></div>
-    {/if}
-    {#each $sortedCollections as col (col.id)}
-      {#if col.id !== item.collectionId}
-        <button class="move-option" onclick={() => { moveItemToCollection(item.id, col.id).catch(e => console.error('Move failed:', e)); showMoveMenu = false; onclose(); }}>
-          <span class="move-dot" style="background: {col.color || '#6366f1'}"></span>
-          {col.name}
-        </button>
-      {/if}
-    {/each}
-    {#if $sortedCollections.length === 0}
-      <div class="move-empty">No collections</div>
-    {/if}
-  </div>
-{/if}
 
 <style>
   .overlay {
@@ -527,7 +528,7 @@
 
   @media (max-width: 600px), (display-mode: standalone) {
     .overlay {
-      padding: 0;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
       background: var(--bg);
     }
 

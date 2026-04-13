@@ -492,7 +492,7 @@
 
   @media (max-width: 600px), (display-mode: standalone) {
     .overlay {
-      padding: 0;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
       background: var(--bg);
     }
 
