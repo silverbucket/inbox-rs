@@ -514,6 +514,20 @@
     margin-right: auto;
   }
 
+  @media (max-width: 600px), (display-mode: standalone) {
+    .overlay {
+      padding: 0;
+      background: var(--bg);
+    }
+
+    .modal {
+      max-width: none;
+      min-height: 100%;
+      border: none;
+      border-radius: 0;
+    }
+  }
+
   .modal-header {
     display: flex;
     align-items: center;

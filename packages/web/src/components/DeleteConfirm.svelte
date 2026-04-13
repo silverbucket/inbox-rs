@@ -29,7 +29,10 @@
     overflow-y: auto;
     overscroll-behavior: contain;
     z-index: 200;
-    padding: 3rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
   }
 
   .dialog {
@@ -41,8 +44,6 @@
     max-width: 340px;
     width: 100%;
     box-shadow: 0 12px 40px var(--shadow);
-    margin-left: auto;
-    margin-right: auto;
   }
 
   p {
