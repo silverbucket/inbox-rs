@@ -79,6 +79,32 @@
     void updateConfig({ todosCollapsed: !v });
   }
 
+  // Lock body scroll when any modal is open (including iOS Safari)
+  const anyModalOpen = $derived(!!viewingItem || !!activeModal || showCollectionForm || showGroupForm);
+  let savedScrollY = 0;
+  let wasModalOpen = false;
+
+  $effect(() => {
+    if (anyModalOpen && !wasModalOpen) {
+      // false→true: capture scroll position and lock
+      savedScrollY = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${savedScrollY}px`;
+      document.body.style.left = '0';
+      document.body.style.right = '0';
+      document.body.style.overflow = 'hidden';
+    } else if (!anyModalOpen && wasModalOpen) {
+      // true→false: unlock and restore scroll position
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
+      document.body.style.overflow = '';
+      window.scrollTo(0, savedScrollY);
+    }
+    wasModalOpen = anyModalOpen;
+  });
+
   function openAdd(type: InboxItemType) {
     editingItem = undefined;
     activeModal = type;
@@ -267,7 +293,7 @@
     z-index: 100;
     background: var(--bg);
     border-bottom: 1px solid var(--border);
-    backdrop-filter: blur(12px);
+    width: 100%;
   }
 
   .header-inner {
@@ -346,7 +372,7 @@
   .header-nav {
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 0.3rem;
     padding: 0.25rem;
     border: 1px solid var(--border);
@@ -354,6 +380,14 @@
     background: color-mix(in srgb, var(--surface) 88%, black 12%);
     min-width: 0;
     flex-shrink: 1;
+    overflow-x: auto;
+    max-width: 100%;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .header-nav::-webkit-scrollbar {
+    display: none;
   }
 
   .header-nav a {
@@ -440,6 +474,7 @@
     max-width: 1200px;
     margin: 0 auto;
     padding: 1.5rem;
+    width: 100%;
   }
 
   .content-layout {

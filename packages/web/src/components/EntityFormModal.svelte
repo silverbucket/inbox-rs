@@ -123,10 +123,9 @@
     inset: 0;
     z-index: 200;
     background: var(--overlay);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 3rem 1rem;
   }
 
   .modal {
@@ -135,6 +134,22 @@
     border-radius: var(--radius);
     width: 100%;
     padding: 1.5rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  @media (max-width: 600px), (display-mode: standalone) {
+    .overlay {
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      background: var(--bg);
+    }
+
+    .modal {
+      max-width: none;
+      min-height: 100%;
+      border: none;
+      border-radius: 0;
+    }
   }
 
   h2 {

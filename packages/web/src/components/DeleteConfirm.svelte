@@ -26,10 +26,13 @@
     position: fixed;
     inset: 0;
     background: var(--overlay);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    z-index: 200;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 200;
+    padding: 1rem;
   }
 
   .dialog {

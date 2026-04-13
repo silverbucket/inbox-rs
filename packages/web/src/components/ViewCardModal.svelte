@@ -51,6 +51,8 @@
   let showDelete = $state(false);
   let deleting = $state(false);
   let showMoveMenu = $state(false);
+  let moveButtonEl = $state<HTMLButtonElement | null>(null);
+  let dropdownStyle = $state('');
 
   // Audio playback
   const audioSrc = $derived(
@@ -91,6 +93,7 @@
 
   onDestroy(() => {
     if (docBlobUrl) URL.revokeObjectURL(docBlobUrl);
+    removeMoveMenuListeners();
   });
 
   async function handleTranscribe() {
@@ -181,6 +184,63 @@
 
   const canMakeTodo = $derived(item.type !== 'todo' && !item.isTodo);
   const canMakeRef = $derived(item.isTodo || item.type === 'todo');
+
+  function toggleMoveMenu() {
+    showMoveMenu = !showMoveMenu;
+    if (showMoveMenu) {
+      updateDropdownPosition();
+      window.addEventListener('scroll', handleMoveMenuScroll, true);
+      window.addEventListener('resize', closeMoveMenu);
+      window.addEventListener('keydown', handleMoveMenuKeydown);
+    } else {
+      removeMoveMenuListeners();
+    }
+  }
+
+  function handleMoveMenuScroll(event: Event) {
+    const target = event.target;
+    if (target instanceof Element && target.closest('.move-dropdown')) return;
+    closeMoveMenu();
+  }
+
+  function handleMoveMenuKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') closeMoveMenu();
+  }
+
+  function closeMoveMenu() {
+    showMoveMenu = false;
+    removeMoveMenuListeners();
+  }
+
+  function removeMoveMenuListeners() {
+    window.removeEventListener('scroll', handleMoveMenuScroll, true);
+    window.removeEventListener('resize', closeMoveMenu);
+    window.removeEventListener('keydown', handleMoveMenuKeydown);
+  }
+
+  function updateDropdownPosition() {
+    if (!moveButtonEl) return;
+    const rect = moveButtonEl.getBoundingClientRect();
+    const spaceAbove = rect.top;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const dropdownMaxHeight = 240;
+    const viewportPadding = 16;
+    const gap = 4;
+
+    const openUpward = spaceAbove > spaceBelow;
+    const available = openUpward ? spaceAbove : spaceBelow;
+    const maxHeight = Math.max(0, Math.min(available - viewportPadding, dropdownMaxHeight));
+
+    // Clamp horizontal position using max possible rendered width
+    const dropdownWidth = Math.min(280, window.innerWidth - viewportPadding * 2);
+    const left = Math.max(viewportPadding, Math.min(rect.left, window.innerWidth - dropdownWidth - viewportPadding));
+
+    if (openUpward) {
+      dropdownStyle = `bottom: ${window.innerHeight - rect.top + gap}px; left: ${left}px; max-height: ${maxHeight}px;`;
+    } else {
+      dropdownStyle = `top: ${rect.bottom + gap}px; left: ${left}px; max-height: ${maxHeight}px;`;
+    }
+  }
 
   let convertingRef = $state(false);
 
@@ -391,7 +451,7 @@
         Delete
       </button>
       <div class="move-container">
-        <button class="btn-move" onclick={() => showMoveMenu = !showMoveMenu}>
+        <button class="btn-move" bind:this={moveButtonEl} onclick={toggleMoveMenu}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="7" height="7"></rect>
             <rect x="14" y="3" width="7" height="7"></rect>
@@ -400,27 +460,6 @@
           </svg>
           {item.collectionId ? 'Move' : 'Collect'}
         </button>
-        {#if showMoveMenu}
-          <div class="move-dropdown">
-            {#if item.collectionId}
-              <button class="move-option" onclick={() => { moveItemToCollection(item.id, undefined).catch(e => console.error('Move failed:', e)); showMoveMenu = false; onclose(); }}>
-                Return to Inbox
-              </button>
-              <div class="move-divider"></div>
-            {/if}
-            {#each $sortedCollections as col (col.id)}
-              {#if col.id !== item.collectionId}
-                <button class="move-option" onclick={() => { moveItemToCollection(item.id, col.id).catch(e => console.error('Move failed:', e)); showMoveMenu = false; onclose(); }}>
-                  <span class="move-dot" style="background: {col.color || '#6366f1'}"></span>
-                  {col.name}
-                </button>
-              {/if}
-            {/each}
-            {#if $sortedCollections.length === 0}
-              <div class="move-empty">No collections</div>
-            {/if}
-          </div>
-        {/if}
       </div>
       <button class="btn-cancel" onclick={onclose}>Close</button>
       <button class="btn-edit" onclick={() => onedit(item)}>Edit</button>
@@ -433,6 +472,35 @@
         {deleting}
       />
     {/if}
+
+    {#if showMoveMenu}
+      <button
+        type="button"
+        class="move-backdrop"
+        tabindex="-1"
+        aria-label="Close move menu"
+        onclick={() => closeMoveMenu()}
+      ></button>
+      <div class="move-dropdown" style={dropdownStyle}>
+        {#if item.collectionId}
+          <button class="move-option" onclick={() => { moveItemToCollection(item.id, undefined).catch(e => console.error('Move failed:', e)); closeMoveMenu(); onclose(); }}>
+            Return to Inbox
+          </button>
+          <div class="move-divider"></div>
+        {/if}
+        {#each $sortedCollections as col (col.id)}
+          {#if col.id !== item.collectionId}
+            <button class="move-option" onclick={() => { moveItemToCollection(item.id, col.id).catch(e => console.error('Move failed:', e)); closeMoveMenu(); onclose(); }}>
+              <span class="move-dot" style="background: {col.color || '#6366f1'}"></span>
+              {col.name}
+            </button>
+          {/if}
+        {/each}
+        {#if $sortedCollections.length === 0}
+          <div class="move-empty">No collections</div>
+        {/if}
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -442,10 +510,9 @@
     inset: 0;
     z-index: 200;
     background: var(--overlay);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 3rem 1rem;
   }
 
   .modal {
@@ -454,9 +521,23 @@
     border-radius: var(--radius);
     width: 100%;
     max-width: 560px;
-    max-height: 90vh;
-    overflow-y: auto;
     padding: 1.5rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  @media (max-width: 600px), (display-mode: standalone) {
+    .overlay {
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      background: var(--bg);
+    }
+
+    .modal {
+      max-width: none;
+      min-height: 100%;
+      border: none;
+      border-radius: 0;
+    }
   }
 
   .modal-header {
@@ -762,16 +843,26 @@
   }
 
   .move-dropdown {
-    position: absolute;
-    bottom: calc(100% + 0.35rem);
-    left: 0;
-    min-width: 180px;
+    position: fixed;
+    min-width: 200px;
+    max-width: 280px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: 0.3rem;
-    z-index: 10;
-    box-shadow: 0 4px 16px var(--shadow);
+    z-index: 300;
+    box-shadow: 0 8px 24px var(--shadow);
+    overflow-y: auto;
+  }
+
+  .move-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 250;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: default;
   }
 
   .move-option {
