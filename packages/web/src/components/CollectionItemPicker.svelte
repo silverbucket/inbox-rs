@@ -65,18 +65,9 @@
     inset: 0;
     z-index: 200;
     background: var(--overlay);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 1rem;
     overflow-y: auto;
     overscroll-behavior: contain;
-  }
-
-  .overlay::before,
-  .overlay::after {
-    content: '';
-    flex: 1;
+    padding: 3rem 1rem;
   }
 
   .modal {
@@ -88,8 +79,9 @@
     max-height: 80vh;
     display: flex;
     flex-direction: column;
-    flex-shrink: 0;
     padding: 1.5rem;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   h2 {

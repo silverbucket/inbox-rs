@@ -26,18 +26,10 @@
     position: fixed;
     inset: 0;
     background: var(--overlay);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    z-index: 200;
     overflow-y: auto;
     overscroll-behavior: contain;
-  }
-
-  .overlay::before,
-  .overlay::after {
-    content: '';
-    flex: 1;
+    z-index: 200;
+    padding: 3rem 1rem;
   }
 
   .dialog {
@@ -49,7 +41,8 @@
     max-width: 340px;
     width: 100%;
     box-shadow: 0 12px 40px var(--shadow);
-    flex-shrink: 0;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   p {
