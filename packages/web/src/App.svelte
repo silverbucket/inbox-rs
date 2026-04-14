@@ -19,7 +19,6 @@
   type Route =
     | { page: 'home' }
     | { page: 'plugins' }
-    | { page: 'collections' }
     | { page: 'group'; groupId: string };
 
   let activeModal = $state<InboxItemType | null>(null);
@@ -33,11 +32,18 @@
     if (typeof window === 'undefined') return { page: 'home' };
     const hash = window.location.hash;
     if (hash === '#/plugins') return { page: 'plugins' };
-    if (hash === '#/collections') return { page: 'collections' };
+    if (hash === '#/collections') return { page: 'home' };
     const groupMatch = hash.match(/^#\/group\/(.+)$/);
     if (groupMatch) return { page: 'group', groupId: groupMatch[1] };
     return { page: 'home' };
   }
+
+  // Legacy #/collections redirect: wait for groups to load, then redirect
+  $effect(() => {
+    if (window.location.hash === '#/collections' && $sortedGroups.length > 0) {
+      window.location.hash = `#/group/${$sortedGroups[0].id}`;
+    }
+  });
 
   let route = $state<Route>(getRouteFromHash());
   let userToggledTodos = false;
@@ -163,7 +169,6 @@
     </div>
     <nav class="header-nav" aria-label="Primary">
       <a class:active={route.page === 'home'} aria-current={route.page === 'home' ? 'page' : undefined} href="#/">Inbox</a>
-      <a class:active={route.page === 'collections'} aria-current={route.page === 'collections' ? 'page' : undefined} href="#/collections">Collections</a>
       {#if $connected}
         {#each $sortedGroups as group (group.id)}
           <a
@@ -194,16 +199,6 @@
 <main>
   {#if route.page === 'plugins'}
     <PluginsPage />
-  {:else if route.page === 'collections'}
-    {#if $connected}
-      <CollectionsPage onselect={openView} oncreate={() => showCollectionForm = true} />
-    {:else}
-      <div class="empty-state">
-        <div class="empty-icon">📥</div>
-        <h2>Connect your storage</h2>
-        <p>Enter your remoteStorage address above to view your collections.</p>
-      </div>
-    {/if}
   {:else if route.page === 'group'}
     {#if $connected}
       <CollectionsPage onselect={openView} oncreate={() => showCollectionForm = true} groupId={route.groupId} />

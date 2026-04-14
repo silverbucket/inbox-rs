@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack, onDestroy } from 'svelte';
   import type { InboxItem } from '@inbox-rs/rs-module';
-  import { deleteItem, storeItem, blobUrls, connected, ungroupedCollections, sortedGroups, groupCollections, moveItemToCollection, loadFileBlobUrl } from '../lib/stores';
+  import { deleteItem, storeItem, blobUrls, connected, sortedGroups, groupCollections, moveItemToCollection, loadFileBlobUrl } from '../lib/stores';
   import rs from '../lib/rs';
   import { transcribeAudio } from '../lib/transcribe';
   import ShareButton from './ShareButton.svelte';
@@ -488,14 +488,6 @@
           </button>
           <div class="move-divider"></div>
         {/if}
-        {#each $ungroupedCollections as col (col.id)}
-          {#if col.id !== item.collectionId}
-            <button class="move-option" onclick={() => { moveItemToCollection(item.id, col.id).catch(e => console.error('Move failed:', e)); closeMoveMenu(); onclose(); }}>
-              <span class="move-dot" style="background: {col.color || '#6366f1'}"></span>
-              {col.name}
-            </button>
-          {/if}
-        {/each}
         {#each $sortedGroups as group (group.id)}
           {#each ($groupCollections[group.id] ?? []) as col (col.id)}
             {#if col.id !== item.collectionId}
@@ -506,7 +498,7 @@
             {/if}
           {/each}
         {/each}
-        {#if $ungroupedCollections.length === 0 && $sortedGroups.length === 0}
+        {#if $sortedGroups.length === 0}
           <div class="move-empty">No collections</div>
         {/if}
       </div>

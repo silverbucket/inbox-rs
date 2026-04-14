@@ -3,18 +3,18 @@
   import { get } from 'svelte/store';
   import { dndzone } from 'svelte-dnd-action';
   import {
-    sortedCollections, storeCollection, deleteCollection, reorderCollections,
-    groups, groupCollections, ungroupedCollections, storeGroup, deleteGroup, moveCollectionToGroup,
+    storeCollection, deleteCollection,
+    groups, groupCollections, sortedGroups, storeGroup, deleteGroup, moveCollectionToGroup,
     appConfig, updateConfig, reorderGroupCollections
   } from '../lib/stores';
   import CollectionView from './CollectionView.svelte';
   import CollectionFormModal from './CollectionFormModal.svelte';
   import GroupFormModal from './GroupFormModal.svelte';
 
-  let { onselect, oncreate, groupId = undefined }: {
+  let { onselect, oncreate, groupId }: {
     onselect: (item: InboxItem) => void;
     oncreate: () => void;
-    groupId?: string;
+    groupId: string;
   } = $props();
 
   let expandedIds = $state<Set<string>>(new Set($appConfig.expandedCollections ?? []));
@@ -42,13 +42,7 @@
 
   const currentGroup = $derived(groupId ? $groups[groupId] : undefined);
 
-  const filteredCollections = $derived.by(() => {
-    if (groupId) {
-      const grpCols = $groupCollections[groupId];
-      return grpCols ?? [];
-    }
-    return $ungroupedCollections;
-  });
+  const filteredCollections = $derived($groupCollections[groupId] ?? []);
 
   // DnD: local mutable copy of filtered collections
   let dndCollections = $state<Array<Collection & { id: string }>>([]);
@@ -65,17 +59,7 @@
     dndCollections = e.detail.items;
     const newIds = dndCollections.map(c => c.id);
     try {
-      if (groupId) {
-        await reorderGroupCollections(groupId, newIds);
-      } else {
-        // Merge reordered subset into full order, preserving grouped collections' positions
-        let currentOrder: string[] = [];
-        currentOrder = get(appConfig).collectionsOrder ?? [];
-        const reorderedSet = new Set(newIds);
-        const merged = currentOrder.filter(id => !reorderedSet.has(id));
-        merged.push(...newIds);
-        await reorderCollections(merged);
-      }
+      await reorderGroupCollections(groupId, newIds);
     } catch (error) {
       console.error('Failed to reorder collections', error);
       dndCollections = previous;
@@ -115,7 +99,8 @@
     if (!groupId) return;
     editingGroup = null;
     await deleteGroup(groupId);
-    window.location.hash = '#/collections';
+    const remaining = get(sortedGroups);
+    window.location.hash = remaining.length > 0 ? `#/group/${remaining[0].id}` : '#/';
   }
 </script>
 
@@ -134,8 +119,6 @@
           </button>
         </div>
       </div>
-    {:else}
-      <h2>Collections</h2>
     {/if}
     <button class="btn-new" onclick={oncreate}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -192,7 +175,7 @@
     group={editingGroup}
     onclose={() => editingGroup = null}
     onsave={handleEditGroup}
-    ondelete={groupId ? handleDeleteGroup : undefined}
+    ondelete={filteredCollections.length === 0 ? handleDeleteGroup : undefined}
   />
 {/if}
 
