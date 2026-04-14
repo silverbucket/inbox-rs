@@ -30,8 +30,22 @@
   let showCompleted = $state(false);
   let addingType = $state<InboxItemType | null>(null);
   let showMoveMenu = $state(false);
+  let moveButtonEl = $state<HTMLButtonElement>();
+  let menuPos = $state({ top: 0, right: 0 });
 
   const availableGroups = $derived($sortedGroups);
+
+  function toggleMoveMenu(e: Event) {
+    e.stopPropagation();
+    if (!showMoveMenu && moveButtonEl) {
+      const rect = moveButtonEl.getBoundingClientRect();
+      menuPos = {
+        top: rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+      };
+    }
+    showMoveMenu = !showMoveMenu;
+  }
 
   async function handleMoveToGroup(groupId: string | undefined) {
     showMoveMenu = false;
@@ -101,7 +115,7 @@
       </button>
       {#if availableGroups.length > 0}
         <div class="move-menu-wrapper">
-          <button class="btn-header" aria-label="Move to group" aria-haspopup="menu" aria-expanded={showMoveMenu} title="Move to group" onclick={(e) => { e.stopPropagation(); showMoveMenu = !showMoveMenu; }}>
+          <button class="btn-header" bind:this={moveButtonEl} aria-label="Move to group" aria-haspopup="menu" aria-expanded={showMoveMenu} title="Move to group" onclick={toggleMoveMenu}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
               <line x1="12" y1="11" x2="12" y2="17"></line>
@@ -112,7 +126,7 @@
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div class="move-menu-backdrop" onclick={(e) => { e.stopPropagation(); showMoveMenu = false; }}></div>
-            <div class="move-menu" onclick={(e) => e.stopPropagation()}>
+            <div class="move-menu" style="top: {menuPos.top}px; right: {menuPos.right}px;" onclick={(e) => e.stopPropagation()}>
               <div class="move-menu-label">Move to group</div>
               <button
                 class="move-menu-item"
@@ -503,12 +517,9 @@
   }
 
   .move-menu {
-    position: absolute;
-    top: 100%;
-    right: 0;
+    position: fixed;
     z-index: 50;
     min-width: 180px;
-    margin-top: 0.25rem;
     padding: 0.35rem;
     background: var(--surface);
     border: 1px solid var(--border);
