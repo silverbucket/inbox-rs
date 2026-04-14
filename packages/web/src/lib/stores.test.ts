@@ -22,8 +22,10 @@ vi.mock('./rs', () => {
       getAllCollections: vi.fn().mockResolvedValue({}),
       getAllGroups: vi.fn().mockResolvedValue({}),
       onChange: vi.fn(),
-      store: vi.fn(),
-      remove: vi.fn(),
+      store: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
+      storeCollection: vi.fn().mockResolvedValue(undefined),
+      storeGroup: vi.fn().mockResolvedValue(undefined),
     },
   };
   return {
@@ -38,7 +40,11 @@ vi.mock('./clean-for-storage', () => ({
   cleanForStorage: (x: any) => x,
 }));
 
-import { blobUrls, connected, loadFileBlobUrl } from './stores';
+import {
+  blobUrls, connected, loadFileBlobUrl,
+  collections, groups, groupCollections, moveCollectionToGroup,
+} from './stores';
+import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
 
 describe('loadFileBlobUrl', () => {
   beforeEach(() => {
@@ -152,5 +158,140 @@ describe('loadFileBlobUrl', () => {
     });
 
     expect(mockFetchFileBlobUrl).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ---- Helpers for collection/group tests ----
+
+function makeCollection(id: string, groupId?: string): Collection {
+  return {
+    id,
+    name: `Collection ${id}`,
+    itemIds: [],
+    createdAt: new Date().toISOString(),
+    ...(groupId ? { groupId } : {}),
+  };
+}
+
+function makeGroup(id: string, collectionIds: string[] = []): CollectionGroup {
+  return {
+    id,
+    name: `Group ${id}`,
+    collectionIds,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+describe('groupCollections', () => {
+  beforeEach(() => {
+    collections.set({});
+    groups.set({});
+  });
+
+  it('shows collections listed in group.collectionIds', () => {
+    const col1 = makeCollection('c1', 'g1');
+    const col2 = makeCollection('c2', 'g1');
+    const group = makeGroup('g1', ['c1', 'c2']);
+
+    collections.set({ c1: col1, c2: col2 });
+    groups.set({ g1: group });
+
+    const result = get(groupCollections);
+    expect(result['g1']).toHaveLength(2);
+    expect(result['g1'][0].id).toBe('c1');
+    expect(result['g1'][1].id).toBe('c2');
+  });
+
+  it('shows collections with groupId but missing from collectionIds', () => {
+    const col1 = makeCollection('c1', 'g1');
+    const col2 = makeCollection('c2', 'g1');
+    // Group only knows about c1, but c2 also has groupId pointing here
+    const group = makeGroup('g1', ['c1']);
+
+    collections.set({ c1: col1, c2: col2 });
+    groups.set({ g1: group });
+
+    const result = get(groupCollections);
+    expect(result['g1']).toHaveLength(2);
+    expect(result['g1'][0].id).toBe('c1');
+    expect(result['g1'][1].id).toBe('c2');
+  });
+
+  it('preserves collectionIds order and appends orphans after', () => {
+    const col1 = makeCollection('c1', 'g1');
+    const col2 = makeCollection('c2', 'g1');
+    const col3 = makeCollection('c3', 'g1');
+    // Group has c2 then c1 in order; c3 is orphaned
+    const group = makeGroup('g1', ['c2', 'c1']);
+
+    collections.set({ c1: col1, c2: col2, c3: col3 });
+    groups.set({ g1: group });
+
+    const result = get(groupCollections);
+    expect(result['g1'].map(c => c.id)).toEqual(['c2', 'c1', 'c3']);
+  });
+
+  it('filters out stale collectionIds entries', () => {
+    const col1 = makeCollection('c1', 'g1');
+    // Group references c1 and c_deleted, but c_deleted doesn't exist
+    const group = makeGroup('g1', ['c1', 'c_deleted']);
+
+    collections.set({ c1: col1 });
+    groups.set({ g1: group });
+
+    const result = get(groupCollections);
+    expect(result['g1']).toHaveLength(1);
+    expect(result['g1'][0].id).toBe('c1');
+  });
+
+  it('returns empty array for group with no collections', () => {
+    const group = makeGroup('g1', []);
+    groups.set({ g1: group });
+
+    const result = get(groupCollections);
+    expect(result['g1']).toEqual([]);
+  });
+});
+
+describe('moveCollectionToGroup', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    collections.set({});
+    groups.set({});
+  });
+
+  it('updates collection groupId and group collectionIds', async () => {
+    const col = makeCollection('c1');
+    const group = makeGroup('g1', []);
+
+    collections.set({ c1: col });
+    groups.set({ g1: group });
+
+    await moveCollectionToGroup('c1', 'g1');
+
+    const updatedCol = get(collections)['c1'];
+    expect(updatedCol.groupId).toBe('g1');
+
+    const updatedGroup = get(groups)['g1'];
+    expect(updatedGroup.collectionIds).toContain('c1');
+  });
+
+  it('removes collection from old group when moving to new group', async () => {
+    const col = makeCollection('c1', 'g1');
+    const oldGroup = makeGroup('g1', ['c1']);
+    const newGroup = makeGroup('g2', []);
+
+    collections.set({ c1: col });
+    groups.set({ g1: oldGroup, g2: newGroup });
+
+    await moveCollectionToGroup('c1', 'g2');
+
+    const updatedOldGroup = get(groups)['g1'];
+    expect(updatedOldGroup.collectionIds).not.toContain('c1');
+
+    const updatedNewGroup = get(groups)['g2'];
+    expect(updatedNewGroup.collectionIds).toContain('c1');
+
+    expect(get(collections)['c1'].groupId).toBe('g2');
   });
 });
