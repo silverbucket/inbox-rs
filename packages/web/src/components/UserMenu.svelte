@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import rs from '../lib/rs';
   import { connected, syncing, userAddress, userSettings, updateUserSettings } from '../lib/stores';
 
@@ -7,6 +8,13 @@
   let connecting = $state(false);
   let editingAbbrev = $state(false);
   let abbrevInput = $state('');
+  let abbrevInputEl = $state<HTMLInputElement | null>(null);
+
+  // Theme: synced settings take priority, localStorage is the offline fallback
+  let localTheme = $state<'system' | 'light' | 'dark'>(
+    (localStorage.getItem('inbox-rs:theme') as 'system' | 'light' | 'dark') || 'system'
+  );
+  const theme = $derived($userSettings.theme ?? localTheme);
 
   function applyTheme(t: 'system' | 'light' | 'dark') {
     const root = document.documentElement;
@@ -20,14 +28,19 @@
   }
 
   function setTheme(t: 'system' | 'light' | 'dark') {
+    localTheme = t;
+    localStorage.setItem('inbox-rs:theme', t);
     applyTheme(t);
-    void updateUserSettings({ theme: t });
+    if ($connected) {
+      void updateUserSettings({ theme: t });
+    }
   }
 
-  // Apply theme from synced settings (also handles initial load)
-  const theme = $derived($userSettings.theme ?? 'system');
+  // Apply theme reactively (handles synced settings arriving after connect)
   $effect(() => {
     applyTheme(theme);
+    // Keep localStorage in sync so it's available as fallback next load
+    localStorage.setItem('inbox-rs:theme', theme);
   });
 
   function toggle() {
@@ -88,9 +101,11 @@
   );
   const initials = $derived($userSettings.abbreviation || autoInitials);
 
-  function startEditAbbrev() {
+  async function startEditAbbrev() {
     abbrevInput = $userSettings.abbreviation ?? '';
     editingAbbrev = true;
+    await tick();
+    abbrevInputEl?.focus();
   }
 
   function saveAbbrev() {
@@ -139,11 +154,11 @@
               <input
                 class="abbrev-input"
                 type="text"
+                bind:this={abbrevInputEl}
                 bind:value={abbrevInput}
                 maxlength="3"
                 placeholder={autoInitials}
                 onkeydown={(e) => { if (e.key === 'Escape') cancelEditAbbrev(); }}
-                autofocus
               />
               <button type="submit" class="abbrev-btn save" aria-label="Save">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
