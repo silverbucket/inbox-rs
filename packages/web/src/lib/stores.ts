@@ -77,17 +77,15 @@ function orderedDerived<T extends { id: string; createdAt: string }>(
   configOrderKey: 'collectionsOrder' | 'groupsOrder',
 ): Readable<T[]> {
   return derived([entityStore, appConfig], ([$entities, $config]) => {
-    const items = Object.values($entities);
-    const order = $config[configOrderKey];
-    if (order?.length) {
-      const orderIndex = new Map(order.map((id, i) => [id, i]));
-      return items.sort((a, b) => (orderIndex.get(a.id) ?? Infinity) - (orderIndex.get(b.id) ?? Infinity));
-    }
-    return items.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    return sortWithConfiguredOrder(
+      Object.values($entities),
+      $config[configOrderKey],
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
   });
 }
 
-async function removeFromOrderConfig(id: string, key: 'collectionsOrder' | 'groupsOrder') {
+async function removeFromOrderConfig(id: string, key: 'collectionsOrder' | 'groupsOrder' | 'todosOrder') {
   const currentOrder = get(appConfig)[key] ?? [];
   if (currentOrder.includes(id)) {
     await updateConfig({ [key]: currentOrder.filter((x: string) => x !== id) });
@@ -275,6 +273,30 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
+function sortWithConfiguredOrder<T extends { id: string }>(
+  entities: T[],
+  order: string[] | undefined,
+  fallbackCompare: (a: T, b: T) => number,
+): T[] {
+  const orderIndex = order?.length
+    ? new Map(order.map((id, index) => [id, index]))
+    : undefined;
+
+  return entities.sort((a, b) => {
+    if (orderIndex) {
+      const aIndex = orderIndex.get(a.id);
+      const bIndex = orderIndex.get(b.id);
+      if (aIndex !== undefined || bIndex !== undefined) {
+        if (aIndex === undefined) return 1;
+        if (bIndex === undefined) return -1;
+        if (aIndex !== bIndex) return aIndex - bIndex;
+      }
+    }
+
+    return fallbackCompare(a, b);
+  });
+}
+
 // ---- Derived stores ----
 
 export const sortedItems = derived(items, ($items) => {
@@ -283,15 +305,22 @@ export const sortedItems = derived(items, ($items) => {
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 });
 
-export const todoItems = derived(items, ($items) => {
-  return Object.values($items)
-    .filter(i => (i.isTodo || i.type === 'todo') && !i.collectionId)
-    .sort((a, b) => {
-      const aDone = !!a.completed;
-      const bDone = !!b.completed;
-      if (aDone !== bDone) return aDone ? 1 : -1;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
+export const todoItems = derived([items, appConfig], ([$items, $config]) => {
+  const all = Object.values($items)
+    .filter(i => (i.isTodo || i.type === 'todo') && !i.collectionId);
+  const open = all.filter(i => !i.completed);
+  const completed = all.filter(i => i.completed);
+
+  sortWithConfiguredOrder(
+    open,
+    $config.todosOrder,
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+
+  // Completed sorted by completedAt desc
+  completed.sort((a, b) => new Date(b.completedAt ?? b.createdAt).getTime() - new Date(a.completedAt ?? a.createdAt).getTime());
+
+  return [...open, ...completed];
 });
 
 export const sortedCollections = orderedDerived<Collection>(collections, 'collectionsOrder');
@@ -731,4 +760,8 @@ export async function reorderGroupCollections(groupId: string, newCollectionIds:
 
 export async function reorderGroups(newOrder: string[]) {
   await updateConfig({ groupsOrder: newOrder });
+}
+
+export async function reorderTodos(newOrder: string[]) {
+  await updateConfig({ todosOrder: newOrder });
 }

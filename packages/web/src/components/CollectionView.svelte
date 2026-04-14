@@ -1,9 +1,11 @@
 <script lang="ts">
   import type { InboxItem, InboxItemType, Collection } from '@inbox-rs/rs-module';
+  import { dndzone } from 'svelte-dnd-action';
   import {
     collectionItems, storeItem,
     deleteItem,
-    sortedGroups, moveCollectionToGroup
+    sortedGroups, moveCollectionToGroup,
+    reorderCollectionItems
   } from '../lib/stores';
   import { makeTodo, makeReference, typeBadge, todoNote } from '../lib/item-utils';
   import { cleanForStorage } from '../lib/clean-for-storage';
@@ -62,6 +64,32 @@
       completedAt: nowCompleted ? new Date().toISOString() : undefined,
     };
     await storeItem(cleanForStorage(updated));
+  }
+
+  // DnD for open todos within the collection
+  let dndOpenTodos = $state<Array<InboxItem & { id: string }>>([]);
+  $effect(() => {
+    dndOpenTodos = openTodos.map(t => ({ ...t }));
+  });
+
+  function handleTodoDndConsider(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
+    dndOpenTodos = e.detail.items;
+  }
+
+  async function handleTodoDndFinalize(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
+    const previous = openTodos.map(t => ({ ...t }));
+    dndOpenTodos = e.detail.items;
+    // Rebuild full itemIds: new open todo order + completed todos + reference items (preserving their relative order)
+    const openTodoIds = new Set(openTodos.map(t => t.id));
+    const newOpenIds = dndOpenTodos.map(t => t.id);
+    const rest = collection.itemIds.filter(id => !openTodoIds.has(id));
+    const newItemIds = [...newOpenIds, ...rest];
+    try {
+      await reorderCollectionItems(collection.id, newItemIds);
+    } catch (error) {
+      console.error('Failed to reorder collection todos', error);
+      dndOpenTodos = previous;
+    }
   }
 
 </script>
@@ -189,9 +217,13 @@
                 {/if}
               </div>
 
-              {#if openTodos.length > 0}
-                <ul class="todo-list" role="list">
-                  {#each openTodos as item (item.id)}
+              {#if dndOpenTodos.length > 0}
+                <ul class="todo-list" role="list"
+                  use:dndzone={{ items: dndOpenTodos, flipDurationMs: 200, dropTargetStyle: {}, dragDisabled: isTouchDevice }}
+                  onconsider={handleTodoDndConsider}
+                  onfinalize={handleTodoDndFinalize}
+                >
+                  {#each dndOpenTodos as item (item.id)}
                     {@const badge = typeBadge(item)}
                     {@const note = todoNote(item)}
                     <li class="todo-item" role="button" tabindex="0"
