@@ -2,6 +2,7 @@
   import { tick } from 'svelte';
   import rs from '../lib/rs';
   import { connected, syncing, userAddress, userSettings, updateUserSettings } from '../lib/stores';
+  import ImportExportModal from './ImportExportModal.svelte';
 
   let open = $state(false);
   let inputAddress = $state('');
@@ -9,6 +10,9 @@
   let editingAbbrev = $state(false);
   let abbrevInput = $state('');
   let abbrevInputEl = $state<HTMLInputElement | null>(null);
+  let importExportModal = $state<ReturnType<typeof ImportExportModal>>();
+  let importExportOpen = $state(false);
+  let fileInputEl = $state<HTMLInputElement | null>(null);
 
   // Theme: synced settings take priority, localStorage is the offline fallback
   let localTheme = $state<'system' | 'light' | 'dark'>(
@@ -117,6 +121,25 @@
   function cancelEditAbbrev() {
     editingAbbrev = false;
   }
+
+  function handleExport() {
+    open = false;
+    importExportModal?.startExport();
+  }
+
+  function handleImportClick() {
+    fileInputEl?.click();
+  }
+
+  function handleFileSelected(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (file) {
+      open = false;
+      importExportModal?.promptImport(file);
+    }
+    input.value = '';
+  }
 </script>
 
 <div class="user-menu">
@@ -220,6 +243,37 @@
         </form>
       {/if}
 
+      {#if $connected}
+        <div class="divider"></div>
+
+        <!-- Data -->
+        <div class="section-label">Data</div>
+        <button class="menu-item" role="menuitem" onclick={handleExport}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Export Data
+        </button>
+        <button class="menu-item" role="menuitem" onclick={handleImportClick}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          Import Data
+          <span class="menu-hint">.zip</span>
+        </button>
+        <input
+          bind:this={fileInputEl}
+          type="file"
+          accept=".zip"
+          style="display: none"
+          onchange={handleFileSelected}
+        />
+      {/if}
+
       <div class="divider"></div>
 
       <!-- Theme -->
@@ -275,6 +329,8 @@
     </div>
   {/if}
 </div>
+
+<ImportExportModal bind:this={importExportModal} bind:open={importExportOpen} />
 
 <style>
   .user-menu {
@@ -617,6 +673,13 @@
 
   .menu-item.danger:hover {
     background: color-mix(in srgb, var(--danger) 10%, var(--surface) 90%);
+  }
+
+  .menu-hint {
+    margin-left: auto;
+    font-size: 0.7rem;
+    opacity: 0.45;
+    font-weight: 400;
   }
 
   /* ── Connect form ────────────────────────── */
