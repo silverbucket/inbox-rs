@@ -102,9 +102,11 @@
   async function handleDeleteGroup() {
     if (!groupId) return;
     editingGroup = null;
-    await deleteGroup(groupId);
-    const remaining = get(sortedGroups);
-    window.location.hash = remaining.length > 0 ? `#/group/${remaining[0].id}` : '#/';
+    const deleted = await deleteGroup(groupId);
+    if (deleted) {
+      const remaining = get(sortedGroups);
+      window.location.hash = remaining.length > 0 ? `#/group/${remaining[0].id}` : '#/';
+    }
   }
 </script>
 

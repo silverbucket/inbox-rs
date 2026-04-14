@@ -51,10 +51,10 @@ vi.mock('./clean-for-storage', () => ({
 
 import {
   blobUrls, connected, loadFileBlobUrl,
-  items, collections, groups, groupCollections, moveCollectionToGroup,
-  deleteGroup, deleteCollection, ungroupedCollections, appConfig,
+  collections, groups, groupCollections, moveCollectionToGroup,
+  deleteGroup, ungroupedCollections, appConfig,
 } from './stores';
-import type { InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
+import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
 
 /**
  * rs.on() handlers are registered at module load time.
@@ -307,9 +307,9 @@ describe('deleteGroup', () => {
     collections.set({ c1: col });
     groups.set({ g1: group });
 
-    await deleteGroup('g1');
+    const result = await deleteGroup('g1');
 
-    // Group should still exist
+    expect(result).toBe(false);
     expect(get(groups)['g1']).toBeDefined();
   });
 
@@ -320,8 +320,9 @@ describe('deleteGroup', () => {
     collections.set({ c1: col });
     groups.set({ g1: group });
 
-    await deleteGroup('g1');
+    const result = await deleteGroup('g1');
 
+    expect(result).toBe(false);
     expect(get(groups)['g1']).toBeDefined();
   });
 
@@ -330,8 +331,9 @@ describe('deleteGroup', () => {
 
     groups.set({ g1: group });
 
-    await deleteGroup('g1');
+    const result = await deleteGroup('g1');
 
+    expect(result).toBe(true);
     expect(get(groups)['g1']).toBeUndefined();
   });
 
@@ -343,8 +345,9 @@ describe('deleteGroup', () => {
     collections.set({ c1: col });
     groups.set({ g1: group, g2: makeGroup('g2', ['c1']) });
 
-    await deleteGroup('g1');
+    const result = await deleteGroup('g1');
 
+    expect(result).toBe(true);
     expect(get(groups)['g1']).toBeUndefined();
   });
 });
@@ -554,13 +557,14 @@ describe('deleteGroup with non-existent group', () => {
     appConfig.set({});
   });
 
-  it('does not crash when deleting a group that does not exist', async () => {
+  it('returns false and skips backend call for non-existent group', async () => {
     groups.set({ g1: makeGroup('g1', []) });
 
-    await deleteGroup('g_nonexistent');
+    const result = await deleteGroup('g_nonexistent');
 
-    // g1 still exists, no crash
+    expect(result).toBe(false);
     expect(get(groups)['g1']).toBeDefined();
+    expect(mockInbox.removeGroup).not.toHaveBeenCalled();
   });
 });
 

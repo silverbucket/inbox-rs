@@ -607,19 +607,19 @@ export async function storeGroup(group: CollectionGroup) {
   groups.update(current => ({ ...current, [clean.id]: clean }));
 }
 
-export async function deleteGroup(id: string) {
+export async function deleteGroup(id: string): Promise<boolean> {
   const inbox = getInbox();
   const currentGroups = get(groups);
   const group = currentGroups[id];
 
+  if (!group) return false;
+
   // Refuse to delete a group that still has collections (check groupId, not stale collectionIds)
-  if (group) {
-    const allCollections = get(collections);
-    const hasCollections = Object.values(allCollections).some(col => col.groupId === id);
-    if (hasCollections) {
-      console.warn('[inbox] cannot delete group with collections — remove them first');
-      return;
-    }
+  const allCollections = get(collections);
+  const hasCollections = Object.values(allCollections).some(col => col.groupId === id);
+  if (hasCollections) {
+    console.warn('[inbox] cannot delete group with collections — remove them first');
+    return false;
   }
 
   const prevGroups = get(groups);
@@ -631,6 +631,7 @@ export async function deleteGroup(id: string) {
       return next;
     });
     await removeFromOrderConfig(id, 'groupsOrder');
+    return true;
   } catch (e) {
     groups.set(prevGroups);
     console.error('[inbox] deleteGroup failed, rolling back:', e);
