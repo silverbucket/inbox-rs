@@ -142,7 +142,7 @@ inbox-rs/
 │   │   └── src/
 │   │       ├── App.svelte          # Main layout
 │   │       ├── lib/
-│   │       │   ├── rs.ts           # RS instance + getFileUrl helper
+│   │       │   ├── rs.ts           # RS instance + fetchFileBlobUrl helper
 │   │       │   └── stores.ts       # Svelte stores (items, connection state)
 │   │       └── components/
 │   │           ├── InboxGrid.svelte      # CSS-column masonry layout

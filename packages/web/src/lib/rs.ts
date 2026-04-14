@@ -45,13 +45,4 @@ export async function fetchFileBlobUrl(path: string): Promise<string | null> {
   return fetchFileWithAuth(remote.href, remote.token, path);
 }
 
-/**
- * @deprecated Use fetchFileBlobUrl instead — query-param auth doesn't work on all RS servers (e.g. 5apps).
- */
-export function getFileUrl(path: string): string | null {
-  const remote = (rs as any).remote;
-  if (!remote?.href || !remote?.token) return null;
-  return `${remote.href}/inbox/${path}?access_token=${encodeURIComponent(remote.token)}`;
-}
-
 export default rs;
