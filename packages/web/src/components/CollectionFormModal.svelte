@@ -13,7 +13,7 @@
   let name = $state(collection?.name ?? '');
   let description = $state(collection?.description ?? '');
   let color = $state(collection?.color ?? '#6366f1');
-  let active = $state(collection?.active ?? false);
+  let active = $state(collection?.active ?? true);
 
   function handleSubmit() {
     if (!name.trim()) return;
