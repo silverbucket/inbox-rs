@@ -149,6 +149,39 @@ async function loadGroups() {
   await loadEntities<CollectionGroup>(() => inbox.getAllGroups(), groups, 'collectionIds');
 }
 
+const DEFAULT_GROUP_COLOR = '#6b7280';
+
+async function ensureDefaultGroup() {
+  const currentGroups = get(groups);
+  let targetGroupId: string | undefined;
+
+  // If no groups exist, create a default "Collections" group
+  if (Object.keys(currentGroups).length === 0) {
+    const defaultGroup: CollectionGroup = {
+      id: crypto.randomUUID(),
+      name: 'Collections',
+      collectionIds: [],
+      createdAt: new Date().toISOString(),
+      color: DEFAULT_GROUP_COLOR,
+    };
+    await storeGroup(defaultGroup);
+    targetGroupId = defaultGroup.id;
+  }
+
+  // Migrate any ungrouped collections into the first group
+  const allCollections = get(collections);
+  const allGroups = get(groups);
+  const firstGroupId = targetGroupId || Object.values(allGroups)[0]?.id;
+  if (!firstGroupId) return;
+
+  const groupIds = new Set(Object.keys(allGroups));
+  for (const col of Object.values(allCollections)) {
+    if (!col.groupId || !groupIds.has(col.groupId)) {
+      await moveCollectionToGroup(col.id, firstGroupId);
+    }
+  }
+}
+
 // Debounced sync indicator: stays visible for at least 1 second to avoid flicker
 let syncTimeout: ReturnType<typeof setTimeout> | null = null;
 let syncVisibleUntil = 0;
@@ -264,11 +297,10 @@ export async function updateUserSettings(patch: Partial<UserSettings>) {
 const inboxRef = getInbox();
 function scheduleReload() {
   if (reloadTimeout) clearTimeout(reloadTimeout);
-  reloadTimeout = setTimeout(() => {
+  reloadTimeout = setTimeout(async () => {
     reloadTimeout = undefined;
-    void loadItems();
-    void loadCollections();
-    void loadGroups();
+    await Promise.all([loadItems(), loadCollections(), loadGroups()]);
+    await ensureDefaultGroup();
   }, 100);
 }
 if (inboxRef) {
@@ -587,15 +619,6 @@ export const groupCollections = derived([collections, groups, appConfig], ([$col
   return result;
 });
 
-/** Collections that don't belong to any group */
-export const ungroupedCollections = derived([sortedCollections, groups], ([$sortedCollections, $groups]) => {
-  const grouped = new Set<string>();
-  for (const group of Object.values($groups)) {
-    for (const cid of group.collectionIds) grouped.add(cid);
-  }
-  return $sortedCollections.filter(c => !grouped.has(c.id));
-});
-
 export async function storeGroup(group: CollectionGroup) {
   const inbox = getInbox();
   const clean = cleanForStorage(group);
@@ -605,28 +628,17 @@ export async function storeGroup(group: CollectionGroup) {
 
 export async function deleteGroup(id: string) {
   const inbox = getInbox();
-  const prevCollections = get(collections);
+  const currentGroups = get(groups);
+  const group = currentGroups[id];
+
+  // Refuse to delete a group that still has collections
+  if (group && group.collectionIds.length > 0) {
+    console.warn('[inbox] cannot delete group with collections — remove them first');
+    return;
+  }
+
   const prevGroups = get(groups);
-
-  // Unset groupId on orphaned collections
-  let orphanedCols: Collection[] = [];
-  collections.update(current => {
-    const next = { ...current };
-    for (const key of Object.keys(next)) {
-      if (next[key].groupId === id) {
-        const updated = { ...next[key] };
-        delete (updated as any).groupId;
-        next[key] = updated as Collection;
-        orphanedCols.push(updated as Collection);
-      }
-    }
-    return next;
-  });
-
   try {
-    for (const col of orphanedCols) {
-      await inbox.storeCollection(cleanForStorage(col));
-    }
     await inbox.removeGroup(id);
     groups.update(current => {
       const next = { ...current };
@@ -635,7 +647,6 @@ export async function deleteGroup(id: string) {
     });
     await removeFromOrderConfig(id, 'groupsOrder');
   } catch (e) {
-    collections.set(prevCollections);
     groups.set(prevGroups);
     console.error('[inbox] deleteGroup failed, rolling back:', e);
     throw e;
