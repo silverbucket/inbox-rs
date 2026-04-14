@@ -12,7 +12,8 @@
   import CollectionsPage from './components/CollectionsPage.svelte';
   import CollectionFormModal from './components/CollectionFormModal.svelte';
   import GroupFormModal from './components/GroupFormModal.svelte';
-  import { connected, deleteItem, todoItems, appConfig, updateConfig, pendingMigrationCount, runAllMigrations, storeCollection, sortedGroups, storeGroup, moveCollectionToGroup, ungroupedCollections } from './lib/stores';
+  import { dndzone } from 'svelte-dnd-action';
+  import { connected, deleteItem, todoItems, appConfig, updateConfig, pendingMigrationCount, runAllMigrations, storeCollection, sortedGroups, storeGroup, moveCollectionToGroup, ungroupedCollections, reorderGroups } from './lib/stores';
   import { pluginArtifactVersion } from './lib/plugin-downloads.generated';
   import LogoShield from './components/LogoShield.svelte';
 
@@ -28,6 +29,36 @@
   let todosExpanded = $state(false);
   let showCollectionForm = $state(false);
   let showGroupForm = $state(false);
+
+  // DnD for group tabs in nav
+  let isTouchDevice = $state(false);
+  $effect(() => {
+    const mql = window.matchMedia('(pointer: coarse)');
+    isTouchDevice = mql.matches;
+    const handler = (e: MediaQueryListEvent) => { isTouchDevice = e.matches; };
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  });
+
+  let dndGroups = $state<Array<CollectionGroup & { id: string }>>([]);
+  $effect(() => {
+    dndGroups = $sortedGroups.map(g => ({ ...g }));
+  });
+
+  function handleGroupDndConsider(e: CustomEvent<{ items: Array<CollectionGroup & { id: string }> }>) {
+    dndGroups = e.detail.items;
+  }
+
+  async function handleGroupDndFinalize(e: CustomEvent<{ items: Array<CollectionGroup & { id: string }> }>) {
+    const previous = $sortedGroups.map(g => ({ ...g }));
+    dndGroups = e.detail.items;
+    try {
+      await reorderGroups(dndGroups.map(g => g.id));
+    } catch (error) {
+      console.error('Failed to reorder groups', error);
+      dndGroups = previous;
+    }
+  }
 
   function getRouteFromHash(): Route {
     if (typeof window === 'undefined') return { page: 'home' };
@@ -164,18 +195,27 @@
     <nav class="header-nav" aria-label="Primary">
       <a class:active={route.page === 'home'} aria-current={route.page === 'home' ? 'page' : undefined} href="#/">Inbox</a>
       {#if $connected}
-        {#each $sortedGroups as group (group.id)}
-          <a
-            class="group-link"
-            class:active={route.page === 'group' && route.groupId === group.id}
-            aria-current={route.page === 'group' && route.groupId === group.id ? 'page' : undefined}
-            href="#/group/{group.id}"
-            style="--group-color: {group.color || 'var(--accent)'}"
+        {#if dndGroups.length > 0}
+          <div
+            class="nav-groups-dnd"
+            use:dndzone={{ items: dndGroups, flipDurationMs: 200, dropTargetStyle: {}, dragDisabled: isTouchDevice, type: 'nav-groups' }}
+            onconsider={handleGroupDndConsider}
+            onfinalize={handleGroupDndFinalize}
           >
-            <span class="group-dot"></span>
-            <span class="group-name">{group.name}</span>
-          </a>
-        {/each}
+            {#each dndGroups as group (group.id)}
+              <a
+                class="group-link"
+                class:active={route.page === 'group' && route.groupId === group.id}
+                aria-current={route.page === 'group' && route.groupId === group.id ? 'page' : undefined}
+                href="#/group/{group.id}"
+                style="--group-color: {group.color || 'var(--accent)'}"
+              >
+                <span class="group-dot"></span>
+                <span class="group-name">{group.name}</span>
+              </a>
+            {/each}
+          </div>
+        {/if}
         {#if $ungroupedCollections.length > 0}
           <a
             class:active={route.page === 'ungrouped'}
@@ -409,6 +449,13 @@
 
   .header-nav .group-link.active {
     background: color-mix(in srgb, var(--group-color) 18%, var(--surface) 82%);
+  }
+
+  .nav-groups-dnd {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-width: 0;
   }
 
   .group-dot {

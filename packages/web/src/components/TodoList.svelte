@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
-  import { todoItems, storeItem, activeCollectionTodos } from '../lib/stores';
+  import { dndzone } from 'svelte-dnd-action';
+  import { todoItems, storeItem, activeCollectionTodos, reorderTodos } from '../lib/stores';
   import { cleanForStorage } from '../lib/clean-for-storage';
   import { typeBadge } from '../lib/item-utils';
 
@@ -17,6 +18,36 @@
   const totalOpenCount = $derived(openTodos.length + collectionTodos.length);
   let expanded = $state(!inline);
   let showCompleted = $state(false);
+
+  let isTouchDevice = $state(false);
+  $effect(() => {
+    const mql = window.matchMedia('(pointer: coarse)');
+    isTouchDevice = mql.matches;
+    const handler = (e: MediaQueryListEvent) => { isTouchDevice = e.matches; };
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  });
+
+  let dndOpenTodos = $state<Array<InboxItem & { id: string }>>([]);
+  $effect(() => {
+    dndOpenTodos = openTodos.map(t => ({ ...t }));
+  });
+
+  function handleDndConsider(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
+    dndOpenTodos = e.detail.items;
+  }
+
+  async function handleDndFinalize(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
+    const previous = openTodos.map(t => ({ ...t }));
+    dndOpenTodos = e.detail.items;
+    try {
+      await reorderTodos(dndOpenTodos.map(t => t.id));
+    } catch (error) {
+      console.error('Failed to reorder todos', error);
+      dndOpenTodos = previous;
+    }
+  }
+
   async function toggleCompleted(e: Event, todo: InboxItem) {
     e.stopPropagation();
     const updated = {
@@ -56,9 +87,13 @@
     </button>
   </div>
   {#if expanded}
-    {#if openTodos.length > 0}
-      <ul role="list">
-        {#each openTodos as todo (todo.id)}
+    {#if dndOpenTodos.length > 0}
+      <ul role="list"
+        use:dndzone={{ items: dndOpenTodos, flipDurationMs: 200, dropTargetStyle: {}, dragDisabled: isTouchDevice }}
+        onconsider={handleDndConsider}
+        onfinalize={handleDndFinalize}
+      >
+        {#each dndOpenTodos as todo (todo.id)}
           {@const badge = typeBadge(todo)}
           {@const note = todoNote(todo)}
           <li class="todo-item" role="button" tabindex="0"

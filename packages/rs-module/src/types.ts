@@ -93,6 +93,7 @@ export interface AppConfig {
   todosCollapsed?: boolean;
   collectionsOrder?: string[]; // ordered list of collection IDs for nav display
   groupsOrder?: string[];      // ordered list of group IDs for nav display
+  todosOrder?: string[];       // ordered list of inbox todo IDs for manual sorting
   expandedCollections?: string[]; // IDs of collections currently expanded
 }
 
