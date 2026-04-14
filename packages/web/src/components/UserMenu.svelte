@@ -81,7 +81,7 @@
   const hostPart = $derived(atIdx >= 0 ? $userAddress.slice(atIdx) : '');
   const initials = $derived(
     userPart.length >= 2
-      ? userPart.slice(0, 2).toUpperCase()
+      ? (userPart[0] + userPart[userPart.length - 1]).toUpperCase()
       : userPart.length === 1
         ? userPart.toUpperCase()
         : '?'
