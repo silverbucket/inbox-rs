@@ -165,6 +165,14 @@ export const emailSchema = {
   required: ['id', 'type', 'title', 'body', 'createdAt']
 };
 
+export const userSettingsSchema = {
+  type: 'object',
+  properties: {
+    abbreviation: { type: 'string' },
+    theme: { type: 'string', enum: ['system', 'light', 'dark'] },
+  }
+};
+
 export const appConfigSchema = {
   type: 'object',
   properties: {

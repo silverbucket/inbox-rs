@@ -1,23 +1,14 @@
 <script lang="ts">
   import rs from '../lib/rs';
-  import { connected, syncing, userAddress } from '../lib/stores';
+  import { connected, syncing, userAddress, userSettings, updateUserSettings } from '../lib/stores';
 
   let open = $state(false);
   let inputAddress = $state('');
   let connecting = $state(false);
-  let theme = $state<'system' | 'light' | 'dark'>(getStoredTheme());
-  let customAbbrev = $state(localStorage.getItem('inbox-rs:userAbbrev') ?? '');
   let editingAbbrev = $state(false);
   let abbrevInput = $state('');
 
-  function getStoredTheme(): 'system' | 'light' | 'dark' {
-    if (typeof localStorage === 'undefined') return 'system';
-    return (localStorage.getItem('inbox-rs-theme') as 'system' | 'light' | 'dark') || 'system';
-  }
-
   function applyTheme(t: 'system' | 'light' | 'dark') {
-    theme = t;
-    localStorage.setItem('inbox-rs-theme', t);
     const root = document.documentElement;
     if (t === 'system') {
       root.removeAttribute('data-theme');
@@ -28,7 +19,13 @@
     }
   }
 
-  // Apply stored theme on mount
+  function setTheme(t: 'system' | 'light' | 'dark') {
+    applyTheme(t);
+    void updateUserSettings({ theme: t });
+  }
+
+  // Apply theme from synced settings (also handles initial load)
+  const theme = $derived($userSettings.theme ?? 'system');
   $effect(() => {
     applyTheme(theme);
   });
@@ -89,21 +86,16 @@
         ? userPart.toUpperCase()
         : '?'
   );
-  const initials = $derived(customAbbrev || autoInitials);
+  const initials = $derived($userSettings.abbreviation || autoInitials);
 
   function startEditAbbrev() {
-    abbrevInput = customAbbrev;
+    abbrevInput = $userSettings.abbreviation ?? '';
     editingAbbrev = true;
   }
 
   function saveAbbrev() {
     const val = abbrevInput.trim().toUpperCase().slice(0, 3);
-    customAbbrev = val;
-    if (val) {
-      localStorage.setItem('inbox-rs:userAbbrev', val);
-    } else {
-      localStorage.removeItem('inbox-rs:userAbbrev');
-    }
+    void updateUserSettings({ abbreviation: val || undefined });
     editingAbbrev = false;
   }
 
@@ -223,7 +215,7 @@
           class:active={theme === 'system'}
           role="radio"
           aria-checked={theme === 'system'}
-          onclick={() => applyTheme('system')}
+          onclick={() => setTheme('system')}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
@@ -237,7 +229,7 @@
           class:active={theme === 'light'}
           role="radio"
           aria-checked={theme === 'light'}
-          onclick={() => applyTheme('light')}
+          onclick={() => setTheme('light')}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="5"></circle>
@@ -257,7 +249,7 @@
           class:active={theme === 'dark'}
           role="radio"
           aria-checked={theme === 'dark'}
-          onclick={() => applyTheme('dark')}
+          onclick={() => setTheme('dark')}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>

@@ -1,6 +1,6 @@
 import { writable, derived, get } from 'svelte/store';
 import type { Writable, Readable } from 'svelte/store';
-import type { InboxItem, AppConfig, Collection, CollectionGroup } from '@inbox-rs/rs-module';
+import type { InboxItem, AppConfig, UserSettings, Collection, CollectionGroup } from '@inbox-rs/rs-module';
 import { migrator } from '@inbox-rs/rs-module';
 import { cleanForStorage } from './clean-for-storage';
 import rs, { fetchFileBlobUrl } from './rs';
@@ -28,6 +28,7 @@ function readStoredUserAddress(): string {
 export const userAddress = writable<string>(readStoredUserAddress());
 export const items = writable<Record<string, InboxItem>>({});
 export const appConfig = writable<AppConfig>({});
+export const userSettings = writable<UserSettings>({});
 export const collections = writable<Record<string, Collection>>({});
 export const groups = writable<Record<string, CollectionGroup>>({});
 /** Derived from loaded items using rs-migrate's getPending */
@@ -125,6 +126,19 @@ async function loadConfig() {
   }
 }
 
+async function loadUserSettings() {
+  const inbox = getInbox();
+  if (!inbox) return;
+  try {
+    const settings = await inbox.getUserSettings();
+    if (settings && typeof settings === 'object') {
+      userSettings.set(settings);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 async function loadCollections() {
   const inbox = getInbox();
   await loadEntities<Collection>(() => inbox.getAllCollections(), collections, 'itemIds');
@@ -185,6 +199,7 @@ rs.on('connected', () => {
   userAddress.set(addr);
   void loadItems();
   void loadConfig();
+  void loadUserSettings();
   void loadCollections();
   void loadGroups();
 });
@@ -199,6 +214,7 @@ rs.on('disconnected', () => {
   }
   items.set({});
   appConfig.set({});
+  userSettings.set({});
   collections.set({});
   groups.set({});
 });
@@ -225,6 +241,21 @@ export async function updateConfig(patch: Partial<AppConfig>) {
   } catch (e) {
     appConfig.set(currentConfig);
     console.error('[inbox] failed to persist config update:', e);
+    throw e;
+  }
+}
+
+export async function updateUserSettings(patch: Partial<UserSettings>) {
+  const inbox = getInbox();
+  if (!inbox) throw new Error('Cannot update user settings: storage not connected');
+  const current = get(userSettings);
+  const updated = { ...current, ...patch };
+  userSettings.set(updated);
+  try {
+    await inbox.setUserSettings(cleanForStorage(updated));
+  } catch (e) {
+    userSettings.set(current);
+    console.error('[inbox] failed to persist user settings:', e);
     throw e;
   }
 }
