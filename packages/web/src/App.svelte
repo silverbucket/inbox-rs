@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { InboxItemType, InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
-  import ConnectWidget from './components/ConnectWidget.svelte';
+  import UserMenu from './components/UserMenu.svelte';
   import InboxGrid from './components/InboxGrid.svelte';
   import TodoList from './components/TodoList.svelte';
   import AddEntryBar from './components/AddEntryBar.svelte';
@@ -14,7 +14,7 @@
   import GroupFormModal from './components/GroupFormModal.svelte';
   import { connected, deleteItem, todoItems, appConfig, updateConfig, pendingMigrationCount, runAllMigrations, storeCollection, sortedGroups, storeGroup, moveCollectionToGroup } from './lib/stores';
   import { pluginArtifactVersion } from './lib/plugin-downloads.generated';
-  import logoShield from './assets/logos/logo-shield.svg';
+  import LogoShield from './components/LogoShield.svelte';
 
   type Route =
     | { page: 'home' }
@@ -158,7 +158,7 @@
     <div class="brand">
       <a class="brand-link" href="#/">
         <h1 class="sr-only">Inbox RS</h1>
-        <img src={logoShield} alt="" aria-hidden="true" class="brand-logo" />
+        <span class="brand-logo" aria-hidden="true"><LogoShield /></span>
       </a>
     </div>
     <nav class="header-nav" aria-label="Primary">
@@ -186,7 +186,7 @@
       {/if}
     </nav>
     <div class="header-right">
-      <ConnectWidget />
+      <UserMenu />
     </div>
   </div>
 </header>
@@ -333,6 +333,12 @@
   }
 
   .brand-logo {
+    display: inline-flex;
+    height: 38px;
+    width: auto;
+  }
+
+  .brand-logo :global(svg) {
     height: 38px;
     width: auto;
   }
@@ -490,6 +496,11 @@
 
     .brand-logo {
       height: 30px;
+    }
+
+    .brand-logo :global(svg) {
+      height: 30px;
+      width: auto;
     }
 
     /* Row 1, right: connection controls */
