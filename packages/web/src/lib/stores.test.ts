@@ -53,6 +53,7 @@ import {
   blobUrls, connected, loadFileBlobUrl,
   collections, groups, groupCollections, moveCollectionToGroup,
   deleteGroup, ungroupedCollections, appConfig,
+  storeCollection, reorderGroupCollections,
 } from './stores';
 import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
 
@@ -613,6 +614,92 @@ describe('ungroupedCollections reacts to group deletion', () => {
     // After: grouped
     expect(get(ungroupedCollections)).toHaveLength(0);
     expect(get(groupCollections)['g1']).toHaveLength(1);
+  });
+});
+
+// ---- Tests exercising the component code paths for the ungrouped route ----
+// These mirror what CollectionsPage and App.svelte do when groupId is "" or undefined.
+
+describe('ungrouped route: collection creation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('collection created without groupId stays ungrouped', async () => {
+    // App.svelte passes groupId=undefined to CollectionFormModal on the ungrouped route.
+    // CollectionFormModal sets groupId to undefined, so handleCreateCollection
+    // calls storeCollection but skips moveCollectionToGroup.
+    const col = makeCollection('c1'); // no groupId — mirrors what CollectionFormModal produces
+
+    await storeCollection(col);
+    // App.svelte: if (col.groupId) { await moveCollectionToGroup(...) }
+    // groupId is undefined so this branch is skipped.
+
+    expect(get(collections)['c1']).toBeDefined();
+    expect(get(collections)['c1'].groupId).toBeUndefined();
+    expect(get(ungroupedCollections)).toHaveLength(1);
+    expect(mockInbox.storeGroup).not.toHaveBeenCalled();
+  });
+
+  it('collection created with empty-string groupId is treated as ungrouped', async () => {
+    // Edge case: if groupId were "" instead of undefined
+    const col: Collection = {
+      id: 'c1',
+      name: 'Test',
+      itemIds: [],
+      createdAt: new Date().toISOString(),
+      groupId: '',
+    };
+
+    await storeCollection(col);
+    // "" is falsy so moveCollectionToGroup would be skipped in handleCreateCollection
+
+    expect(get(collections)['c1'].groupId).toBe('');
+    // ungroupedCollections checks !c.groupId — empty string is falsy, so it's included
+    expect(get(ungroupedCollections)).toHaveLength(1);
+  });
+});
+
+describe('ungrouped route: reorder is a no-op', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('reorderGroupCollections with empty groupId does not modify any group', async () => {
+    // CollectionsPage calls reorderGroupCollections(groupId, newIds) on DnD finalize.
+    // When groupId is "", no group matches, so it should be a no-op.
+    const group = makeGroup('g1', ['c1', 'c2']);
+    const col1 = makeCollection('c1', 'g1');
+    const col2 = makeCollection('c2', 'g1');
+
+    collections.set({ c1: col1, c2: col2 });
+    groups.set({ g1: group });
+
+    await reorderGroupCollections('', ['c2', 'c1']);
+
+    // g1 should be untouched
+    expect(get(groups)['g1'].collectionIds).toEqual(['c1', 'c2']);
+    expect(mockInbox.storeGroup).not.toHaveBeenCalled();
+  });
+
+  it('reorderGroupCollections with valid groupId works normally', async () => {
+    const group = makeGroup('g1', ['c1', 'c2']);
+    const col1 = makeCollection('c1', 'g1');
+    const col2 = makeCollection('c2', 'g1');
+
+    collections.set({ c1: col1, c2: col2 });
+    groups.set({ g1: group });
+
+    await reorderGroupCollections('g1', ['c2', 'c1']);
+
+    expect(get(groups)['g1'].collectionIds).toEqual(['c2', 'c1']);
+    expect(mockInbox.storeGroup).toHaveBeenCalled();
   });
 });
 
