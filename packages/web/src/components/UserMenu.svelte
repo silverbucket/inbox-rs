@@ -1,9 +1,9 @@
 <script lang="ts">
   import rs from '../lib/rs';
-  import { connected, syncing } from '../lib/stores';
+  import { connected, syncing, userAddress } from '../lib/stores';
 
   let open = $state(false);
-  let userAddress = $state('');
+  let inputAddress = $state('');
   let connecting = $state(false);
   let theme = $state<'system' | 'light' | 'dark'>(getStoredTheme());
 
@@ -57,10 +57,11 @@
   });
 
   async function handleConnect() {
-    if (!userAddress.trim()) return;
+    if (!inputAddress.trim()) return;
     connecting = true;
     try {
-      rs.connect(userAddress.trim());
+      localStorage.setItem('inbox-rs:userAddress', inputAddress.trim());
+      rs.connect(inputAddress.trim());
     } catch {
       connecting = false;
     }
@@ -74,38 +75,55 @@
   $effect(() => {
     if ($connected) connecting = false;
   });
+
+  const initials = $derived($userAddress ? $userAddress[0].toUpperCase() : '?');
+  const atIdx = $derived($userAddress.indexOf('@'));
+  const userPart = $derived(atIdx >= 0 ? $userAddress.slice(0, atIdx) : $userAddress);
+  const hostPart = $derived(atIdx >= 0 ? $userAddress.slice(atIdx) : '');
 </script>
 
 <div class="user-menu">
   <button
     class="trigger"
+    class:open
     onclick={toggle}
     aria-expanded={open}
     aria-haspopup="true"
     aria-label={$connected ? 'User menu — connected' : 'User menu — disconnected'}
   >
-    <svg class="trigger-sync" class:spinning={$syncing} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-      <polyline points="23 4 23 10 17 10"></polyline>
-      <polyline points="1 20 1 14 7 14"></polyline>
-      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
-      <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
-    </svg>
-    <span class="trigger-dot" class:connected={$connected}></span>
-    <svg class="trigger-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-      <circle cx="12" cy="7" r="4"></circle>
+    <span class="avatar" aria-hidden="true">{initials}</span>
+    {#if $syncing}
+      <span class="sync-ring" aria-hidden="true"></span>
+    {/if}
+    <svg class="chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <polyline points="6 9 12 15 18 9"></polyline>
     </svg>
   </button>
 
   {#if open}
     <div class="dropdown" role="menu">
       <!-- Connection status -->
-      <div class="section-label">Connection</div>
       {#if $connected}
-        <div class="status-row">
-          <span class="status-dot connected"></span>
-          <span class="status-label">Connected</span>
+        <div class="user-info">
+          <span class="avatar avatar-lg" aria-hidden="true">{initials}</span>
+          <div class="user-text">
+            <span class="user-name">{userPart || $userAddress}</span>
+            <span class="user-host">{hostPart}</span>
+          </div>
+          {#if $syncing}
+            <svg class="sync-icon spinning" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-label="Syncing">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
+              <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
+            </svg>
+          {:else}
+            <span class="connected-badge" aria-label="Connected">
+              <span class="status-dot connected"></span>
+            </span>
+          {/if}
         </div>
+
         <button class="menu-item danger" role="menuitem" onclick={handleDisconnect}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -115,6 +133,7 @@
           Disconnect
         </button>
       {:else}
+        <div class="section-label">Connection</div>
         <div class="status-row">
           <span class="status-dot"></span>
           <span class="status-label">Not connected</span>
@@ -122,11 +141,11 @@
         <form class="connect-form" onsubmit={(e) => { e.preventDefault(); handleConnect(); }}>
           <input
             type="text"
-            bind:value={userAddress}
+            bind:value={inputAddress}
             placeholder="user@storage.example"
             disabled={connecting}
           />
-          <button type="submit" class="btn-connect" disabled={connecting || !userAddress.trim()}>
+          <button type="submit" class="btn-connect" disabled={connecting || !inputAddress.trim()}>
             {connecting ? 'Connecting…' : 'Connect'}
           </button>
         </form>
@@ -197,55 +216,69 @@
   .trigger {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.35rem 0.55rem;
+    gap: 0.35rem;
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 999px;
-    background: var(--surface);
-    color: var(--text);
+    padding: 0.25rem 0.5rem 0.25rem 0.25rem;
     cursor: pointer;
-    transition: border-color 150ms, background 150ms;
+    transition: border-color 0.15s, background 0.15s;
+    position: relative;
   }
 
-  .trigger:hover {
+  .trigger:hover,
+  .trigger.open {
     border-color: var(--accent);
-    background: var(--surface-hover);
+    background: var(--accent-subtler);
   }
 
-  .trigger-dot {
-    width: 7px;
-    height: 7px;
+  /* ── Avatar ──────────────────────────────── */
+  .avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
-    background: var(--text-muted);
-    opacity: 0.4;
-    flex-shrink: 0;
-    transition: background 200ms, opacity 200ms;
-  }
-
-  .trigger-dot.connected {
-    background: #22c55e;
-    opacity: 1;
-  }
-
-  .trigger-icon {
-    color: var(--text-muted);
-    flex-shrink: 0;
-  }
-
-  .trigger-sync {
+    background: var(--accent-subtle);
     color: var(--accent);
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1;
     flex-shrink: 0;
-    opacity: 0;
-    transition: opacity 150ms;
+    border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    user-select: none;
   }
 
-  .trigger-sync.spinning {
-    opacity: 1;
+  .avatar-lg {
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
+
+  /* ── Chevron ─────────────────────────────── */
+  .chevron {
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .trigger.open .chevron {
+    transform: rotate(180deg);
+  }
+
+  /* ── Sync ring on trigger ────────────────── */
+  .sync-ring {
+    position: absolute;
+    inset: -2px;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    border-top-color: var(--accent);
     animation: spin 1s linear infinite;
+    pointer-events: none;
   }
 
   @keyframes spin {
-    from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
   }
 
@@ -315,6 +348,63 @@
   .status-label {
     font-size: 0.82rem;
     color: var(--text-muted);
+  }
+
+  /* ── User info row ─────────────────────── */
+  .user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.75rem;
+  }
+
+  .user-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .user-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .user-host {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .connected-badge {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .connected-badge .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 0 2px color-mix(in srgb, #22c55e 20%, transparent);
+    opacity: 1;
+  }
+
+  .sync-icon {
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .sync-icon.spinning {
+    animation: spin 1s linear infinite;
   }
 
   /* ── Menu items ──────────────────────────── */
