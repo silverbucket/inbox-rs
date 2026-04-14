@@ -32,11 +32,14 @@ jobs:
       - run: npm ci
       - run: npm install @rollup/rollup-linux-x64-gnu --no-save
 
-      - name: Bump version
-        id: version
+      - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version
+        id: version
+        run: |
           npm version ${{ inputs.bump }} --no-git-tag-version
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -61,6 +64,18 @@ jobs:
             "
           done
 
+      - name: Commit version bump and tag
+        # This clean commit (no build artifacts) is what gets pushed to origin/master.
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          git add package.json packages/*/package.json \
+            packages/extension/manifest.json \
+            packages/extension/manifest.firefox.json \
+            packages/thunderbird/manifest.json
+          git commit -m "release v${VERSION}"
+          git tag "v${VERSION}"
+          git push origin HEAD:master --tags
+
       - name: Build web app
         run: npm run build
 
@@ -75,17 +90,24 @@ jobs:
           echo -e "Host 5apps.com\n  IdentityFile ~/.ssh/5apps_key" >> ~/.ssh/config
 
       - name: Deploy to 5apps
+        # Force-add build artifacts onto a throwaway deploy branch, extract just
+        # the dist/ subtree, and push that to 5apps. The deploy commit is never
+        # pushed to origin — only the clean version-bump commit above reaches master.
         run: |
-          git remote add 5apps git@5apps.com:silverbucket_inbox-rs.git 2>/dev/null || git remote set-url 5apps git@5apps.com:silverbucket_inbox-rs.git
-          git add package.json packages/*/package.json packages/extension/manifest.json packages/extension/manifest.firefox.json packages/thunderbird/manifest.json packages/web/dist -f
-          git commit -m "deploy v${{ steps.version.outputs.version }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          git remote add 5apps git@5apps.com:silverbucket_inbox-rs.git 2>/dev/null \
+            || git remote set-url 5apps git@5apps.com:silverbucket_inbox-rs.git
+
+          # Create a throwaway branch for the deploy commit so master stays clean.
+          git checkout -b deploy/v${VERSION}
+          git add packages/web/dist -f
+          git commit -m "deploy v${VERSION} [skip ci]"
+
           SPLIT_SHA=$(git subtree split --prefix=packages/web/dist)
           git push 5apps "$SPLIT_SHA":refs/heads/master --force
 
-      - name: Tag and push version
-        run: |
-          git tag "v${{ steps.version.outputs.version }}"
-          git push origin HEAD:master --tags
+          # Return to master; the deploy branch is local-only and discarded.
+          git checkout master
 
       - name: Create GitHub Release
         env:

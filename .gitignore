@@ -1,9 +1,26 @@
+# Dependencies
 node_modules/
+
+# Build artifacts — never commit these for normal development.
+# For deployment, the release workflow uses `git add -f` to force-add
+# packages/web/dist/ for the 5apps subtree-push, then the deploy commit
+# is pushed only to the 5apps remote, never to origin/master.
 dist/
+packages/web/src/lib/plugin-downloads.generated.ts
+
+# Environment & secrets
 .env
-rs-data/
-.context/
 *.local
+
+# Local dev data
+rs-data/
+
+# Editor / OS
+.context/
 .DS_Store
+
+# Extension build outputs (already covered by dist/, listed explicitly for clarity)
 *.xpi
+
+# Dev-only download staging area (copied into dist/ during build)
 packages/web/public/downloads/
