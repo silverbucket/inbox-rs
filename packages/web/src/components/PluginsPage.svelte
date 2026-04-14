@@ -269,8 +269,11 @@
 
 <style>
   .plugins-page {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: clamp(2rem, 4vw, 3rem);
+    flex: 1;
+    min-height: 100%;
   }
 
   /* ── Hero ── */
@@ -680,6 +683,7 @@
     border-top: 1px solid var(--border);
     border-radius: calc(var(--radius) * 1.25);
     background: color-mix(in srgb, var(--surface) 92%, black 8%);
+    margin-top: auto;
   }
 
   .footer-meta {

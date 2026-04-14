@@ -450,12 +450,16 @@
     margin: 0 auto;
     padding: 1.5rem;
     width: 100%;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
   }
 
   .content-layout {
     display: flex;
     gap: 1.5rem;
     align-items: flex-start;
+    flex: 1;
   }
 
   .inbox-top {

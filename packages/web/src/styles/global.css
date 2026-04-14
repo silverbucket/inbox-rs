@@ -90,6 +90,10 @@ body {
   width: 100%;
   overflow-x: hidden;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 button {

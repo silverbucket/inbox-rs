@@ -14,6 +14,18 @@ export const blobUrls = writable<Record<string, string>>({});
 
 export const connected = writable(false);
 export const syncing = writable(false);
+
+function readStoredUserAddress(): string {
+  try {
+    // remoteStorage.js persists the user address in this key
+    const settings = JSON.parse(localStorage.getItem('remotestorage:wireclient') ?? '{}');
+    return settings?.userAddress ?? localStorage.getItem('inbox-rs:userAddress') ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export const userAddress = writable<string>(readStoredUserAddress());
 export const items = writable<Record<string, InboxItem>>({});
 export const appConfig = writable<AppConfig>({});
 export const collections = writable<Record<string, Collection>>({});
@@ -166,6 +178,11 @@ let reloadTimeout: ReturnType<typeof setTimeout> | undefined;
 
 rs.on('connected', () => {
   connected.set(true);
+  const addr =
+    (rs as any).remote?.userAddress ||
+    localStorage.getItem('inbox-rs:userAddress') ||
+    '';
+  userAddress.set(addr);
   void loadItems();
   void loadConfig();
   void loadCollections();
@@ -174,6 +191,8 @@ rs.on('connected', () => {
 
 rs.on('disconnected', () => {
   connected.set(false);
+  userAddress.set('');
+  localStorage.removeItem('inbox-rs:userAddress');
   if (reloadTimeout) {
     clearTimeout(reloadTimeout);
     reloadTimeout = undefined;
