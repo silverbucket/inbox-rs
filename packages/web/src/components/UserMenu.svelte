@@ -76,10 +76,16 @@
     if ($connected) connecting = false;
   });
 
-  const initials = $derived($userAddress ? $userAddress[0].toUpperCase() : '?');
   const atIdx = $derived($userAddress.indexOf('@'));
   const userPart = $derived(atIdx >= 0 ? $userAddress.slice(0, atIdx) : $userAddress);
   const hostPart = $derived(atIdx >= 0 ? $userAddress.slice(atIdx) : '');
+  const initials = $derived(
+    userPart.length >= 2
+      ? userPart.slice(0, 2).toUpperCase()
+      : userPart.length === 1
+        ? userPart.toUpperCase()
+        : '?'
+  );
 </script>
 
 <div class="user-menu">
@@ -91,10 +97,17 @@
     aria-haspopup="true"
     aria-label={$connected ? 'User menu — connected' : 'User menu — disconnected'}
   >
-    <span class="avatar" aria-hidden="true">{initials}</span>
-    {#if $syncing}
-      <span class="sync-ring" aria-hidden="true"></span>
+    {#if $connected && $userAddress}
+      <span class="avatar" aria-hidden="true">{initials}</span>
+    {:else}
+      <svg class="trigger-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+        <circle cx="12" cy="7" r="4"></circle>
+      </svg>
     {/if}
+    <span class="status-indicator">
+      <span class="status-dot" class:connected={$connected} class:syncing={$syncing}></span>
+    </span>
     <svg class="chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <polyline points="6 9 12 15 18 9"></polyline>
     </svg>
@@ -256,6 +269,44 @@
     font-size: 1rem;
   }
 
+  /* ── Trigger icon (disconnected state) ──── */
+  .trigger-icon {
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  /* ── Status indicator dot ────────────────── */
+  .status-indicator {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .status-indicator .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    opacity: 0.35;
+    transition: background 0.3s, opacity 0.3s, box-shadow 0.3s;
+  }
+
+  .status-indicator .status-dot.connected {
+    background: #22c55e;
+    opacity: 1;
+  }
+
+  .status-indicator .status-dot.syncing {
+    background: var(--accent);
+    opacity: 1;
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent); }
+    50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 0%, transparent); }
+  }
+
   /* ── Chevron ─────────────────────────────── */
   .chevron {
     color: var(--text-muted);
@@ -265,21 +316,6 @@
 
   .trigger.open .chevron {
     transform: rotate(180deg);
-  }
-
-  /* ── Sync ring on trigger ────────────────── */
-  .sync-ring {
-    position: absolute;
-    inset: -2px;
-    border-radius: 999px;
-    border: 2px solid transparent;
-    border-top-color: var(--accent);
-    animation: spin 1s linear infinite;
-    pointer-events: none;
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
   }
 
   /* ── Dropdown ────────────────────────────── */
@@ -405,6 +441,10 @@
 
   .sync-icon.spinning {
     animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 
   /* ── Menu items ──────────────────────────── */
