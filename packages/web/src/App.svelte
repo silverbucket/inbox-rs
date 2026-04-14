@@ -310,7 +310,6 @@
     display: flex;
     align-items: center;
     gap: 1rem;
-    justify-content: space-between;
   }
 
   /* ── Brand (zone 1) ────────────────────────── */
@@ -442,6 +441,7 @@
     align-items: center;
     gap: 0.75rem;
     flex-shrink: 0;
+    margin-left: auto;
   }
 
   /* ── Main content ──────────────────────────── */
@@ -450,12 +450,16 @@
     margin: 0 auto;
     padding: 1.5rem;
     width: 100%;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
   }
 
   .content-layout {
     display: flex;
     gap: 1.5rem;
     align-items: flex-start;
+    flex: 1;
   }
 
   .inbox-top {

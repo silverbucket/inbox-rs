@@ -1,20 +1,22 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import rs from '../lib/rs';
-  import { connected, syncing } from '../lib/stores';
+  import { connected, syncing, userAddress, userSettings, updateUserSettings } from '../lib/stores';
 
   let open = $state(false);
-  let userAddress = $state('');
+  let inputAddress = $state('');
   let connecting = $state(false);
-  let theme = $state<'system' | 'light' | 'dark'>(getStoredTheme());
+  let editingAbbrev = $state(false);
+  let abbrevInput = $state('');
+  let abbrevInputEl = $state<HTMLInputElement | null>(null);
 
-  function getStoredTheme(): 'system' | 'light' | 'dark' {
-    if (typeof localStorage === 'undefined') return 'system';
-    return (localStorage.getItem('inbox-rs-theme') as 'system' | 'light' | 'dark') || 'system';
-  }
+  // Theme: synced settings take priority, localStorage is the offline fallback
+  let localTheme = $state<'system' | 'light' | 'dark'>(
+    (localStorage.getItem('inbox-rs:theme') as 'system' | 'light' | 'dark') || 'system'
+  );
+  const theme = $derived($userSettings.theme ?? localTheme);
 
   function applyTheme(t: 'system' | 'light' | 'dark') {
-    theme = t;
-    localStorage.setItem('inbox-rs-theme', t);
     const root = document.documentElement;
     if (t === 'system') {
       root.removeAttribute('data-theme');
@@ -25,9 +27,20 @@
     }
   }
 
-  // Apply stored theme on mount
+  function setTheme(t: 'system' | 'light' | 'dark') {
+    localTheme = t;
+    localStorage.setItem('inbox-rs:theme', t);
+    applyTheme(t);
+    if ($connected) {
+      void updateUserSettings({ theme: t });
+    }
+  }
+
+  // Apply theme reactively (handles synced settings arriving after connect)
   $effect(() => {
     applyTheme(theme);
+    // Keep localStorage in sync so it's available as fallback next load
+    localStorage.setItem('inbox-rs:theme', theme);
   });
 
   function toggle() {
@@ -57,10 +70,11 @@
   });
 
   async function handleConnect() {
-    if (!userAddress.trim()) return;
+    if (!inputAddress.trim()) return;
     connecting = true;
     try {
-      rs.connect(userAddress.trim());
+      localStorage.setItem('inbox-rs:userAddress', inputAddress.trim());
+      rs.connect(inputAddress.trim());
     } catch {
       connecting = false;
     }
@@ -74,38 +88,111 @@
   $effect(() => {
     if ($connected) connecting = false;
   });
+
+  const atIdx = $derived($userAddress.indexOf('@'));
+  const userPart = $derived(atIdx >= 0 ? $userAddress.slice(0, atIdx) : $userAddress);
+  const hostPart = $derived(atIdx >= 0 ? $userAddress.slice(atIdx) : '');
+  const autoInitials = $derived(
+    userPart.length >= 2
+      ? (userPart[0] + userPart[userPart.length - 1]).toUpperCase()
+      : userPart.length === 1
+        ? userPart.toUpperCase()
+        : '?'
+  );
+  const initials = $derived($userSettings.abbreviation || autoInitials);
+
+  async function startEditAbbrev() {
+    abbrevInput = $userSettings.abbreviation ?? '';
+    editingAbbrev = true;
+    await tick();
+    abbrevInputEl?.focus();
+  }
+
+  function saveAbbrev() {
+    const val = abbrevInput.trim().toUpperCase().slice(0, 3);
+    void updateUserSettings({ abbreviation: val || undefined });
+    editingAbbrev = false;
+  }
+
+  function cancelEditAbbrev() {
+    editingAbbrev = false;
+  }
 </script>
 
 <div class="user-menu">
   <button
     class="trigger"
+    class:open
     onclick={toggle}
     aria-expanded={open}
     aria-haspopup="true"
     aria-label={$connected ? 'User menu — connected' : 'User menu — disconnected'}
   >
-    <svg class="trigger-sync" class:spinning={$syncing} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-      <polyline points="23 4 23 10 17 10"></polyline>
-      <polyline points="1 20 1 14 7 14"></polyline>
-      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
-      <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
-    </svg>
-    <span class="trigger-dot" class:connected={$connected}></span>
-    <svg class="trigger-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-      <circle cx="12" cy="7" r="4"></circle>
+    {#if $connected && $userAddress}
+      <span class="avatar" aria-hidden="true">{initials}</span>
+    {:else}
+      <svg class="trigger-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+        <circle cx="12" cy="7" r="4"></circle>
+      </svg>
+    {/if}
+    <span class="status-indicator">
+      <span class="status-dot" class:connected={$connected} class:syncing={$syncing}></span>
+    </span>
+    <svg class="chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <polyline points="6 9 12 15 18 9"></polyline>
     </svg>
   </button>
 
   {#if open}
     <div class="dropdown" role="menu">
       <!-- Connection status -->
-      <div class="section-label">Connection</div>
       {#if $connected}
-        <div class="status-row">
-          <span class="status-dot connected"></span>
-          <span class="status-label">Connected</span>
+        <div class="user-info">
+          {#if editingAbbrev}
+            <form class="abbrev-form" onsubmit={(e) => { e.preventDefault(); saveAbbrev(); }}>
+              <input
+                class="abbrev-input"
+                type="text"
+                bind:this={abbrevInputEl}
+                bind:value={abbrevInput}
+                maxlength="3"
+                placeholder={autoInitials}
+                onkeydown={(e) => { if (e.key === 'Escape') cancelEditAbbrev(); }}
+              />
+              <button type="submit" class="abbrev-btn save" aria-label="Save">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              </button>
+              <button type="button" class="abbrev-btn cancel" onclick={cancelEditAbbrev} aria-label="Cancel">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </form>
+          {:else}
+            <button class="avatar-edit-wrapper" onclick={startEditAbbrev} title="Edit abbreviation" aria-label="Edit abbreviation">
+              <span class="avatar avatar-lg">{initials}</span>
+              <span class="avatar-edit-badge" aria-hidden="true">
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+              </span>
+            </button>
+          {/if}
+          <div class="user-text">
+            <span class="user-name">{userPart || $userAddress}</span>
+            <span class="user-host">{hostPart}</span>
+          </div>
+          {#if $syncing}
+            <svg class="sync-icon spinning" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-label="Syncing">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
+              <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
+            </svg>
+          {:else}
+            <span class="connected-badge" aria-label="Connected">
+              <span class="status-dot connected"></span>
+            </span>
+          {/if}
         </div>
+
         <button class="menu-item danger" role="menuitem" onclick={handleDisconnect}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -115,6 +202,7 @@
           Disconnect
         </button>
       {:else}
+        <div class="section-label">Connection</div>
         <div class="status-row">
           <span class="status-dot"></span>
           <span class="status-label">Not connected</span>
@@ -122,11 +210,11 @@
         <form class="connect-form" onsubmit={(e) => { e.preventDefault(); handleConnect(); }}>
           <input
             type="text"
-            bind:value={userAddress}
+            bind:value={inputAddress}
             placeholder="user@storage.example"
             disabled={connecting}
           />
-          <button type="submit" class="btn-connect" disabled={connecting || !userAddress.trim()}>
+          <button type="submit" class="btn-connect" disabled={connecting || !inputAddress.trim()}>
             {connecting ? 'Connecting…' : 'Connect'}
           </button>
         </form>
@@ -142,7 +230,7 @@
           class:active={theme === 'system'}
           role="radio"
           aria-checked={theme === 'system'}
-          onclick={() => applyTheme('system')}
+          onclick={() => setTheme('system')}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
@@ -156,7 +244,7 @@
           class:active={theme === 'light'}
           role="radio"
           aria-checked={theme === 'light'}
-          onclick={() => applyTheme('light')}
+          onclick={() => setTheme('light')}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="5"></circle>
@@ -176,7 +264,7 @@
           class:active={theme === 'dark'}
           role="radio"
           aria-checked={theme === 'dark'}
-          onclick={() => applyTheme('dark')}
+          onclick={() => setTheme('dark')}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
@@ -197,56 +285,181 @@
   .trigger {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.35rem 0.55rem;
+    gap: 0.35rem;
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 999px;
-    background: var(--surface);
-    color: var(--text);
+    padding: 0.25rem 0.5rem 0.25rem 0.25rem;
     cursor: pointer;
-    transition: border-color 150ms, background 150ms;
+    transition: border-color 0.15s, background 0.15s;
+    position: relative;
   }
 
-  .trigger:hover {
+  .trigger:hover,
+  .trigger.open {
     border-color: var(--accent);
-    background: var(--surface-hover);
+    background: var(--accent-subtler);
   }
 
-  .trigger-dot {
-    width: 7px;
-    height: 7px;
+  /* ── Avatar ──────────────────────────────── */
+  .avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
-    background: var(--text-muted);
-    opacity: 0.4;
+    background: var(--accent-subtle);
+    color: var(--accent);
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1;
     flex-shrink: 0;
-    transition: background 200ms, opacity 200ms;
+    border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    user-select: none;
   }
 
-  .trigger-dot.connected {
-    background: #22c55e;
+  .avatar-lg {
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
+
+  .avatar-edit-wrapper {
+    position: relative;
+    display: inline-flex;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .avatar-edit-wrapper .avatar {
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .avatar-edit-wrapper:hover .avatar {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-subtle);
+  }
+
+  .avatar-edit-badge {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white;
+    border: 2px solid var(--surface);
+    opacity: 0.7;
+    transition: opacity 0.15s;
+  }
+
+  .avatar-edit-wrapper:hover .avatar-edit-badge {
     opacity: 1;
   }
 
+  /* ── Abbreviation editor ─────────────────── */
+  .abbrev-form {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+  }
+
+  .abbrev-input {
+    width: 42px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--accent);
+    background: var(--accent-subtle);
+    color: var(--accent);
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-align: center;
+    text-transform: uppercase;
+    outline: none;
+    padding: 0;
+    box-shadow: 0 0 0 2px var(--accent-subtle);
+  }
+
+  .abbrev-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: color 0.12s, background 0.12s;
+  }
+
+  .abbrev-btn.save:hover {
+    color: #22c55e;
+    background: color-mix(in srgb, #22c55e 10%, var(--surface));
+  }
+
+  .abbrev-btn.cancel:hover {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  }
+
+  /* ── Trigger icon (disconnected state) ──── */
   .trigger-icon {
     color: var(--text-muted);
     flex-shrink: 0;
   }
 
-  .trigger-sync {
-    color: var(--accent);
+  /* ── Status indicator dot ────────────────── */
+  .status-indicator {
+    display: flex;
+    align-items: center;
     flex-shrink: 0;
-    opacity: 0;
-    transition: opacity 150ms;
   }
 
-  .trigger-sync.spinning {
+  .status-indicator .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    opacity: 0.35;
+    transition: background 0.3s, opacity 0.3s, box-shadow 0.3s;
+  }
+
+  .status-indicator .status-dot.connected {
+    background: #22c55e;
     opacity: 1;
-    animation: spin 1s linear infinite;
   }
 
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+  .status-indicator .status-dot.syncing {
+    background: var(--accent);
+    opacity: 1;
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent); }
+    50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 0%, transparent); }
+  }
+
+  /* ── Chevron ─────────────────────────────── */
+  .chevron {
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .trigger.open .chevron {
+    transform: rotate(180deg);
   }
 
   /* ── Dropdown ────────────────────────────── */
@@ -315,6 +528,67 @@
   .status-label {
     font-size: 0.82rem;
     color: var(--text-muted);
+  }
+
+  /* ── User info row ─────────────────────── */
+  .user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.75rem;
+  }
+
+  .user-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .user-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .user-host {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .connected-badge {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .connected-badge .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 0 2px color-mix(in srgb, #22c55e 20%, transparent);
+    opacity: 1;
+  }
+
+  .sync-icon {
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .sync-icon.spinning {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 
   /* ── Menu items ──────────────────────────── */

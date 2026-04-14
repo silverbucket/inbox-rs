@@ -1,6 +1,6 @@
 import { writable, derived, get } from 'svelte/store';
 import type { Writable, Readable } from 'svelte/store';
-import type { InboxItem, AppConfig, Collection, CollectionGroup } from '@inbox-rs/rs-module';
+import type { InboxItem, AppConfig, UserSettings, Collection, CollectionGroup } from '@inbox-rs/rs-module';
 import { migrator } from '@inbox-rs/rs-module';
 import { cleanForStorage } from './clean-for-storage';
 import rs, { fetchFileBlobUrl } from './rs';
@@ -14,8 +14,21 @@ export const blobUrls = writable<Record<string, string>>({});
 
 export const connected = writable(false);
 export const syncing = writable(false);
+
+function readStoredUserAddress(): string {
+  try {
+    // remoteStorage.js persists the user address in this key
+    const settings = JSON.parse(localStorage.getItem('remotestorage:wireclient') ?? '{}');
+    return settings?.userAddress ?? localStorage.getItem('inbox-rs:userAddress') ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export const userAddress = writable<string>(readStoredUserAddress());
 export const items = writable<Record<string, InboxItem>>({});
 export const appConfig = writable<AppConfig>({});
+export const userSettings = writable<UserSettings>({});
 export const collections = writable<Record<string, Collection>>({});
 export const groups = writable<Record<string, CollectionGroup>>({});
 /** Derived from loaded items using rs-migrate's getPending */
@@ -113,6 +126,19 @@ async function loadConfig() {
   }
 }
 
+async function loadUserSettings() {
+  const inbox = getInbox();
+  if (!inbox) return;
+  try {
+    const settings = await inbox.getUserSettings();
+    if (settings && typeof settings === 'object') {
+      userSettings.set(settings);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 async function loadCollections() {
   const inbox = getInbox();
   await loadEntities<Collection>(() => inbox.getAllCollections(), collections, 'itemIds');
@@ -166,20 +192,29 @@ let reloadTimeout: ReturnType<typeof setTimeout> | undefined;
 
 rs.on('connected', () => {
   connected.set(true);
+  const addr =
+    (rs as any).remote?.userAddress ||
+    localStorage.getItem('inbox-rs:userAddress') ||
+    '';
+  userAddress.set(addr);
   void loadItems();
   void loadConfig();
+  void loadUserSettings();
   void loadCollections();
   void loadGroups();
 });
 
 rs.on('disconnected', () => {
   connected.set(false);
+  userAddress.set('');
+  localStorage.removeItem('inbox-rs:userAddress');
   if (reloadTimeout) {
     clearTimeout(reloadTimeout);
     reloadTimeout = undefined;
   }
   items.set({});
   appConfig.set({});
+  userSettings.set({});
   collections.set({});
   groups.set({});
 });
@@ -206,6 +241,21 @@ export async function updateConfig(patch: Partial<AppConfig>) {
   } catch (e) {
     appConfig.set(currentConfig);
     console.error('[inbox] failed to persist config update:', e);
+    throw e;
+  }
+}
+
+export async function updateUserSettings(patch: Partial<UserSettings>) {
+  const inbox = getInbox();
+  if (!inbox) throw new Error('Cannot update user settings: storage not connected');
+  const current = get(userSettings);
+  const updated = { ...current, ...patch };
+  userSettings.set(updated);
+  try {
+    await inbox.setUserSettings(cleanForStorage(updated));
+  } catch (e) {
+    userSettings.set(current);
+    console.error('[inbox] failed to persist user settings:', e);
     throw e;
   }
 }

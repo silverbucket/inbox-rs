@@ -84,6 +84,11 @@ export interface EmailItem extends InboxItemBase {
 
 export type InboxItem = BookmarkItem | NoteItem | ImageItem | AudioItem | VideoItem | DocumentItem | CodeSnippetItem | TodoItem | EmailItem;
 
+export interface UserSettings {
+  abbreviation?: string;
+  theme?: 'system' | 'light' | 'dark';
+}
+
 export interface AppConfig {
   todosCollapsed?: boolean;
   collectionsOrder?: string[]; // ordered list of collection IDs for nav display

@@ -1,5 +1,5 @@
-import { bookmarkSchema, noteSchema, imageMetaSchema, audioMetaSchema, videoMetaSchema, documentMetaSchema, codeSnippetSchema, todoSchema, emailSchema, appConfigSchema, collectionSchema, collectionGroupSchema } from './schemas.js';
-import type { InboxItem, InboxItemType, AppConfig, Collection, CollectionGroup } from './types.js';
+import { bookmarkSchema, noteSchema, imageMetaSchema, audioMetaSchema, videoMetaSchema, documentMetaSchema, codeSnippetSchema, todoSchema, emailSchema, appConfigSchema, userSettingsSchema, collectionSchema, collectionGroupSchema } from './schemas.js';
+import type { InboxItem, InboxItemType, AppConfig, UserSettings, Collection, CollectionGroup } from './types.js';
 import type { MigrateResult } from 'rs-migrate';
 import { migrator, legacySchemas } from './migrations.js';
 export { migrator } from './migrations.js';
@@ -10,7 +10,7 @@ const CURRENT_TYPES: Set<string> = new Set<string>([
   'document', 'code-snippet', 'todo', 'email',
 ] satisfies InboxItemType[]);
 
-export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, AudioItem, VideoItem, DocumentItem, CodeSnippetItem, TodoItem, EmailItem, AppConfig, Collection, CollectionGroup } from './types.js';
+export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, AudioItem, VideoItem, DocumentItem, CodeSnippetItem, TodoItem, EmailItem, AppConfig, UserSettings, Collection, CollectionGroup } from './types.js';
 
 export interface InboxModuleExports {
   getAll(): Promise<Record<string, InboxItem>>;
@@ -20,6 +20,8 @@ export interface InboxModuleExports {
   getFile(path: string): Promise<{ data: ArrayBuffer; mimeType: string } | undefined>;
   getConfig(): Promise<AppConfig>;
   setConfig(config: AppConfig): Promise<void>;
+  getUserSettings(): Promise<UserSettings>;
+  setUserSettings(settings: UserSettings): Promise<void>;
   getAllCollections(): Promise<Record<string, Collection>>;
   getCollectionById(id: string): Promise<Collection | undefined>;
   storeCollection(collection: Collection): Promise<void>;
@@ -61,6 +63,7 @@ const InboxModule = {
     privateClient.declareType('todo', todoSchema);
     privateClient.declareType('email', emailSchema);
     privateClient.declareType('app-config', appConfigSchema);
+    privateClient.declareType('user-settings', userSettingsSchema);
     privateClient.declareType('collection', collectionSchema);
     privateClient.declareType('collection-group', collectionGroupSchema);
 
@@ -153,6 +156,14 @@ const InboxModule = {
 
         async setConfig(config: AppConfig): Promise<void> {
           await privateClient.storeObject('app-config', 'config/app', config);
+        },
+
+        async getUserSettings(): Promise<UserSettings> {
+          return (await privateClient.getObject('config/user')) || {};
+        },
+
+        async setUserSettings(settings: UserSettings): Promise<void> {
+          await privateClient.storeObject('user-settings', 'config/user', settings);
         },
 
         async getAllCollections(): Promise<Record<string, Collection>> {
