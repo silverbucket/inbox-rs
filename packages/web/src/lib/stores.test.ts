@@ -30,7 +30,6 @@ vi.mock('./rs', () => {
     default: rs,
     fetchFileBlobUrl: mockFetchFileBlobUrl,
     fetchFileWithAuth: vi.fn(),
-    getFileUrl: vi.fn(),
   };
 });
 
