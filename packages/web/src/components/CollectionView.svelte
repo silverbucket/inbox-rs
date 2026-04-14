@@ -106,7 +106,7 @@
     role="button"
     tabindex="0"
     onclick={ontoggle}
-    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ontoggle(); } }}
+    onkeydown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); ontoggle(); } }}
     aria-expanded={expanded}
     aria-label="{expanded ? 'Collapse' : 'Expand'} {collection.name}{collection.active ? ' (active)' : ''}"
   >
