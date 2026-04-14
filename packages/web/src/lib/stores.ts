@@ -149,66 +149,6 @@ async function loadGroups() {
   await loadEntities<CollectionGroup>(() => inbox.getAllGroups(), groups, 'collectionIds');
 }
 
-const DEFAULT_GROUP_COLOR = '#6b7280';
-let ensureDefaultGroupRunning = false;
-
-async function ensureDefaultGroup() {
-  if (ensureDefaultGroupRunning) return;
-  ensureDefaultGroupRunning = true;
-  try {
-    const currentGroups = get(groups);
-    let targetGroupId: string | undefined;
-
-    // If no groups exist, create a default "Collections" group
-    if (Object.keys(currentGroups).length === 0) {
-      const defaultGroup: CollectionGroup = {
-        id: crypto.randomUUID(),
-        name: 'Collections',
-        collectionIds: [],
-        createdAt: new Date().toISOString(),
-        color: DEFAULT_GROUP_COLOR,
-      };
-      await storeGroup(defaultGroup);
-      targetGroupId = defaultGroup.id;
-    }
-
-    // Migrate any ungrouped collections into the first group
-    const allCollections = get(collections);
-    const allGroups = get(groups);
-    const firstGroupId = targetGroupId || Object.values(allGroups)[0]?.id;
-    if (!firstGroupId) return;
-
-    const groupIds = new Set(Object.keys(allGroups));
-    for (const col of Object.values(allCollections)) {
-      if (!col.groupId || !groupIds.has(col.groupId)) {
-        await moveCollectionToGroup(col.id, firstGroupId);
-      }
-    }
-
-    // Reconcile: ensure group.collectionIds includes all collections that reference it
-    const reconciledGroups = get(groups);
-    for (const [gid, group] of Object.entries(reconciledGroups)) {
-      const colIdSet = new Set(group.collectionIds);
-      const missing: string[] = [];
-      for (const col of Object.values(get(collections))) {
-        if (col.groupId === gid && !colIdSet.has(col.id)) {
-          missing.push(col.id);
-        }
-      }
-      if (missing.length > 0) {
-        console.warn(`[inbox] reconciling group "${group.name}": adding ${missing.length} missing collection(s)`);
-        const updated: CollectionGroup = {
-          ...group,
-          collectionIds: [...group.collectionIds, ...missing],
-        };
-        await storeGroup(updated);
-      }
-    }
-  } finally {
-    ensureDefaultGroupRunning = false;
-  }
-}
-
 // Debounced sync indicator: stays visible for at least 1 second to avoid flicker
 let syncTimeout: ReturnType<typeof setTimeout> | null = null;
 let syncVisibleUntil = 0;
@@ -258,7 +198,6 @@ rs.on('connected', async () => {
     '';
   userAddress.set(addr);
   await Promise.all([loadItems(), loadConfig(), loadUserSettings(), loadCollections(), loadGroups()]);
-  await ensureDefaultGroup();
 });
 
 rs.on('disconnected', () => {
@@ -324,7 +263,6 @@ function scheduleReload() {
   reloadTimeout = setTimeout(async () => {
     reloadTimeout = undefined;
     await Promise.all([loadItems(), loadCollections(), loadGroups()]);
-    await ensureDefaultGroup();
   }, 100);
 }
 if (inboxRef) {
@@ -654,6 +592,14 @@ export const groupCollections = derived([collections, groups, appConfig], ([$col
   return result;
 });
 
+export const ungroupedCollections = derived(
+  [sortedCollections, groups],
+  ([$sortedCollections, $groups]) => {
+    const groupIds = new Set(Object.keys($groups));
+    return $sortedCollections.filter(c => !c.groupId || !groupIds.has(c.groupId));
+  }
+);
+
 export async function storeGroup(group: CollectionGroup) {
   const inbox = getInbox();
   const clean = cleanForStorage(group);
@@ -661,15 +607,19 @@ export async function storeGroup(group: CollectionGroup) {
   groups.update(current => ({ ...current, [clean.id]: clean }));
 }
 
-export async function deleteGroup(id: string) {
+export async function deleteGroup(id: string): Promise<boolean> {
   const inbox = getInbox();
   const currentGroups = get(groups);
   const group = currentGroups[id];
 
-  // Refuse to delete a group that still has collections
-  if (group && group.collectionIds.length > 0) {
+  if (!group) return false;
+
+  // Refuse to delete a group that still has collections (check groupId, not stale collectionIds)
+  const allCollections = get(collections);
+  const hasCollections = Object.values(allCollections).some(col => col.groupId === id);
+  if (hasCollections) {
     console.warn('[inbox] cannot delete group with collections — remove them first');
-    return;
+    return false;
   }
 
   const prevGroups = get(groups);
@@ -681,6 +631,7 @@ export async function deleteGroup(id: string) {
       return next;
     });
     await removeFromOrderConfig(id, 'groupsOrder');
+    return true;
   } catch (e) {
     groups.set(prevGroups);
     console.error('[inbox] deleteGroup failed, rolling back:', e);

@@ -12,14 +12,15 @@
   import CollectionsPage from './components/CollectionsPage.svelte';
   import CollectionFormModal from './components/CollectionFormModal.svelte';
   import GroupFormModal from './components/GroupFormModal.svelte';
-  import { connected, deleteItem, todoItems, appConfig, updateConfig, pendingMigrationCount, runAllMigrations, storeCollection, sortedGroups, storeGroup, moveCollectionToGroup } from './lib/stores';
+  import { connected, deleteItem, todoItems, appConfig, updateConfig, pendingMigrationCount, runAllMigrations, storeCollection, sortedGroups, storeGroup, moveCollectionToGroup, ungroupedCollections } from './lib/stores';
   import { pluginArtifactVersion } from './lib/plugin-downloads.generated';
   import LogoShield from './components/LogoShield.svelte';
 
   type Route =
     | { page: 'home' }
     | { page: 'plugins' }
-    | { page: 'group'; groupId: string };
+    | { page: 'group'; groupId: string }
+    | { page: 'ungrouped' };
 
   let activeModal = $state<InboxItemType | null>(null);
   let editingItem = $state<InboxItem | undefined>(undefined);
@@ -32,18 +33,11 @@
     if (typeof window === 'undefined') return { page: 'home' };
     const hash = window.location.hash;
     if (hash === '#/plugins') return { page: 'plugins' };
-    if (hash === '#/collections') return { page: 'home' };
+    if (hash === '#/collections') return { page: 'ungrouped' };
     const groupMatch = hash.match(/^#\/group\/(.+)$/);
     if (groupMatch) return { page: 'group', groupId: groupMatch[1] };
     return { page: 'home' };
   }
-
-  // Legacy #/collections redirect: wait for groups to load, then redirect
-  $effect(() => {
-    if (window.location.hash === '#/collections' && $sortedGroups.length > 0) {
-      window.location.hash = `#/group/${$sortedGroups[0].id}`;
-    }
-  });
 
   let route = $state<Route>(getRouteFromHash());
   let userToggledTodos = false;
@@ -182,6 +176,13 @@
             <span class="group-name">{group.name}</span>
           </a>
         {/each}
+        {#if $ungroupedCollections.length > 0}
+          <a
+            class:active={route.page === 'ungrouped'}
+            aria-current={route.page === 'ungrouped' ? 'page' : undefined}
+            href="#/collections"
+          >Ungrouped</a>
+        {/if}
         <button class="nav-add-group" onclick={() => showGroupForm = true} title="New group" aria-label="Create new group">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -199,6 +200,16 @@
 <main>
   {#if route.page === 'plugins'}
     <PluginsPage />
+  {:else if route.page === 'ungrouped'}
+    {#if $connected}
+      <CollectionsPage onselect={openView} oncreate={() => showCollectionForm = true} groupId="" />
+    {:else}
+      <div class="empty-state">
+        <div class="empty-icon">📥</div>
+        <h2>Connect your storage</h2>
+        <p>Enter your remoteStorage address above to view your collections.</p>
+      </div>
+    {/if}
   {:else if route.page === 'group'}
     {#if $connected}
       <CollectionsPage onselect={openView} oncreate={() => showCollectionForm = true} groupId={route.groupId} />
