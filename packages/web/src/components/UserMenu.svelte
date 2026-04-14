@@ -161,7 +161,12 @@
               </button>
             </form>
           {:else}
-            <button class="avatar avatar-lg avatar-editable" onclick={startEditAbbrev} title="Click to set custom abbreviation" aria-label="Edit abbreviation">{initials}</button>
+            <button class="avatar-edit-wrapper" onclick={startEditAbbrev} title="Edit abbreviation" aria-label="Edit abbreviation">
+              <span class="avatar avatar-lg">{initials}</span>
+              <span class="avatar-edit-badge" aria-hidden="true">
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+              </span>
+            </button>
           {/if}
           <div class="user-text">
             <span class="user-name">{userPart || $userAddress}</span>
@@ -313,14 +318,44 @@
     font-size: 1rem;
   }
 
-  .avatar-editable {
+  .avatar-edit-wrapper {
+    position: relative;
+    display: inline-flex;
+    background: none;
+    border: none;
+    padding: 0;
     cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .avatar-edit-wrapper .avatar {
     transition: border-color 0.15s, box-shadow 0.15s;
   }
 
-  .avatar-editable:hover {
+  .avatar-edit-wrapper:hover .avatar {
     border-color: var(--accent);
     box-shadow: 0 0 0 2px var(--accent-subtle);
+  }
+
+  .avatar-edit-badge {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white;
+    border: 2px solid var(--surface);
+    opacity: 0.7;
+    transition: opacity 0.15s;
+  }
+
+  .avatar-edit-wrapper:hover .avatar-edit-badge {
+    opacity: 1;
   }
 
   /* ── Abbreviation editor ─────────────────── */
