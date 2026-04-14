@@ -244,6 +244,22 @@ describe('groupCollections', () => {
     expect(result['g1'][0].id).toBe('c1');
   });
 
+  it('does not show collection in stale group after move', () => {
+    // Partial write: collection moved to g2 but g1.collectionIds still references it
+    const col1 = makeCollection('c1', 'g2');
+    const oldGroup = makeGroup('g1', ['c1']);
+    const newGroup = makeGroup('g2', []);
+
+    collections.set({ c1: col1 });
+    groups.set({ g1: oldGroup, g2: newGroup });
+
+    const result = get(groupCollections);
+    // c1 should only appear in g2 (its actual groupId), not g1
+    expect(result['g1']).toHaveLength(0);
+    expect(result['g2']).toHaveLength(1);
+    expect(result['g2'][0].id).toBe('c1');
+  });
+
   it('returns empty array for group with no collections', () => {
     const group = makeGroup('g1', []);
     groups.set({ g1: group });

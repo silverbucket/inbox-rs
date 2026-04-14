@@ -636,9 +636,12 @@ export const sortedGroups = orderedDerived<CollectionGroup>(groups, 'groupsOrder
 export const groupCollections = derived([collections, groups, appConfig], ([$collections, $groups]) => {
   const result: Record<string, Collection[]> = {};
   for (const [gid, group] of Object.entries($groups)) {
-    const orderedIds = group.collectionIds.filter(cid => $collections[cid] !== undefined);
+    const orderedIds = group.collectionIds.filter(cid => {
+      const col = $collections[cid];
+      return col !== undefined && col.groupId === gid;
+    });
     const orderedSet = new Set(orderedIds);
-    // Start with ordered collections
+    // Start with ordered collections whose groupId matches
     const cols: Collection[] = orderedIds.map(cid => $collections[cid]);
     // Append any collections whose groupId points here but missing from collectionIds
     for (const col of Object.values($collections)) {
