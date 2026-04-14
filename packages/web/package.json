@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "predev": "node ../../scripts/gen-plugin-metadata.mjs",
     "prebuild": "node ../../scripts/package-plugins.mjs",
     "build": "vite build",
     "preview": "vite preview",
