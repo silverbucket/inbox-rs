@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Inbox RS",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Save links, text, and more to your remoteStorage inbox.",
   "permissions": [
     "contextMenus",
@@ -32,7 +32,9 @@
       "id": "inbox-rs@silverbucket.net",
       "strict_min_version": "126.0",
       "data_collection_permissions": {
-        "required": ["none"],
+        "required": [
+          "none"
+        ],
         "optional": []
       }
     }
