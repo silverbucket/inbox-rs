@@ -7,8 +7,7 @@
     "contextMenus",
     "activeTab",
     "storage",
-    "identity",
-    "scripting"
+    "identity"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -30,7 +29,7 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "inbox-rs@example.com",
+      "id": "inbox-rs@silverbucket.net",
       "strict_min_version": "126.0",
       "data_collection_permissions": {
         "required": ["none"],
