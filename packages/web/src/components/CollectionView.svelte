@@ -2,7 +2,7 @@
   import type { InboxItem, InboxItemType, Collection } from '@inbox-rs/rs-module';
   import { dndzone } from 'svelte-dnd-action';
   import {
-    collectionItems, storeItem,
+    collectionItems, storeItem, storeCollection,
     deleteItem,
     sortedGroups, moveCollectionToGroup,
     reorderCollectionItems
@@ -54,6 +54,11 @@
     await moveCollectionToGroup(collection.id, groupId);
   }
 
+  async function handleToggleActive(e: Event) {
+    e.stopPropagation();
+    await storeCollection({ ...collection, active: !collection.active });
+  }
+
   async function toggleCompleted(e: Event, item: InboxItem) {
     e.stopPropagation();
     const nowCompleted = !item.completed;
@@ -101,23 +106,38 @@
     role="button"
     tabindex="0"
     onclick={ontoggle}
-    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ontoggle(); } }}
+    onkeydown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); ontoggle(); } }}
     aria-expanded={expanded}
     aria-label="{expanded ? 'Collapse' : 'Expand'} {collection.name}{collection.active ? ' (active)' : ''}"
   >
     <span class="color-indicator"></span>
-    {#if collection.active}
-      <span class="active-dot" title="Active — todos surfaced in main list"></span>
-    {/if}
     <svg class="chevron" class:open={expanded} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="6 9 12 15 18 9"></polyline>
     </svg>
     <div class="header-info">
       <h3>{collection.name}</h3>
+      <button class="btn-header btn-edit" onclick={(e) => { e.stopPropagation(); onedit(); }} aria-label="Edit collection" title="Edit">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+        </svg>
+      </button>
       {#if collection.description && !expanded}
         <span class="col-description">{collection.description}</span>
       {/if}
     </div>
+    <button
+      type="button"
+      class="header-toggle"
+      class:on={collection.active}
+      onclick={handleToggleActive}
+      role="switch"
+      aria-checked={collection.active ?? false}
+      aria-label="{collection.active ? 'Deactivate' : 'Activate'} collection"
+      title="{collection.active ? 'Active' : 'Inactive'} — click to toggle"
+    >
+      <span class="header-toggle-knob"></span>
+    </button>
     <div class="header-badges">
       {#if openTodos.length > 0}
         <span class="badge badge-todo" title="{openTodos.length} open {openTodos.length === 1 ? 'todo' : 'todos'}">
@@ -135,12 +155,6 @@
       {/if}
     </div>
     <div class="header-actions">
-      <button class="btn-header" onclick={(e) => { e.stopPropagation(); onedit(); }} aria-label="Edit collection" title="Edit">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-        </svg>
-      </button>
       {#if availableGroups.length > 0}
         <div class="move-menu-wrapper">
           <button class="btn-header" bind:this={moveButtonEl} aria-label="Move to group" aria-haspopup="menu" aria-expanded={showMoveMenu} title="Move to group" onclick={toggleMoveMenu}>
@@ -412,19 +426,56 @@
     flex-shrink: 0;
   }
 
-  .active-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--_col);
+  .header-toggle {
+    position: relative;
+    width: 32px;
+    height: 18px;
+    border-radius: 999px;
+    border: none;
+    background: color-mix(in srgb, var(--text-muted) 25%, var(--bg) 75%);
+    cursor: pointer;
+    transition: background 200ms;
     flex-shrink: 0;
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--_col) 30%, transparent 70%);
-    animation: pulse-active 2s ease-in-out infinite;
+    padding: 0;
+    margin-left: auto;
   }
 
-  @keyframes pulse-active {
-    0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--_col) 30%, transparent 70%); }
-    50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--_col) 15%, transparent 85%); }
+  .header-toggle.on {
+    background: var(--_col);
+  }
+
+  .header-toggle-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: white;
+    transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+
+  .header-toggle.on .header-toggle-knob {
+    transform: translateX(14px);
+  }
+
+  .btn-edit {
+    width: 28px;
+    height: 28px;
+    opacity: 0;
+    transition: opacity 150ms, color 150ms, background 150ms;
+    flex-shrink: 0;
+  }
+
+  .collection-header:hover .btn-edit {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    .btn-edit {
+      opacity: 1;
+    }
   }
 
   .chevron {
@@ -977,6 +1028,15 @@
 
     .collection-header {
       padding: 0.65rem 0.75rem;
+      gap: 0.35rem;
+    }
+
+    .col-description {
+      display: none;
+    }
+
+    .header-badges {
+      display: none;
     }
 
     .collection-body {

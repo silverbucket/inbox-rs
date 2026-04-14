@@ -6,7 +6,7 @@
     storeCollection, deleteCollection,
     groups, groupCollections, sortedGroups, storeGroup, deleteGroup, moveCollectionToGroup,
     ungroupedCollections,
-    appConfig, updateConfig, reorderGroupCollections
+    appConfig, updateConfig, reorderGroupCollections,
   } from '../lib/stores';
   import CollectionView from './CollectionView.svelte';
   import CollectionFormModal from './CollectionFormModal.svelte';
@@ -108,6 +108,25 @@
       window.location.hash = remaining.length > 0 ? `#/group/${remaining[0].id}` : '#/';
     }
   }
+
+  const hasAnyActive = $derived(filteredCollections.some(c => c.active));
+  const hasAnyInactive = $derived(filteredCollections.some(c => !c.active));
+
+  async function activateAll() {
+    for (const col of filteredCollections) {
+      if (!col.active) {
+        await storeCollection({ ...col, active: true });
+      }
+    }
+  }
+
+  async function deactivateAll() {
+    for (const col of filteredCollections) {
+      if (col.active) {
+        await storeCollection({ ...col, active: false });
+      }
+    }
+  }
 </script>
 
 <div class="collections-page">
@@ -126,6 +145,22 @@
             </svg>
           </button>
         </div>
+      </div>
+    {/if}
+    {#if filteredCollections.length > 0}
+      <div class="batch-actions">
+        <button
+          class="btn-batch"
+          onclick={activateAll}
+          disabled={!hasAnyInactive}
+          title="Activate all collections"
+        >Activate All</button>
+        <button
+          class="btn-batch"
+          onclick={deactivateAll}
+          disabled={!hasAnyActive}
+          title="Deactivate all collections"
+        >Deactivate All</button>
       </div>
     {/if}
     <button class="btn-new" onclick={oncreate}>
@@ -242,6 +277,35 @@
     background: var(--surface-tint);
   }
 
+  .batch-actions {
+    display: flex;
+    gap: 0.35rem;
+    margin-left: auto;
+    margin-right: 0.75rem;
+  }
+
+  .btn-batch {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: color 150ms, background 150ms, border-color 150ms;
+  }
+
+  .btn-batch:hover:not(:disabled) {
+    color: var(--text);
+    background: var(--surface-tint);
+    border-color: color-mix(in srgb, var(--text-muted) 30%, var(--border) 70%);
+  }
+
+  .btn-batch:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
   .btn-new {
     display: inline-flex;
     align-items: center;
@@ -281,5 +345,27 @@
     color: var(--text-muted);
     font-size: 0.9rem;
     max-width: 400px;
+  }
+
+  @media (max-width: 550px) {
+    .page-header {
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .batch-actions {
+      order: 3;
+      width: 100%;
+      margin-left: 0;
+      margin-right: 0;
+    }
+
+    .btn-batch {
+      flex: 1;
+    }
+
+    .btn-new {
+      margin-left: auto;
+    }
   }
 </style>
