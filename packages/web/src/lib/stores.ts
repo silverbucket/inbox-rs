@@ -223,18 +223,15 @@ rs.on('wire-done', () => console.log('[inbox] wire-done'));
 
 let reloadTimeout: ReturnType<typeof setTimeout> | undefined;
 
-rs.on('connected', () => {
+rs.on('connected', async () => {
   connected.set(true);
   const addr =
     (rs as any).remote?.userAddress ||
     localStorage.getItem('inbox-rs:userAddress') ||
     '';
   userAddress.set(addr);
-  void loadItems();
-  void loadConfig();
-  void loadUserSettings();
-  void loadCollections();
-  void loadGroups();
+  await Promise.all([loadItems(), loadConfig(), loadUserSettings(), loadCollections(), loadGroups()]);
+  await ensureDefaultGroup();
 });
 
 rs.on('disconnected', () => {

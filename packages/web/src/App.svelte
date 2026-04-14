@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { get } from 'svelte/store';
   import type { InboxItemType, InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
   import UserMenu from './components/UserMenu.svelte';
   import InboxGrid from './components/InboxGrid.svelte';
@@ -33,18 +32,18 @@
     if (typeof window === 'undefined') return { page: 'home' };
     const hash = window.location.hash;
     if (hash === '#/plugins') return { page: 'plugins' };
-    if (hash === '#/collections') {
-      const groups = get(sortedGroups);
-      if (groups.length > 0) {
-        window.location.hash = `#/group/${groups[0].id}`;
-        return { page: 'group', groupId: groups[0].id };
-      }
-      return { page: 'home' };
-    }
+    if (hash === '#/collections') return { page: 'home' };
     const groupMatch = hash.match(/^#\/group\/(.+)$/);
     if (groupMatch) return { page: 'group', groupId: groupMatch[1] };
     return { page: 'home' };
   }
+
+  // Legacy #/collections redirect: wait for groups to load, then redirect
+  $effect(() => {
+    if (window.location.hash === '#/collections' && $sortedGroups.length > 0) {
+      window.location.hash = `#/group/${$sortedGroups[0].id}`;
+    }
+  });
 
   let route = $state<Route>(getRouteFromHash());
   let userToggledTodos = false;
