@@ -6,6 +6,9 @@
   let inputAddress = $state('');
   let connecting = $state(false);
   let theme = $state<'system' | 'light' | 'dark'>(getStoredTheme());
+  let customAbbrev = $state(localStorage.getItem('inbox-rs:userAbbrev') ?? '');
+  let editingAbbrev = $state(false);
+  let abbrevInput = $state('');
 
   function getStoredTheme(): 'system' | 'light' | 'dark' {
     if (typeof localStorage === 'undefined') return 'system';
@@ -79,13 +82,34 @@
   const atIdx = $derived($userAddress.indexOf('@'));
   const userPart = $derived(atIdx >= 0 ? $userAddress.slice(0, atIdx) : $userAddress);
   const hostPart = $derived(atIdx >= 0 ? $userAddress.slice(atIdx) : '');
-  const initials = $derived(
+  const autoInitials = $derived(
     userPart.length >= 2
       ? (userPart[0] + userPart[userPart.length - 1]).toUpperCase()
       : userPart.length === 1
         ? userPart.toUpperCase()
         : '?'
   );
+  const initials = $derived(customAbbrev || autoInitials);
+
+  function startEditAbbrev() {
+    abbrevInput = customAbbrev;
+    editingAbbrev = true;
+  }
+
+  function saveAbbrev() {
+    const val = abbrevInput.trim().toUpperCase().slice(0, 3);
+    customAbbrev = val;
+    if (val) {
+      localStorage.setItem('inbox-rs:userAbbrev', val);
+    } else {
+      localStorage.removeItem('inbox-rs:userAbbrev');
+    }
+    editingAbbrev = false;
+  }
+
+  function cancelEditAbbrev() {
+    editingAbbrev = false;
+  }
 </script>
 
 <div class="user-menu">
@@ -118,7 +142,27 @@
       <!-- Connection status -->
       {#if $connected}
         <div class="user-info">
-          <span class="avatar avatar-lg" aria-hidden="true">{initials}</span>
+          {#if editingAbbrev}
+            <form class="abbrev-form" onsubmit={(e) => { e.preventDefault(); saveAbbrev(); }}>
+              <input
+                class="abbrev-input"
+                type="text"
+                bind:value={abbrevInput}
+                maxlength="3"
+                placeholder={autoInitials}
+                onkeydown={(e) => { if (e.key === 'Escape') cancelEditAbbrev(); }}
+                autofocus
+              />
+              <button type="submit" class="abbrev-btn save" aria-label="Save">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              </button>
+              <button type="button" class="abbrev-btn cancel" onclick={cancelEditAbbrev} aria-label="Cancel">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </form>
+          {:else}
+            <button class="avatar avatar-lg avatar-editable" onclick={startEditAbbrev} title="Click to set custom abbreviation" aria-label="Edit abbreviation">{initials}</button>
+          {/if}
           <div class="user-text">
             <span class="user-name">{userPart || $userAddress}</span>
             <span class="user-host">{hostPart}</span>
@@ -267,6 +311,64 @@
     width: 36px;
     height: 36px;
     font-size: 1rem;
+  }
+
+  .avatar-editable {
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .avatar-editable:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-subtle);
+  }
+
+  /* ── Abbreviation editor ─────────────────── */
+  .abbrev-form {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+  }
+
+  .abbrev-input {
+    width: 42px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--accent);
+    background: var(--accent-subtle);
+    color: var(--accent);
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-align: center;
+    text-transform: uppercase;
+    outline: none;
+    padding: 0;
+    box-shadow: 0 0 0 2px var(--accent-subtle);
+  }
+
+  .abbrev-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: color 0.12s, background 0.12s;
+  }
+
+  .abbrev-btn.save:hover {
+    color: #22c55e;
+    background: color-mix(in srgb, #22c55e 10%, var(--surface));
+  }
+
+  .abbrev-btn.cancel:hover {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 10%, var(--surface));
   }
 
   /* ── Trigger icon (disconnected state) ──── */
