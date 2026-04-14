@@ -8,28 +8,37 @@ const { mockFetchFileBlobUrl } = vi.hoisted(() => {
   return { mockFetchFileBlobUrl };
 });
 
-vi.mock('./rs', () => {
-  const rs = {
+const { mockRs, mockInbox } = vi.hoisted(() => {
+  const mockInbox = {
+    getAll: vi.fn().mockResolvedValue({}),
+    getConfig: vi.fn().mockResolvedValue({}),
+    getAllCollections: vi.fn().mockResolvedValue({}),
+    getAllGroups: vi.fn().mockResolvedValue({}),
+    onChange: vi.fn(),
+    store: vi.fn().mockResolvedValue(undefined),
+    remove: vi.fn().mockResolvedValue(undefined),
+    storeCollection: vi.fn().mockResolvedValue(undefined),
+    removeCollection: vi.fn().mockResolvedValue(undefined),
+    storeGroup: vi.fn().mockResolvedValue(undefined),
+    removeGroup: vi.fn().mockResolvedValue(undefined),
+    setConfig: vi.fn().mockResolvedValue(undefined),
+    getUserSettings: vi.fn().mockResolvedValue(undefined),
+  };
+  const mockRs = {
     access: { claim: vi.fn() },
     caching: { enable: vi.fn() },
     setSyncInterval: vi.fn(),
     on: vi.fn(),
     remote: {},
     startSync: vi.fn(),
-    inbox: {
-      getAll: vi.fn().mockResolvedValue({}),
-      getConfig: vi.fn().mockResolvedValue({}),
-      getAllCollections: vi.fn().mockResolvedValue({}),
-      getAllGroups: vi.fn().mockResolvedValue({}),
-      onChange: vi.fn(),
-      store: vi.fn().mockResolvedValue(undefined),
-      remove: vi.fn().mockResolvedValue(undefined),
-      storeCollection: vi.fn().mockResolvedValue(undefined),
-      storeGroup: vi.fn().mockResolvedValue(undefined),
-    },
+    inbox: mockInbox,
   };
+  return { mockRs, mockInbox };
+});
+
+vi.mock('./rs', () => {
   return {
-    default: rs,
+    default: mockRs,
     fetchFileBlobUrl: mockFetchFileBlobUrl,
     fetchFileWithAuth: vi.fn(),
   };
@@ -42,9 +51,23 @@ vi.mock('./clean-for-storage', () => ({
 
 import {
   blobUrls, connected, loadFileBlobUrl,
-  collections, groups, groupCollections, moveCollectionToGroup,
+  items, collections, groups, groupCollections, moveCollectionToGroup,
+  deleteGroup, deleteCollection, ungroupedCollections, appConfig,
 } from './stores';
-import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
+import type { InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
+
+/**
+ * rs.on() handlers are registered at module load time.
+ * Capture them once before any test clears mocks.
+ */
+const rsHandlers: Record<string, (...args: any[]) => any> = {};
+function captureRsHandlers() {
+  if (Object.keys(rsHandlers).length > 0) return;
+  for (const [event, handler] of mockRs.on.mock.calls as [string, (...args: any[]) => any][]) {
+    rsHandlers[event] = handler;
+  }
+}
+captureRsHandlers();
 
 describe('loadFileBlobUrl', () => {
   beforeEach(() => {
@@ -266,6 +289,326 @@ describe('groupCollections', () => {
 
     const result = get(groupCollections);
     expect(result['g1']).toEqual([]);
+  });
+});
+
+describe('deleteGroup', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('refuses to delete a group when collections reference it via groupId (even if collectionIds is empty)', async () => {
+    const col = makeCollection('c1', 'g1');
+    const group = makeGroup('g1', []); // collectionIds is empty but col has groupId
+
+    collections.set({ c1: col });
+    groups.set({ g1: group });
+
+    await deleteGroup('g1');
+
+    // Group should still exist
+    expect(get(groups)['g1']).toBeDefined();
+  });
+
+  it('refuses to delete a group when collectionIds and groupId both reference it', async () => {
+    const col = makeCollection('c1', 'g1');
+    const group = makeGroup('g1', ['c1']);
+
+    collections.set({ c1: col });
+    groups.set({ g1: group });
+
+    await deleteGroup('g1');
+
+    expect(get(groups)['g1']).toBeDefined();
+  });
+
+  it('allows deleting a group with no collections referencing it', async () => {
+    const group = makeGroup('g1', []);
+
+    groups.set({ g1: group });
+
+    await deleteGroup('g1');
+
+    expect(get(groups)['g1']).toBeUndefined();
+  });
+
+  it('allows deleting a group where collectionIds has stale entries but no collection has matching groupId', async () => {
+    // collectionIds references c_deleted which doesn't exist, and c1 has groupId pointing elsewhere
+    const col = makeCollection('c1', 'g2');
+    const group = makeGroup('g1', ['c_deleted']);
+
+    collections.set({ c1: col });
+    groups.set({ g1: group, g2: makeGroup('g2', ['c1']) });
+
+    await deleteGroup('g1');
+
+    expect(get(groups)['g1']).toBeUndefined();
+  });
+});
+
+describe('ungroupedCollections', () => {
+  beforeEach(() => {
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('returns collections with no groupId', () => {
+    const col1 = makeCollection('c1');
+    const col2 = makeCollection('c2', 'g1');
+    const group = makeGroup('g1', ['c2']);
+
+    collections.set({ c1: col1, c2: col2 });
+    groups.set({ g1: group });
+
+    const result = get(ungroupedCollections);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('c1');
+  });
+
+  it('returns collections whose groupId points to a non-existent group', () => {
+    const col = makeCollection('c1', 'g_deleted');
+
+    collections.set({ c1: col });
+    groups.set({});
+
+    const result = get(ungroupedCollections);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('c1');
+  });
+
+  it('does not include collections with a valid groupId', () => {
+    const col = makeCollection('c1', 'g1');
+    const group = makeGroup('g1', ['c1']);
+
+    collections.set({ c1: col });
+    groups.set({ g1: group });
+
+    const result = get(ungroupedCollections);
+    expect(result).toHaveLength(0);
+  });
+
+  it('returns empty array when all collections belong to groups', () => {
+    const col1 = makeCollection('c1', 'g1');
+    const col2 = makeCollection('c2', 'g1');
+    const group = makeGroup('g1', ['c1', 'c2']);
+
+    collections.set({ c1: col1, c2: col2 });
+    groups.set({ g1: group });
+
+    const result = get(ungroupedCollections);
+    expect(result).toHaveLength(0);
+  });
+});
+
+describe('no auto-group-creation on connect', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+    // Reset mock return values for loaders
+    mockInbox.getAll.mockResolvedValue({});
+    mockInbox.getConfig.mockResolvedValue({});
+    mockInbox.getAllCollections.mockResolvedValue({});
+    mockInbox.getAllGroups.mockResolvedValue({});
+    mockInbox.getUserSettings.mockResolvedValue(undefined);
+  });
+
+  it('does not create a group when connecting with no groups', async () => {
+    await rsHandlers['connected']();
+
+    expect(get(groups)).toEqual({});
+    expect(mockInbox.storeGroup).not.toHaveBeenCalled();
+  });
+
+  it('does not create a group when connecting with ungrouped collections', async () => {
+    const col = makeCollection('c1');
+    mockInbox.getAllCollections.mockResolvedValue({ c1: col });
+
+    await rsHandlers['connected']();
+
+    // Collections should load but no group should be created
+    expect(get(collections)['c1']).toBeDefined();
+    expect(Object.keys(get(groups))).toHaveLength(0);
+    expect(mockInbox.storeGroup).not.toHaveBeenCalled();
+  });
+
+  it('does not force-migrate ungrouped collections into an existing group', async () => {
+    const col = makeCollection('c1'); // no groupId
+    const group = makeGroup('g1', []);
+    mockInbox.getAllCollections.mockResolvedValue({ c1: col });
+    mockInbox.getAllGroups.mockResolvedValue({ g1: group });
+
+    await rsHandlers['connected']();
+
+    // Collection should remain ungrouped
+    expect(get(collections)['c1'].groupId).toBeUndefined();
+    // storeCollection should not have been called to migrate
+    expect(mockInbox.storeCollection).not.toHaveBeenCalled();
+  });
+
+  it('preserves existing groups on connect without modification', async () => {
+    const group = makeGroup('g1', ['c1']);
+    const col = makeCollection('c1', 'g1');
+    mockInbox.getAllCollections.mockResolvedValue({ c1: col });
+    mockInbox.getAllGroups.mockResolvedValue({ g1: group });
+
+    await rsHandlers['connected']();
+
+    expect(get(groups)['g1']).toBeDefined();
+    expect(get(groups)['g1'].name).toBe('Group g1');
+    // No new groups created, no groups modified
+    expect(mockInbox.storeGroup).not.toHaveBeenCalled();
+  });
+});
+
+describe('no group recreation after deletion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+    mockInbox.getAll.mockResolvedValue({});
+    mockInbox.getConfig.mockResolvedValue({});
+    mockInbox.getAllCollections.mockResolvedValue({});
+    mockInbox.getAllGroups.mockResolvedValue({});
+    mockInbox.getUserSettings.mockResolvedValue(undefined);
+  });
+
+  it('does not recreate a group after all groups are deleted and a reload triggers', async () => {
+    // Start with a group
+    const group = makeGroup('g1', []);
+    groups.set({ g1: group });
+
+    // Delete the group
+    await deleteGroup('g1');
+    expect(get(groups)['g1']).toBeUndefined();
+
+    // Simulate a reload (scheduleReload loads from backend which returns empty)
+    const onChange = mockInbox.onChange.mock.calls[0]?.[1] ?? mockInbox.onChange.mock.calls[0]?.[0];
+    if (onChange) {
+      onChange();
+      // Wait for debounced reload
+      await vi.waitFor(() => {
+        // After reload, groups should still be empty
+        expect(Object.keys(get(groups))).toHaveLength(0);
+      }, { timeout: 500 });
+    }
+
+    expect(mockInbox.storeGroup).not.toHaveBeenCalled();
+  });
+});
+
+describe('deleteGroup preserves collections', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('does not delete collections when deleting an empty group', async () => {
+    const col = makeCollection('c1', 'g2');
+    const group1 = makeGroup('g1', []);
+    const group2 = makeGroup('g2', ['c1']);
+
+    collections.set({ c1: col });
+    groups.set({ g1: group1, g2: group2 });
+
+    await deleteGroup('g1');
+
+    // g1 is gone, g2 and c1 are untouched
+    expect(get(groups)['g1']).toBeUndefined();
+    expect(get(groups)['g2']).toBeDefined();
+    expect(get(collections)['c1']).toBeDefined();
+    expect(get(collections)['c1'].groupId).toBe('g2');
+  });
+
+  it('does not modify any collection groupId when deleting a group', async () => {
+    const col1 = makeCollection('c1', 'g2');
+    const col2 = makeCollection('c2');
+    const emptyGroup = makeGroup('g1', []);
+    const otherGroup = makeGroup('g2', ['c1']);
+
+    collections.set({ c1: col1, c2: col2 });
+    groups.set({ g1: emptyGroup, g2: otherGroup });
+
+    await deleteGroup('g1');
+
+    // All collection groupIds unchanged
+    expect(get(collections)['c1'].groupId).toBe('g2');
+    expect(get(collections)['c2'].groupId).toBeUndefined();
+    expect(mockInbox.storeCollection).not.toHaveBeenCalled();
+  });
+});
+
+describe('deleteGroup with non-existent group', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('does not crash when deleting a group that does not exist', async () => {
+    groups.set({ g1: makeGroup('g1', []) });
+
+    await deleteGroup('g_nonexistent');
+
+    // g1 still exists, no crash
+    expect(get(groups)['g1']).toBeDefined();
+  });
+});
+
+describe('ungroupedCollections reacts to group deletion', () => {
+  beforeEach(() => {
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('collections appear in ungroupedCollections after their group is deleted', async () => {
+    const col = makeCollection('c1', 'g1');
+    const group = makeGroup('g1', ['c1']);
+
+    collections.set({ c1: col });
+    groups.set({ g1: group });
+
+    // Before deletion: c1 is grouped
+    expect(get(ungroupedCollections)).toHaveLength(0);
+    expect(get(groupCollections)['g1']).toHaveLength(1);
+
+    // Simulate the group being removed from the store (as if deleted on another device)
+    groups.update(current => {
+      const next = { ...current };
+      delete next['g1'];
+      return next;
+    });
+
+    // c1 still has groupId 'g1' but that group no longer exists
+    expect(get(ungroupedCollections)).toHaveLength(1);
+    expect(get(ungroupedCollections)[0].id).toBe('c1');
+  });
+
+  it('collections move from ungrouped to grouped when assigned a valid group', async () => {
+    const col = makeCollection('c1');
+    const group = makeGroup('g1', []);
+
+    collections.set({ c1: col });
+    groups.set({ g1: group });
+
+    // Before: ungrouped
+    expect(get(ungroupedCollections)).toHaveLength(1);
+
+    await moveCollectionToGroup('c1', 'g1');
+
+    // After: grouped
+    expect(get(ungroupedCollections)).toHaveLength(0);
+    expect(get(groupCollections)['g1']).toHaveLength(1);
   });
 });
 

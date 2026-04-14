@@ -5,6 +5,7 @@
   import {
     storeCollection, deleteCollection,
     groups, groupCollections, sortedGroups, storeGroup, deleteGroup, moveCollectionToGroup,
+    ungroupedCollections,
     appConfig, updateConfig, reorderGroupCollections
   } from '../lib/stores';
   import CollectionView from './CollectionView.svelte';
@@ -40,9 +41,12 @@
     }
   });
 
+  const isUngrouped = $derived(!groupId);
   const currentGroup = $derived(groupId ? $groups[groupId] : undefined);
 
-  const filteredCollections = $derived($groupCollections[groupId] ?? []);
+  const filteredCollections = $derived(
+    isUngrouped ? $ungroupedCollections : ($groupCollections[groupId] ?? [])
+  );
 
   // DnD: local mutable copy of filtered collections
   let dndCollections = $state<Array<Collection & { id: string }>>([]);
@@ -106,7 +110,9 @@
 
 <div class="collections-page">
   <div class="page-header">
-    {#if currentGroup}
+    {#if isUngrouped}
+      <h2>Ungrouped</h2>
+    {:else if currentGroup}
       <div class="group-header">
         <span class="group-dot-lg" style="background: {currentGroup.color || 'var(--accent)'}"></span>
         <h2>{currentGroup.name}</h2>
