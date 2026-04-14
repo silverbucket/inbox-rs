@@ -57,9 +57,10 @@ export async function exportToZipBytes(
     }
   }
 
-  // Fetch binary files
+  // Fetch binary files — fail on errors to avoid incomplete backups
   const zipData: Record<string, Uint8Array> = {};
   const filesManifest: Record<string, { mimeType: string }> = {};
+  const failedFiles: string[] = [];
 
   for (let i = 0; i < fileItems.length; i++) {
     const { filePath, mimeType } = fileItems[i];
@@ -69,10 +70,18 @@ export async function exportToZipBytes(
       if (file?.data) {
         zipData[`files/${filePath}`] = new Uint8Array(file.data);
         filesManifest[filePath] = { mimeType };
+      } else {
+        failedFiles.push(filePath);
       }
     } catch (e) {
-      console.warn(`[import-export] skipping file ${filePath}:`, e);
+      failedFiles.push(filePath);
     }
+  }
+
+  if (failedFiles.length > 0) {
+    throw new Error(
+      `Export failed: ${failedFiles.length} file(s) could not be retrieved:\n${failedFiles.join('\n')}`,
+    );
   }
 
   onProgress?.({ phase: 'files', current: fileItems.length, total: fileItems.length });
@@ -189,13 +198,9 @@ export async function importFromZipBytes(
     onProgress?.({ phase: 'restoring', current: restored, total: totalToRestore });
   }
 
-  // Restore config and settings
-  if (manifest.appConfig && Object.keys(manifest.appConfig).length > 0) {
-    await inbox.setConfig(manifest.appConfig);
-  }
-  if (manifest.userSettings && Object.keys(manifest.userSettings).length > 0) {
-    await inbox.setUserSettings(manifest.userSettings);
-  }
+  // Restore config and settings (always write, even if empty, to clear old values)
+  await inbox.setConfig(manifest.appConfig ?? {});
+  await inbox.setUserSettings(manifest.userSettings ?? {});
 
   // Reload all stores
   const [allItems, allCollections, allGroups, config, settings] = await Promise.all([

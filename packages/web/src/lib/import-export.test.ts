@@ -157,7 +157,7 @@ describe('exportToZipBytes', () => {
     expect(manifest.files['images/img1.jpg']).toEqual({ mimeType: 'image/jpeg' });
   });
 
-  it('skips missing files gracefully', async () => {
+  it('fails when a file cannot be retrieved', async () => {
     const img = makeImage('img1', 'Missing');
     mockInbox.getAll.mockResolvedValue({ img1: img });
     mockInbox.getAllCollections.mockResolvedValue({});
@@ -166,13 +166,19 @@ describe('exportToZipBytes', () => {
     mockInbox.getUserSettings.mockResolvedValue({});
     mockInbox.getFile.mockResolvedValue(undefined);
 
-    await exportToZipBytes();
+    await expect(exportToZipBytes()).rejects.toThrow('could not be retrieved');
+  });
 
-    const zipInput = mockZipSync.mock.calls[0][0];
-    expect(zipInput['files/images/img1.jpg']).toBeUndefined();
+  it('fails when a file fetch throws', async () => {
+    const img = makeImage('img1', 'Error');
+    mockInbox.getAll.mockResolvedValue({ img1: img });
+    mockInbox.getAllCollections.mockResolvedValue({});
+    mockInbox.getAllGroups.mockResolvedValue({});
+    mockInbox.getConfig.mockResolvedValue({});
+    mockInbox.getUserSettings.mockResolvedValue({});
+    mockInbox.getFile.mockRejectedValue(new Error('network error'));
 
-    const manifest: ExportManifest = JSON.parse(decoder.decode(zipInput['manifest.json']));
-    expect(manifest.files['images/img1.jpg']).toBeUndefined();
+    await expect(exportToZipBytes()).rejects.toThrow('images/img1.jpg');
   });
 
   it('calls onProgress callback', async () => {
@@ -335,7 +341,7 @@ describe('importFromZipBytes', () => {
     expect(progress).toHaveBeenCalledWith(expect.objectContaining({ phase: 'restoring' }));
   });
 
-  it('does not call setConfig for empty appConfig', async () => {
+  it('clears config and settings when archive has empty objects', async () => {
     const manifest: ExportManifest = {
       version: 1,
       exportedAt: '2026-01-01T00:00:00Z',
@@ -351,8 +357,8 @@ describe('importFromZipBytes', () => {
 
     await importFromZipBytes(new Uint8Array([1, 2, 3]));
 
-    expect(mockInbox.setConfig).not.toHaveBeenCalled();
-    expect(mockInbox.setUserSettings).not.toHaveBeenCalled();
+    expect(mockInbox.setConfig).toHaveBeenCalledWith({});
+    expect(mockInbox.setUserSettings).toHaveBeenCalledWith({});
   });
 });
 
