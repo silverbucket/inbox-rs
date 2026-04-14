@@ -150,35 +150,62 @@ async function loadGroups() {
 }
 
 const DEFAULT_GROUP_COLOR = '#6b7280';
+let ensureDefaultGroupRunning = false;
 
 async function ensureDefaultGroup() {
-  const currentGroups = get(groups);
-  let targetGroupId: string | undefined;
+  if (ensureDefaultGroupRunning) return;
+  ensureDefaultGroupRunning = true;
+  try {
+    const currentGroups = get(groups);
+    let targetGroupId: string | undefined;
 
-  // If no groups exist, create a default "Collections" group
-  if (Object.keys(currentGroups).length === 0) {
-    const defaultGroup: CollectionGroup = {
-      id: crypto.randomUUID(),
-      name: 'Collections',
-      collectionIds: [],
-      createdAt: new Date().toISOString(),
-      color: DEFAULT_GROUP_COLOR,
-    };
-    await storeGroup(defaultGroup);
-    targetGroupId = defaultGroup.id;
-  }
-
-  // Migrate any ungrouped collections into the first group
-  const allCollections = get(collections);
-  const allGroups = get(groups);
-  const firstGroupId = targetGroupId || Object.values(allGroups)[0]?.id;
-  if (!firstGroupId) return;
-
-  const groupIds = new Set(Object.keys(allGroups));
-  for (const col of Object.values(allCollections)) {
-    if (!col.groupId || !groupIds.has(col.groupId)) {
-      await moveCollectionToGroup(col.id, firstGroupId);
+    // If no groups exist, create a default "Collections" group
+    if (Object.keys(currentGroups).length === 0) {
+      const defaultGroup: CollectionGroup = {
+        id: crypto.randomUUID(),
+        name: 'Collections',
+        collectionIds: [],
+        createdAt: new Date().toISOString(),
+        color: DEFAULT_GROUP_COLOR,
+      };
+      await storeGroup(defaultGroup);
+      targetGroupId = defaultGroup.id;
     }
+
+    // Migrate any ungrouped collections into the first group
+    const allCollections = get(collections);
+    const allGroups = get(groups);
+    const firstGroupId = targetGroupId || Object.values(allGroups)[0]?.id;
+    if (!firstGroupId) return;
+
+    const groupIds = new Set(Object.keys(allGroups));
+    for (const col of Object.values(allCollections)) {
+      if (!col.groupId || !groupIds.has(col.groupId)) {
+        await moveCollectionToGroup(col.id, firstGroupId);
+      }
+    }
+
+    // Reconcile: ensure group.collectionIds includes all collections that reference it
+    const reconciledGroups = get(groups);
+    for (const [gid, group] of Object.entries(reconciledGroups)) {
+      const colIdSet = new Set(group.collectionIds);
+      const missing: string[] = [];
+      for (const col of Object.values(get(collections))) {
+        if (col.groupId === gid && !colIdSet.has(col.id)) {
+          missing.push(col.id);
+        }
+      }
+      if (missing.length > 0) {
+        console.warn(`[inbox] reconciling group "${group.name}": adding ${missing.length} missing collection(s)`);
+        const updated: CollectionGroup = {
+          ...group,
+          collectionIds: [...group.collectionIds, ...missing],
+        };
+        await storeGroup(updated);
+      }
+    }
+  } finally {
+    ensureDefaultGroupRunning = false;
   }
 }
 
@@ -606,12 +633,23 @@ export async function reorderCollections(newOrder: string[]) {
 
 export const sortedGroups = orderedDerived<CollectionGroup>(groups, 'groupsOrder');
 
-export const groupCollections = derived([collections, groups, appConfig], ([$collections, $groups, $config]) => {
+export const groupCollections = derived([collections, groups, appConfig], ([$collections, $groups]) => {
   const result: Record<string, Collection[]> = {};
   for (const [gid, group] of Object.entries($groups)) {
-    result[gid] = group.collectionIds
-      .map(cid => $collections[cid])
-      .filter((c): c is Collection => c !== undefined);
+    const orderedIds = group.collectionIds.filter(cid => {
+      const col = $collections[cid];
+      return col !== undefined && col.groupId === gid;
+    });
+    const orderedSet = new Set(orderedIds);
+    // Start with ordered collections whose groupId matches
+    const cols: Collection[] = orderedIds.map(cid => $collections[cid]);
+    // Append any collections whose groupId points here but missing from collectionIds
+    for (const col of Object.values($collections)) {
+      if (col.groupId === gid && !orderedSet.has(col.id)) {
+        cols.push(col);
+      }
+    }
+    result[gid] = cols;
   }
   return result;
 });
