@@ -77,13 +77,11 @@ function orderedDerived<T extends { id: string; createdAt: string }>(
   configOrderKey: 'collectionsOrder' | 'groupsOrder',
 ): Readable<T[]> {
   return derived([entityStore, appConfig], ([$entities, $config]) => {
-    const items = Object.values($entities);
-    const order = $config[configOrderKey];
-    if (order?.length) {
-      const orderIndex = new Map(order.map((id, i) => [id, i]));
-      return items.sort((a, b) => (orderIndex.get(a.id) ?? Infinity) - (orderIndex.get(b.id) ?? Infinity));
-    }
-    return items.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    return sortWithConfiguredOrder(
+      Object.values($entities),
+      $config[configOrderKey],
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
   });
 }
 
@@ -275,6 +273,30 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
+function sortWithConfiguredOrder<T extends { id: string }>(
+  entities: T[],
+  order: string[] | undefined,
+  fallbackCompare: (a: T, b: T) => number,
+): T[] {
+  const orderIndex = order?.length
+    ? new Map(order.map((id, index) => [id, index]))
+    : undefined;
+
+  return entities.sort((a, b) => {
+    if (orderIndex) {
+      const aIndex = orderIndex.get(a.id);
+      const bIndex = orderIndex.get(b.id);
+      if (aIndex !== undefined || bIndex !== undefined) {
+        if (aIndex === undefined) return 1;
+        if (bIndex === undefined) return -1;
+        if (aIndex !== bIndex) return aIndex - bIndex;
+      }
+    }
+
+    return fallbackCompare(a, b);
+  });
+}
+
 // ---- Derived stores ----
 
 export const sortedItems = derived(items, ($items) => {
@@ -289,14 +311,11 @@ export const todoItems = derived([items, appConfig], ([$items, $config]) => {
   const open = all.filter(i => !i.completed);
   const completed = all.filter(i => i.completed);
 
-  // Sort open todos by todosOrder if available, else by creation date
-  const order = $config.todosOrder;
-  if (order?.length) {
-    const orderIndex = new Map(order.map((id, i) => [id, i]));
-    open.sort((a, b) => (orderIndex.get(a.id) ?? Infinity) - (orderIndex.get(b.id) ?? Infinity));
-  } else {
-    open.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }
+  sortWithConfiguredOrder(
+    open,
+    $config.todosOrder,
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
 
   // Completed sorted by completedAt desc
   completed.sort((a, b) => new Date(b.completedAt ?? b.createdAt).getTime() - new Date(a.completedAt ?? a.createdAt).getTime());

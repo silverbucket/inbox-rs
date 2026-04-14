@@ -53,9 +53,9 @@ import {
   blobUrls, connected, loadFileBlobUrl,
   collections, groups, groupCollections, moveCollectionToGroup,
   deleteGroup, ungroupedCollections, appConfig,
-  storeCollection, reorderGroupCollections,
+  storeCollection, reorderGroupCollections, items, todoItems, reorderTodos,
 } from './stores';
-import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
+import type { Collection, CollectionGroup, InboxItem } from '@inbox-rs/rs-module';
 
 /**
  * rs.on() handlers are registered at module load time.
@@ -206,6 +206,16 @@ function makeGroup(id: string, collectionIds: string[] = []): CollectionGroup {
   };
 }
 
+function makeTodo(id: string, overrides: Partial<InboxItem> = {}): InboxItem {
+  return {
+    id,
+    type: 'todo',
+    title: `Todo ${id}`,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  } as InboxItem;
+}
+
 describe('groupCollections', () => {
   beforeEach(() => {
     collections.set({});
@@ -290,6 +300,52 @@ describe('groupCollections', () => {
 
     const result = get(groupCollections);
     expect(result['g1']).toEqual([]);
+  });
+});
+
+describe('todoItems ordering', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    items.set({});
+    appConfig.set({});
+  });
+
+  it('keeps configured open todo order and falls back to newest-first for new todos', () => {
+    items.set({
+      t1: makeTodo('t1', { createdAt: '2026-01-01T00:00:00.000Z' }),
+      t2: makeTodo('t2', { createdAt: '2026-01-02T00:00:00.000Z' }),
+      t3: makeTodo('t3', { createdAt: '2026-01-03T00:00:00.000Z' }),
+    });
+    appConfig.set({ todosOrder: ['t2'] });
+
+    expect(get(todoItems).map(todo => todo.id)).toEqual(['t2', 't3', 't1']);
+  });
+
+  it('keeps completed todos after open todos and sorts them by completion time', () => {
+    items.set({
+      open: makeTodo('open', { createdAt: '2026-01-01T00:00:00.000Z' }),
+      'done-older': makeTodo('done-older', {
+        createdAt: '2026-01-02T00:00:00.000Z',
+        completed: true,
+        completedAt: '2026-01-04T00:00:00.000Z',
+      }),
+      'done-newer': makeTodo('done-newer', {
+        createdAt: '2026-01-03T00:00:00.000Z',
+        completed: true,
+        completedAt: '2026-01-05T00:00:00.000Z',
+      }),
+    });
+
+    expect(get(todoItems).map(todo => todo.id)).toEqual(['open', 'done-newer', 'done-older']);
+  });
+
+  it('persists reordered inbox todo ids in config', async () => {
+    appConfig.set({});
+
+    await reorderTodos(['t3', 't1', 't2']);
+
+    expect(get(appConfig).todosOrder).toEqual(['t3', 't1', 't2']);
+    expect(mockInbox.setConfig).toHaveBeenCalledWith({ todosOrder: ['t3', 't1', 't2'] });
   });
 });
 
