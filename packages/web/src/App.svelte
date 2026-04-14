@@ -310,7 +310,6 @@
     display: flex;
     align-items: center;
     gap: 1rem;
-    justify-content: space-between;
   }
 
   /* ── Brand (zone 1) ────────────────────────── */
@@ -442,6 +441,7 @@
     align-items: center;
     gap: 0.75rem;
     flex-shrink: 0;
+    margin-left: auto;
   }
 
   /* ── Main content ──────────────────────────── */
