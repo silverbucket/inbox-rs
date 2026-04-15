@@ -14,7 +14,6 @@ const { mockRs, mockInbox } = vi.hoisted(() => {
     getConfig: vi.fn().mockResolvedValue({}),
     getAllCollections: vi.fn().mockResolvedValue({}),
     getAllGroups: vi.fn().mockResolvedValue({}),
-    onChange: vi.fn(),
     store: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
     storeCollection: vi.fn().mockResolvedValue(undefined),
@@ -27,7 +26,6 @@ const { mockRs, mockInbox } = vi.hoisted(() => {
   const mockRs = {
     access: { claim: vi.fn() },
     caching: { enable: vi.fn() },
-    setSyncInterval: vi.fn(),
     on: vi.fn(),
     remote: {},
     startSync: vi.fn(),
@@ -60,15 +58,32 @@ import type { Collection, CollectionGroup, InboxItem } from '@inbox-rs/rs-module
 /**
  * rs.on() handlers are registered at module load time.
  * Capture them once before any test clears mocks.
+ * Multiple handlers may be registered per event (e.g. sync-done has
+ * hideSync, scheduleReload, and a debug logger).
  */
-const rsHandlers: Record<string, (...args: any[]) => any> = {};
+const rsHandlerMap: Record<string, Array<(...args: any[]) => any>> = {};
 function captureRsHandlers() {
-  if (Object.keys(rsHandlers).length > 0) return;
+  if (Object.keys(rsHandlerMap).length > 0) return;
   for (const [event, handler] of mockRs.on.mock.calls as [string, (...args: any[]) => any][]) {
-    rsHandlers[event] = handler;
+    (rsHandlerMap[event] ??= []).push(handler);
   }
 }
 captureRsHandlers();
+
+/** Fire all registered handlers for an RS event */
+function emitRsEvent(event: string, ...args: any[]) {
+  for (const handler of rsHandlerMap[event] ?? []) {
+    handler(...args);
+  }
+}
+
+/** Backwards-compat: single-handler lookup for events with one handler (e.g. 'connected') */
+const rsHandlers = new Proxy({} as Record<string, (...args: any[]) => any>, {
+  get: (_target, prop: string) => {
+    const handlers = rsHandlerMap[prop];
+    return handlers?.[handlers.length - 1];
+  },
+});
 
 describe('loadFileBlobUrl', () => {
   beforeEach(() => {
@@ -539,7 +554,7 @@ describe('no group recreation after deletion', () => {
     mockInbox.getUserSettings.mockResolvedValue(undefined);
   });
 
-  it('does not recreate a group after all groups are deleted and a reload triggers', async () => {
+  it('does not recreate a group after all groups are deleted and a sync-done reload triggers', async () => {
     // Start with a group
     const group = makeGroup('g1', []);
     groups.set({ g1: group });
@@ -548,18 +563,83 @@ describe('no group recreation after deletion', () => {
     await deleteGroup('g1');
     expect(get(groups)['g1']).toBeUndefined();
 
-    // Simulate a reload (scheduleReload loads from backend which returns empty)
-    const onChange = mockInbox.onChange.mock.calls[0]?.[1] ?? mockInbox.onChange.mock.calls[0]?.[0];
-    if (onChange) {
-      onChange();
-      // Wait for debounced reload
-      await vi.waitFor(() => {
-        // After reload, groups should still be empty
-        expect(Object.keys(get(groups))).toHaveLength(0);
-      }, { timeout: 500 });
-    }
+    // Simulate a sync-done event triggering a reload (backend returns empty)
+    emitRsEvent('sync-done');
+    await vi.waitFor(() => {
+      expect(Object.keys(get(groups))).toHaveLength(0);
+    }, { timeout: 500 });
 
     expect(mockInbox.storeGroup).not.toHaveBeenCalled();
+  });
+});
+
+describe('sync-done reload', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    items.set({});
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+    mockInbox.getAll.mockResolvedValue({});
+    mockInbox.getAllCollections.mockResolvedValue({});
+    mockInbox.getAllGroups.mockResolvedValue({});
+  });
+
+  it('reloads items, collections, and groups on sync-done', async () => {
+    const item = { id: 'i1', type: 'note', title: 'Test', createdAt: '2026-01-01T00:00:00.000Z' };
+    const col = makeCollection('c1');
+    const group = makeGroup('g1', ['c1']);
+    mockInbox.getAll.mockResolvedValue({ i1: item });
+    mockInbox.getAllCollections.mockResolvedValue({ c1: col });
+    mockInbox.getAllGroups.mockResolvedValue({ g1: group });
+
+    // Before sync-done, stores are empty
+    expect(Object.keys(get(items))).toHaveLength(0);
+
+    emitRsEvent('sync-done');
+
+    await vi.waitFor(() => {
+      expect(Object.keys(get(items))).toHaveLength(1);
+      expect(get(items)['i1'].title).toBe('Test');
+      expect(get(collections)['c1']).toBeDefined();
+      expect(get(groups)['g1']).toBeDefined();
+    }, { timeout: 500 });
+  });
+
+  it('reloads only once for rapid sync-done events (debounce)', async () => {
+    mockInbox.getAll.mockResolvedValue({});
+    mockInbox.getAllCollections.mockResolvedValue({});
+    mockInbox.getAllGroups.mockResolvedValue({});
+
+    // Fire sync-done 5 times rapidly
+    for (let i = 0; i < 5; i++) {
+      emitRsEvent('sync-done');
+    }
+
+    await vi.waitFor(() => {
+      expect(mockInbox.getAll).toHaveBeenCalled();
+    }, { timeout: 500 });
+
+    // Debounce (100ms) should collapse these into a single reload
+    expect(mockInbox.getAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('picks up new incoming items after sync completes', async () => {
+    // Simulate initial state with one item
+    items.set({ i1: { id: 'i1', type: 'note', title: 'Old', createdAt: '2026-01-01T00:00:00.000Z' } as InboxItem });
+
+    // Backend now has two items (one new from another device)
+    mockInbox.getAll.mockResolvedValue({
+      i1: { id: 'i1', type: 'note', title: 'Old', createdAt: '2026-01-01T00:00:00.000Z' },
+      i2: { id: 'i2', type: 'image', title: 'Photo', createdAt: '2026-01-02T00:00:00.000Z', filePath: 'files/photo.jpg', mimeType: 'image/jpeg' },
+    });
+
+    emitRsEvent('sync-done');
+
+    await vi.waitFor(() => {
+      expect(Object.keys(get(items))).toHaveLength(2);
+      expect(get(items)['i2'].title).toBe('Photo');
+    }, { timeout: 500 });
   });
 });
 
