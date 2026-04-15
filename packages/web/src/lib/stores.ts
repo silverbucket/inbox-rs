@@ -176,6 +176,11 @@ rs.on('wire-busy', showSync);
 rs.on('wire-done', hideSync);
 rs.on('sync-done', hideSync);
 
+// Reload stores once per completed sync cycle (not per-item change event)
+rs.on('sync-done', () => {
+  scheduleReload();
+});
+
 // Debug: log sync activity
 rs.on('sync-req-done', (e: any) => {
   console.log('[inbox] sync-req-done, tasks remaining:', e?.tasksRemaining);
@@ -254,17 +259,13 @@ export async function updateUserSettings(patch: Partial<UserSettings>) {
   }
 }
 
-// Update items on remote/local changes — debounced to avoid redundant reloads during sync
-const inboxRef = getInbox();
+// Reload stores after sync completes — debounced in case multiple sync-done events fire closely
 function scheduleReload() {
   if (reloadTimeout) clearTimeout(reloadTimeout);
   reloadTimeout = setTimeout(async () => {
     reloadTimeout = undefined;
     await Promise.all([loadItems(), loadCollections(), loadGroups()]);
   }, 100);
-}
-if (inboxRef) {
-  inboxRef.onChange(scheduleReload);
 }
 
 document.addEventListener('visibilitychange', () => {
