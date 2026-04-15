@@ -432,8 +432,6 @@ export async function storeItem(item: InboxItem, fileData?: ArrayBuffer) {
     const blob = new Blob([fileData], { type: (item as any).mimeType });
     const url = URL.createObjectURL(blob);
     blobUrls.update(current => ({ ...current, [item.filePath as string]: url }));
-    console.log('[inbox] stored file, triggering sync:', item.filePath);
-    rs.startSync();
   }
   items.update(current => ({ ...current, [cleanItem.id]: cleanItem }));
 }
