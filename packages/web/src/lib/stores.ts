@@ -176,9 +176,15 @@ rs.on('wire-busy', showSync);
 rs.on('wire-done', hideSync);
 rs.on('sync-done', hideSync);
 
-// Reload stores once per completed sync cycle (not per-item change event)
+// Reload stores once per sync cycle, but only if data actually changed.
+// onChange fires per-item during sync; we just set a flag and wait for
+// sync-done to batch the reload into a single getAll() call.
+let syncHasChanges = false;
 rs.on('sync-done', () => {
-  scheduleReload();
+  if (syncHasChanges) {
+    syncHasChanges = false;
+    scheduleReload();
+  }
 });
 
 // Debug: log sync activity
@@ -266,6 +272,11 @@ function scheduleReload() {
     reloadTimeout = undefined;
     await Promise.all([loadItems(), loadCollections(), loadGroups()]);
   }, 100);
+}
+
+const inboxRef = getInbox();
+if (inboxRef) {
+  inboxRef.onChange(() => { syncHasChanges = true; });
 }
 
 document.addEventListener('visibilitychange', () => {

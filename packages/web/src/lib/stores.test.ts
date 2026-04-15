@@ -14,6 +14,7 @@ const { mockRs, mockInbox } = vi.hoisted(() => {
     getConfig: vi.fn().mockResolvedValue({}),
     getAllCollections: vi.fn().mockResolvedValue({}),
     getAllGroups: vi.fn().mockResolvedValue({}),
+    onChange: vi.fn(),
     store: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
     storeCollection: vi.fn().mockResolvedValue(undefined),
@@ -75,6 +76,14 @@ function emitRsEvent(event: string, ...args: any[]) {
   for (const handler of rsHandlerMap[event] ?? []) {
     handler(...args);
   }
+}
+
+/** Capture the onChange handler registered at module load time (before mocks are cleared) */
+const onChangeHandler = mockInbox.onChange.mock.calls[0]?.[0] as (() => void) | undefined;
+
+/** Simulate a remoteStorage module change event (marks data as changed for sync-done reload) */
+function emitModuleChange() {
+  if (onChangeHandler) onChangeHandler();
 }
 
 /** Backwards-compat: single-handler lookup for events with one handler (e.g. 'connected') */
@@ -564,6 +573,7 @@ describe('no group recreation after deletion', () => {
     expect(get(groups)['g1']).toBeUndefined();
 
     // Simulate a sync-done event triggering a reload (backend returns empty)
+    emitModuleChange();
     emitRsEvent('sync-done');
     await vi.waitFor(() => {
       expect(Object.keys(get(groups))).toHaveLength(0);
@@ -585,7 +595,22 @@ describe('sync-done reload', () => {
     mockInbox.getAllGroups.mockResolvedValue({});
   });
 
-  it('reloads items, collections, and groups on sync-done', async () => {
+  it('does not reload on idle sync-done when no data changed', async () => {
+    // Drain any stale syncHasChanges flag from prior tests
+    emitRsEvent('sync-done');
+    await new Promise(r => setTimeout(r, 200));
+    vi.clearAllMocks();
+    mockInbox.getAll.mockResolvedValue({});
+    mockInbox.getAllCollections.mockResolvedValue({});
+    mockInbox.getAllGroups.mockResolvedValue({});
+
+    // Now fire sync-done with no preceding onChange — should not reload
+    emitRsEvent('sync-done');
+    await new Promise(r => setTimeout(r, 200));
+    expect(mockInbox.getAll).not.toHaveBeenCalled();
+  });
+
+  it('reloads items, collections, and groups on sync-done after changes', async () => {
     const item = { id: 'i1', type: 'note', title: 'Test', createdAt: '2026-01-01T00:00:00.000Z' };
     const col = makeCollection('c1');
     const group = makeGroup('g1', ['c1']);
@@ -593,9 +618,10 @@ describe('sync-done reload', () => {
     mockInbox.getAllCollections.mockResolvedValue({ c1: col });
     mockInbox.getAllGroups.mockResolvedValue({ g1: group });
 
-    // Before sync-done, stores are empty
     expect(Object.keys(get(items))).toHaveLength(0);
 
+    // onChange marks data as changed, sync-done triggers the reload
+    emitModuleChange();
     emitRsEvent('sync-done');
 
     await vi.waitFor(() => {
@@ -611,7 +637,8 @@ describe('sync-done reload', () => {
     mockInbox.getAllCollections.mockResolvedValue({});
     mockInbox.getAllGroups.mockResolvedValue({});
 
-    // Fire sync-done 5 times rapidly
+    // Mark data as changed, then fire sync-done 5 times rapidly
+    emitModuleChange();
     for (let i = 0; i < 5; i++) {
       emitRsEvent('sync-done');
     }
@@ -625,15 +652,14 @@ describe('sync-done reload', () => {
   });
 
   it('picks up new incoming items after sync completes', async () => {
-    // Simulate initial state with one item
     items.set({ i1: { id: 'i1', type: 'note', title: 'Old', createdAt: '2026-01-01T00:00:00.000Z' } as InboxItem });
 
-    // Backend now has two items (one new from another device)
     mockInbox.getAll.mockResolvedValue({
       i1: { id: 'i1', type: 'note', title: 'Old', createdAt: '2026-01-01T00:00:00.000Z' },
       i2: { id: 'i2', type: 'image', title: 'Photo', createdAt: '2026-01-02T00:00:00.000Z', filePath: 'files/photo.jpg', mimeType: 'image/jpeg' },
     });
 
+    emitModuleChange();
     emitRsEvent('sync-done');
 
     await vi.waitFor(() => {
