@@ -248,8 +248,17 @@ export async function updateUserSettings(patch: Partial<UserSettings>) {
   }
 }
 
-// Handle incoming changes per-item instead of reloading full collections.
-// Each change event updates a single entry in the relevant store.
+// Handle incoming remote changes per-item rather than reloading full
+// collections with getAll(). RS.js fires a `change` event for each item
+// during a sync cycle — we parse relativePath to route each change to the
+// correct store. This avoids redundant cache reads when many items arrive
+// at once (e.g. bulk image sync from another device).
+//
+// Local writes already update stores optimistically (see storeItem,
+// deleteItem, etc.), so we skip 'window' origin events to avoid duplicates.
+// getAll() is only used for the initial load on connect.
+//
+// See: https://remotestorage.io/rs.js/docs/api/baseclient/classes/BaseClient.html#change-events
 const inboxRef = getInbox();
 if (inboxRef) {
   inboxRef.onChange((event: any) => {
@@ -272,6 +281,7 @@ if (inboxRef) {
       const key = path.slice('collections/'.length);
       if (value && typeof value === 'object' && value.id) {
         const col = value as Collection;
+        // Normalize itemIds — may be missing if written by another client
         collections.update(current => ({
           ...current,
           [key]: { ...col, itemIds: Array.isArray(col.itemIds) ? col.itemIds : [] },
@@ -287,6 +297,7 @@ if (inboxRef) {
       const key = path.slice('groups/'.length);
       if (value && typeof value === 'object' && value.id) {
         const grp = value as CollectionGroup;
+        // Normalize collectionIds — may be missing if written by another client
         groups.update(current => ({
           ...current,
           [key]: { ...grp, collectionIds: Array.isArray(grp.collectionIds) ? grp.collectionIds : [] },
@@ -307,9 +318,14 @@ if (inboxRef) {
         userSettings.set(value as UserSettings);
       }
     }
+    // File paths (e.g. files/photo.jpg) are ignored here — binary data
+    // is fetched on demand via loadFileBlobUrl when components render.
   });
 }
 
+// Request a check for remote changes when the tab returns to foreground.
+// This is the correct use of startSync() — local writes push automatically,
+// but we need to explicitly ask for remote changes after being backgrounded.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && (rs as any).remote?.connected) {
     rs.startSync();
