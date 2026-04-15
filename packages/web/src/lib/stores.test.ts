@@ -52,7 +52,7 @@ import {
   blobUrls, connected, loadFileBlobUrl,
   collections, groups, groupCollections, moveCollectionToGroup,
   deleteGroup, ungroupedCollections, appConfig,
-  storeCollection, reorderGroupCollections, items, todoItems, reorderTodos,
+  storeCollection, reorderGroupCollections, items, todoItems, reorderTodos, userSettings,
 } from './stores';
 import type { Collection, CollectionGroup, InboxItem } from '@inbox-rs/rs-module';
 
@@ -79,11 +79,11 @@ function emitRsEvent(event: string, ...args: any[]) {
 }
 
 /** Capture the onChange handler registered at module load time (before mocks are cleared) */
-const onChangeHandler = mockInbox.onChange.mock.calls[0]?.[0] as (() => void) | undefined;
+const onChangeHandler = mockInbox.onChange.mock.calls[0]?.[0] as ((event: any) => void) | undefined;
 
-/** Simulate a remoteStorage module change event (marks data as changed for sync-done reload) */
-function emitModuleChange() {
-  if (onChangeHandler) onChangeHandler();
+/** Simulate a remoteStorage module change event with per-item data */
+function emitModuleChange(event: { relativePath: string; origin?: string; newValue?: any; oldValue?: any }) {
+  if (onChangeHandler) onChangeHandler({ origin: 'remote', ...event });
 }
 
 /** Backwards-compat: single-handler lookup for events with one handler (e.g. 'connected') */
@@ -563,109 +563,109 @@ describe('no group recreation after deletion', () => {
     mockInbox.getUserSettings.mockResolvedValue(undefined);
   });
 
-  it('does not recreate a group after all groups are deleted and a sync-done reload triggers', async () => {
-    // Start with a group
+  it('does not recreate a group after deletion when unrelated changes arrive', async () => {
     const group = makeGroup('g1', []);
     groups.set({ g1: group });
 
-    // Delete the group
     await deleteGroup('g1');
     expect(get(groups)['g1']).toBeUndefined();
 
-    // Simulate a sync-done event triggering a reload (backend returns empty)
-    emitModuleChange();
-    emitRsEvent('sync-done');
-    await vi.waitFor(() => {
-      expect(Object.keys(get(groups))).toHaveLength(0);
-    }, { timeout: 500 });
+    // An unrelated item change should not recreate the deleted group
+    emitModuleChange({
+      relativePath: 'items/i1',
+      newValue: { id: 'i1', type: 'note', title: 'X', createdAt: '2026-01-01T00:00:00.000Z' },
+    });
 
+    expect(Object.keys(get(groups))).toHaveLength(0);
     expect(mockInbox.storeGroup).not.toHaveBeenCalled();
   });
 });
 
-describe('sync-done reload', () => {
+describe('per-item change handling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     items.set({});
     collections.set({});
     groups.set({});
     appConfig.set({});
-    mockInbox.getAll.mockResolvedValue({});
-    mockInbox.getAllCollections.mockResolvedValue({});
-    mockInbox.getAllGroups.mockResolvedValue({});
   });
 
-  it('does not reload on idle sync-done when no data changed', async () => {
-    // Drain any stale syncHasChanges flag from prior tests
-    emitRsEvent('sync-done');
-    await new Promise(r => setTimeout(r, 200));
-    vi.clearAllMocks();
-    mockInbox.getAll.mockResolvedValue({});
-    mockInbox.getAllCollections.mockResolvedValue({});
-    mockInbox.getAllGroups.mockResolvedValue({});
+  it('adds an incoming item to the store', () => {
+    const item = { id: 'i1', type: 'note', title: 'Test', createdAt: '2026-01-01T00:00:00.000Z' };
+    emitModuleChange({ relativePath: 'items/i1', newValue: item });
 
-    // Now fire sync-done with no preceding onChange — should not reload
-    emitRsEvent('sync-done');
-    await new Promise(r => setTimeout(r, 200));
+    expect(get(items)['i1']).toBeDefined();
+    expect(get(items)['i1'].title).toBe('Test');
+  });
+
+  it('removes a deleted item from the store', () => {
+    items.set({ i1: { id: 'i1', type: 'note', title: 'Old', createdAt: '2026-01-01T00:00:00.000Z' } as InboxItem });
+
+    emitModuleChange({ relativePath: 'items/i1', newValue: undefined, oldValue: { id: 'i1' } });
+
+    expect(get(items)['i1']).toBeUndefined();
+  });
+
+  it('adds an incoming collection with itemIds normalization', () => {
+    const col = { id: 'c1', name: 'Test', createdAt: '2026-01-01T00:00:00.000Z' };
+    emitModuleChange({ relativePath: 'collections/c1', newValue: col });
+
+    expect(get(collections)['c1']).toBeDefined();
+    expect(get(collections)['c1'].itemIds).toEqual([]);
+  });
+
+  it('adds an incoming group with collectionIds normalization', () => {
+    const grp = { id: 'g1', name: 'Test Group', createdAt: '2026-01-01T00:00:00.000Z' };
+    emitModuleChange({ relativePath: 'groups/g1', newValue: grp });
+
+    expect(get(groups)['g1']).toBeDefined();
+    expect(get(groups)['g1'].collectionIds).toEqual([]);
+  });
+
+  it('updates appConfig on config/app change', () => {
+    emitModuleChange({ relativePath: 'config/app', newValue: { todosOrder: ['t1', 't2'] } });
+
+    expect(get(appConfig).todosOrder).toEqual(['t1', 't2']);
+  });
+
+  it('updates userSettings on config/user change', () => {
+    emitModuleChange({ relativePath: 'config/user', newValue: { theme: 'dark' } });
+
+    expect((get(userSettings) as any).theme).toBe('dark');
+  });
+
+  it('ignores window-origin events (local writes already update stores)', () => {
+    emitModuleChange({ relativePath: 'items/i1', origin: 'window', newValue: { id: 'i1', type: 'note', title: 'X', createdAt: '' } });
+
+    expect(get(items)['i1']).toBeUndefined();
+  });
+
+  it('handles multiple incoming items without calling getAll', () => {
+    for (let i = 0; i < 5; i++) {
+      emitModuleChange({
+        relativePath: `items/i${i}`,
+        newValue: { id: `i${i}`, type: 'note', title: `Note ${i}`, createdAt: '2026-01-01T00:00:00.000Z' },
+      });
+    }
+
+    expect(Object.keys(get(items))).toHaveLength(5);
     expect(mockInbox.getAll).not.toHaveBeenCalled();
   });
 
-  it('reloads items, collections, and groups on sync-done after changes', async () => {
-    const item = { id: 'i1', type: 'note', title: 'Test', createdAt: '2026-01-01T00:00:00.000Z' };
-    const col = makeCollection('c1');
-    const group = makeGroup('g1', ['c1']);
-    mockInbox.getAll.mockResolvedValue({ i1: item });
-    mockInbox.getAllCollections.mockResolvedValue({ c1: col });
-    mockInbox.getAllGroups.mockResolvedValue({ g1: group });
+  it('removes a deleted collection from the store', () => {
+    collections.set({ c1: makeCollection('c1') });
 
-    expect(Object.keys(get(items))).toHaveLength(0);
+    emitModuleChange({ relativePath: 'collections/c1', newValue: undefined, oldValue: { id: 'c1' } });
 
-    // onChange marks data as changed, sync-done triggers the reload
-    emitModuleChange();
-    emitRsEvent('sync-done');
-
-    await vi.waitFor(() => {
-      expect(Object.keys(get(items))).toHaveLength(1);
-      expect(get(items)['i1'].title).toBe('Test');
-      expect(get(collections)['c1']).toBeDefined();
-      expect(get(groups)['g1']).toBeDefined();
-    }, { timeout: 500 });
+    expect(get(collections)['c1']).toBeUndefined();
   });
 
-  it('reloads only once for rapid sync-done events (debounce)', async () => {
-    mockInbox.getAll.mockResolvedValue({});
-    mockInbox.getAllCollections.mockResolvedValue({});
-    mockInbox.getAllGroups.mockResolvedValue({});
+  it('removes a deleted group from the store', () => {
+    groups.set({ g1: makeGroup('g1') });
 
-    // Mark data as changed, then fire sync-done 5 times rapidly
-    emitModuleChange();
-    for (let i = 0; i < 5; i++) {
-      emitRsEvent('sync-done');
-    }
+    emitModuleChange({ relativePath: 'groups/g1', newValue: undefined, oldValue: { id: 'g1' } });
 
-    await vi.waitFor(() => {
-      expect(mockInbox.getAll).toHaveBeenCalled();
-    }, { timeout: 500 });
-
-    // Debounce (100ms) should collapse these into a single reload
-    expect(mockInbox.getAll).toHaveBeenCalledTimes(1);
-  });
-
-  it('picks up new incoming items after sync completes', async () => {
-    items.set({ i1: { id: 'i1', type: 'note', title: 'Old', createdAt: '2026-01-01T00:00:00.000Z' } as InboxItem });
-
-    mockInbox.getAll.mockResolvedValue({
-      i1: { id: 'i1', type: 'note', title: 'Old', createdAt: '2026-01-01T00:00:00.000Z' },
-      i2: { id: 'i2', type: 'image', title: 'Photo', createdAt: '2026-01-02T00:00:00.000Z', filePath: 'files/photo.jpg', mimeType: 'image/jpeg' },
-    });
-
-    emitModuleChange();
-    emitRsEvent('sync-done');
-
-    await vi.waitFor(() => {
-      expect(Object.keys(get(items))).toHaveLength(2);
-      expect(get(items)['i2'].title).toBe('Photo');
-    }, { timeout: 500 });
+    expect(get(groups)['g1']).toBeUndefined();
   });
 });
 

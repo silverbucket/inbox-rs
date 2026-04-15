@@ -176,17 +176,6 @@ rs.on('wire-busy', showSync);
 rs.on('wire-done', hideSync);
 rs.on('sync-done', hideSync);
 
-// Reload stores once per sync cycle, but only if data actually changed.
-// onChange fires per-item during sync; we just set a flag and wait for
-// sync-done to batch the reload into a single getAll() call.
-let syncHasChanges = false;
-rs.on('sync-done', () => {
-  if (syncHasChanges) {
-    syncHasChanges = false;
-    scheduleReload();
-  }
-});
-
 // Debug: log sync activity
 rs.on('sync-req-done', (e: any) => {
   console.log('[inbox] sync-req-done, tasks remaining:', e?.tasksRemaining);
@@ -196,8 +185,6 @@ rs.on('sync-done', (e: any) => {
 });
 rs.on('wire-busy', () => console.log('[inbox] wire-busy'));
 rs.on('wire-done', () => console.log('[inbox] wire-done'));
-
-let reloadTimeout: ReturnType<typeof setTimeout> | undefined;
 
 rs.on('connected', async () => {
   connected.set(true);
@@ -213,10 +200,6 @@ rs.on('disconnected', () => {
   connected.set(false);
   userAddress.set('');
   localStorage.removeItem('inbox-rs:userAddress');
-  if (reloadTimeout) {
-    clearTimeout(reloadTimeout);
-    reloadTimeout = undefined;
-  }
   items.set({});
   appConfig.set({});
   userSettings.set({});
@@ -265,18 +248,66 @@ export async function updateUserSettings(patch: Partial<UserSettings>) {
   }
 }
 
-// Reload stores after sync completes — debounced in case multiple sync-done events fire closely
-function scheduleReload() {
-  if (reloadTimeout) clearTimeout(reloadTimeout);
-  reloadTimeout = setTimeout(async () => {
-    reloadTimeout = undefined;
-    await Promise.all([loadItems(), loadCollections(), loadGroups()]);
-  }, 100);
-}
-
+// Handle incoming changes per-item instead of reloading full collections.
+// Each change event updates a single entry in the relevant store.
 const inboxRef = getInbox();
 if (inboxRef) {
-  inboxRef.onChange(() => { syncHasChanges = true; });
+  inboxRef.onChange((event: any) => {
+    if (!event || event.origin === 'window') return;
+    const path: string = event.relativePath || '';
+    const value = event.newValue;
+
+    if (path.startsWith('items/')) {
+      const key = path.slice('items/'.length);
+      if (value && typeof value === 'object' && value.id) {
+        items.update(current => ({ ...current, [key]: value as InboxItem }));
+      } else if (!value) {
+        items.update(current => {
+          const next = { ...current };
+          delete next[key];
+          return next;
+        });
+      }
+    } else if (path.startsWith('collections/')) {
+      const key = path.slice('collections/'.length);
+      if (value && typeof value === 'object' && value.id) {
+        const col = value as Collection;
+        collections.update(current => ({
+          ...current,
+          [key]: { ...col, itemIds: Array.isArray(col.itemIds) ? col.itemIds : [] },
+        }));
+      } else if (!value) {
+        collections.update(current => {
+          const next = { ...current };
+          delete next[key];
+          return next;
+        });
+      }
+    } else if (path.startsWith('groups/')) {
+      const key = path.slice('groups/'.length);
+      if (value && typeof value === 'object' && value.id) {
+        const grp = value as CollectionGroup;
+        groups.update(current => ({
+          ...current,
+          [key]: { ...grp, collectionIds: Array.isArray(grp.collectionIds) ? grp.collectionIds : [] },
+        }));
+      } else if (!value) {
+        groups.update(current => {
+          const next = { ...current };
+          delete next[key];
+          return next;
+        });
+      }
+    } else if (path === 'config/app') {
+      if (value && typeof value === 'object') {
+        appConfig.set(value as AppConfig);
+      }
+    } else if (path === 'config/user') {
+      if (value && typeof value === 'object') {
+        userSettings.set(value as UserSettings);
+      }
+    }
+  });
 }
 
 document.addEventListener('visibilitychange', () => {
