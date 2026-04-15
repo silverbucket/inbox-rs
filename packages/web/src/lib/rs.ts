@@ -10,7 +10,6 @@ const rs = new RemoteStorage({
 rs.access.claim('inbox', 'rw');
 rs.access.claim('shares', 'rw');
 rs.caching.enable('/inbox/');
-rs.setSyncInterval(3000);
 
 /**
  * Fetch a file from an RS server using Authorization header and return a blob URL.
