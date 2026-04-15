@@ -102,7 +102,11 @@ async function loadItems() {
     const valid: Record<string, InboxItem> = {};
     for (const [key, item] of Object.entries(all)) {
       if (item && typeof item === 'object' && 'id' in item && (item as InboxItem).id) {
-        valid[key] = item as InboxItem;
+        const inboxItem = item as InboxItem;
+        // Only trust canonically-addressed item records. This avoids rendering
+        // duplicate/stale documents that may still exist under malformed keys.
+        if (key !== inboxItem.id) continue;
+        valid[inboxItem.id] = inboxItem;
       }
     }
     items.set(valid);
@@ -415,7 +419,7 @@ export const activeCollectionTodos = derived(
       for (const id of col.itemIds) {
         if (count >= MAX_PER_COLLECTION) break;
         const item = itemMap.get(id);
-        if (!item || !(item.isTodo || item.type === 'todo') || item.completed) continue;
+        if (!item || item.collectionId !== col.id || !(item.isTodo || item.type === 'todo') || item.completed) continue;
         result.push({
           item,
           collectionId: col.id,
@@ -438,7 +442,7 @@ export const collectionItems = derived([items, collections], ([$items, $collecti
   for (const [cid, col] of Object.entries($collections)) {
     result[cid] = col.itemIds
       .map(id => itemMap.get(id))
-      .filter((i): i is InboxItem => i !== undefined);
+      .filter((i): i is InboxItem => i !== undefined && i.collectionId === cid);
   }
   return result;
 });
@@ -583,11 +587,13 @@ export async function moveItemToCollection(itemId: string, collectionId: string 
 
   if (!item) return;
 
+  const isSameCollection = oldCollectionId === collectionId;
+
   try {
     await inbox.store(cleanForStorage(item));
 
     // Update source collection's itemIds
-    if (oldCollectionId) {
+    if (oldCollectionId && !isSameCollection) {
       collections.update(current => {
         const col = current[oldCollectionId!];
         if (col) {

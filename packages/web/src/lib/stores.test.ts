@@ -52,7 +52,9 @@ import {
   blobUrls, connected, loadFileBlobUrl,
   collections, groups, groupCollections, moveCollectionToGroup,
   deleteGroup, ungroupedCollections, appConfig,
-  storeCollection, reorderGroupCollections, items, todoItems, reorderTodos, userSettings,
+  storeCollection, reorderGroupCollections, items, todoItems, reorderTodos,
+  activeCollectionTodos, collectionItems,
+  userSettings,
 } from './stores';
 import type { Collection, CollectionGroup, InboxItem } from '@inbox-rs/rs-module';
 
@@ -370,6 +372,51 @@ describe('todoItems ordering', () => {
 
     expect(get(appConfig).todosOrder).toEqual(['t3', 't1', 't2']);
     expect(mockInbox.setConfig).toHaveBeenCalledWith({ todosOrder: ['t3', 't1', 't2'] });
+  });
+});
+
+describe('collection todo consistency', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    items.set({});
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+    mockInbox.getAll.mockResolvedValue({});
+    mockInbox.getConfig.mockResolvedValue({});
+    mockInbox.getAllCollections.mockResolvedValue({});
+    mockInbox.getAllGroups.mockResolvedValue({});
+    mockInbox.getUserSettings.mockResolvedValue(undefined);
+  });
+
+  it('ignores item records whose storage key does not match the item id', async () => {
+    const canonical = makeTodo('t1', { collectionId: 'c1' });
+    const stale = makeTodo('t1');
+    mockInbox.getAll.mockResolvedValue({
+      stale_copy: stale,
+      t1: canonical,
+    });
+
+    await rsHandlers['connected']();
+
+    expect(get(items)).toEqual({ t1: canonical });
+    expect(get(todoItems)).toEqual([]);
+  });
+
+  it('does not surface stale collection refs when an item is not actually in that collection', () => {
+    const inboxTodo = makeTodo('t1');
+    const collection = {
+      ...makeCollection('c1'),
+      active: true,
+      itemIds: ['t1'],
+    };
+
+    items.set({ t1: inboxTodo });
+    collections.set({ c1: collection });
+
+    expect(get(collectionItems)['c1']).toEqual([]);
+    expect(get(activeCollectionTodos)).toEqual([]);
+    expect(get(todoItems).map(todo => todo.id)).toEqual(['t1']);
   });
 });
 
