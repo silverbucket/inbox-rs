@@ -27,7 +27,6 @@ const { mockRs, mockInbox } = vi.hoisted(() => {
   const mockRs = {
     access: { claim: vi.fn() },
     caching: { enable: vi.fn() },
-    setSyncInterval: vi.fn(),
     on: vi.fn(),
     remote: {},
     startSync: vi.fn(),
@@ -55,21 +54,47 @@ import {
   deleteGroup, ungroupedCollections, appConfig,
   storeCollection, reorderGroupCollections, items, todoItems, reorderTodos,
   activeCollectionTodos, collectionItems,
+  userSettings,
 } from './stores';
 import type { Collection, CollectionGroup, InboxItem } from '@inbox-rs/rs-module';
 
 /**
  * rs.on() handlers are registered at module load time.
  * Capture them once before any test clears mocks.
+ * Multiple handlers may be registered per event (e.g. sync-done has
+ * hideSync, scheduleReload, and a debug logger).
  */
-const rsHandlers: Record<string, (...args: any[]) => any> = {};
+const rsHandlerMap: Record<string, Array<(...args: any[]) => any>> = {};
 function captureRsHandlers() {
-  if (Object.keys(rsHandlers).length > 0) return;
+  if (Object.keys(rsHandlerMap).length > 0) return;
   for (const [event, handler] of mockRs.on.mock.calls as [string, (...args: any[]) => any][]) {
-    rsHandlers[event] = handler;
+    (rsHandlerMap[event] ??= []).push(handler);
   }
 }
 captureRsHandlers();
+
+/** Fire all registered handlers for an RS event */
+function emitRsEvent(event: string, ...args: any[]) {
+  for (const handler of rsHandlerMap[event] ?? []) {
+    handler(...args);
+  }
+}
+
+/** Capture the onChange handler registered at module load time (before mocks are cleared) */
+const onChangeHandler = mockInbox.onChange.mock.calls[0]?.[0] as ((event: any) => void) | undefined;
+
+/** Simulate a remoteStorage module change event with per-item data */
+function emitModuleChange(event: { relativePath: string; origin?: string; newValue?: any; oldValue?: any }) {
+  if (onChangeHandler) onChangeHandler({ origin: 'remote', ...event });
+}
+
+/** Backwards-compat: single-handler lookup for events with one handler (e.g. 'connected') */
+const rsHandlers = new Proxy({} as Record<string, (...args: any[]) => any>, {
+  get: (_target, prop: string) => {
+    const handlers = rsHandlerMap[prop];
+    return handlers?.[handlers.length - 1];
+  },
+});
 
 describe('loadFileBlobUrl', () => {
   beforeEach(() => {
@@ -585,27 +610,109 @@ describe('no group recreation after deletion', () => {
     mockInbox.getUserSettings.mockResolvedValue(undefined);
   });
 
-  it('does not recreate a group after all groups are deleted and a reload triggers', async () => {
-    // Start with a group
+  it('does not recreate a group after deletion when unrelated changes arrive', async () => {
     const group = makeGroup('g1', []);
     groups.set({ g1: group });
 
-    // Delete the group
     await deleteGroup('g1');
     expect(get(groups)['g1']).toBeUndefined();
 
-    // Simulate a reload (scheduleReload loads from backend which returns empty)
-    const onChange = mockInbox.onChange.mock.calls[0]?.[1] ?? mockInbox.onChange.mock.calls[0]?.[0];
-    if (onChange) {
-      onChange();
-      // Wait for debounced reload
-      await vi.waitFor(() => {
-        // After reload, groups should still be empty
-        expect(Object.keys(get(groups))).toHaveLength(0);
-      }, { timeout: 500 });
+    // An unrelated item change should not recreate the deleted group
+    emitModuleChange({
+      relativePath: 'items/i1',
+      newValue: { id: 'i1', type: 'note', title: 'X', createdAt: '2026-01-01T00:00:00.000Z' },
+    });
+
+    expect(Object.keys(get(groups))).toHaveLength(0);
+    expect(mockInbox.storeGroup).not.toHaveBeenCalled();
+  });
+});
+
+describe('per-item change handling', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    items.set({});
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('adds an incoming item to the store', () => {
+    const item = { id: 'i1', type: 'note', title: 'Test', createdAt: '2026-01-01T00:00:00.000Z' };
+    emitModuleChange({ relativePath: 'items/i1', newValue: item });
+
+    expect(get(items)['i1']).toBeDefined();
+    expect(get(items)['i1'].title).toBe('Test');
+  });
+
+  it('removes a deleted item from the store', () => {
+    items.set({ i1: { id: 'i1', type: 'note', title: 'Old', createdAt: '2026-01-01T00:00:00.000Z' } as InboxItem });
+
+    emitModuleChange({ relativePath: 'items/i1', newValue: undefined, oldValue: { id: 'i1' } });
+
+    expect(get(items)['i1']).toBeUndefined();
+  });
+
+  it('adds an incoming collection with itemIds normalization', () => {
+    const col = { id: 'c1', name: 'Test', createdAt: '2026-01-01T00:00:00.000Z' };
+    emitModuleChange({ relativePath: 'collections/c1', newValue: col });
+
+    expect(get(collections)['c1']).toBeDefined();
+    expect(get(collections)['c1'].itemIds).toEqual([]);
+  });
+
+  it('adds an incoming group with collectionIds normalization', () => {
+    const grp = { id: 'g1', name: 'Test Group', createdAt: '2026-01-01T00:00:00.000Z' };
+    emitModuleChange({ relativePath: 'groups/g1', newValue: grp });
+
+    expect(get(groups)['g1']).toBeDefined();
+    expect(get(groups)['g1'].collectionIds).toEqual([]);
+  });
+
+  it('updates appConfig on config/app change', () => {
+    emitModuleChange({ relativePath: 'config/app', newValue: { todosOrder: ['t1', 't2'] } });
+
+    expect(get(appConfig).todosOrder).toEqual(['t1', 't2']);
+  });
+
+  it('updates userSettings on config/user change', () => {
+    emitModuleChange({ relativePath: 'config/user', newValue: { theme: 'dark' } });
+
+    expect((get(userSettings) as any).theme).toBe('dark');
+  });
+
+  it('ignores window-origin events (local writes already update stores)', () => {
+    emitModuleChange({ relativePath: 'items/i1', origin: 'window', newValue: { id: 'i1', type: 'note', title: 'X', createdAt: '' } });
+
+    expect(get(items)['i1']).toBeUndefined();
+  });
+
+  it('handles multiple incoming items without calling getAll', () => {
+    for (let i = 0; i < 5; i++) {
+      emitModuleChange({
+        relativePath: `items/i${i}`,
+        newValue: { id: `i${i}`, type: 'note', title: `Note ${i}`, createdAt: '2026-01-01T00:00:00.000Z' },
+      });
     }
 
-    expect(mockInbox.storeGroup).not.toHaveBeenCalled();
+    expect(Object.keys(get(items))).toHaveLength(5);
+    expect(mockInbox.getAll).not.toHaveBeenCalled();
+  });
+
+  it('removes a deleted collection from the store', () => {
+    collections.set({ c1: makeCollection('c1') });
+
+    emitModuleChange({ relativePath: 'collections/c1', newValue: undefined, oldValue: { id: 'c1' } });
+
+    expect(get(collections)['c1']).toBeUndefined();
+  });
+
+  it('removes a deleted group from the store', () => {
+    groups.set({ g1: makeGroup('g1') });
+
+    emitModuleChange({ relativePath: 'groups/g1', newValue: undefined, oldValue: { id: 'g1' } });
+
+    expect(get(groups)['g1']).toBeUndefined();
   });
 });
 
