@@ -126,18 +126,6 @@
         <span class="col-description">{collection.description}</span>
       {/if}
     </div>
-    <button
-      type="button"
-      class="header-toggle"
-      class:on={collection.active}
-      onclick={handleToggleActive}
-      role="switch"
-      aria-checked={collection.active ?? false}
-      aria-label="{collection.active ? 'Deactivate' : 'Activate'} collection"
-      title="{collection.active ? 'Active' : 'Inactive'} — click to toggle"
-    >
-      <span class="header-toggle-knob"></span>
-    </button>
     <div class="header-badges">
       {#if openTodos.length > 0}
         <span class="badge badge-todo" title="{openTodos.length} open {openTodos.length === 1 ? 'todo' : 'todos'}">
@@ -154,6 +142,18 @@
         <span class="badge badge-ref">0</span>
       {/if}
     </div>
+    <button
+      type="button"
+      class="header-toggle"
+      class:on={collection.active}
+      onclick={handleToggleActive}
+      role="switch"
+      aria-checked={collection.active ?? false}
+      aria-label="{collection.active ? 'Deactivate' : 'Activate'} collection"
+      title="{collection.active ? 'Active' : 'Inactive'} — click to toggle"
+    >
+      <span class="header-toggle-knob"></span>
+    </button>
     <div class="header-actions">
       {#if availableGroups.length > 0}
         <div class="move-menu-wrapper">
@@ -437,7 +437,6 @@
     transition: background 200ms;
     flex-shrink: 0;
     padding: 0;
-    margin-left: auto;
   }
 
   .header-toggle.on {
@@ -521,6 +520,7 @@
     align-items: center;
     gap: 0.3rem;
     flex-shrink: 0;
+    margin-left: auto;
   }
 
   .badge {
@@ -1037,6 +1037,10 @@
 
     .header-badges {
       display: none;
+    }
+
+    .header-toggle {
+      margin-left: auto;
     }
 
     .collection-body {
