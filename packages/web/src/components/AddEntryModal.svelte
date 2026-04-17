@@ -3,8 +3,9 @@
   import { onDestroy } from 'svelte';
   import type { InboxItemType, InboxItem } from '@inbox-rs/rs-module';
   import { storeItem, moveItemToCollection } from '../lib/stores';
+  import { renderMarkdown } from '../lib/markdown';
   import { transcribeAudio } from '../lib/transcribe';
-  import { loadMarkdownEditorComponent, shouldSubmitAddEntryForm } from '../lib/add-entry-modal';
+  import { loadMarkdownEditorComponent, shouldLoadMarkdownEditor, shouldSubmitAddEntryForm } from '../lib/add-entry-modal';
 
   let { type, editItem = undefined, collectionId = undefined, onclose, ondelete }: {
     type: InboxItemType;
@@ -32,6 +33,7 @@
   let editorMode = $state<'visual' | 'write' | 'preview'>('visual');
   let MarkdownEditorComponent = $state<Component<any> | null>(null);
   let markdownEditorLoadError = $state('');
+  let previewHtml = $state('');
 
   // Voice recording state
   let recording = $state(false);
@@ -293,7 +295,7 @@
   });
 
   $effect(() => {
-    if (type !== 'note' || MarkdownEditorComponent || markdownEditorLoadError) {
+    if (!shouldLoadMarkdownEditor(type, editorMode, !!MarkdownEditorComponent, !!markdownEditorLoadError)) {
       return;
     }
 
@@ -310,6 +312,32 @@
         if (!cancelled) {
           markdownEditorLoadError = 'Visual editor unavailable. Markdown mode is still available.';
           editorMode = 'write';
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  });
+
+  $effect(() => {
+    if (type !== 'note' || editorMode !== 'preview') {
+      previewHtml = '';
+      return;
+    }
+
+    const currentBody = body;
+    let cancelled = false;
+
+    renderMarkdown(currentBody)
+      .then((html) => {
+        if (!cancelled && body === currentBody && editorMode === 'preview') {
+          previewHtml = html;
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          previewHtml = '';
         }
       });
 
@@ -364,12 +392,24 @@
             <div class="editor-tabs">
               <button type="button" class="tab" class:active={editorMode === 'visual'} onclick={() => editorMode = 'visual'} disabled={!!markdownEditorLoadError}>Visual</button>
               <button type="button" class="tab" class:active={editorMode === 'write'} onclick={() => editorMode = 'write'}>Markdown</button>
-              <button type="button" class="tab" class:active={editorMode === 'preview'} onclick={() => editorMode = 'preview'} disabled={!!markdownEditorLoadError}>Preview</button>
+              <button type="button" class="tab" class:active={editorMode === 'preview'} onclick={() => editorMode = 'preview'}>Preview</button>
             </div>
           </div>
-          {#if MarkdownEditorComponent}
-            <MarkdownEditorComponent bind:value={body} bind:mode={editorMode} placeholder="Write your note..." />
-          {:else if markdownEditorLoadError}
+          {#if editorMode === 'visual'}
+            {#if MarkdownEditorComponent}
+              <MarkdownEditorComponent bind:value={body} placeholder="Write your note..." />
+            {:else if markdownEditorLoadError}
+              <textarea
+                use:autofocus
+                class="code-input"
+                bind:value={body}
+                rows="10"
+                placeholder="Write your note in Markdown..."
+              ></textarea>
+            {:else}
+              <div class="editor-loading" aria-live="polite">Loading visual editor…</div>
+            {/if}
+          {:else if editorMode === 'write'}
             <textarea
               use:autofocus
               class="code-input"
@@ -378,7 +418,15 @@
               placeholder="Write your note in Markdown..."
             ></textarea>
           {:else}
-            <div class="editor-loading" aria-live="polite">Loading visual editor…</div>
+            <div class="preview-wrap markdown-body">
+              {#if previewHtml}
+                {@html previewHtml}
+              {:else if body.trim()}
+                <span class="preview-empty">Preview unavailable</span>
+              {:else}
+                <span class="preview-empty">Nothing to preview</span>
+              {/if}
+            </div>
           {/if}
         </div>
         {#if markdownEditorLoadError}
@@ -660,6 +708,22 @@
     font-size: 0.85rem;
   }
 
+  .preview-wrap {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
+  .preview-empty {
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 0.85rem;
+  }
+
   .actions {
     display: flex;
     justify-content: flex-end;
@@ -892,4 +956,58 @@
     flex-direction: column;
     min-height: 0;
   }
+
+  .markdown-body {
+    font-size: 0.9rem;
+    color: var(--text);
+    line-height: 1.6;
+    word-break: break-word;
+  }
+
+  .markdown-body :global(h1) { font-size: 1.3rem; font-weight: 600; margin: 0.75rem 0 0.4rem; }
+  .markdown-body :global(h2) { font-size: 1.15rem; font-weight: 600; margin: 0.6rem 0 0.35rem; }
+  .markdown-body :global(h3) { font-size: 1.05rem; font-weight: 600; margin: 0.5rem 0 0.3rem; }
+  .markdown-body :global(p) { margin: 0 0 0.5rem; }
+  .markdown-body :global(p:last-child) { margin-bottom: 0; }
+  .markdown-body :global(ul),
+  .markdown-body :global(ol) { padding-left: 1.5rem; margin: 0 0 0.5rem; }
+  .markdown-body :global(ul) { list-style: disc; }
+  .markdown-body :global(ol) { list-style: decimal; }
+  .markdown-body :global(li) { margin-bottom: 0.15rem; }
+  .markdown-body :global(blockquote) {
+    border-left: 3px solid var(--accent);
+    padding-left: 0.75rem;
+    margin: 0 0 0.5rem;
+    color: var(--text-muted);
+  }
+  .markdown-body :global(a) { color: var(--accent); text-decoration: none; }
+  .markdown-body :global(a:hover) { text-decoration: underline; }
+  .markdown-body :global(code) {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.82rem;
+  }
+  .markdown-body :global(pre) {
+    background: #0d1117;
+    border-radius: var(--radius-sm);
+    padding: 0.75rem;
+    margin: 0 0 0.5rem;
+    overflow-x: auto;
+  }
+  .markdown-body :global(pre code) {
+    background: none;
+    padding: 0;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: #e6edf3;
+  }
+  .markdown-body :global(hr) {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 0.75rem 0;
+  }
+  .markdown-body :global(strong) { font-weight: 600; }
+  .markdown-body :global(em) { font-style: italic; }
 </style>

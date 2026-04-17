@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { loadMarkdownEditorComponent, shouldSubmitAddEntryForm } from './add-entry-modal';
+import { loadMarkdownEditorComponent, shouldLoadMarkdownEditor, shouldSubmitAddEntryForm } from './add-entry-modal';
 
 describe('shouldSubmitAddEntryForm', () => {
   it('submits from text-like inputs including bookmark url fields', () => {
@@ -39,5 +39,19 @@ describe('loadMarkdownEditorComponent', () => {
   it('loads the markdown editor on demand', async () => {
     const component = await loadMarkdownEditorComponent();
     expect(component).toBeTruthy();
+  });
+});
+
+describe('shouldLoadMarkdownEditor', () => {
+  it('loads only for note visual mode', () => {
+    expect(shouldLoadMarkdownEditor('note', 'visual', false, false)).toBe(true);
+    expect(shouldLoadMarkdownEditor('note', 'write', false, false)).toBe(false);
+    expect(shouldLoadMarkdownEditor('note', 'preview', false, false)).toBe(false);
+    expect(shouldLoadMarkdownEditor('bookmark', 'visual', false, false)).toBe(false);
+  });
+
+  it('does not reload after success or failure', () => {
+    expect(shouldLoadMarkdownEditor('note', 'visual', true, false)).toBe(false);
+    expect(shouldLoadMarkdownEditor('note', 'visual', false, true)).toBe(false);
   });
 });

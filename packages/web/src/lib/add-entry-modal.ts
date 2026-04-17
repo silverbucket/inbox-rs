@@ -1,4 +1,5 @@
 import type { Component } from 'svelte';
+import type { InboxItemType } from '@inbox-rs/rs-module';
 
 const SUBMITTABLE_INPUT_TYPES = new Set(['text', 'url', 'email', 'search', 'tel']);
 
@@ -21,4 +22,13 @@ export function shouldSubmitAddEntryForm(
 export async function loadMarkdownEditorComponent(): Promise<Component<any>> {
   const module = await import('../components/MarkdownEditor.svelte');
   return module.default;
+}
+
+export function shouldLoadMarkdownEditor(
+  type: InboxItemType,
+  mode: 'visual' | 'write' | 'preview',
+  componentLoaded: boolean,
+  loadError: boolean,
+): boolean {
+  return type === 'note' && mode === 'visual' && !componentLoaded && !loadError;
 }
