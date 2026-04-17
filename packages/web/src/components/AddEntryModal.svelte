@@ -1,9 +1,10 @@
 <script lang="ts">
+  import type { Component } from 'svelte';
   import { onDestroy } from 'svelte';
   import type { InboxItemType, InboxItem } from '@inbox-rs/rs-module';
   import { storeItem, moveItemToCollection } from '../lib/stores';
   import { transcribeAudio } from '../lib/transcribe';
-  import MarkdownEditor from './MarkdownEditor.svelte';
+  import { loadMarkdownEditorComponent, shouldSubmitAddEntryForm } from '../lib/add-entry-modal';
 
   let { type, editItem = undefined, collectionId = undefined, onclose, ondelete }: {
     type: InboxItemType;
@@ -29,6 +30,8 @@
 
   // Markdown editor mode for notes
   let editorMode = $state<'visual' | 'write' | 'preview'>('visual');
+  let MarkdownEditorComponent = $state<Component<any> | null>(null);
+  let markdownEditorLoadError = $state('');
 
   // Voice recording state
   let recording = $state(false);
@@ -289,6 +292,32 @@
     if (recordedUrl) URL.revokeObjectURL(recordedUrl);
   });
 
+  $effect(() => {
+    if (type !== 'note' || MarkdownEditorComponent || markdownEditorLoadError) {
+      return;
+    }
+
+    let cancelled = false;
+
+    loadMarkdownEditorComponent()
+      .then((component) => {
+        if (!cancelled) {
+          MarkdownEditorComponent = component;
+        }
+      })
+      .catch((loadError) => {
+        console.error('Failed to load markdown editor:', loadError);
+        if (!cancelled) {
+          markdownEditorLoadError = 'Visual editor unavailable. Markdown mode is still available.';
+          editorMode = 'write';
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  });
+
   const needsFile = $derived(type === 'image' || type === 'document');
   const canSubmit = $derived(
     saving || recording ? false
@@ -308,7 +337,7 @@
     <h2 class="modal-title" id="modal-title">{isEdit ? editLabels[type] : addLabels[type]}</h2>
 
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="form" onkeydown={(e) => { if (e.key === 'Enter' && e.target instanceof HTMLInputElement && e.target.type === 'text' && canSubmit) { e.preventDefault(); handleSubmit(); } }}>
+    <div class="form" onkeydown={(e) => { if (shouldSubmitAddEntryForm(e.key, e.target, canSubmit)) { e.preventDefault(); handleSubmit(); } }}>
       {#if type === 'bookmark'}
         <p class="info-note">Metadata fetching is not yet available in the web app. Use the browser extension to auto-fill bookmark details. Sockethub integration is planned for a future release.</p>
         <label class="field">
@@ -333,13 +362,28 @@
           <div class="field-header">
             <span>Content *</span>
             <div class="editor-tabs">
-              <button type="button" class="tab" class:active={editorMode === 'visual'} onclick={() => editorMode = 'visual'}>Visual</button>
+              <button type="button" class="tab" class:active={editorMode === 'visual'} onclick={() => editorMode = 'visual'} disabled={!!markdownEditorLoadError}>Visual</button>
               <button type="button" class="tab" class:active={editorMode === 'write'} onclick={() => editorMode = 'write'}>Markdown</button>
-              <button type="button" class="tab" class:active={editorMode === 'preview'} onclick={() => editorMode = 'preview'}>Preview</button>
+              <button type="button" class="tab" class:active={editorMode === 'preview'} onclick={() => editorMode = 'preview'} disabled={!!markdownEditorLoadError}>Preview</button>
             </div>
           </div>
-          <MarkdownEditor bind:value={body} bind:mode={editorMode} placeholder="Write your note..." />
+          {#if MarkdownEditorComponent}
+            <MarkdownEditorComponent bind:value={body} bind:mode={editorMode} placeholder="Write your note..." />
+          {:else if markdownEditorLoadError}
+            <textarea
+              use:autofocus
+              class="code-input"
+              bind:value={body}
+              rows="10"
+              placeholder="Write your note in Markdown..."
+            ></textarea>
+          {:else}
+            <div class="editor-loading" aria-live="polite">Loading visual editor…</div>
+          {/if}
         </div>
+        {#if markdownEditorLoadError}
+          <p class="info-note">{markdownEditorLoadError}</p>
+        {/if}
 
       {:else if type === 'image'}
         <label class="field">
@@ -602,6 +646,18 @@
     font-size: 0.8rem;
     line-height: 1.5;
     tab-size: 2;
+  }
+
+  .editor-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 14rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 0.85rem;
   }
 
   .actions {

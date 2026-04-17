@@ -1,4 +1,5 @@
 import hljs from 'highlight.js/lib/core';
+import DOMPurify from 'dompurify';
 import { Marked } from 'marked';
 
 export const langModules: Record<string, () => Promise<any>> = {
@@ -45,11 +46,6 @@ async function ensureLanguage(lang: string): Promise<string | null> {
   return resolved;
 }
 
-const marked = new Marked({
-  gfm: true,
-  breaks: true,
-});
-
 export async function renderMarkdown(source: string): Promise<string> {
   // Collect code block languages so we can load them before rendering
   const langsToLoad = new Set<string>();
@@ -82,6 +78,15 @@ export async function renderMarkdown(source: string): Promise<string> {
     },
   };
 
+  const marked = new Marked({
+    gfm: true,
+    breaks: true,
+  });
+
   marked.use({ renderer });
-  return await marked.parse(source);
+  const rendered = await marked.parse(source);
+
+  return DOMPurify.sanitize(rendered, {
+    USE_PROFILES: { html: true },
+  });
 }
