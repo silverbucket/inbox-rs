@@ -24,7 +24,6 @@
   let url = $state(editItem && 'url' in editItem ? editItem.url : '');
   let body = $state(editItem && 'body' in editItem ? editItem.body ?? '' : '');
   let description = $state(editItem?.description ?? '');
-  let language = $state(editItem && 'language' in editItem ? editItem.language ?? '' : '');
   let completed = $state(editItem && 'completed' in editItem ? editItem.completed : false);
   let from = $state(editItem && 'from' in editItem ? editItem.from ?? '' : '');
   let notes = $state(editItem && 'notes' in editItem ? editItem.notes ?? '' : '');
@@ -124,7 +123,6 @@
     'image': 'Add Image',
     'audio': 'Add Audio',
     'document': 'Add File',
-    'code-snippet': 'Add Code Snippet',
     'todo': 'Add Todo',
     'email': 'Add Email',
   };
@@ -135,7 +133,6 @@
     'image': 'Edit Image',
     'audio': 'Edit Audio',
     'document': 'Edit File',
-    'code-snippet': 'Edit Code Snippet',
     'todo': 'Edit Todo',
     'email': 'Edit Email',
   };
@@ -231,8 +228,6 @@
         } else {
           return;
         }
-      } else if (type === 'code-snippet') {
-        item = { id, type: 'code-snippet', title: title || 'Untitled snippet', body, language: language || undefined, description: description || undefined, createdAt };
       } else if (type === 'email') {
         const emailMessageUrl = isEdit && editItem!.type === 'email' ? editItem!.messageUrl : undefined;
         item = { id, type: 'email', title: title || 'Untitled email', body, from: from || undefined, notes: notes || undefined, messageUrl: emailMessageUrl, createdAt };
@@ -407,7 +402,7 @@
     : type === 'audio' ? !!(file || recordedBlob || hasExistingFile)
     : needsFile ? !!(file || hasExistingFile)
     : type === 'bookmark' ? !!url
-    : type === 'note' || type === 'code-snippet' || type === 'email' ? !!body
+    : type === 'note' || type === 'email' ? !!body
     : type === 'todo' ? !!title
     : true
   );
@@ -558,20 +553,6 @@
         <label class="field">
           <span>Description</span>
           <textarea bind:value={description} rows="2" placeholder="Optional description..."></textarea>
-        </label>
-
-      {:else if type === 'code-snippet'}
-        <label class="field">
-          <span>Title</span>
-          <input use:autofocus type="text" bind:value={title} placeholder="Snippet title" />
-        </label>
-        <label class="field">
-          <span>Language</span>
-          <input type="text" bind:value={language} placeholder="e.g. javascript, python, rust" />
-        </label>
-        <label class="field">
-          <span>Code *</span>
-          <textarea class="code-input" bind:value={body} rows="8" placeholder="Paste your code..." onkeydown={(e) => handleCodeKeydown(e, true)}></textarea>
         </label>
 
       {:else if type === 'email'}

@@ -1,7 +1,7 @@
 import { writable, derived, get } from 'svelte/store';
 import type { Writable, Readable } from 'svelte/store';
 import type { InboxItem, AppConfig, UserSettings, Collection, CollectionGroup } from '@inbox-rs/rs-module';
-import { migrator } from '@inbox-rs/rs-module';
+import { migrator, wrapCodeBlock } from '@inbox-rs/rs-module';
 import { cleanForStorage } from './clean-for-storage';
 import rs, { fetchFileBlobUrl } from './rs';
 
@@ -27,6 +27,12 @@ function readStoredUserAddress(): string {
 
 export const userAddress = writable<string>(readStoredUserAddress());
 export const items = writable<Record<string, InboxItem>>({});
+/**
+ * Un-normalized view of items straight from storage. Used for migration
+ * detection so legacy types (e.g. `code-snippet`) are visible to the migrator
+ * even though `items` presents them normalized to their current type.
+ */
+const rawItems = writable<Record<string, object>>({});
 export const appConfig = writable<AppConfig>({});
 export const userSettings = writable<UserSettings>({});
 export const collections = writable<Record<string, Collection>>({});
@@ -39,15 +45,15 @@ function stripMigrationVersion<T>(doc: T): T {
   return rest as T;
 }
 
-function requiresContentMigration(doc: InboxItem): boolean {
-  const migrated = migrator.migrateDocument('items', doc);
+function requiresContentMigration(doc: object): boolean {
+  const migrated = migrator.migrateDocument('items', doc as InboxItem);
   if (migrated === doc) return false;
   return JSON.stringify(stripMigrationVersion(migrated)) !== JSON.stringify(stripMigrationVersion(doc));
 }
 
 /** Count only docs whose non-version content would actually change under migration */
-const rawPendingMigrationCount = derived(items, ($items) => {
-  const docs = Object.values($items);
+const rawPendingMigrationCount = derived(rawItems, ($rawItems) => {
+  const docs = Object.values($rawItems);
   if (docs.length === 0) return 0;
   let count = 0;
   for (const doc of docs) {
@@ -142,21 +148,36 @@ async function removeFromOrderConfig(id: string, key: 'collectionsOrder' | 'grou
 
 // ---- Loaders ----
 
+function normalizeLoadedItem(item: object): InboxItem {
+  const candidate = item as Record<string, unknown>;
+  if (candidate.type === 'code-snippet') {
+    const { language, body, ...rest } = candidate;
+    return {
+      ...rest,
+      type: 'note',
+      body: wrapCodeBlock(body, language),
+    } as InboxItem;
+  }
+  return candidate as InboxItem;
+}
+
 async function loadItems() {
   const inbox = getInbox();
   if (!inbox) return;
   try {
     const all = await inbox.getAll();
     const valid: Record<string, InboxItem> = {};
+    const rawValid: Record<string, object> = {};
     for (const [key, item] of Object.entries(all)) {
-      if (item && typeof item === 'object' && 'id' in item && (item as InboxItem).id) {
-        const inboxItem = item as InboxItem;
+      if (item && typeof item === 'object' && 'id' in item && typeof (item as { id?: unknown }).id === 'string') {
         // Only trust canonically-addressed item records. This avoids rendering
         // duplicate/stale documents that may still exist under malformed keys.
-        if (key !== inboxItem.id) continue;
-        valid[inboxItem.id] = inboxItem;
+        if (key !== (item as { id: string }).id) continue;
+        rawValid[key] = item;
+        valid[key] = normalizeLoadedItem(item);
       }
     }
+    rawItems.set(rawValid);
     items.set(valid);
   } catch {
     // RS sync/fetch error — keep existing items
@@ -263,6 +284,7 @@ rs.on('disconnected', () => {
   clearMigrationAlertTimeout();
   migrationAlertReady.set(false);
   items.set({});
+  rawItems.set({});
   appConfig.set({});
   userSettings.set({});
   collections.set({});
@@ -331,8 +353,15 @@ if (inboxRef) {
     if (path.startsWith('items/')) {
       const key = path.slice('items/'.length);
       if (value && typeof value === 'object' && value.id) {
-        items.update(current => ({ ...current, [key]: value as InboxItem }));
+        if (key !== (value as { id: string }).id) return;
+        rawItems.update(current => ({ ...current, [key]: value as object }));
+        items.update(current => ({ ...current, [key]: normalizeLoadedItem(value as object) }));
       } else if (!value) {
+        rawItems.update(current => {
+          const next = { ...current };
+          delete next[key];
+          return next;
+        });
         items.update(current => {
           const next = { ...current };
           delete next[key];
@@ -542,12 +571,23 @@ export async function storeItem(item: InboxItem, fileData?: ArrayBuffer) {
     const url = URL.createObjectURL(blob);
     blobUrls.update(current => ({ ...current, [item.filePath as string]: url }));
   }
+  rawItems.update(current => ({ ...current, [cleanItem.id]: cleanItem as object }));
   items.update(current => ({ ...current, [cleanItem.id]: cleanItem }));
 }
 
 export async function deleteItem(id: string, item?: InboxItem) {
   const inbox = getInbox();
   await inbox.remove(id, item);
+  rawItems.update(current => {
+    const next = { ...current };
+    for (const key of Object.keys(next)) {
+      if ((next[key] as { id?: string }).id === id) {
+        delete next[key];
+        break;
+      }
+    }
+    return next;
+  });
   items.update(current => {
     const next = { ...current };
     for (const key of Object.keys(next)) {
