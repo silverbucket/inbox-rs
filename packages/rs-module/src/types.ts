@@ -1,4 +1,4 @@
-export type InboxItemType = 'bookmark' | 'note' | 'image' | 'audio' | 'video' | 'document' | 'code-snippet' | 'todo' | 'email';
+export type InboxItemType = 'bookmark' | 'note' | 'image' | 'audio' | 'video' | 'document' | 'todo' | 'email';
 
 export interface InboxItemBase {
   id: string;
@@ -61,12 +61,6 @@ export interface DocumentItem extends InboxItemBase {
   fileName?: string;
 }
 
-export interface CodeSnippetItem extends InboxItemBase {
-  type: 'code-snippet';
-  body: string;
-  language?: string;
-}
-
 export interface TodoItem extends InboxItemBase {
   type: 'todo';
   body?: string;
@@ -82,7 +76,7 @@ export interface EmailItem extends InboxItemBase {
   messageUrl?: string; // mid: URI to open in mail client
 }
 
-export type InboxItem = BookmarkItem | NoteItem | ImageItem | AudioItem | VideoItem | DocumentItem | CodeSnippetItem | TodoItem | EmailItem;
+export type InboxItem = BookmarkItem | NoteItem | ImageItem | AudioItem | VideoItem | DocumentItem | TodoItem | EmailItem;
 
 export interface UserSettings {
   abbreviation?: string;

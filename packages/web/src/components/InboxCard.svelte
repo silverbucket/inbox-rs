@@ -5,7 +5,6 @@
   import ImageCard from './ImageCard.svelte';
   import AudioCard from './AudioCard.svelte';
   import DocumentCard from './DocumentCard.svelte';
-  import CodeSnippetCard from './CodeSnippetCard.svelte';
   import EmailCard from './EmailCard.svelte';
   let { item, onselect }: { item: InboxItem; onselect: (item: InboxItem) => void } = $props();
 
@@ -39,8 +38,6 @@
       <AudioCard {item} />
     {:else if item.type === 'document'}
       <DocumentCard {item} />
-    {:else if item.type === 'code-snippet'}
-      <CodeSnippetCard {item} />
     {:else if item.type === 'email'}
       <EmailCard {item} />
     {/if}

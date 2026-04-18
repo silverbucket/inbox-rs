@@ -51,7 +51,6 @@ All four packages share the `@inbox-rs/rs-module` for consistent data types and 
 | `image` | Downloaded image binary with metadata and optional source URL. |
 | `audio` | Audio recording with duration. |
 | `document` | Uploaded file with metadata. |
-| `code-snippet` | Code with syntax highlighting and language tag. |
 | `email` | Email with subject, body, sender, optional notes, and `mid:` URI link. |
 | `todo` | Task with title, completion status, and optional notes. Any item can be converted to a todo. |
 
