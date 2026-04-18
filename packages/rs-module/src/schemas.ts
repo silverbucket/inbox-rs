@@ -129,23 +129,6 @@ export const documentMetaSchema = {
   required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt']
 };
 
-export const codeSnippetSchema = {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    type: { type: 'string', enum: ['code-snippet'] },
-    title: { type: 'string' },
-    description: { type: 'string' },
-    body: { type: 'string' },
-    language: { type: 'string' },
-    createdAt: { type: 'string' },
-    ...todoFields,
-    ...collectionFields,
-    ...migrateFields,
-  },
-  required: ['id', 'type', 'title', 'body', 'createdAt']
-};
-
 export const emailSchema = {
   type: 'object',
   properties: {

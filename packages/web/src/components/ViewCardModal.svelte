@@ -7,10 +7,8 @@
   import ShareButton from './ShareButton.svelte';
   import Lightbox from './Lightbox.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
-  import hljs from 'highlight.js/lib/core';
-  import DOMPurify from 'dompurify';
   import 'highlight.js/styles/github-dark.min.css';
-  import { langModules, langAliases, renderMarkdown } from '../lib/markdown';
+  import { renderMarkdown } from '../lib/markdown';
 
   let { item, onclose, onedit }: {
     item: InboxItem;
@@ -37,9 +35,6 @@
   let transcribing = $state(false);
   let transcriptionError = $state(false);
 
-  // Code highlighting
-  let highlightedHtml = $state('');
-
   // Markdown rendering for notes
   let renderedBody = $state('');
 
@@ -55,16 +50,12 @@
     audioError = false;
     transcribing = false;
     transcriptionError = false;
-    highlightedHtml = '';
     renderedBody = '';
     showLightbox = false;
     untrack(() => { if (docBlobUrl) URL.revokeObjectURL(docBlobUrl); });
     docBlobUrl = null;
     docLoading = false;
 
-    if (currentItem.type === 'code-snippet') {
-      highlightCode();
-    }
     if (currentItem.type === 'note' && (currentItem as any).body) {
       renderMarkdown((currentItem as any).body).then((html) => {
         if (item.id === currentItem.id) renderedBody = html;
@@ -100,26 +91,6 @@
       if (item.id === target.id) transcriptionError = true;
     } finally {
       if (item.id === target.id) transcribing = false;
-    }
-  }
-
-  async function highlightCode() {
-    if (item.type !== 'code-snippet') return;
-    const lang = item.language?.toLowerCase() || '';
-    const resolved = langAliases[lang] || lang;
-    const loader = langModules[resolved];
-    if (loader && !hljs.getLanguage(resolved)) {
-      const mod = await loader();
-      hljs.registerLanguage(resolved, mod.default);
-      highlightedHtml = DOMPurify.sanitize(
-        hljs.highlight(item.body, { language: resolved }).value,
-        { USE_PROFILES: { html: true } },
-      );
-    } else if (hljs.getLanguage(resolved)) {
-      highlightedHtml = DOMPurify.sanitize(
-        hljs.highlight(item.body, { language: resolved }).value,
-        { USE_PROFILES: { html: true } },
-      );
     }
   }
 
@@ -396,13 +367,6 @@
       </div>
     {/if}
 
-    {#if item.type === 'code-snippet'}
-      {#if item.language}
-        <span class="language-badge">{item.language}</span>
-      {/if}
-      <pre class="code"><code>{#if highlightedHtml}{@html highlightedHtml}{:else}{item.body}{/if}</code></pre>
-    {/if}
-
     {#if item.type === 'document'}
       {#if item.fileName}
         <p class="meta-text">{item.fileName}</p>
@@ -423,7 +387,7 @@
       </div>
     {/if}
 
-    {#if body && item.type !== 'code-snippet'}
+    {#if body}
       <div class="content-block">
         <span class="content-label">{item.type === 'audio' ? 'Transcription' : 'Body'}</span>
         {#if item.type === 'note' && renderedBody}
@@ -650,43 +614,6 @@
   .status-text {
     font-size: 0.8rem;
     color: var(--text-muted);
-  }
-
-  .language-badge {
-    display: inline-block;
-    background: var(--accent-subtle);
-    color: var(--accent);
-    padding: 0.1rem 0.4rem;
-    border-radius: 999px;
-    font-size: 0.65rem;
-    font-weight: 500;
-    text-transform: lowercase;
-    margin-bottom: 0.5rem;
-  }
-
-  .code {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 0.75rem;
-    font-size: 0.8rem;
-    line-height: 1.5;
-    overflow-x: auto;
-    white-space: pre-wrap;
-    word-break: break-word;
-    margin: 0 0 0.75rem;
-    max-height: 400px;
-    overflow-y: auto;
-  }
-
-  .code code {
-    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
-    color: var(--text);
-  }
-
-  :global(.code .hljs) {
-    background: transparent;
-    padding: 0;
   }
 
   .content-block {

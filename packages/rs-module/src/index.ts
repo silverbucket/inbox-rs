@@ -1,16 +1,17 @@
-import { bookmarkSchema, noteSchema, imageMetaSchema, audioMetaSchema, videoMetaSchema, documentMetaSchema, codeSnippetSchema, todoSchema, emailSchema, appConfigSchema, userSettingsSchema, collectionSchema, collectionGroupSchema } from './schemas.js';
+import { bookmarkSchema, noteSchema, imageMetaSchema, audioMetaSchema, videoMetaSchema, documentMetaSchema, todoSchema, emailSchema, appConfigSchema, userSettingsSchema, collectionSchema, collectionGroupSchema } from './schemas.js';
 import type { InboxItem, InboxItemType, AppConfig, UserSettings, Collection, CollectionGroup } from './types.js';
 import type { MigrateResult } from 'rs-migrate';
 import { migrator, legacySchemas } from './migrations.js';
 export { migrator } from './migrations.js';
+export { wrapCodeBlock } from './migrations.js';
 
 /** Current item types — legacy types like 'voice-memo' are excluded */
 const CURRENT_TYPES: Set<string> = new Set<string>([
   'bookmark', 'note', 'image', 'audio', 'video',
-  'document', 'code-snippet', 'todo', 'email',
+  'document', 'todo', 'email',
 ] satisfies InboxItemType[]);
 
-export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, AudioItem, VideoItem, DocumentItem, CodeSnippetItem, TodoItem, EmailItem, AppConfig, UserSettings, Collection, CollectionGroup } from './types.js';
+export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, AudioItem, VideoItem, DocumentItem, TodoItem, EmailItem, AppConfig, UserSettings, Collection, CollectionGroup } from './types.js';
 
 export interface InboxModuleExports {
   getAll(): Promise<Record<string, InboxItem>>;
@@ -59,7 +60,6 @@ const InboxModule = {
     for (const ls of legacySchemas) {
       privateClient.declareType(ls.type, ls.schema);
     }
-    privateClient.declareType('code-snippet', codeSnippetSchema);
     privateClient.declareType('todo', todoSchema);
     privateClient.declareType('email', emailSchema);
     privateClient.declareType('app-config', appConfigSchema);
