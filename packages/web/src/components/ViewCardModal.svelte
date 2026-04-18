@@ -8,6 +8,7 @@
   import Lightbox from './Lightbox.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
   import hljs from 'highlight.js/lib/core';
+  import DOMPurify from 'dompurify';
   import 'highlight.js/styles/github-dark.min.css';
   import { langModules, langAliases, renderMarkdown } from '../lib/markdown';
 
@@ -110,9 +111,15 @@
     if (loader && !hljs.getLanguage(resolved)) {
       const mod = await loader();
       hljs.registerLanguage(resolved, mod.default);
-      highlightedHtml = hljs.highlight(item.body, { language: resolved }).value;
+      highlightedHtml = DOMPurify.sanitize(
+        hljs.highlight(item.body, { language: resolved }).value,
+        { USE_PROFILES: { html: true } },
+      );
     } else if (hljs.getLanguage(resolved)) {
-      highlightedHtml = hljs.highlight(item.body, { language: resolved }).value;
+      highlightedHtml = DOMPurify.sanitize(
+        hljs.highlight(item.body, { language: resolved }).value,
+        { USE_PROFILES: { html: true } },
+      );
     }
   }
 

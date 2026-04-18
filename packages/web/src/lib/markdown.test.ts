@@ -19,6 +19,23 @@ describe('renderMarkdown', () => {
     expect(html).not.toContain('javascript:alert(1)');
   });
 
+  it('strips external-resource and active html from markdown output', async () => {
+    const html = await renderMarkdown([
+      '<img src="https://attacker.example/pixel.png" alt="pixel">',
+      '<audio controls src="https://attacker.example/audio.mp3"></audio>',
+      '<form><input value="spoof"></form>',
+      '<p style="position:fixed;inset:0">overlay</p>',
+      '[safe](https://example.com)',
+    ].join('\n\n'));
+
+    expect(html).not.toContain('<img');
+    expect(html).not.toContain('<audio');
+    expect(html).not.toContain('<form');
+    expect(html).not.toContain('<input');
+    expect(html).not.toContain('style=');
+    expect(html).toContain('<a href="https://example.com">safe</a>');
+  });
+
   it('preserves highlighted code block classes for safe markdown output', async () => {
     const html = await renderMarkdown('```javascript\nconst value = 1;\n```');
 
@@ -26,5 +43,14 @@ describe('renderMarkdown', () => {
     expect(html).toContain('class="hljs language-javascript"');
     expect(html).toContain('hljs-keyword');
     expect(html).toContain('hljs-number');
+  });
+
+  it('fully escapes fallback code blocks for unknown languages', async () => {
+    const html = await renderMarkdown('```unknown\nconst s = "<tag> & \'quote\'";\n```');
+
+    expect(html).toContain('&lt;tag&gt;');
+    expect(html).toContain('&amp;');
+    expect(html).not.toContain('<tag>');
+    expect(html).toContain('\'quote\'');
   });
 });

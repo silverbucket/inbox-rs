@@ -2,6 +2,35 @@ import hljs from 'highlight.js/lib/core';
 import DOMPurify from 'dompurify';
 import { Marked } from 'marked';
 
+const MARKDOWN_SANITIZE_OPTIONS = {
+  USE_PROFILES: { html: true },
+  FORBID_TAGS: [
+    'img',
+    'picture',
+    'audio',
+    'video',
+    'source',
+    'track',
+    'iframe',
+    'frame',
+    'frameset',
+    'object',
+    'embed',
+    'portal',
+    'form',
+    'input',
+    'button',
+    'textarea',
+    'select',
+    'option',
+    'style',
+    'link',
+    'meta',
+    'base',
+  ],
+  FORBID_ATTR: ['style'],
+} as const;
+
 export const langModules: Record<string, () => Promise<any>> = {
   javascript: () => import('highlight.js/lib/languages/javascript'),
   typescript: () => import('highlight.js/lib/languages/typescript'),
@@ -73,7 +102,12 @@ export async function renderMarkdown(source: string): Promise<string> {
         const highlighted = hljs.highlight(text, { language: resolved }).value;
         return `<pre><code class="hljs language-${resolved}">${highlighted}</code></pre>`;
       }
-      const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const escaped = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
       return `<pre><code>${escaped}</code></pre>`;
     },
   };
@@ -86,7 +120,5 @@ export async function renderMarkdown(source: string): Promise<string> {
   marked.use({ renderer });
   const rendered = await marked.parse(source);
 
-  return DOMPurify.sanitize(rendered, {
-    USE_PROFILES: { html: true },
-  });
+  return DOMPurify.sanitize(rendered, MARKDOWN_SANITIZE_OPTIONS);
 }
