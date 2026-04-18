@@ -6,6 +6,7 @@
   import { renderMarkdown } from '../lib/markdown';
   import { transcribeAudio } from '../lib/transcribe';
   import { loadMarkdownEditorComponent, shouldLoadMarkdownEditor, shouldSubmitAddEntryForm } from '../lib/add-entry-modal';
+  import { isInsideCodeBlock, insertIndent, indentSelection, dedentSelection, insertNewlineWithIndent, isOnClosingFence } from '../lib/code-indent';
 
   let { type, editItem = undefined, collectionId = undefined, onclose, ondelete }: {
     type: InboxItemType;
@@ -286,6 +287,60 @@
     requestAnimationFrame(() => node.focus());
   }
 
+  /**
+   * Apply a computed TextState to a textarea using setRangeText, which
+   * preserves native undo/redo and auto-fires the input event.
+   */
+  function applyTextState(
+    ta: HTMLTextAreaElement,
+    next: import('../lib/code-indent').TextState,
+  ) {
+    ta.setRangeText(next.value, 0, ta.value.length, 'end');
+    ta.selectionStart = next.selectionStart;
+    ta.selectionEnd = next.selectionEnd;
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  // Track whether Escape was pressed to release the Tab trap.
+  // Reset when the textarea regains focus or the user types a normal key.
+  let tabTrapped = $state(true);
+
+  /** Handle Tab, Enter, and Escape for auto-indenting inside code areas */
+  function handleCodeKeydown(e: KeyboardEvent, alwaysActive: boolean = false) {
+    const ta = e.currentTarget as HTMLTextAreaElement;
+
+    if (e.key === 'Escape') {
+      tabTrapped = false;
+      return;
+    }
+
+    // Any non-modifier key re-enables the Tab trap (user is typing again).
+    if (!e.key.startsWith('Shift') && !e.key.startsWith('Alt') && !e.key.startsWith('Control') && !e.key.startsWith('Meta') && e.key !== 'Tab' && e.key !== 'Enter') {
+      tabTrapped = true;
+    }
+
+    const active = alwaysActive || isInsideCodeBlock(ta.value, ta.selectionStart);
+    if (!active) return;
+
+    if (e.key === 'Tab' && tabTrapped) {
+      e.preventDefault();
+      const state = { value: ta.value, selectionStart: ta.selectionStart, selectionEnd: ta.selectionEnd };
+      if (state.selectionStart === state.selectionEnd) {
+        applyTextState(ta, insertIndent(state));
+      } else if (e.shiftKey) {
+        applyTextState(ta, dedentSelection(state));
+      } else {
+        applyTextState(ta, indentSelection(state));
+      }
+    } else if (e.key === 'Enter') {
+      if (!alwaysActive && isOnClosingFence(ta.value, ta.selectionStart)) return;
+
+      e.preventDefault();
+      const state = { value: ta.value, selectionStart: ta.selectionStart, selectionEnd: ta.selectionEnd };
+      applyTextState(ta, insertNewlineWithIndent(state));
+    }
+  }
+
   onDestroy(() => {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       mediaRecorder.stop();
@@ -405,6 +460,7 @@
                 bind:value={body}
                 rows="10"
                 placeholder="Write your note in Markdown..."
+                onkeydown={handleCodeKeydown}
               ></textarea>
             {:else}
               <div class="editor-loading" aria-live="polite">Loading visual editor…</div>
@@ -416,6 +472,7 @@
               bind:value={body}
               rows="10"
               placeholder="Write your note in Markdown..."
+              onkeydown={handleCodeKeydown}
             ></textarea>
           {:else}
             <div class="preview-wrap markdown-body">
@@ -514,7 +571,7 @@
         </label>
         <label class="field">
           <span>Code *</span>
-          <textarea class="code-input" bind:value={body} rows="8" placeholder="Paste your code..."></textarea>
+          <textarea class="code-input" bind:value={body} rows="8" placeholder="Paste your code..." onkeydown={(e) => handleCodeKeydown(e, true)}></textarea>
         </label>
 
       {:else if type === 'email'}
@@ -542,7 +599,7 @@
         </label>
         <label class="field">
           <span>Details</span>
-          <textarea bind:value={body} rows="3" placeholder="Optional details..."></textarea>
+          <textarea bind:value={body} rows="3" placeholder="Optional details..." onkeydown={handleCodeKeydown}></textarea>
         </label>
         {#if isEdit}
           <label class="field checkbox-field">
