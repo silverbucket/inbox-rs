@@ -5,6 +5,7 @@
   import rs from '../lib/rs';
   import { transcribeAudio } from '../lib/transcribe';
   import ShareButton from './ShareButton.svelte';
+  import Lightbox from './Lightbox.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
   import hljs from 'highlight.js/lib/core';
   import 'highlight.js/styles/github-dark.min.css';
@@ -18,6 +19,7 @@
 
   let showDelete = $state(false);
   let deleting = $state(false);
+  let showLightbox = $state(false);
   let showMoveMenu = $state(false);
   let moveButtonEl = $state<HTMLButtonElement | null>(null);
   let dropdownStyle = $state('');
@@ -54,6 +56,7 @@
     transcriptionError = false;
     highlightedHtml = '';
     renderedBody = '';
+    showLightbox = false;
     untrack(() => { if (docBlobUrl) URL.revokeObjectURL(docBlobUrl); });
     docBlobUrl = null;
     docLoading = false;
@@ -344,8 +347,22 @@
     {/if}
 
     {#if imageSrc}
-      <img class="view-image" src={imageSrc} alt=""
-        onerror={(e) => (e.currentTarget as HTMLImageElement).style.display = 'none'} />
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="view-image-link" onclick={() => showLightbox = true}>
+        <img class="view-image" src={imageSrc} alt=""
+          onerror={(e) => (e.currentTarget as HTMLImageElement).style.display = 'none'} />
+      </div>
+    {/if}
+    {#if showLightbox && imageSrc}
+      <Lightbox
+        src={imageSrc}
+        alt={item.title}
+        onclose={() => showLightbox = false}
+        filePath={'filePath' in item ? (item as any).filePath : undefined}
+        mimeType={'mimeType' in item ? (item as any).mimeType : undefined}
+        filename={item.title || undefined}
+      />
     {/if}
 
     {#if item.type === 'audio'}
@@ -596,13 +613,17 @@
     margin-bottom: 0.5rem;
   }
 
+  .view-image-link {
+    cursor: zoom-in;
+    margin-bottom: 0.75rem;
+  }
+
   .view-image {
     width: 100%;
     max-height: 300px;
     object-fit: cover;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border);
-    margin-bottom: 0.75rem;
   }
 
   .player {

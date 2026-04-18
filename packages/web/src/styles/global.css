@@ -109,3 +109,18 @@ a {
 a:hover {
   color: var(--accent-hover);
 }
+
+@media (max-width: 600px) {
+  html {
+    font-size: 17px;
+  }
+
+  /* Prevent iOS Safari zoom-on-focus: any focused text input/textarea/select
+     with a computed font-size below 16px triggers an automatic viewport zoom
+     that then persists. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
