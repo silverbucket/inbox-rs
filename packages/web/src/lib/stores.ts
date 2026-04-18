@@ -45,7 +45,6 @@ const rawPendingMigrationCount = derived(items, ($items) => {
   return count;
 });
 const migrationAlertReady = writable(false);
-let waitingForInitialMigrationSettle = false;
 let migrationAlertTimeout: ReturnType<typeof setTimeout> | null = null;
 
 function clearMigrationAlertTimeout() {
@@ -56,22 +55,19 @@ function clearMigrationAlertTimeout() {
 
 function resetMigrationAlertReadiness() {
   clearMigrationAlertTimeout();
-  waitingForInitialMigrationSettle = true;
   migrationAlertReady.set(false);
 }
 
 function scheduleMigrationAlertFallback() {
   clearMigrationAlertTimeout();
   migrationAlertTimeout = setTimeout(() => {
-    waitingForInitialMigrationSettle = false;
     migrationAlertTimeout = null;
     migrationAlertReady.set(true);
   }, INITIAL_MIGRATION_ALERT_TIMEOUT_MS);
 }
 
 function markMigrationAlertReady() {
-  if (!waitingForInitialMigrationSettle) return;
-  waitingForInitialMigrationSettle = false;
+  if (get(migrationAlertReady)) return;
   clearMigrationAlertTimeout();
   migrationAlertReady.set(true);
 }
@@ -256,7 +252,6 @@ rs.on('disconnected', () => {
     reloadTimeout = undefined;
   }
   clearMigrationAlertTimeout();
-  waitingForInitialMigrationSettle = false;
   migrationAlertReady.set(false);
   items.set({});
   appConfig.set({});
