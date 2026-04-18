@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
 
 // Mock the RS module to prevent RemoteStorage initialization side effects
@@ -53,7 +53,7 @@ import {
   blobUrls, connected, loadFileBlobUrl,
   collections, groups, groupCollections, moveCollectionToGroup,
   deleteGroup, ungroupedCollections, appConfig,
-  storeCollection, reorderGroupCollections, items, todoItems, reorderTodos,
+  storeCollection, reorderGroupCollections, items, todoItems, reorderTodos, pendingMigrationCount,
 } from './stores';
 import type { Collection, CollectionGroup, InboxItem } from '@inbox-rs/rs-module';
 
@@ -65,7 +65,9 @@ const rsHandlers: Record<string, (...args: any[]) => any> = {};
 function captureRsHandlers() {
   if (Object.keys(rsHandlers).length > 0) return;
   for (const [event, handler] of mockRs.on.mock.calls as [string, (...args: any[]) => any][]) {
-    rsHandlers[event] = handler;
+    if (!(event in rsHandlers)) {
+      rsHandlers[event] = handler;
+    }
   }
 }
 captureRsHandlers();
@@ -214,6 +216,17 @@ function makeTodo(id: string, overrides: Partial<InboxItem> = {}): InboxItem {
     createdAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
   } as InboxItem;
+}
+
+function makeLegacyVoiceMemo(id: string): InboxItem {
+  return {
+    id,
+    type: 'voice-memo',
+    title: `Voice memo ${id}`,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    filePath: `files/${id}.m4a`,
+    mimeType: 'audio/mp4',
+  } as unknown as InboxItem;
 }
 
 describe('groupCollections', () => {
@@ -406,6 +419,51 @@ describe('deleteGroup', () => {
 
     expect(result).toBe(true);
     expect(get(groups)['g1']).toBeUndefined();
+  });
+});
+
+describe('pendingMigrationCount visibility timing', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+    connected.set(false);
+    items.set({});
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+    mockInbox.getAll.mockResolvedValue({});
+    mockInbox.getConfig.mockResolvedValue({});
+    mockInbox.getAllCollections.mockResolvedValue({});
+    mockInbox.getAllGroups.mockResolvedValue({});
+    mockInbox.getUserSettings.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('keeps migration count hidden until initial sync settles', async () => {
+    mockInbox.getAll.mockResolvedValue({ legacy: makeLegacyVoiceMemo('legacy') });
+
+    await rsHandlers['connected']();
+
+    expect(get(pendingMigrationCount)).toBe(0);
+
+    rsHandlers['sync-done']();
+
+    expect(get(pendingMigrationCount)).toBe(1);
+  });
+
+  it('shows migration count after the fallback timeout when no sync signal arrives', async () => {
+    mockInbox.getAll.mockResolvedValue({ legacy: makeLegacyVoiceMemo('legacy') });
+
+    await rsHandlers['connected']();
+
+    expect(get(pendingMigrationCount)).toBe(0);
+
+    await vi.advanceTimersByTimeAsync(2500);
+
+    expect(get(pendingMigrationCount)).toBe(1);
   });
 });
 

@@ -31,8 +31,10 @@ export const appConfig = writable<AppConfig>({});
 export const userSettings = writable<UserSettings>({});
 export const collections = writable<Record<string, Collection>>({});
 export const groups = writable<Record<string, CollectionGroup>>({});
-/** Derived from loaded items using rs-migrate's getPending */
-export const pendingMigrationCount = derived(items, ($items) => {
+const INITIAL_MIGRATION_ALERT_TIMEOUT_MS = 2500;
+
+/** Raw count from loaded items using rs-migrate's getPending */
+const rawPendingMigrationCount = derived(items, ($items) => {
   const docs = Object.values($items);
   if (docs.length === 0) return 0;
   const pending = migrator.getPending('items', docs);
@@ -42,6 +44,45 @@ export const pendingMigrationCount = derived(items, ($items) => {
   }
   return count;
 });
+const migrationAlertReady = writable(false);
+let waitingForInitialMigrationSettle = false;
+let migrationAlertTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function clearMigrationAlertTimeout() {
+  if (!migrationAlertTimeout) return;
+  clearTimeout(migrationAlertTimeout);
+  migrationAlertTimeout = null;
+}
+
+function resetMigrationAlertReadiness() {
+  clearMigrationAlertTimeout();
+  waitingForInitialMigrationSettle = true;
+  migrationAlertReady.set(false);
+}
+
+function scheduleMigrationAlertFallback() {
+  clearMigrationAlertTimeout();
+  migrationAlertTimeout = setTimeout(() => {
+    waitingForInitialMigrationSettle = false;
+    migrationAlertTimeout = null;
+    migrationAlertReady.set(true);
+  }, INITIAL_MIGRATION_ALERT_TIMEOUT_MS);
+}
+
+function markMigrationAlertReady() {
+  if (!waitingForInitialMigrationSettle) return;
+  waitingForInitialMigrationSettle = false;
+  clearMigrationAlertTimeout();
+  migrationAlertReady.set(true);
+}
+
+/** Visible count for the app after the initial connect/sync state settles */
+export const pendingMigrationCount = derived(
+  [rawPendingMigrationCount, migrationAlertReady],
+  ([$rawPendingMigrationCount, $migrationAlertReady]) => (
+    $migrationAlertReady ? $rawPendingMigrationCount : 0
+  ),
+);
 
 // ---- Generic helpers ----
 
@@ -173,8 +214,14 @@ function hideSync() {
 }
 
 rs.on('wire-busy', showSync);
-rs.on('wire-done', hideSync);
-rs.on('sync-done', hideSync);
+rs.on('wire-done', () => {
+  hideSync();
+  markMigrationAlertReady();
+});
+rs.on('sync-done', () => {
+  hideSync();
+  markMigrationAlertReady();
+});
 
 // Debug: log sync activity
 rs.on('sync-req-done', (e: any) => {
@@ -190,12 +237,14 @@ let reloadTimeout: ReturnType<typeof setTimeout> | undefined;
 
 rs.on('connected', async () => {
   connected.set(true);
+  resetMigrationAlertReadiness();
   const addr =
     (rs as any).remote?.userAddress ||
     localStorage.getItem('inbox-rs:userAddress') ||
     '';
   userAddress.set(addr);
   await Promise.all([loadItems(), loadConfig(), loadUserSettings(), loadCollections(), loadGroups()]);
+  scheduleMigrationAlertFallback();
 });
 
 rs.on('disconnected', () => {
@@ -206,6 +255,9 @@ rs.on('disconnected', () => {
     clearTimeout(reloadTimeout);
     reloadTimeout = undefined;
   }
+  clearMigrationAlertTimeout();
+  waitingForInitialMigrationSettle = false;
+  migrationAlertReady.set(false);
   items.set({});
   appConfig.set({});
   userSettings.set({});
