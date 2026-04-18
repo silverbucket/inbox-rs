@@ -33,14 +33,25 @@ export const collections = writable<Record<string, Collection>>({});
 export const groups = writable<Record<string, CollectionGroup>>({});
 const INITIAL_MIGRATION_ALERT_TIMEOUT_MS = 2500;
 
-/** Raw count from loaded items using rs-migrate's getPending */
+function stripMigrationVersion<T>(doc: T): T {
+  if (!doc || typeof doc !== 'object') return doc;
+  const { _migrateVersion: _, ...rest } = doc as Record<string, unknown>;
+  return rest as T;
+}
+
+function requiresContentMigration(doc: InboxItem): boolean {
+  const migrated = migrator.migrateDocument('items', doc);
+  if (migrated === doc) return false;
+  return JSON.stringify(stripMigrationVersion(migrated)) !== JSON.stringify(stripMigrationVersion(doc));
+}
+
+/** Count only docs whose non-version content would actually change under migration */
 const rawPendingMigrationCount = derived(items, ($items) => {
   const docs = Object.values($items);
   if (docs.length === 0) return 0;
-  const pending = migrator.getPending('items', docs);
   let count = 0;
-  for (const r of pending) {
-    if (r.pendingMigrations.length > 0) count++;
+  for (const doc of docs) {
+    if (requiresContentMigration(doc)) count++;
   }
   return count;
 });

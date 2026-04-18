@@ -253,6 +253,17 @@ function makeLegacyVoiceMemo(id: string): InboxItem {
   } as unknown as InboxItem;
 }
 
+function makeVersionedNote(id: string, version: number): InboxItem {
+  return {
+    id,
+    type: 'note',
+    title: `Note ${id}`,
+    body: `Body ${id}`,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    _migrateVersion: version,
+  } as InboxItem;
+}
+
 describe('groupCollections', () => {
   beforeEach(() => {
     collections.set({});
@@ -533,6 +544,15 @@ describe('pendingMigrationCount visibility timing', () => {
     await vi.advanceTimersByTimeAsync(2500);
 
     expect(get(pendingMigrationCount)).toBe(1);
+  });
+
+  it('does not count docs that only need a version bump with no content change', async () => {
+    mockInbox.getAll.mockResolvedValue({ note1: makeVersionedNote('note1', 1) });
+
+    await rsHandlers['connected']();
+    emitRsEvent('sync-done');
+
+    expect(get(pendingMigrationCount)).toBe(0);
   });
 });
 
