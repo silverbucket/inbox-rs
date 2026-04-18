@@ -8,40 +8,9 @@
   import Lightbox from './Lightbox.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
   import hljs from 'highlight.js/lib/core';
+  import DOMPurify from 'dompurify';
   import 'highlight.js/styles/github-dark.min.css';
-
-  const langModules: Record<string, () => Promise<any>> = {
-    javascript: () => import('highlight.js/lib/languages/javascript'),
-    typescript: () => import('highlight.js/lib/languages/typescript'),
-    python: () => import('highlight.js/lib/languages/python'),
-    rust: () => import('highlight.js/lib/languages/rust'),
-    go: () => import('highlight.js/lib/languages/go'),
-    bash: () => import('highlight.js/lib/languages/bash'),
-    shell: () => import('highlight.js/lib/languages/shell'),
-    json: () => import('highlight.js/lib/languages/json'),
-    html: () => import('highlight.js/lib/languages/xml'),
-    xml: () => import('highlight.js/lib/languages/xml'),
-    css: () => import('highlight.js/lib/languages/css'),
-    sql: () => import('highlight.js/lib/languages/sql'),
-    java: () => import('highlight.js/lib/languages/java'),
-    c: () => import('highlight.js/lib/languages/c'),
-    cpp: () => import('highlight.js/lib/languages/cpp'),
-    csharp: () => import('highlight.js/lib/languages/csharp'),
-    ruby: () => import('highlight.js/lib/languages/ruby'),
-    php: () => import('highlight.js/lib/languages/php'),
-    swift: () => import('highlight.js/lib/languages/swift'),
-    kotlin: () => import('highlight.js/lib/languages/kotlin'),
-    yaml: () => import('highlight.js/lib/languages/yaml'),
-    markdown: () => import('highlight.js/lib/languages/markdown'),
-    dockerfile: () => import('highlight.js/lib/languages/dockerfile'),
-    svelte: () => import('highlight.js/lib/languages/xml'),
-  };
-
-  const langAliases: Record<string, string> = {
-    js: 'javascript', ts: 'typescript', py: 'python', rb: 'ruby',
-    sh: 'bash', zsh: 'bash', yml: 'yaml', 'c++': 'cpp', 'c#': 'csharp',
-    htm: 'html', md: 'markdown',
-  };
+  import { langModules, langAliases, renderMarkdown } from '../lib/markdown';
 
   let { item, onclose, onedit }: {
     item: InboxItem;
@@ -71,6 +40,9 @@
   // Code highlighting
   let highlightedHtml = $state('');
 
+  // Markdown rendering for notes
+  let renderedBody = $state('');
+
   // Document download
   let docBlobUrl = $state<string | null>(null);
   let docLoading = $state(false);
@@ -84,6 +56,7 @@
     transcribing = false;
     transcriptionError = false;
     highlightedHtml = '';
+    renderedBody = '';
     showLightbox = false;
     untrack(() => { if (docBlobUrl) URL.revokeObjectURL(docBlobUrl); });
     docBlobUrl = null;
@@ -91,6 +64,11 @@
 
     if (currentItem.type === 'code-snippet') {
       highlightCode();
+    }
+    if (currentItem.type === 'note' && (currentItem as any).body) {
+      renderMarkdown((currentItem as any).body).then((html) => {
+        if (item.id === currentItem.id) renderedBody = html;
+      });
     }
   });
 
@@ -133,9 +111,15 @@
     if (loader && !hljs.getLanguage(resolved)) {
       const mod = await loader();
       hljs.registerLanguage(resolved, mod.default);
-      highlightedHtml = hljs.highlight(item.body, { language: resolved }).value;
+      highlightedHtml = DOMPurify.sanitize(
+        hljs.highlight(item.body, { language: resolved }).value,
+        { USE_PROFILES: { html: true } },
+      );
     } else if (hljs.getLanguage(resolved)) {
-      highlightedHtml = hljs.highlight(item.body, { language: resolved }).value;
+      highlightedHtml = DOMPurify.sanitize(
+        hljs.highlight(item.body, { language: resolved }).value,
+        { USE_PROFILES: { html: true } },
+      );
     }
   }
 
@@ -442,7 +426,11 @@
     {#if body && item.type !== 'code-snippet'}
       <div class="content-block">
         <span class="content-label">{item.type === 'audio' ? 'Transcription' : 'Body'}</span>
-        <p class="content-text">{body}</p>
+        {#if item.type === 'note' && renderedBody}
+          <div class="markdown-body">{@html renderedBody}</div>
+        {:else}
+          <p class="content-text">{body}</p>
+        {/if}
       </div>
     {/if}
 
@@ -721,6 +709,104 @@
     line-height: 1.6;
     white-space: pre-wrap;
     word-break: break-word;
+  }
+
+  .markdown-body {
+    font-size: 0.9rem;
+    color: var(--text);
+    line-height: 1.6;
+    word-break: break-word;
+  }
+
+  .markdown-body :global(h1) { font-size: 1.1rem; font-weight: 600; margin: 0.75rem 0 0.4rem; }
+  .markdown-body :global(h2) { font-size: 1rem; font-weight: 600; margin: 0.6rem 0 0.35rem; }
+  .markdown-body :global(h3) { font-size: 0.95rem; font-weight: 600; margin: 0.5rem 0 0.3rem; }
+  .markdown-body :global(h4),
+  .markdown-body :global(h5),
+  .markdown-body :global(h6) { font-size: 0.9rem; font-weight: 600; margin: 0.4rem 0 0.25rem; }
+
+  .markdown-body :global(p) { margin: 0 0 0.5rem; }
+  .markdown-body :global(p:last-child) { margin-bottom: 0; }
+
+  .markdown-body :global(ul),
+  .markdown-body :global(ol) {
+    padding-left: 1.5rem;
+    margin: 0 0 0.5rem;
+  }
+  .markdown-body :global(ul) { list-style: disc; }
+  .markdown-body :global(ol) { list-style: decimal; }
+  .markdown-body :global(li) { margin-bottom: 0.15rem; }
+  .markdown-body :global(li > ul),
+  .markdown-body :global(li > ol) { margin-top: 0.15rem; margin-bottom: 0; }
+
+  .markdown-body :global(blockquote) {
+    border-left: 3px solid var(--accent);
+    padding-left: 0.75rem;
+    margin: 0 0 0.5rem;
+    color: var(--text-muted);
+  }
+
+  .markdown-body :global(a) {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .markdown-body :global(a:hover) { text-decoration: underline; }
+
+  .markdown-body :global(code) {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.82rem;
+  }
+
+  .markdown-body :global(pre) {
+    background: #0d1117;
+    border-radius: var(--radius-sm);
+    padding: 0.75rem;
+    margin: 0 0 0.5rem;
+    overflow-x: auto;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .markdown-body :global(pre code) {
+    background: none;
+    padding: 0;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: #e6edf3;
+  }
+
+  .markdown-body :global(pre .hljs) {
+    background: transparent;
+    padding: 0;
+  }
+
+  .markdown-body :global(hr) {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 0.75rem 0;
+  }
+
+  .markdown-body :global(strong) { font-weight: 600; }
+  .markdown-body :global(em) { font-style: italic; }
+
+  .markdown-body :global(table) {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+  }
+  .markdown-body :global(th),
+  .markdown-body :global(td) {
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+  }
+  .markdown-body :global(th) {
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.03);
   }
 
   .notes-block .content-text {
