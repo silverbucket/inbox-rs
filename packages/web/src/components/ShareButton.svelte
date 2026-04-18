@@ -1,6 +1,6 @@
 <script lang="ts">
   import rs from '../lib/rs';
-  import { getSharedUrl, saveSharedUrl } from '../lib/shared-state';
+  import { getSharedUrl, saveSharedUrl, verifySharedUrl } from '../lib/shared-state';
 
   let { filePath, mimeType, filename }: {
     filePath: string;
@@ -12,13 +12,31 @@
   let state = $state<'idle' | 'sharing' | 'done' | 'error'>('idle');
   let publicUrl = $state('');
   let copied = $state(false);
+  let verified = $state(false);
 
   $effect(() => {
-    if (existingUrl && state === 'idle') {
+    if (existingUrl && state === 'idle' && !verified) {
       publicUrl = existingUrl;
       state = 'done';
+      verified = true;
+      verifySharedUrl(filePath).then((live) => {
+        if (!live && state === 'done') {
+          publicUrl = '';
+          state = 'idle';
+        }
+      });
     }
   });
+
+  function mimeToExt(mime: string): string {
+    const map: Record<string, string> = {
+      'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif',
+      'image/webp': '.webp', 'image/avif': '.avif', 'image/svg+xml': '.svg',
+      'audio/webm': '.webm', 'audio/ogg': '.ogg', 'audio/mpeg': '.mp3',
+      'application/pdf': '.pdf',
+    };
+    return map[mime] || '.bin';
+  }
 
   async function share() {
     if (state === 'sharing') return;
@@ -28,20 +46,31 @@
       const shares = (rs as any).shares;
       if (!shares) throw new Error('Shares module not available');
 
-      // Read file via RS inbox module (no token-in-URL)
+      // PUT directly to remote, bypassing shares.storeFile() which has a
+      // thumbnail bug (reads Image dimensions before onload → 0×0 canvas throw).
+      const remote = (rs as any).remote;
+      if (!remote?.connected) throw new Error('Not connected to remote storage');
+
+      // Read file via RS inbox module
       const inbox = (rs as any).inbox;
-      if (!inbox) throw new Error('Not connected');
+      if (!inbox) throw new Error('Inbox module not available');
       const file = await inbox.getFile(filePath);
       if (!file?.data) throw new Error('File not found');
 
       const resolvedMime = mimeType || file.mimeType || 'application/octet-stream';
-      const name = filename || filePath.split('/').pop() || 'file';
+      const ext = (filePath.split('/').pop()?.match(/\.[^.]+$/)?.[0]) || mimeToExt(resolvedMime);
+      const uid = Math.random().toString(36).slice(2, 8);
+      const shareName = shares._formattedDate(new Date()) + '-' + uid + ext;
 
-      const shareUrl = await shares.storeFile(resolvedMime, name, file.data);
+      const filePutPath = '/public/shares/' + shareName;
+      await remote.put(filePutPath, file.data, resolvedMime);
+
+      const shareUrl = remote.href + filePutPath;
       publicUrl = shareUrl;
       state = 'done';
       saveSharedUrl(filePath, shareUrl);
-    } catch {
+    } catch (e) {
+      console.error('Sharesome save failed:', e);
       state = 'error';
       setTimeout(() => { state = 'idle'; }, 2000);
     }
