@@ -7,6 +7,7 @@
   import Placeholder from '@tiptap/extension-placeholder';
   import { common, createLowlight } from 'lowlight';
   import 'highlight.js/styles/github-dark.min.css';
+  import { CodeBlockAutoIndent } from '../lib/tiptap-code-indent';
 
   let {
     value = $bindable(''),
@@ -30,6 +31,8 @@
         }),
         CodeBlockLowlight.configure({
           lowlight,
+          enableTabIndentation: true,
+          tabSize: 2,
         }),
         Markdown.configure({
           html: false,
@@ -40,6 +43,7 @@
         Placeholder.configure({
           placeholder,
         }),
+        CodeBlockAutoIndent,
       ],
       content: value,
       onUpdate: ({ editor: e }) => {
