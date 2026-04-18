@@ -46,7 +46,15 @@
         };
       }
     } catch {
-      // src fetch failed, try RS module
+      // src fetch failed, try other methods
+    }
+
+    // Try canvas-based extraction (works when server sends CORS headers for images)
+    try {
+      const canvasResult = await extractViaCanvas(src);
+      if (canvasResult) return canvasResult;
+    } catch {
+      // Canvas extraction failed
     }
 
     // Fallback: RS module direct file access
@@ -63,6 +71,50 @@
     throw new Error('Could not load file data');
   }
 
+  function extractViaCanvas(url: string): Promise<{ data: ArrayBuffer; mime: string } | null> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = async () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext('2d')!;
+          ctx.drawImage(img, 0, 0);
+          const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
+          if (blob) {
+            resolve({ data: await blob.arrayBuffer(), mime: 'image/png' });
+          } else {
+            resolve(null);
+          }
+        } catch {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+  }
+
+  function isExternalUrl(url: string): boolean {
+    try {
+      const u = new URL(url);
+      return u.protocol === 'http:' || u.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }
+
+  function buildRedirectPage(url: string): ArrayBuffer {
+    const html = `<!DOCTYPE html>
+<html><head>
+<meta http-equiv="refresh" content="0;url=${url.replace(/"/g, '&quot;')}">
+<style>body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui;background:#111;color:#ccc}a{color:#6cf}</style>
+</head><body><a href="${url.replace(/"/g, '&quot;')}">View image</a></body></html>`;
+    return new TextEncoder().encode(html).buffer;
+  }
+
   async function share() {
     if (shareState === 'sharing') return;
     shareState = 'sharing';
@@ -71,11 +123,6 @@
       const shares = (rs as any).shares;
       if (!shares) throw new Error('Shares module not available');
 
-      const { data, mime } = await fetchFileData();
-      const baseName = filename || filePath?.split('/').pop() || 'image.jpg';
-      const date = shares._formattedDate(new Date());
-      const name = date + '-' + baseName;
-
       // PUT directly to remote, bypassing the sync layer entirely.
       // Two reasons: (1) shares module has a sync thumbnail bug that throws
       // because it reads Image dimensions before onload, and (2) the sync
@@ -83,13 +130,36 @@
       const remote = (rs as any).remote;
       if (!remote?.connected) throw new Error('Not connected to remote storage');
 
-      const filePutPath = '/public/shares/' + name;
+      let data: ArrayBuffer;
+      let mime: string;
+      let shareName: string;
+      let isRedirect = false;
+
+      try {
+        const result = await fetchFileData();
+        data = result.data;
+        mime = result.mime;
+        const baseName = filename || filePath?.split('/').pop() || 'image.jpg';
+        shareName = shares._formattedDate(new Date()) + '-' + baseName;
+      } catch {
+        // Image data couldn't be fetched (likely CORS-blocked external URL).
+        // Save an HTML redirect page instead so the user still gets a shareable link.
+        if (!isExternalUrl(src)) throw new Error('Could not load file data');
+        data = buildRedirectPage(src);
+        mime = 'text/html';
+        const baseName = filename || filePath?.split('/').pop() || 'image';
+        const stem = baseName.replace(/\.[^.]+$/, '');
+        shareName = shares._formattedDate(new Date()) + '-' + stem + '.html';
+        isRedirect = true;
+      }
+
+      const filePutPath = '/public/shares/' + shareName;
       await remote.put(filePutPath, data, mime);
 
       // Generate and upload thumbnail directly if it's an image
-      if (shares._isImage(mime)) {
+      if (!isRedirect && shares._isImage(mime)) {
         try {
-          await generateThumbnail(data, mime, name, remote);
+          await generateThumbnail(data, mime, shareName, remote);
         } catch {
           // Thumbnail failure is non-critical
         }
