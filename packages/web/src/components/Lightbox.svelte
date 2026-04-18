@@ -1,6 +1,6 @@
 <script lang="ts">
   import rs from '../lib/rs';
-  import { getSharedUrl, saveSharedUrl } from '../lib/shared-state';
+  import { getSharedUrl, saveSharedUrl, verifySharedUrl } from '../lib/shared-state';
 
   let { src, alt = '', onclose, filePath, mimeType, filename }: {
     src: string;
@@ -11,6 +11,20 @@
     filename?: string;
   } = $props();
 
+  /** Build a safe share filename from a short random id, preserving extension. */
+  function safeShareName(ext: string): string {
+    const uid = Math.random().toString(36).slice(2, 8);
+    return uid + (ext.startsWith('.') ? ext : '.' + ext);
+  }
+
+  function mimeToExt(mime: string): string {
+    const map: Record<string, string> = {
+      'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif',
+      'image/webp': '.webp', 'image/avif': '.avif', 'image/svg+xml': '.svg',
+    };
+    return map[mime] || '.jpg';
+  }
+
   function stableKey(): string {
     if (filePath) return filePath;
     try { const u = new URL(src); return u.origin + u.pathname; }
@@ -20,11 +34,19 @@
   const existingUrl = $derived(getSharedUrl(stableKey()));
   let shareState = $state<'idle' | 'sharing' | 'done' | 'error'>('idle');
   let publicUrl = $state('');
+  let verified = $state(false);
 
   $effect(() => {
-    if (existingUrl && shareState === 'idle') {
+    if (existingUrl && shareState === 'idle' && !verified) {
       publicUrl = existingUrl;
       shareState = 'done';
+      verified = true;
+      verifySharedUrl(stableKey()).then((live) => {
+        if (!live && shareState === 'done') {
+          publicUrl = '';
+          shareState = 'idle';
+        }
+      });
     }
   });
   let copied = $state(false);
@@ -135,21 +157,21 @@
       let shareName: string;
       let isRedirect = false;
 
+      const datePrefix = shares._formattedDate(new Date());
+
       try {
         const result = await fetchFileData();
         data = result.data;
         mime = result.mime;
-        const baseName = filename || filePath?.split('/').pop() || 'image.jpg';
-        shareName = shares._formattedDate(new Date()) + '-' + baseName;
+        const ext = (filePath?.split('/').pop()?.match(/\.[^.]+$/)?.[0]) || mimeToExt(mime);
+        shareName = datePrefix + '-' + safeShareName(ext);
       } catch {
         // Image data couldn't be fetched (likely CORS-blocked external URL).
         // Save an HTML redirect page instead so the user still gets a shareable link.
         if (!isExternalUrl(src)) throw new Error('Could not load file data');
         data = buildRedirectPage(src);
         mime = 'text/html';
-        const baseName = filename || filePath?.split('/').pop() || 'image';
-        const stem = baseName.replace(/\.[^.]+$/, '');
-        shareName = shares._formattedDate(new Date()) + '-' + stem + '.html';
+        shareName = datePrefix + '-' + safeShareName('.html');
         isRedirect = true;
       }
 
