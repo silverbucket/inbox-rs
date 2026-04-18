@@ -139,7 +139,11 @@ async function loadItems() {
     const valid: Record<string, InboxItem> = {};
     for (const [key, item] of Object.entries(all)) {
       if (item && typeof item === 'object' && 'id' in item && (item as InboxItem).id) {
-        valid[key] = item as InboxItem;
+        const inboxItem = item as InboxItem;
+        // Only trust canonically-addressed item records. This avoids rendering
+        // duplicate/stale documents that may still exist under malformed keys.
+        if (key !== inboxItem.id) continue;
+        valid[inboxItem.id] = inboxItem;
       }
     }
     items.set(valid);
@@ -229,8 +233,6 @@ rs.on('sync-done', (e: any) => {
 rs.on('wire-busy', () => console.log('[inbox] wire-busy'));
 rs.on('wire-done', () => console.log('[inbox] wire-done'));
 
-let reloadTimeout: ReturnType<typeof setTimeout> | undefined;
-
 rs.on('connected', async () => {
   connected.set(true);
   resetMigrationAlertReadiness();
@@ -247,10 +249,6 @@ rs.on('disconnected', () => {
   connected.set(false);
   userAddress.set('');
   localStorage.removeItem('inbox-rs:userAddress');
-  if (reloadTimeout) {
-    clearTimeout(reloadTimeout);
-    reloadTimeout = undefined;
-  }
   clearMigrationAlertTimeout();
   migrationAlertReady.set(false);
   items.set({});
@@ -301,19 +299,84 @@ export async function updateUserSettings(patch: Partial<UserSettings>) {
   }
 }
 
-// Update items on remote/local changes — debounced to avoid redundant reloads during sync
+// Handle incoming remote changes per-item rather than reloading full
+// collections with getAll(). RS.js fires a `change` event for each item
+// during a sync cycle — we parse relativePath to route each change to the
+// correct store. This avoids redundant cache reads when many items arrive
+// at once (e.g. bulk image sync from another device).
+//
+// Local writes already update stores optimistically (see storeItem,
+// deleteItem, etc.), so we skip 'window' origin events to avoid duplicates.
+// getAll() is only used for the initial load on connect.
+//
+// See: https://remotestorage.io/rs.js/docs/api/baseclient/classes/BaseClient.html#change-events
 const inboxRef = getInbox();
-function scheduleReload() {
-  if (reloadTimeout) clearTimeout(reloadTimeout);
-  reloadTimeout = setTimeout(async () => {
-    reloadTimeout = undefined;
-    await Promise.all([loadItems(), loadCollections(), loadGroups()]);
-  }, 100);
-}
 if (inboxRef) {
-  inboxRef.onChange(scheduleReload);
+  inboxRef.onChange((event: any) => {
+    if (!event || event.origin === 'window') return;
+    const path: string = event.relativePath || '';
+    const value = event.newValue;
+
+    if (path.startsWith('items/')) {
+      const key = path.slice('items/'.length);
+      if (value && typeof value === 'object' && value.id) {
+        items.update(current => ({ ...current, [key]: value as InboxItem }));
+      } else if (!value) {
+        items.update(current => {
+          const next = { ...current };
+          delete next[key];
+          return next;
+        });
+      }
+    } else if (path.startsWith('collections/')) {
+      const key = path.slice('collections/'.length);
+      if (value && typeof value === 'object' && value.id) {
+        const col = value as Collection;
+        // Normalize itemIds — may be missing if written by another client
+        collections.update(current => ({
+          ...current,
+          [key]: { ...col, itemIds: Array.isArray(col.itemIds) ? col.itemIds : [] },
+        }));
+      } else if (!value) {
+        collections.update(current => {
+          const next = { ...current };
+          delete next[key];
+          return next;
+        });
+      }
+    } else if (path.startsWith('groups/')) {
+      const key = path.slice('groups/'.length);
+      if (value && typeof value === 'object' && value.id) {
+        const grp = value as CollectionGroup;
+        // Normalize collectionIds — may be missing if written by another client
+        groups.update(current => ({
+          ...current,
+          [key]: { ...grp, collectionIds: Array.isArray(grp.collectionIds) ? grp.collectionIds : [] },
+        }));
+      } else if (!value) {
+        groups.update(current => {
+          const next = { ...current };
+          delete next[key];
+          return next;
+        });
+      }
+    } else if (path === 'config/app') {
+      if (value && typeof value === 'object') {
+        appConfig.set(value as AppConfig);
+      }
+    } else if (path === 'config/user') {
+      if (value && typeof value === 'object') {
+        userSettings.set(value as UserSettings);
+      }
+    }
+    // File paths (e.g. files/photo.jpg) are ignored here — binary data
+    // is fetched on demand via loadFileBlobUrl when components render.
+  });
 }
 
+// Request a check for remote changes when the tab returns to foreground.
+// This is the correct use of startSync() — local writes push automatically,
+// but we need to explicitly ask for remote changes after being backgrounded.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && (rs as any).remote?.connected) {
     rs.startSync();
@@ -403,7 +466,7 @@ export const activeCollectionTodos = derived(
       for (const id of col.itemIds) {
         if (count >= MAX_PER_COLLECTION) break;
         const item = itemMap.get(id);
-        if (!item || !(item.isTodo || item.type === 'todo') || item.completed) continue;
+        if (!item || item.collectionId !== col.id || !(item.isTodo || item.type === 'todo') || item.completed) continue;
         result.push({
           item,
           collectionId: col.id,
@@ -426,7 +489,7 @@ export const collectionItems = derived([items, collections], ([$items, $collecti
   for (const [cid, col] of Object.entries($collections)) {
     result[cid] = col.itemIds
       .map(id => itemMap.get(id))
-      .filter((i): i is InboxItem => i !== undefined);
+      .filter((i): i is InboxItem => i !== undefined && i.collectionId === cid);
   }
   return result;
 });
@@ -467,8 +530,6 @@ export async function storeItem(item: InboxItem, fileData?: ArrayBuffer) {
     const blob = new Blob([fileData], { type: (item as any).mimeType });
     const url = URL.createObjectURL(blob);
     blobUrls.update(current => ({ ...current, [item.filePath as string]: url }));
-    console.log('[inbox] stored file, triggering sync:', item.filePath);
-    rs.startSync();
   }
   items.update(current => ({ ...current, [cleanItem.id]: cleanItem }));
 }
@@ -573,11 +634,13 @@ export async function moveItemToCollection(itemId: string, collectionId: string 
 
   if (!item) return;
 
+  const isSameCollection = oldCollectionId === collectionId;
+
   try {
     await inbox.store(cleanForStorage(item));
 
     // Update source collection's itemIds
-    if (oldCollectionId) {
+    if (oldCollectionId && !isSameCollection) {
       collections.update(current => {
         const col = current[oldCollectionId!];
         if (col) {

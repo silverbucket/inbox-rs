@@ -1,6 +1,6 @@
 {
   "name": "@inbox-rs/web",
-  "version": "1.5.0",
+  "version": "1.7.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,13 +13,22 @@
   },
   "dependencies": {
     "@inbox-rs/rs-module": "*",
+    "@tiptap/core": "^3.22.1",
+    "@tiptap/extension-code-block-lowlight": "^3.22.1",
+    "@tiptap/extension-placeholder": "^3.22.1",
+    "@tiptap/pm": "^3.22.1",
+    "@tiptap/starter-kit": "^3.22.1",
     "@xenova/transformers": "^2.17.2",
+    "dompurify": "^3.2.7",
     "fflate": "^0.8.2",
     "highlight.js": "^11.11.1",
+    "lowlight": "^3.3.0",
+    "marked": "^17.0.5",
     "onnxruntime-web": "^1.14.0",
     "remotestorage-module-shares": "^2.1.4",
     "remotestoragejs": "^2.0.0-beta.8",
-    "svelte-dnd-action": "^0.9.69"
+    "svelte-dnd-action": "^0.9.69",
+    "tiptap-markdown": "^0.9.0"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
