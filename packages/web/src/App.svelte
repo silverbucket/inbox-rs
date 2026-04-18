@@ -3,113 +3,78 @@
   import type { InboxItemType, InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
   import UserMenu from './components/UserMenu.svelte';
   import InboxGrid from './components/InboxGrid.svelte';
-  import TodoList from './components/TodoList.svelte';
   import AddEntryBar from './components/AddEntryBar.svelte';
   import AddEntryModal from './components/AddEntryModal.svelte';
   import ViewCardModal from './components/ViewCardModal.svelte';
   import MigrationAlert from './components/MigrationAlert.svelte';
   import PluginsPage from './components/PluginsPage.svelte';
   import CollectionsPage from './components/CollectionsPage.svelte';
+  import TodosPage from './components/TodosPage.svelte';
+  import GroupFilterBar from './components/GroupFilterBar.svelte';
   import CollectionFormModal from './components/CollectionFormModal.svelte';
   import GroupFormModal from './components/GroupFormModal.svelte';
-  import { dndzone } from 'svelte-dnd-action';
-  import { connected, deleteItem, todoItems, appConfig, updateConfig, pendingMigrationCount, runAllMigrations, storeCollection, sortedGroups, storeGroup, moveCollectionToGroup, ungroupedCollections, reorderGroups } from './lib/stores';
+  import {
+    connected, deleteItem, todoItems, pendingMigrationCount, runAllMigrations,
+    storeCollection, storeGroup, moveCollectionToGroup,
+    appConfig, setActiveGroupFilters,
+  } from './lib/stores';
+  import { parseHash, formatRoute, pageUsesFilters, type Page, type Route } from './lib/route';
   import { pluginArtifactVersion } from './lib/plugin-downloads.generated';
   import LogoShield from './components/LogoShield.svelte';
-
-  type Route =
-    | { page: 'home' }
-    | { page: 'plugins' }
-    | { page: 'group'; groupId: string }
-    | { page: 'ungrouped' };
 
   let activeModal = $state<InboxItemType | null>(null);
   let editingItem = $state<InboxItem | undefined>(undefined);
   let viewingItem = $state<InboxItem | null>(null);
-  let todosExpanded = $state(false);
   let showCollectionForm = $state(false);
   let showGroupForm = $state(false);
 
-  // DnD for group tabs in nav
-  let isTouchDevice = $state(false);
+  let route = $state<Route>(parseHash(window.location.hash));
+
+  // ---- Route ↔ filter sync ----
+  // Source of truth for filters is `appConfig.activeGroupFilters`. URL params
+  // are an optional override applied once on load (or when the URL changes).
+  let lastAppliedFilterHash = $state<string | undefined>(undefined);
   $effect(() => {
-    const mql = window.matchMedia('(pointer: coarse)');
-    isTouchDevice = mql.matches;
-    const handler = (e: MediaQueryListEvent) => { isTouchDevice = e.matches; };
-    mql.addEventListener('change', handler);
-    return () => mql.removeEventListener('change', handler);
+    if (!pageUsesFilters(route.page)) return;
+    const filters = route.groupFilters;
+    if (filters === undefined) return;
+    const key = `${route.page}::${filters.join(',')}`;
+    if (lastAppliedFilterHash === key) return;
+    lastAppliedFilterHash = key;
+    void setActiveGroupFilters(filters).catch(e => {
+      console.error('Failed to sync URL filters to config', e);
+    });
   });
 
-  let dndGroups = $state<Array<CollectionGroup & { id: string }>>([]);
+  // When user toggles filter pills, reflect into URL (without history spam).
   $effect(() => {
-    dndGroups = $sortedGroups.map(g => ({ ...g }));
-  });
-
-  function handleGroupDndConsider(e: CustomEvent<{ items: Array<CollectionGroup & { id: string }> }>) {
-    dndGroups = e.detail.items;
-  }
-
-  async function handleGroupDndFinalize(e: CustomEvent<{ items: Array<CollectionGroup & { id: string }> }>) {
-    const previous = $sortedGroups.map(g => ({ ...g }));
-    dndGroups = e.detail.items;
-    try {
-      await reorderGroups(dndGroups.map(g => g.id));
-    } catch (error) {
-      console.error('Failed to reorder groups', error);
-      dndGroups = previous;
-    }
-  }
-
-  function getRouteFromHash(): Route {
-    if (typeof window === 'undefined') return { page: 'home' };
-    const hash = window.location.hash;
-    if (hash === '#/plugins') return { page: 'plugins' };
-    if (hash === '#/collections') return { page: 'ungrouped' };
-    const groupMatch = hash.match(/^#\/group\/(.+)$/);
-    if (groupMatch) return { page: 'group', groupId: groupMatch[1] };
-    return { page: 'home' };
-  }
-
-  let route = $state<Route>(getRouteFromHash());
-  let userToggledTodos = false;
-
-  // React to config/todo changes to set default expand state,
-  // but stop once the user has manually toggled.
-  $effect(() => {
-    if (userToggledTodos) return;
+    if (!pageUsesFilters(route.page)) return;
     const config = $appConfig;
-    if (config.todosCollapsed !== undefined) {
-      todosExpanded = !config.todosCollapsed;
-    } else {
-      todosExpanded = $todoItems.some(t => !t.completed);
+    if (config.activeGroupFilters === undefined) return; // default-all → no param
+    const expected = formatRoute({ page: route.page, groupFilters: config.activeGroupFilters });
+    if (window.location.hash !== expected) {
+      window.history.replaceState(null, '', expected);
+      route = { page: route.page, groupFilters: config.activeGroupFilters };
+      lastAppliedFilterHash = `${route.page}::${config.activeGroupFilters.join(',')}`;
     }
   });
 
   onMount(() => {
     const syncRoute = () => {
-      route = getRouteFromHash();
+      route = parseHash(window.location.hash);
     };
-
     syncRoute();
     window.addEventListener('hashchange', syncRoute);
-
-    return () => {
-      window.removeEventListener('hashchange', syncRoute);
-    };
+    return () => window.removeEventListener('hashchange', syncRoute);
   });
 
+  // Close modals when navigating
   $effect(() => {
-    if (route.page === 'home') return;
+    void route.page;
     activeModal = null;
     editingItem = undefined;
     viewingItem = null;
   });
-
-  function handleTodoExpandChange(v: boolean) {
-    userToggledTodos = true;
-    todosExpanded = v;
-    void updateConfig({ todosCollapsed: !v });
-  }
 
   // Lock body scroll when any modal is open (including iOS Safari)
   const anyModalOpen = $derived(!!viewingItem || !!activeModal || showCollectionForm || showGroupForm);
@@ -118,7 +83,6 @@
 
   $effect(() => {
     if (anyModalOpen && !wasModalOpen) {
-      // false→true: capture scroll position and lock
       savedScrollY = window.scrollY;
       document.body.style.position = 'fixed';
       document.body.style.top = `-${savedScrollY}px`;
@@ -126,7 +90,6 @@
       document.body.style.right = '0';
       document.body.style.overflow = 'hidden';
     } else if (!anyModalOpen && wasModalOpen) {
-      // true→false: unlock and restore scroll position
       document.body.style.position = '';
       document.body.style.top = '';
       document.body.style.left = '';
@@ -137,9 +100,27 @@
     wasModalOpen = anyModalOpen;
   });
 
+  function navTo(page: Page) {
+    const target: Route = pageUsesFilters(page) && $appConfig.activeGroupFilters !== undefined
+      ? { page, groupFilters: $appConfig.activeGroupFilters }
+      : { page };
+    const hash = formatRoute(target);
+    if (window.location.hash !== hash) {
+      window.location.hash = hash;
+    }
+  }
+
+  function isActive(page: Page): boolean {
+    return route.page === page;
+  }
+
   function openAdd(type: InboxItemType) {
     editingItem = undefined;
     activeModal = type;
+  }
+
+  function openAddTodo() {
+    openAdd('todo');
   }
 
   function openView(item: InboxItem) {
@@ -177,11 +158,13 @@
     try {
       await storeGroup(group);
       showGroupForm = false;
-      window.location.hash = `#/group/${group.id}`;
     } catch (error) {
       console.error('Failed to create group', error);
     }
   }
+
+  // Surface a small badge with open todo count next to the Todos nav item.
+  const openTodoCount = $derived($todoItems.filter(t => !t.completed).length);
 </script>
 
 <header>
@@ -193,101 +176,69 @@
       </a>
     </div>
     <nav class="header-nav" aria-label="Primary">
-      <a class:active={route.page === 'home'} aria-current={route.page === 'home' ? 'page' : undefined} href="#/">Inbox</a>
-      {#if $connected}
-        {#if dndGroups.length > 0}
-          <div
-            class="nav-groups-dnd"
-            use:dndzone={{ items: dndGroups, flipDurationMs: 200, dropTargetStyle: {}, dragDisabled: isTouchDevice, type: 'nav-groups' }}
-            onconsider={handleGroupDndConsider}
-            onfinalize={handleGroupDndFinalize}
-          >
-            {#each dndGroups as group (group.id)}
-              <a
-                class="group-link"
-                class:active={route.page === 'group' && route.groupId === group.id}
-                aria-current={route.page === 'group' && route.groupId === group.id ? 'page' : undefined}
-                href="#/group/{group.id}"
-                style="--group-color: {group.color || 'var(--accent)'}"
-              >
-                <span class="group-dot"></span>
-                <span class="group-name">{group.name}</span>
-              </a>
-            {/each}
-          </div>
+      <button
+        type="button"
+        class:active={isActive('inbox')}
+        aria-current={isActive('inbox') ? 'page' : undefined}
+        onclick={() => navTo('inbox')}
+      >Inbox</button>
+      <button
+        type="button"
+        class:active={isActive('todos')}
+        aria-current={isActive('todos') ? 'page' : undefined}
+        onclick={() => navTo('todos')}
+      >
+        Todos
+        {#if openTodoCount > 0}
+          <span class="nav-badge">{openTodoCount}</span>
         {/if}
-        {#if $ungroupedCollections.length > 0}
-          <a
-            class:active={route.page === 'ungrouped'}
-            aria-current={route.page === 'ungrouped' ? 'page' : undefined}
-            href="#/collections"
-          >Ungrouped</a>
-        {/if}
-        <button class="nav-add-group" onclick={() => showGroupForm = true} title="New group" aria-label="Create new group">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-        </button>
-      {/if}
+      </button>
+      <button
+        type="button"
+        class:active={isActive('collections')}
+        aria-current={isActive('collections') ? 'page' : undefined}
+        onclick={() => navTo('collections')}
+      >Collections</button>
     </nav>
     <div class="header-right">
       <UserMenu />
     </div>
   </div>
+  {#if $connected && route.page !== 'plugins'}
+    <div class="header-filters">
+      <div class="header-filters-inner">
+        <GroupFilterBar
+          onaddgroup={() => showGroupForm = true}
+          dimmed={!pageUsesFilters(route.page)}
+        />
+      </div>
+    </div>
+  {/if}
 </header>
 
 <main>
   {#if route.page === 'plugins'}
     <PluginsPage />
-  {:else if route.page === 'ungrouped'}
-    {#if $connected}
-      <CollectionsPage onselect={openView} oncreate={() => showCollectionForm = true} groupId="" />
-    {:else}
-      <div class="empty-state">
-        <div class="empty-icon">📥</div>
-        <h2>Connect your storage</h2>
-        <p>Enter your remoteStorage address above to view your collections.</p>
-      </div>
-    {/if}
-  {:else if route.page === 'group'}
-    {#if $connected}
-      <CollectionsPage onselect={openView} oncreate={() => showCollectionForm = true} groupId={route.groupId} />
-    {:else}
-      <div class="empty-state">
-        <div class="empty-icon">📥</div>
-        <h2>Connect your storage</h2>
-        <p>Enter your remoteStorage address above to view your collections.</p>
-      </div>
-    {/if}
+  {:else if !$connected}
+    <div class="empty-state">
+      <div class="empty-icon">📥</div>
+      <h2>Connect your storage</h2>
+      <p>Enter your remoteStorage address above to view your inbox.</p>
+    </div>
   {:else}
-    {#if $connected}
-      {#if $pendingMigrationCount > 0}
-        <MigrationAlert count={$pendingMigrationCount} onrun={runAllMigrations} />
-      {/if}
+    {#if $pendingMigrationCount > 0}
+      <MigrationAlert count={$pendingMigrationCount} onrun={runAllMigrations} />
+    {/if}
 
-      <div class="content-layout" class:todos-collapsed={!todosExpanded}>
-        {#if todosExpanded}
-          <aside class="sidebar">
-            <TodoList onselect={openView} onadd={() => openAdd('todo')} onexpandchange={handleTodoExpandChange} />
-          </aside>
-        {/if}
-        <div class="inbox-area">
-          <div class="inbox-top">
-            {#if !todosExpanded}
-              <TodoList onselect={openView} onadd={() => openAdd('todo')} onexpandchange={handleTodoExpandChange} inline />
-            {/if}
-            <AddEntryBar onadd={openAdd} />
-          </div>
-          <InboxGrid onselect={openView} />
-        </div>
+    {#if route.page === 'inbox'}
+      <div class="page-toolbar">
+        <AddEntryBar onadd={openAdd} />
       </div>
+      <InboxGrid onselect={openView} />
+    {:else if route.page === 'todos'}
+      <TodosPage onselect={openView} onaddtodo={openAddTodo} />
     {:else}
-      <div class="empty-state">
-        <div class="empty-icon">📥</div>
-        <h2>Connect your storage</h2>
-        <p>Enter your remoteStorage address above to view your inbox.</p>
-      </div>
+      <CollectionsPage onselect={openView} />
     {/if}
   {/if}
 </main>
@@ -297,7 +248,7 @@
     <span class="footer-brand">Inbox RS</span>
     <span class="footer-version">v{pluginArtifactVersion}</span>
     <span class="footer-sep">·</span>
-    <a class="footer-link" class:active={route.page === 'plugins'} href="#/plugins">
+    <a class="footer-link" class:active={isActive('plugins')} href="#/plugins">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Downloads
     </a>
@@ -314,11 +265,16 @@
 {/if}
 
 {#if activeModal}
-  <AddEntryModal type={activeModal} editItem={editingItem} onclose={closeModal} ondelete={async (item) => { await deleteItem(item.id, item); closeModal(); }} />
+  <AddEntryModal
+    type={activeModal}
+    editItem={editingItem}
+    onclose={closeModal}
+    ondelete={async (item) => { await deleteItem(item.id, item); closeModal(); }}
+  />
 {/if}
 
 {#if showCollectionForm}
-  <CollectionFormModal onclose={() => showCollectionForm = false} onsave={handleCreateCollection} groupId={route.page === 'group' ? route.groupId : undefined} />
+  <CollectionFormModal onclose={() => showCollectionForm = false} onsave={handleCreateCollection} />
 {/if}
 
 {#if showGroupForm}
@@ -358,7 +314,7 @@
     gap: 1rem;
   }
 
-  /* ── Brand (zone 1) ────────────────────────── */
+  /* ── Brand ─────────────────────────────────── */
   .brand {
     display: flex;
     flex-direction: column;
@@ -388,113 +344,78 @@
     width: auto;
   }
 
-  /* ── Navigation (zone 2) ───────────────────── */
+  /* ── Primary nav (Inbox / Todos / Collections) ── */
   .header-nav {
     display: flex;
     align-items: center;
-    flex-wrap: nowrap;
     gap: 0.3rem;
     padding: 0.25rem;
     border: 1px solid var(--border);
     border-radius: 1rem;
     background: color-mix(in srgb, var(--surface) 88%, black 12%);
-    min-width: 0;
-    flex-shrink: 1;
-    overflow-x: auto;
-    max-width: 100%;
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+    flex-shrink: 0;
   }
 
-  .header-nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  .header-nav a {
+  .header-nav button {
     display: inline-flex;
     align-items: center;
+    gap: 0.4rem;
     min-height: 2rem;
-    padding: 0 0.8rem;
+    padding: 0 0.9rem;
     border-radius: 999px;
+    background: none;
+    border: none;
     color: var(--text-muted);
     font-size: 0.92rem;
     font-weight: 600;
     white-space: nowrap;
-    flex-shrink: 0;
+    cursor: pointer;
     transition: background 180ms ease, color 180ms ease;
   }
 
-  .header-nav a:hover {
+  .header-nav button:hover {
     color: var(--text);
   }
 
-  .header-nav a.active {
+  .header-nav button.active {
     color: var(--text);
     background: color-mix(in srgb, var(--accent) 18%, var(--surface) 82%);
   }
 
-  /* Group links — truncate long names */
-  .header-nav .group-link {
-    gap: 0.35rem;
-    max-width: 10rem;
-    flex-shrink: 1;
-    min-width: 0;
-  }
-
-  .group-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .header-nav .group-link.active {
-    background: color-mix(in srgb, var(--group-color) 18%, var(--surface) 82%);
-  }
-
-  .nav-groups-dnd {
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    min-width: 0;
-  }
-
-  .group-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--group-color);
-    flex-shrink: 0;
-  }
-
-  .nav-add-group {
+  .nav-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: white;
+    background: var(--accent);
+    min-width: 18px;
+    height: 18px;
+    border-radius: 999px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border: none;
-    border-radius: 50%;
-    background: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: color 150ms, background 150ms;
-    flex-shrink: 0;
-    opacity: 0.5;
+    padding: 0 5px;
+    line-height: 1;
   }
 
-  .nav-add-group:hover {
-    color: var(--accent);
-    background: var(--accent-subtler);
-    opacity: 1;
-  }
-
-  /* ── Connection controls (zone 3) ──────────── */
+  /* ── Connection controls ─────────────────── */
   .header-right {
     display: flex;
     align-items: center;
     gap: 0.75rem;
     flex-shrink: 0;
     margin-left: auto;
+  }
+
+  /* ── Filter bar (group toggles) ──────────── */
+  .header-filters {
+    border-top: 1px solid var(--border);
+    background: color-mix(in srgb, var(--surface) 60%, var(--bg) 40%);
+  }
+
+  .header-filters-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0.4rem 1.5rem;
   }
 
   /* ── Main content ──────────────────────────── */
@@ -506,33 +427,14 @@
     flex: 1;
     display: flex;
     flex-direction: column;
+    gap: 1rem;
   }
 
-  .content-layout {
-    display: flex;
-    gap: 1.5rem;
-    align-items: flex-start;
-    flex: 1;
-  }
-
-  .inbox-top {
+  .page-toolbar {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin-bottom: 1rem;
     flex-wrap: wrap;
-  }
-
-  .sidebar {
-    width: 280px;
-    flex-shrink: 0;
-    position: sticky;
-    top: 5rem;
-  }
-
-  .inbox-area {
-    flex: 1;
-    min-width: 0;
   }
 
   /* ── Mobile ────────────────────────────────── */
@@ -545,7 +447,6 @@
       padding: 0.75rem 1rem;
     }
 
-    /* Row 1, left: brand */
     .brand {
       grid-column: 1;
       grid-row: 1;
@@ -560,7 +461,6 @@
       width: auto;
     }
 
-    /* Row 1, right: connection controls */
     .header-right {
       grid-column: 2;
       grid-row: 1;
@@ -568,32 +468,23 @@
       justify-content: flex-end;
     }
 
-    /* Row 2, full width: navigation */
     .header-nav {
       grid-column: 1 / -1;
       grid-row: 2;
       border-radius: 0.75rem;
       gap: 0.25rem;
       padding: 0.2rem;
+      justify-content: center;
     }
 
-    .header-nav a {
+    .header-nav button {
       min-height: 1.75rem;
-      padding: 0 0.6rem;
+      padding: 0 0.7rem;
       font-size: 0.82rem;
     }
 
-    .header-nav .group-link {
-      max-width: 7rem;
-    }
-
-    .content-layout {
-      flex-direction: column;
-    }
-
-    .sidebar {
-      width: 100%;
-      position: static;
+    .header-filters-inner {
+      padding: 0.4rem 1rem;
     }
   }
 

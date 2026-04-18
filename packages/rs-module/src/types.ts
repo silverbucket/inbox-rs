@@ -85,10 +85,17 @@ export interface UserSettings {
 
 export interface AppConfig {
   todosCollapsed?: boolean;
+  uncategorizedTodosCollapsed?: boolean; // collapse state for the Uncategorized todos box on the Todos page
   collectionsOrder?: string[]; // ordered list of collection IDs for nav display
   groupsOrder?: string[];      // ordered list of group IDs for nav display
   todosOrder?: string[];       // ordered list of inbox todo IDs for manual sorting
   expandedCollections?: string[]; // IDs of collections currently expanded
+  /**
+   * Group IDs that are toggled ON in the filter row.
+   * When undefined: treat all groups as active (default for new users).
+   * When set: only groups in this list are visible/filtered in.
+   */
+  activeGroupFilters?: string[];
 }
 
 export interface Collection {
@@ -99,7 +106,6 @@ export interface Collection {
   createdAt: string;       // ISO 8601
   color?: string;          // optional accent color
   groupId?: string;        // optional group membership
-  active?: boolean;        // when true, top todos surface in main todo list
 }
 
 export interface CollectionGroup {

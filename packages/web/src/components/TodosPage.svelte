@@ -1,18 +1,20 @@
 <script lang="ts">
   import type { InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
-  import { dndzone } from 'svelte-dnd-action';
   import {
-    storeCollection, deleteCollection, moveCollectionToGroup,
     visibleGroupedCollections, sortedGroups, storeGroup, deleteGroup,
-    appConfig, updateConfig, reorderGroupCollections, setExpandedCollections,
+    storeCollection, deleteCollection, moveCollectionToGroup,
+    appConfig, updateConfig,
   } from '../lib/stores';
-  import CollectionView from './CollectionView.svelte';
+  import UncategorizedTodos from './UncategorizedTodos.svelte';
   import GroupSection from './GroupSection.svelte';
+  import CollectionTodoTile from './CollectionTodoTile.svelte';
   import CollectionFormModal from './CollectionFormModal.svelte';
   import GroupFormModal from './GroupFormModal.svelte';
 
-  let { onselect }: {
+  let { onselect, onaddtodo }: {
     onselect: (item: InboxItem) => void;
+    /** Open the add-todo flow targeted at the uncategorized list. */
+    onaddtodo: () => void;
   } = $props();
 
   let editingCollection = $state<Collection | null>(null);
@@ -20,80 +22,26 @@
   let collectionFormGroupId = $state<string | undefined>(undefined);
   let creatingCollection = $state(false);
 
-  let isTouchDevice = $state(false);
-  $effect(() => {
-    const mql = window.matchMedia('(pointer: coarse)');
-    isTouchDevice = mql.matches;
-    const handler = (e: MediaQueryListEvent) => { isTouchDevice = e.matches; };
-    mql.addEventListener('change', handler);
-    return () => mql.removeEventListener('change', handler);
-  });
-
-  // Collapse state persists in appConfig.expandedCollections. Collections
-  // default to collapsed; expanding a row adds its id to the set.
-  const expandedSet = $derived(new Set($appConfig.expandedCollections ?? []));
-
-  function isExpanded(col: Collection): boolean {
-    return expandedSet.has(col.id);
-  }
-
-  async function toggleExpand(col: Collection) {
-    const next = new Set(expandedSet);
-    if (isExpanded(col)) {
-      next.delete(col.id);
-    } else {
-      next.add(col.id);
-    }
-    try {
-      await updateConfig({ expandedCollections: [...next] });
-    } catch (e) {
-      console.error('Failed to persist expanded state', e);
-    }
-  }
-
   const sections = $derived($visibleGroupedCollections);
 
   // Collection ids currently visible on the page — used for expand/collapse all.
+  // Uncategorized todos has its own collapse flag; we treat it as "expanded"
+  // when uncategorizedTodosCollapsed is false (the default).
+  const expandedSet = $derived(new Set($appConfig.expandedCollections ?? []));
   const visibleIds = $derived(sections.flatMap(s => s.collections.map(c => c.id)));
-  const anyExpanded = $derived(visibleIds.some(id => expandedSet.has(id)));
+  const uncatExpanded = $derived(!($appConfig.uncategorizedTodosCollapsed ?? false));
+  const anyExpanded = $derived(uncatExpanded || visibleIds.some(id => expandedSet.has(id)));
 
   async function toggleExpandAll() {
-    const next = anyExpanded ? [] : visibleIds;
+    const expand = !anyExpanded;
     try {
-      await setExpandedCollections(next);
+      await updateConfig({
+        expandedCollections: expand ? visibleIds : [],
+        uncategorizedTodosCollapsed: !expand,
+      });
     } catch (e) {
       console.error('Failed to toggle expand all', e);
     }
-  }
-
-  // Per-group DnD state — keyed by group id, mirrored from sections.
-  let dndByGroup = $state<Record<string, Array<Collection & { id: string }>>>({});
-  $effect(() => {
-    const next: Record<string, Array<Collection & { id: string }>> = {};
-    for (const section of sections) {
-      next[section.group.id] = section.collections.map(c => ({ ...c }));
-    }
-    dndByGroup = next;
-  });
-
-  function makeConsider(groupId: string) {
-    return (e: CustomEvent<{ items: Array<Collection & { id: string }> }>) => {
-      dndByGroup = { ...dndByGroup, [groupId]: e.detail.items };
-    };
-  }
-
-  function makeFinalize(groupId: string) {
-    return async (e: CustomEvent<{ items: Array<Collection & { id: string }> }>) => {
-      const previous = (sections.find(s => s.group.id === groupId)?.collections ?? []).map(c => ({ ...c }));
-      const updated = e.detail.items;
-      dndByGroup = { ...dndByGroup, [groupId]: updated };
-      try {
-        await reorderGroupCollections(groupId, updated.map(c => c.id));
-      } catch (error) {
-        console.error('Failed to reorder collections', error);
-        dndByGroup = { ...dndByGroup, [groupId]: previous };
-      }
-    };
   }
 
   function openAddCollection(groupId: string) {
@@ -159,6 +107,7 @@
     }
   }
 
+  // True when a group has zero collections — required to allow deletion.
   const editingGroupIsEmpty = $derived.by(() => {
     if (!editingGroup) return false;
     const section = sections.find(s => s.group.id === editingGroup!.id);
@@ -166,7 +115,7 @@
   });
 </script>
 
-<div class="collections-page">
+<div class="todos-page">
   {#if visibleIds.length > 0}
     <div class="page-toolbar">
       <button class="btn-expand-toggle" onclick={toggleExpandAll}>
@@ -178,38 +127,26 @@
     </div>
   {/if}
 
+  <UncategorizedTodos {onselect} onadd={onaddtodo} />
+
   {#each sections as section (section.group.id)}
     <GroupSection
       group={section.group}
       onedit={() => editingGroup = section.group}
       onaddcollection={() => openAddCollection(section.group.id)}
     >
-      {#if (dndByGroup[section.group.id]?.length ?? 0) === 0}
+      {#if section.collections.length === 0}
         <p class="group-empty">
           No collections in this group yet.
           <button class="link" onclick={() => openAddCollection(section.group.id)}>Add one</button>.
         </p>
       {:else}
-        <div
-          class="collection-list"
-          use:dndzone={{
-            items: dndByGroup[section.group.id],
-            flipDurationMs: 200,
-            dropTargetStyle: {},
-            dragDisabled: isTouchDevice,
-            type: `cols-${section.group.id}`,
-          }}
-          onconsider={makeConsider(section.group.id)}
-          onfinalize={makeFinalize(section.group.id)}
-        >
-          {#each dndByGroup[section.group.id] as col (col.id)}
-            <CollectionView
+        <div class="tile-grid">
+          {#each section.collections as col (col.id)}
+            <CollectionTodoTile
               collection={col}
-              expanded={isExpanded(col)}
               {onselect}
-              {isTouchDevice}
               onedit={() => editingCollection = col}
-              ontoggle={() => toggleExpand(col)}
             />
           {/each}
         </div>
@@ -220,10 +157,6 @@
   {#if $sortedGroups.length === 0}
     <p class="page-empty">
       No groups yet. Create one from the filter bar above to organise your collections.
-    </p>
-  {:else if sections.length === 0}
-    <p class="page-empty">
-      All groups are filtered out. Toggle one on in the filter bar to see collections.
     </p>
   {/if}
 </div>
@@ -255,7 +188,7 @@
 {/if}
 
 <style>
-  .collections-page {
+  .todos-page {
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
@@ -297,10 +230,11 @@
     transform: rotate(0);
   }
 
-  .collection-list {
-    display: flex;
-    flex-direction: column;
+  .tile-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 0.75rem;
+    align-items: start;
   }
 
   .group-empty {

@@ -475,54 +475,6 @@ export const todoItems = derived([items, appConfig], ([$items, $config]) => {
 
 export const sortedCollections = orderedDerived<Collection>(collections, 'collectionsOrder');
 
-/** Todos from active collections, surfaced for the main todo list.
- *  Each todo is annotated with its source collection info. */
-export interface ActiveCollectionTodo {
-  item: InboxItem;
-  collectionId: string;
-  collectionName: string;
-  collectionColor: string;
-  groupName: string | undefined;
-  groupColor: string | undefined;
-}
-
-export const activeCollectionTodos = derived(
-  [items, sortedCollections, groups],
-  ([$items, $sortedCollections, $groups]): ActiveCollectionTodo[] => {
-    const MAX_PER_COLLECTION = 5;
-    const result: ActiveCollectionTodo[] = [];
-    const itemMap = new Map(Object.values($items).map(i => [i.id, i]));
-
-    for (const col of $sortedCollections) {
-      if (!col.active) continue;
-
-      // Resolve group color if the collection belongs to a group
-      const group = col.groupId ? $groups[col.groupId] : undefined;
-      const groupColor = group?.color || undefined;
-      const groupName = group?.name || undefined;
-
-      // Collect open todos from this collection, stopping at MAX_PER_COLLECTION
-      let count = 0;
-      for (const id of col.itemIds) {
-        if (count >= MAX_PER_COLLECTION) break;
-        const item = itemMap.get(id);
-        if (!item || item.collectionId !== col.id || !(item.isTodo || item.type === 'todo') || item.completed) continue;
-        result.push({
-          item,
-          collectionId: col.id,
-          collectionName: col.name,
-          collectionColor: col.color || '#6366f1',
-          groupName,
-          groupColor,
-        });
-        count++;
-      }
-    }
-
-    return result;
-  }
-);
-
 export const collectionItems = derived([items, collections], ([$items, $collections]) => {
   const result: Record<string, InboxItem[]> = {};
   const itemMap = new Map(Object.values($items).map(i => [i.id, i]));
@@ -757,6 +709,15 @@ export async function reorderCollections(newOrder: string[]) {
   await updateConfig({ collectionsOrder: newOrder });
 }
 
+/**
+ * Expand/collapse helpers for the per-collection expansion state stored in
+ * `appConfig.expandedCollections`. Callers pass the set of collection ids the
+ * toggle should apply to (typically what's currently visible on the page).
+ */
+export async function setExpandedCollections(ids: string[]) {
+  await updateConfig({ expandedCollections: ids });
+}
+
 // ---- Group operations ----
 
 export const sortedGroups = orderedDerived<CollectionGroup>(groups, 'groupsOrder');
@@ -793,8 +754,19 @@ export const ungroupedCollections = derived(
 export async function storeGroup(group: CollectionGroup) {
   const inbox = getInbox();
   const clean = cleanForStorage(group);
+  const isNew = !get(groups)[clean.id];
   await inbox.storeGroup(clean);
   groups.update(current => ({ ...current, [clean.id]: clean }));
+
+  // New groups should appear active in the filter row so the user can see
+  // them immediately. Only touch filters when they're explicitly set — an
+  // undefined filter list means "all active" and already includes new groups.
+  if (isNew) {
+    const existing = get(appConfig).activeGroupFilters;
+    if (existing !== undefined && !existing.includes(clean.id)) {
+      await updateConfig({ activeGroupFilters: [...existing, clean.id] });
+    }
+  }
 }
 
 export async function deleteGroup(id: string): Promise<boolean> {
@@ -926,3 +898,78 @@ export async function reorderGroups(newOrder: string[]) {
 export async function reorderTodos(newOrder: string[]) {
   await updateConfig({ todosOrder: newOrder });
 }
+
+// ---- Group filter (toggle row) ----
+
+/**
+ * Set of group IDs currently active (visible) in the filter row.
+ * When `activeGroupFilters` is undefined in config, all groups default to active.
+ */
+export const activeGroupIds = derived(
+  [sortedGroups, appConfig],
+  ([$sortedGroups, $config]) => {
+    const all = new Set($sortedGroups.map(g => g.id));
+    if ($config.activeGroupFilters === undefined) return all;
+    const filtered = new Set<string>();
+    for (const id of $config.activeGroupFilters) {
+      if (all.has(id)) filtered.add(id);
+    }
+    return filtered;
+  }
+);
+
+/**
+ * Group + collection bundle, in the configured group order, filtered by
+ * activeGroupIds. Within each group, collections preserve the configured
+ * order from groupCollections.
+ */
+export interface VisibleGroupSection {
+  group: CollectionGroup;
+  collections: Collection[];
+}
+
+export const visibleGroupedCollections = derived(
+  [sortedGroups, groupCollections, activeGroupIds],
+  ([$sortedGroups, $groupCollections, $activeGroupIds]): VisibleGroupSection[] => {
+    const sections: VisibleGroupSection[] = [];
+    for (const group of $sortedGroups) {
+      if (!$activeGroupIds.has(group.id)) continue;
+      const cols = $groupCollections[group.id] ?? [];
+      sections.push({ group, collections: cols });
+    }
+    return sections;
+  }
+);
+
+/**
+ * Toggle a group's filter on/off. Persists to config.
+ * If activeGroupFilters was undefined (default-all), this materializes the
+ * current set first, then flips the requested id.
+ */
+export async function toggleGroupFilter(groupId: string): Promise<void> {
+  const config = get(appConfig);
+  const allGroupIds = get(sortedGroups).map(g => g.id);
+  const current = config.activeGroupFilters ?? allGroupIds;
+  const next = current.includes(groupId)
+    ? current.filter(id => id !== groupId)
+    : [...current, groupId];
+  await updateConfig({ activeGroupFilters: next });
+}
+
+/** Set the active group filter list to exactly these IDs. Persists to config. */
+export async function setActiveGroupFilters(ids: string[]): Promise<void> {
+  // Dedupe and only keep ids that correspond to real groups.
+  const allGroupIds = new Set(get(sortedGroups).map(g => g.id));
+  const filtered = Array.from(new Set(ids)).filter(id => allGroupIds.has(id));
+  const current = get(appConfig).activeGroupFilters;
+  // Skip if equal to current (avoids URL ↔ config write loops)
+  if (current && current.length === filtered.length && current.every((v, i) => v === filtered[i])) {
+    return;
+  }
+  await updateConfig({ activeGroupFilters: filtered });
+}
+
+// ---- Uncategorized todos ----
+// Alias of `todoItems` (which already filters out todos in collections),
+// exported under a clearer name for the new Todos page.
+export const uncategorizedTodos = todoItems;

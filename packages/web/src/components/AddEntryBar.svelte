@@ -1,7 +1,10 @@
 <script lang="ts">
   import type { InboxItemType } from '@inbox-rs/rs-module';
 
-  let { onadd }: { onadd: (type: InboxItemType) => void } = $props();
+  let { onadd }: {
+    /** Called with the chosen item type. Destination is chosen inside the modal. */
+    onadd: (type: InboxItemType) => void;
+  } = $props();
 
   const buttons: { type: InboxItemType; label: string; icon: string }[] = [
     {
@@ -37,7 +40,11 @@
   ];
 </script>
 
-<div class="add-bar">
+<!--
+  Horizontal scrolling strip of type buttons — buttons stay on a single line
+  and never wrap, so no "+" ends up orphaned on its own row.
+-->
+<div class="add-strip">
   {#each buttons as btn}
     <button class="add-btn" onclick={() => onadd(btn.type)} title={`Add ${btn.label}`}>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -49,14 +56,36 @@
 </div>
 
 <style>
-  .add-bar {
+  .add-strip {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
+    justify-content: center;
+    gap: 0.4rem;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    padding-bottom: 0.15rem; /* room for scrollbar on macOS */
+  }
+
+  /* When the strip overflows, the scroll container still needs left-alignment
+     otherwise flexbox centering clips the first buttons. */
+  .add-strip > :first-child {
+    margin-left: auto;
+  }
+  .add-strip > :last-child {
+    margin-right: auto;
+  }
+
+  .add-strip::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .add-strip::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 2px;
   }
 
   .add-btn {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 0.35rem;
     background: var(--surface);
@@ -68,10 +97,21 @@
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s;
     white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .add-btn:hover {
     border-color: var(--accent);
     color: var(--accent);
+  }
+
+  @media (max-width: 520px) {
+    .add-btn span {
+      display: none;
+    }
+
+    .add-btn {
+      padding: 0.4rem 0.55rem;
+    }
   }
 </style>

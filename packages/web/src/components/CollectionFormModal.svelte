@@ -13,7 +13,6 @@
   let name = $state(collection?.name ?? '');
   let description = $state(collection?.description ?? '');
   let color = $state(collection?.color ?? '#6366f1');
-  let active = $state(collection ? (collection.active ?? false) : true);
 
   function handleSubmit() {
     if (!name.trim()) return;
@@ -25,7 +24,6 @@
       createdAt: collection?.createdAt ?? new Date().toISOString(),
       color,
       groupId: collection?.groupId ?? groupId,
-      active,
     });
   }
 </script>
@@ -37,8 +35,6 @@
   bind:color
   showDescription
   bind:description
-  showActive
-  bind:active
   namePlaceholder="e.g. Sockethub Bugs"
   descriptionPlaceholder="What's this collection for?"
   maxWidth="440px"

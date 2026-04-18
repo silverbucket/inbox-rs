@@ -2,7 +2,10 @@
   import type { Component } from 'svelte';
   import { onDestroy } from 'svelte';
   import type { InboxItemType, InboxItem } from '@inbox-rs/rs-module';
-  import { storeItem, moveItemToCollection } from '../lib/stores';
+  import {
+    storeItem, moveItemToCollection,
+    sortedGroups, groupCollections, ungroupedCollections,
+  } from '../lib/stores';
   import { renderMarkdown } from '../lib/markdown';
   import { transcribeAudio } from '../lib/transcribe';
   import { loadMarkdownEditorComponent, shouldLoadMarkdownEditor, shouldSubmitAddEntryForm } from '../lib/add-entry-modal';
@@ -18,6 +21,47 @@
 
   const isEdit = !!editItem;
   let saving = $state(false);
+
+  // Let the user pick the destination collection from within the modal for
+  // every new item. Defaults to the collectionId prop — when the modal is
+  // opened from within a collection context, that collection is pre-selected.
+  let selectedCollectionId = $state<string | undefined>(collectionId);
+  let collectionPickerOpen = $state(false);
+  let collectionPickerEl = $state<HTMLDivElement>();
+  const showCollectionPicker = $derived(!isEdit);
+
+  const collectionLabel = $derived.by(() => {
+    if (selectedCollectionId === undefined) return 'Uncategorized';
+    for (const group of $sortedGroups) {
+      const cols = $groupCollections[group.id] ?? [];
+      const found = cols.find(c => c.id === selectedCollectionId);
+      if (found) return found.name;
+    }
+    const orphan = $ungroupedCollections.find(c => c.id === selectedCollectionId);
+    if (orphan) return orphan.name;
+    return 'Uncategorized';
+  });
+
+  $effect(() => {
+    if (!collectionPickerOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (collectionPickerEl && !collectionPickerEl.contains(e.target as Node)) collectionPickerOpen = false;
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') collectionPickerOpen = false;
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  });
+
+  function selectCollection(id: string | undefined) {
+    selectedCollectionId = id;
+    collectionPickerOpen = false;
+  }
 
   // Form fields — pre-populate from editItem if editing
   let title = $state(editItem?.title ?? '');
@@ -250,8 +294,8 @@
       }
 
       await storeItem(item!, fileData);
-      if (collectionId && !isEdit) {
-        await moveItemToCollection(item!.id, collectionId);
+      if (selectedCollectionId && !isEdit) {
+        await moveItemToCollection(item!.id, selectedCollectionId);
       }
       onclose();
     } catch (e) {
@@ -590,6 +634,59 @@
         {/if}
       {/if}
 
+      {#if showCollectionPicker}
+        <div class="field">
+          <span>Collection</span>
+          <div class="dest-wrapper" bind:this={collectionPickerEl}>
+            <button
+              type="button"
+              class="dest-trigger"
+              onclick={() => collectionPickerOpen = !collectionPickerOpen}
+              aria-haspopup="listbox"
+              aria-expanded={collectionPickerOpen}
+            >
+              <span class="dest-label">{collectionLabel}</span>
+              <svg class="dest-chevron" class:open={collectionPickerOpen} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            {#if collectionPickerOpen}
+              <div class="dest-menu" role="listbox" aria-label="Destination">
+                <button
+                  type="button"
+                  class="dest-item"
+                  class:selected={selectedCollectionId === undefined}
+                  onclick={() => selectCollection(undefined)}
+                >
+                  <span class="dest-dot uncat" aria-hidden="true"></span>
+                  Uncategorized
+                </button>
+                {#each $sortedGroups as group (group.id)}
+                  {@const cols = $groupCollections[group.id] ?? []}
+                  {#if cols.length > 0}
+                    <div class="dest-group-label" style="--group-color: {group.color || 'var(--accent)'}">
+                      <span class="dest-dot" style="background: var(--group-color)" aria-hidden="true"></span>
+                      {group.name}
+                    </div>
+                    {#each cols as col (col.id)}
+                      <button
+                        type="button"
+                        class="dest-item nested"
+                        class:selected={selectedCollectionId === col.id}
+                        onclick={() => selectCollection(col.id)}
+                      >
+                        <span class="dest-dot" style="background: {col.color || 'var(--accent)'}" aria-hidden="true"></span>
+                        {col.name}
+                      </button>
+                    {/each}
+                  {/if}
+                {/each}
+              </div>
+            {/if}
+          </div>
+        </div>
+      {/if}
+
       {#if error}
         <p class="error">{error}</p>
       {/if}
@@ -863,6 +960,122 @@
     padding: 0.5rem 0.75rem;
     margin: 0 0 0.75rem;
     line-height: 1.5;
+  }
+
+  .dest-wrapper {
+    position: relative;
+  }
+
+  .dest-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.75rem;
+    color: var(--text);
+    font-size: 0.85rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    white-space: nowrap;
+  }
+
+  .dest-trigger:hover {
+    border-color: var(--accent);
+  }
+
+  .dest-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.85rem;
+    color: var(--text);
+    font-weight: 400;
+  }
+
+  .dest-chevron {
+    transition: transform 150ms;
+    flex-shrink: 0;
+    opacity: 0.7;
+  }
+
+  .dest-chevron.open {
+    transform: rotate(180deg);
+  }
+
+  .dest-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 50;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+    padding: 0.3rem;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .dest-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    background: none;
+    border: none;
+    padding: 0.4rem 0.55rem;
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 0.85rem;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.12s;
+  }
+
+  .dest-item:hover {
+    background: var(--bg);
+  }
+
+  .dest-item.selected {
+    background: color-mix(in srgb, var(--accent) 14%, var(--surface) 86%);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .dest-item.nested {
+    padding-left: 1.5rem;
+  }
+
+  .dest-group-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.55rem 0.2rem;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .dest-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--accent);
+  }
+
+  .dest-dot.uncat {
+    background: var(--text-muted);
+    opacity: 0.5;
   }
 
   .error {

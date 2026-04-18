@@ -160,9 +160,12 @@ export const appConfigSchema = {
   type: 'object',
   properties: {
     todosCollapsed: { type: 'boolean' },
+    uncategorizedTodosCollapsed: { type: 'boolean' },
     collectionsOrder: { type: 'array', items: { type: 'string' } },
     groupsOrder: { type: 'array', items: { type: 'string' } },
+    todosOrder: { type: 'array', items: { type: 'string' } },
     expandedCollections: { type: 'array', items: { type: 'string' } },
+    activeGroupFilters: { type: 'array', items: { type: 'string' } },
   }
 };
 
@@ -193,7 +196,6 @@ export const collectionSchema = {
     createdAt: { type: 'string' },
     color: { type: 'string' },
     groupId: { type: 'string' },
-    active: { type: 'boolean' },
   },
   required: ['id', 'name', 'itemIds', 'createdAt']
 };

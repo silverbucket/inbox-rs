@@ -53,8 +53,9 @@ import {
   collections, groups, groupCollections, moveCollectionToGroup,
   deleteGroup, ungroupedCollections, appConfig,
   storeCollection, reorderGroupCollections, items, todoItems, reorderTodos, pendingMigrationCount,
-  activeCollectionTodos, collectionItems,
-  userSettings,
+  collectionItems, userSettings,
+  activeGroupIds, visibleGroupedCollections,
+  toggleGroupFilter, setActiveGroupFilters, storeGroup,
 } from './stores';
 import type { Collection, CollectionGroup, InboxItem } from '@inbox-rs/rs-module';
 
@@ -429,7 +430,6 @@ describe('collection todo consistency', () => {
     const inboxTodo = makeTodo('t1');
     const collection = {
       ...makeCollection('c1'),
-      active: true,
       itemIds: ['t1'],
     };
 
@@ -437,7 +437,6 @@ describe('collection todo consistency', () => {
     collections.set({ c1: collection });
 
     expect(get(collectionItems)['c1']).toEqual([]);
-    expect(get(activeCollectionTodos)).toEqual([]);
     expect(get(todoItems).map(todo => todo.id)).toEqual(['t1']);
   });
 });
@@ -608,68 +607,6 @@ describe('ungroupedCollections', () => {
 
     const result = get(ungroupedCollections);
     expect(result).toHaveLength(0);
-  });
-});
-
-describe('no auto-group-creation on connect', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    collections.set({});
-    groups.set({});
-    appConfig.set({});
-    // Reset mock return values for loaders
-    mockInbox.getAll.mockResolvedValue({});
-    mockInbox.getConfig.mockResolvedValue({});
-    mockInbox.getAllCollections.mockResolvedValue({});
-    mockInbox.getAllGroups.mockResolvedValue({});
-    mockInbox.getUserSettings.mockResolvedValue(undefined);
-  });
-
-  it('does not create a group when connecting with no groups', async () => {
-    await rsHandlers['connected']();
-
-    expect(get(groups)).toEqual({});
-    expect(mockInbox.storeGroup).not.toHaveBeenCalled();
-  });
-
-  it('does not create a group when connecting with ungrouped collections', async () => {
-    const col = makeCollection('c1');
-    mockInbox.getAllCollections.mockResolvedValue({ c1: col });
-
-    await rsHandlers['connected']();
-
-    // Collections should load but no group should be created
-    expect(get(collections)['c1']).toBeDefined();
-    expect(Object.keys(get(groups))).toHaveLength(0);
-    expect(mockInbox.storeGroup).not.toHaveBeenCalled();
-  });
-
-  it('does not force-migrate ungrouped collections into an existing group', async () => {
-    const col = makeCollection('c1'); // no groupId
-    const group = makeGroup('g1', []);
-    mockInbox.getAllCollections.mockResolvedValue({ c1: col });
-    mockInbox.getAllGroups.mockResolvedValue({ g1: group });
-
-    await rsHandlers['connected']();
-
-    // Collection should remain ungrouped
-    expect(get(collections)['c1'].groupId).toBeUndefined();
-    // storeCollection should not have been called to migrate
-    expect(mockInbox.storeCollection).not.toHaveBeenCalled();
-  });
-
-  it('preserves existing groups on connect without modification', async () => {
-    const group = makeGroup('g1', ['c1']);
-    const col = makeCollection('c1', 'g1');
-    mockInbox.getAllCollections.mockResolvedValue({ c1: col });
-    mockInbox.getAllGroups.mockResolvedValue({ g1: group });
-
-    await rsHandlers['connected']();
-
-    expect(get(groups)['g1']).toBeDefined();
-    expect(get(groups)['g1'].name).toBe('Group g1');
-    // No new groups created, no groups modified
-    expect(mockInbox.storeGroup).not.toHaveBeenCalled();
   });
 });
 
@@ -985,6 +922,185 @@ describe('ungrouped route: reorder is a no-op', () => {
 
     expect(get(groups)['g1'].collectionIds).toEqual(['c2', 'c1']);
     expect(mockInbox.storeGroup).toHaveBeenCalled();
+  });
+});
+
+describe('activeGroupIds', () => {
+  beforeEach(() => {
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('returns all group ids when activeGroupFilters is undefined', () => {
+    groups.set({
+      g1: makeGroup('g1'),
+      g2: makeGroup('g2'),
+    });
+    const ids = get(activeGroupIds);
+    expect(ids.has('g1')).toBe(true);
+    expect(ids.has('g2')).toBe(true);
+    expect(ids.size).toBe(2);
+  });
+
+  it('returns empty set when activeGroupFilters is empty array', () => {
+    groups.set({ g1: makeGroup('g1') });
+    appConfig.set({ activeGroupFilters: [] });
+    expect(get(activeGroupIds).size).toBe(0);
+  });
+
+  it('returns only listed ids when activeGroupFilters is set', () => {
+    groups.set({
+      g1: makeGroup('g1'),
+      g2: makeGroup('g2'),
+      g3: makeGroup('g3'),
+    });
+    appConfig.set({ activeGroupFilters: ['g1', 'g3'] });
+    const ids = get(activeGroupIds);
+    expect(ids.has('g1')).toBe(true);
+    expect(ids.has('g2')).toBe(false);
+    expect(ids.has('g3')).toBe(true);
+  });
+
+  it('drops ids that no longer correspond to real groups', () => {
+    groups.set({ g1: makeGroup('g1') });
+    appConfig.set({ activeGroupFilters: ['g1', 'g_deleted'] });
+    const ids = get(activeGroupIds);
+    expect(ids.has('g1')).toBe(true);
+    expect(ids.has('g_deleted')).toBe(false);
+  });
+});
+
+describe('visibleGroupedCollections', () => {
+  beforeEach(() => {
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('returns all groups by default preserving the configured collection order', () => {
+    const c1 = makeCollection('c1', 'g1');
+    const c2 = makeCollection('c2', 'g1');
+    collections.set({ c1, c2 });
+    groups.set({ g1: makeGroup('g1', ['c2', 'c1']) });
+
+    const sections = get(visibleGroupedCollections);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].group.id).toBe('g1');
+    expect(sections[0].collections.map(c => c.id)).toEqual(['c2', 'c1']);
+  });
+
+  it('omits groups that are filtered out', () => {
+    collections.set({});
+    groups.set({
+      g1: makeGroup('g1', []),
+      g2: makeGroup('g2', []),
+    });
+    appConfig.set({ activeGroupFilters: ['g2'] });
+
+    const sections = get(visibleGroupedCollections);
+    expect(sections.map(s => s.group.id)).toEqual(['g2']);
+  });
+
+  it('returns empty when all groups are filtered out', () => {
+    groups.set({ g1: makeGroup('g1', []) });
+    appConfig.set({ activeGroupFilters: [] });
+    expect(get(visibleGroupedCollections)).toHaveLength(0);
+  });
+});
+
+describe('toggleGroupFilter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('flips an id off when starting from default-all (undefined)', async () => {
+    groups.set({ g1: makeGroup('g1'), g2: makeGroup('g2') });
+    expect(get(appConfig).activeGroupFilters).toBeUndefined();
+
+    await toggleGroupFilter('g1');
+
+    // Should materialize the full list and remove g1
+    expect(get(appConfig).activeGroupFilters).toEqual(['g2']);
+  });
+
+  it('adds an id back when toggling a hidden group', async () => {
+    groups.set({ g1: makeGroup('g1'), g2: makeGroup('g2') });
+    appConfig.set({ activeGroupFilters: ['g1'] });
+
+    await toggleGroupFilter('g2');
+
+    expect(get(appConfig).activeGroupFilters).toEqual(['g1', 'g2']);
+  });
+});
+
+describe('setActiveGroupFilters', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('persists the filter list and dedupes', async () => {
+    groups.set({ g1: makeGroup('g1'), g2: makeGroup('g2') });
+
+    await setActiveGroupFilters(['g1', 'g2', 'g1']);
+
+    expect(get(appConfig).activeGroupFilters).toEqual(['g1', 'g2']);
+  });
+
+  it('drops ids that do not correspond to real groups', async () => {
+    groups.set({ g1: makeGroup('g1') });
+
+    await setActiveGroupFilters(['g1', 'g_unknown']);
+
+    expect(get(appConfig).activeGroupFilters).toEqual(['g1']);
+  });
+
+  it('skips persistence when value is unchanged (avoids URL ↔ config loops)', async () => {
+    groups.set({ g1: makeGroup('g1') });
+    appConfig.set({ activeGroupFilters: ['g1'] });
+
+    await setActiveGroupFilters(['g1']);
+
+    // setConfig should not be called for an unchanged value
+    expect(mockInbox.setConfig).not.toHaveBeenCalled();
+  });
+});
+
+describe('storeGroup keeps new groups visible in filters', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('does not touch filters when activeGroupFilters is undefined (default-all)', async () => {
+    await storeGroup(makeGroup('g_new'));
+    expect(get(appConfig).activeGroupFilters).toBeUndefined();
+  });
+
+  it('appends new group id when activeGroupFilters is explicitly set', async () => {
+    appConfig.set({ activeGroupFilters: ['g1'] });
+
+    await storeGroup(makeGroup('g_new'));
+
+    expect(get(appConfig).activeGroupFilters).toEqual(['g1', 'g_new']);
+  });
+
+  it('does not duplicate the id on update', async () => {
+    appConfig.set({ activeGroupFilters: ['g1'] });
+    groups.set({ g1: makeGroup('g1') });
+
+    // "Update" of an existing group should not append again
+    await storeGroup(makeGroup('g1'));
+
+    expect(get(appConfig).activeGroupFilters).toEqual(['g1']);
   });
 });
 
