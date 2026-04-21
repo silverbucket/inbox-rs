@@ -10,7 +10,20 @@ export interface InboxItemBase {
   isTodo?: boolean;
   completed?: boolean;
   completedAt?: string;
-  collectionId?: string; // undefined = lives in inbox
+  collectionId?: string; // undefined = lives in Inbox (or Uncategorized, see `uncategorized`)
+  /**
+   * When true AND `collectionId` is unset, the item belongs to the
+   * Uncategorized bucket on the Collections/Todos pages rather than the
+   * Inbox. Typical sources:
+   *   - user explicitly picks "Uncategorized" in the AddEntryModal picker
+   *   - an item is orphaned when its parent collection is deleted
+   *
+   * Items without a `collectionId` and without this flag default to the Inbox
+   * — they surface only in the Inbox view and never in the Uncategorized
+   * bucket. Ignored when `collectionId` is set (a collection placement always
+   * wins over Uncategorized).
+   */
+  uncategorized?: boolean;
 }
 
 export interface BookmarkItem extends InboxItemBase {
@@ -85,10 +98,9 @@ export interface UserSettings {
 
 export interface AppConfig {
   todosCollapsed?: boolean;
-  uncategorizedTodosCollapsed?: boolean; // collapse state for the Uncategorized todos box on the Todos page
   collectionsOrder?: string[]; // ordered list of collection IDs for nav display
   groupsOrder?: string[];      // ordered list of group IDs for nav display
-  todosOrder?: string[];       // ordered list of inbox todo IDs for manual sorting
+  todosOrder?: string[];       // ordered list of inbox todo IDs for manual sorting (within-inbox)
   expandedCollections?: string[]; // IDs of collections currently expanded
   /**
    * Group IDs that are toggled ON in the filter row.
@@ -96,6 +108,24 @@ export interface AppConfig {
    * When set: only groups in this list are visible/filtered in.
    */
   activeGroupFilters?: string[];
+  /**
+   * Whether uncategorized todos (items without a collectionId) are visible on
+   * the Todos page. Treated as a filter pill alongside group filters.
+   * When undefined: defaults to true (visible).
+   */
+  uncategorizedFilterActive?: boolean;
+  /**
+   * Ordered list of todo IDs for the flat Todos page. Controls cross-collection
+   * drag-sort order on that page only — collection-internal order (used by the
+   * Collections page) still lives in `Collection.itemIds`.
+   * Ids missing from this list fall back to their natural order (newest first).
+   */
+  todosGlobalOrder?: string[];
+  /**
+   * Whether the completed-todos section on the Todos page is expanded.
+   * Defaults to false (collapsed behind "N completed").
+   */
+  completedTodosExpanded?: boolean;
 }
 
 export interface Collection {

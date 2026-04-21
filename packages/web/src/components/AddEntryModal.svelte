@@ -5,6 +5,7 @@
   import {
     storeItem, moveItemToCollection,
     sortedGroups, groupCollections, ungroupedCollections,
+    hasUncategorizedItems, UNCATEGORIZED_COLLECTION_ID,
   } from '../lib/stores';
   import { renderMarkdown } from '../lib/markdown';
   import { transcribeAudio } from '../lib/transcribe';
@@ -30,8 +31,23 @@
   let collectionPickerEl = $state<HTMLDivElement>();
   const showCollectionPicker = $derived(!isEdit);
 
+  // Todos can't live in the Inbox by design — the Inbox is a refs-only
+  // staging area, and any todo without a collection ends up in the
+  // dynamic Uncategorized bucket instead. For todos the picker's default
+  // label reflects that; for refs it's "Inbox" (the real default landing).
+  const isTodoType = $derived(type === 'todo');
+  const noCollectionLabel = $derived(isTodoType ? 'Uncategorized' : 'Inbox');
+
+  // `undefined` is the default non-collection sentinel — it means:
+  //   - refs  → Inbox (default landing)
+  //   - todos → Uncategorized (since todos can't be in the Inbox)
+  // For refs, the Uncategorized bucket is offered as a separate explicit
+  // option (using UNCATEGORIZED_COLLECTION_ID) when stragglers already exist —
+  // see `showUncategorizedInPicker` below. Todos already land in
+  // Uncategorized via `undefined`, so the explicit row is ref-only.
   const collectionLabel = $derived.by(() => {
-    if (selectedCollectionId === undefined) return 'Uncategorized';
+    if (selectedCollectionId === undefined) return noCollectionLabel;
+    if (selectedCollectionId === UNCATEGORIZED_COLLECTION_ID) return 'Uncategorized';
     for (const group of $sortedGroups) {
       const cols = $groupCollections[group.id] ?? [];
       const found = cols.find(c => c.id === selectedCollectionId);
@@ -39,8 +55,16 @@
     }
     const orphan = $ungroupedCollections.find(c => c.id === selectedCollectionId);
     if (orphan) return orphan.name;
-    return 'Uncategorized';
+    return noCollectionLabel;
   });
+
+  // Show an explicit "Uncategorized" picker row for refs only when the bucket
+  // already exists (has stragglers). Per the design, Uncategorized is a
+  // dynamic surface that appears when items live there — it shouldn't be a
+  // first-class destination unless it's already populated. Todos route there
+  // via the default `undefined` selection, so the explicit row is redundant
+  // for them.
+  const showUncategorizedInPicker = $derived(!isTodoType && $hasUncategorizedItems);
 
   $effect(() => {
     if (!collectionPickerOpen) return;
@@ -293,8 +317,22 @@
         item.collectionId = collectionId;
       }
 
+      // Picker → storage shape:
+      //   undefined + ref         → Inbox (default; no flag, no collectionId)
+      //   undefined + todo        → Uncategorized (no flag needed — todos
+      //                              without a collectionId are uncategorized
+      //                              by definition, see
+      //                              uncategorizedVirtualCollection)
+      //   UNCATEGORIZED_... + ref → Uncategorized (set `uncategorized: true`
+      //                              before storage; no moveItemToCollection
+      //                              call since there's no real collection
+      //                              record to update)
+      //   real id                 → assign via moveItemToCollection after storage
+      if (!isEdit && selectedCollectionId === UNCATEGORIZED_COLLECTION_ID) {
+        item!.uncategorized = true;
+      }
       await storeItem(item!, fileData);
-      if (selectedCollectionId && !isEdit) {
+      if (selectedCollectionId && selectedCollectionId !== UNCATEGORIZED_COLLECTION_ID && !isEdit) {
         await moveItemToCollection(item!.id, selectedCollectionId);
       }
       onclose();
@@ -652,15 +690,37 @@
             </button>
             {#if collectionPickerOpen}
               <div class="dest-menu" role="listbox" aria-label="Destination">
+                <!--
+                  Default non-collection destination. For refs it's "Inbox"
+                  (default landing); for todos it's "Uncategorized" (since
+                  todos can't live in the Inbox).
+                -->
                 <button
                   type="button"
                   class="dest-item"
                   class:selected={selectedCollectionId === undefined}
                   onclick={() => selectCollection(undefined)}
                 >
-                  <span class="dest-dot uncat" aria-hidden="true"></span>
-                  Uncategorized
+                  <span class="dest-dot {isTodoType ? 'uncat' : 'inbox'}" aria-hidden="true"></span>
+                  {noCollectionLabel}
                 </button>
+                {#if showUncategorizedInPicker}
+                  <!--
+                    Refs-only explicit "Uncategorized" row, shown when the
+                    bucket already exists. Lets the user file a new ref
+                    alongside existing stragglers without first sending it to
+                    the Inbox and moving it.
+                  -->
+                  <button
+                    type="button"
+                    class="dest-item"
+                    class:selected={selectedCollectionId === UNCATEGORIZED_COLLECTION_ID}
+                    onclick={() => selectCollection(UNCATEGORIZED_COLLECTION_ID)}
+                  >
+                    <span class="dest-dot" style="background: #9ca3af" aria-hidden="true"></span>
+                    Uncategorized
+                  </button>
+                {/if}
                 {#each $sortedGroups as group (group.id)}
                   {@const cols = $groupCollections[group.id] ?? []}
                   {#if cols.length > 0}
@@ -1070,6 +1130,10 @@
     height: 8px;
     border-radius: 50%;
     flex-shrink: 0;
+    background: var(--accent);
+  }
+
+  .dest-dot.inbox {
     background: var(--accent);
   }
 

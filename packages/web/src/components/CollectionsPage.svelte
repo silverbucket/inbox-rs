@@ -5,11 +5,13 @@
     storeCollection, deleteCollection, moveCollectionToGroup,
     visibleGroupedCollections, sortedGroups, storeGroup, deleteGroup,
     appConfig, updateConfig, reorderGroupCollections, setExpandedCollections,
+    UNCATEGORIZED_FILTER_ID, reorderUngroupedCollections,
   } from '../lib/stores';
   import CollectionView from './CollectionView.svelte';
   import GroupSection from './GroupSection.svelte';
   import CollectionFormModal from './CollectionFormModal.svelte';
   import GroupFormModal from './GroupFormModal.svelte';
+  import Fab from './Fab.svelte';
 
   let { onselect }: {
     onselect: (item: InboxItem) => void;
@@ -54,7 +56,12 @@
   const sections = $derived($visibleGroupedCollections);
 
   // Collection ids currently visible on the page — used for expand/collapse all.
-  const visibleIds = $derived(sections.flatMap(s => s.collections.map(c => c.id)));
+  // Includes virtual collections (e.g. the Uncategorized bucket) so the toggle
+  // covers everything the user can see, not just rows backed by stored records.
+  const visibleIds = $derived(sections.flatMap(s => [
+    ...(s.virtualCollection ? [s.virtualCollection.id] : []),
+    ...s.collections.map(c => c.id),
+  ]));
   const anyExpanded = $derived(visibleIds.some(id => expandedSet.has(id)));
 
   async function toggleExpandAll() {
@@ -88,7 +95,13 @@
       const updated = e.detail.items;
       dndByGroup = { ...dndByGroup, [groupId]: updated };
       try {
-        await reorderGroupCollections(groupId, updated.map(c => c.id));
+        // The Uncategorized section is virtual — there's no backing group
+        // record to update, so route reorders to collectionsOrder instead.
+        if (groupId === UNCATEGORIZED_FILTER_ID) {
+          await reorderUngroupedCollections(updated.map(c => c.id));
+        } else {
+          await reorderGroupCollections(groupId, updated.map(c => c.id));
+        }
       } catch (error) {
         console.error('Failed to reorder collections', error);
         dndByGroup = { ...dndByGroup, [groupId]: previous };
@@ -96,7 +109,11 @@
     };
   }
 
-  function openAddCollection(groupId: string) {
+  function openAddCollection(groupId: string | undefined) {
+    // `undefined` means the user triggered creation outside any group (e.g.
+    // from the page-level FAB). The modal's form captures name/colour only;
+    // ungrouped collections land in the "Collections" bucket and can be
+    // dragged into a group afterwards.
     collectionFormGroupId = groupId;
     creatingCollection = true;
   }
@@ -179,17 +196,33 @@
   {/if}
 
   {#each sections as section (section.group.id)}
+    {@const isUncat = section.group.id === UNCATEGORIZED_FILTER_ID}
+    {@const addGroupId = isUncat ? undefined : section.group.id}
+    {@const realCount = dndByGroup[section.group.id]?.length ?? 0}
     <GroupSection
       group={section.group}
-      onedit={() => editingGroup = section.group}
-      onaddcollection={() => openAddCollection(section.group.id)}
+      onedit={isUncat ? undefined : () => editingGroup = section.group}
+      onaddcollection={() => openAddCollection(addGroupId)}
     >
-      {#if (dndByGroup[section.group.id]?.length ?? 0) === 0}
-        <p class="group-empty">
-          No collections in this group yet.
-          <button class="link" onclick={() => openAddCollection(section.group.id)}>Add one</button>.
-        </p>
-      {:else}
+      {#if section.virtualCollection}
+        <!-- Virtual Uncategorized bucket — rendered outside the dndzone since
+             it's not reorderable and has no backing record. Still participates
+             in the page's expand/collapse state so users can scan their
+             uncategorized items at a glance. -->
+        <div class="collection-list">
+          <CollectionView
+            collection={section.virtualCollection}
+            expanded={isExpanded(section.virtualCollection)}
+            {onselect}
+            {isTouchDevice}
+            isVirtual
+            onedit={() => {}}
+            ontoggle={() => toggleExpand(section.virtualCollection!)}
+          />
+        </div>
+      {/if}
+
+      {#if realCount > 0}
         <div
           class="collection-list"
           use:dndzone={{
@@ -213,11 +246,16 @@
             />
           {/each}
         </div>
+      {:else if !section.virtualCollection}
+        <p class="group-empty">
+          No collections in this group yet.
+          <button class="link" onclick={() => openAddCollection(addGroupId)}>Add one</button>.
+        </p>
       {/if}
     </GroupSection>
   {/each}
 
-  {#if $sortedGroups.length === 0}
+  {#if $sortedGroups.length === 0 && sections.length === 0}
     <p class="page-empty">
       No groups yet. Create one from the filter bar above to organise your collections.
     </p>
@@ -254,11 +292,16 @@
   />
 {/if}
 
+<Fab onclick={() => openAddCollection(undefined)} label="New collection" />
+
 <style>
   .collections-page {
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
+    /* Reserve room so the FAB doesn't float over the last group section when
+       scrolled to the bottom. Matches FAB height (56) + inset (~24) + air. */
+    padding-bottom: 5rem;
   }
 
   .page-toolbar {
@@ -328,5 +371,13 @@
 
   .link:hover {
     color: var(--accent-strong, var(--accent));
+  }
+
+  @media (max-width: 600px) {
+    .collections-page {
+      /* Tighter bottom padding on mobile — the FAB sits closer to the edge
+         and the list should feel dense. */
+      padding-bottom: 4.5rem;
+    }
   }
 </style>

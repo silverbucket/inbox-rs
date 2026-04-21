@@ -56,6 +56,10 @@ import {
   collectionItems, userSettings,
   activeGroupIds, visibleGroupedCollections,
   toggleGroupFilter, setActiveGroupFilters, storeGroup,
+  allTodos, openTodos, visibleTodos, reorderTodosGlobal,
+  uncategorizedFilterActive, toggleUncategorizedFilter,
+  UNCATEGORIZED_FILTER_ID, reorderUngroupedCollections,
+  UNCATEGORIZED_COLLECTION_ID, uncategorizedVirtualCollection,
 } from './stores';
 import type { Collection, CollectionGroup, InboxItem } from '@inbox-rs/rs-module';
 
@@ -983,6 +987,10 @@ describe('visibleGroupedCollections', () => {
     const c2 = makeCollection('c2', 'g1');
     collections.set({ c1, c2 });
     groups.set({ g1: makeGroup('g1', ['c2', 'c1']) });
+    // Disable the Uncategorized pill so this test stays focused on real-group
+    // behaviour — with the pill on (the default) an empty Uncategorized
+    // section is appended.
+    appConfig.set({ uncategorizedFilterActive: false });
 
     const sections = get(visibleGroupedCollections);
     expect(sections).toHaveLength(1);
@@ -996,7 +1004,7 @@ describe('visibleGroupedCollections', () => {
       g1: makeGroup('g1', []),
       g2: makeGroup('g2', []),
     });
-    appConfig.set({ activeGroupFilters: ['g2'] });
+    appConfig.set({ activeGroupFilters: ['g2'], uncategorizedFilterActive: false });
 
     const sections = get(visibleGroupedCollections);
     expect(sections.map(s => s.group.id)).toEqual(['g2']);
@@ -1004,8 +1012,220 @@ describe('visibleGroupedCollections', () => {
 
   it('returns empty when all groups are filtered out', () => {
     groups.set({ g1: makeGroup('g1', []) });
-    appConfig.set({ activeGroupFilters: [] });
+    appConfig.set({ activeGroupFilters: [], uncategorizedFilterActive: false });
     expect(get(visibleGroupedCollections)).toHaveLength(0);
+  });
+
+  it('appends an Uncategorized section when ungrouped collections exist and the pill is on', () => {
+    const grouped = makeCollection('c1', 'g1');
+    const ungrouped = makeCollection('c2');
+    collections.set({ c1: grouped, c2: ungrouped });
+    groups.set({ g1: makeGroup('g1', ['c1']) });
+
+    const sections = get(visibleGroupedCollections);
+    expect(sections.map(s => s.group.id)).toEqual(['g1', UNCATEGORIZED_FILTER_ID]);
+    expect(sections[1].collections.map(c => c.id)).toEqual(['c2']);
+  });
+
+  it('places the Uncategorized section at the sentinel slot in groupsOrder', () => {
+    const grouped = makeCollection('c1', 'g1');
+    const ungrouped = makeCollection('c2');
+    const grouped2 = makeCollection('c3', 'g2');
+    collections.set({ c1: grouped, c2: ungrouped, c3: grouped2 });
+    groups.set({ g1: makeGroup('g1', ['c1']), g2: makeGroup('g2', ['c3']) });
+    // Sentinel placed between g1 and g2
+    appConfig.set({ groupsOrder: ['g1', UNCATEGORIZED_FILTER_ID, 'g2'] });
+
+    const sections = get(visibleGroupedCollections);
+    expect(sections.map(s => s.group.id)).toEqual(['g1', UNCATEGORIZED_FILTER_ID, 'g2']);
+  });
+
+  it('hides the Uncategorized section when the pill is off even if ungrouped collections exist', () => {
+    collections.set({ c1: makeCollection('c1') });
+    groups.set({});
+    appConfig.set({ uncategorizedFilterActive: false });
+
+    expect(get(visibleGroupedCollections)).toHaveLength(0);
+  });
+
+  it('hides the Uncategorized section when there are neither ungrouped collections nor straggler items', () => {
+    // Uncategorized is a dynamic surface — unlike a real group, it has no
+    // persistent identity for the user to "keep". When everything is filed
+    // (all collections have a group, all items have a collection, no
+    // orphans), the Uncategorized section collapses away entirely.
+    const grouped = makeCollection('c1', 'g1');
+    collections.set({ c1: grouped });
+    groups.set({ g1: makeGroup('g1', ['c1']) });
+
+    const sections = get(visibleGroupedCollections);
+    expect(sections.map(s => s.group.id)).toEqual(['g1']);
+  });
+
+  it('renders the Uncategorized section when there are straggler items but no ungrouped collections', () => {
+    // A loose todo or an orphaned ref is enough to bring the Uncategorized
+    // surface back — the straggler needs somewhere to live.
+    const grouped = makeCollection('c1', 'g1');
+    collections.set({ c1: grouped });
+    groups.set({ g1: makeGroup('g1', ['c1']) });
+    const straggler: InboxItem = { id: 't1', type: 'todo', title: 'straggler', createdAt: '2026-01-01T00:00:00Z', completed: false, isTodo: true } as any;
+    items.set({ t1: straggler });
+
+    const sections = get(visibleGroupedCollections);
+    expect(sections.map(s => s.group.id)).toEqual(['g1', UNCATEGORIZED_FILTER_ID]);
+    expect(sections[1].collections).toEqual([]);
+  });
+
+  it('treats a collection whose group was deleted as ungrouped in the section', () => {
+    const orphan = makeCollection('c1', 'g_deleted');
+    collections.set({ c1: orphan });
+    groups.set({});
+
+    const sections = get(visibleGroupedCollections);
+    expect(sections.map(s => s.group.id)).toEqual([UNCATEGORIZED_FILTER_ID]);
+    expect(sections[0].collections.map(c => c.id)).toEqual(['c1']);
+  });
+
+  it('attaches the virtual Uncategorized collection to the Uncategorized section when stragglers exist', () => {
+    // The virtual collection rides alongside real ungrouped collections on
+    // `section.virtualCollection` so CollectionsPage can render it outside the
+    // reorderable drag zone. Its id is the UNCATEGORIZED_COLLECTION_ID sentinel
+    // — distinct from the group sentinel so items-without-collectionId don't
+    // collide with collections-without-groupId in downstream lookups. The
+    // section only appears when there's something to show, so we seed a
+    // straggler todo to trigger it.
+    collections.set({});
+    groups.set({});
+    const straggler: InboxItem = { id: 't1', type: 'todo', title: 'straggler', createdAt: '2026-01-01T00:00:00Z', completed: false, isTodo: true } as any;
+    items.set({ t1: straggler });
+
+    const sections = get(visibleGroupedCollections);
+    const uncat = sections.find(s => s.group.id === UNCATEGORIZED_FILTER_ID);
+    expect(uncat).toBeDefined();
+    expect(uncat!.virtualCollection?.id).toBe(UNCATEGORIZED_COLLECTION_ID);
+    expect(uncat!.virtualCollection?.name).toBe('Uncategorized');
+  });
+});
+
+describe('uncategorizedVirtualCollection', () => {
+  beforeEach(() => {
+    items.set({});
+    appConfig.set({});
+  });
+
+  it('has a stable sentinel id and a placeholder createdAt even with no items', () => {
+    const virt = get(uncategorizedVirtualCollection);
+    expect(virt.id).toBe(UNCATEGORIZED_COLLECTION_ID);
+    expect(virt.itemIds).toEqual([]);
+    // Placeholder createdAt (epoch) — the virtual collection isn't stored, so
+    // there's no real creation timestamp to reference.
+    expect(virt.createdAt).toBe(new Date(0).toISOString());
+  });
+
+  it('includes every straggler — todos without a collection, plus refs explicitly flagged uncategorized', () => {
+    // Todos can't live in the Inbox, so any todo without a `collectionId`
+    // is implicitly a straggler. Refs, by contrast, default to the Inbox and
+    // only land here when explicitly flagged `uncategorized: true` (e.g.
+    // orphaned by a collection deletion). Order: todos first (open then
+    // completed, via todoItems), then refs (newest first, via
+    // uncategorizedReferenceItems).
+    const todo1: InboxItem = { id: 't1', type: 'todo', title: 'first', createdAt: '2026-01-01T00:00:00Z', completed: false, isTodo: true } as any;
+    const note1: InboxItem = { id: 'n1', type: 'note', title: 'note', body: 'x', createdAt: '2026-01-02T00:00:00Z', uncategorized: true } as any;
+    items.set({ t1: todo1, n1: note1 });
+
+    const virt = get(uncategorizedVirtualCollection);
+    expect(virt.itemIds).toEqual(['t1', 'n1']);
+  });
+
+  it('excludes refs without the `uncategorized` flag — those live in the Inbox, not Uncategorized', () => {
+    // Refs without a collectionId and without the `uncategorized` flag are
+    // *Inbox* items, not stragglers. They must not surface in the virtual
+    // Uncategorized collection.
+    const inboxRef: InboxItem = { id: 'n1', type: 'note', title: 'inbox', body: 'x', createdAt: '2026-01-01T00:00:00Z' } as any;
+    items.set({ n1: inboxRef });
+
+    const virt = get(uncategorizedVirtualCollection);
+    expect(virt.itemIds).toEqual([]);
+  });
+
+  it('excludes items that are assigned to a real collection', () => {
+    const uncat: InboxItem = { id: 't1', type: 'todo', title: 'uncat', createdAt: '2026-01-01T00:00:00Z', completed: false, isTodo: true } as any;
+    const assigned: InboxItem = { id: 't2', type: 'todo', title: 'assigned', createdAt: '2026-01-02T00:00:00Z', completed: false, isTodo: true, collectionId: 'c1' } as any;
+    const assignedRef: InboxItem = { id: 'n1', type: 'note', title: 'note', body: 'x', createdAt: '2026-01-03T00:00:00Z', collectionId: 'c1' } as any;
+    items.set({ t1: uncat, t2: assigned, n1: assignedRef });
+
+    const virt = get(uncategorizedVirtualCollection);
+    expect(virt.itemIds).toEqual(['t1']);
+  });
+
+  it('orders todos before refs, with completed todos between the two', () => {
+    // `todoItems` enforces open-first-then-completed for todos;
+    // `uncategorizedReferenceItems` returns refs newest-first. Concatenating
+    // them yields: open todos, completed todos, refs (newest first). Refs
+    // need the `uncategorized: true` flag to surface here — without it they'd
+    // default to the Inbox.
+    const openTodo: InboxItem = { id: 't-open', type: 'todo', title: 'open', createdAt: '2026-01-01T00:00:00Z', completed: false, isTodo: true } as any;
+    const doneTodo: InboxItem = { id: 't-done', type: 'todo', title: 'done', createdAt: '2026-01-02T00:00:00Z', completed: true, isTodo: true, completedAt: '2026-01-02T00:00:00Z' } as any;
+    const oldRef: InboxItem = { id: 'r-old', type: 'note', title: 'old', body: '', createdAt: '2026-01-01T00:00:00Z', uncategorized: true } as any;
+    const newRef: InboxItem = { id: 'r-new', type: 'note', title: 'new', body: '', createdAt: '2026-01-05T00:00:00Z', uncategorized: true } as any;
+    items.set({ 't-open': openTodo, 't-done': doneTodo, 'r-old': oldRef, 'r-new': newRef });
+
+    const virt = get(uncategorizedVirtualCollection);
+    expect(virt.itemIds).toEqual(['t-open', 't-done', 'r-new', 'r-old']);
+  });
+});
+
+describe('collectionItems virtual Uncategorized entry', () => {
+  beforeEach(() => {
+    items.set({});
+    collections.set({});
+  });
+
+  it('surfaces every straggler under UNCATEGORIZED_COLLECTION_ID — todos, and refs flagged uncategorized', () => {
+    // Orphan todo (no collectionId) — every uncollected todo is a straggler
+    // since todos can't live in the Inbox.
+    const todo: InboxItem = { id: 't1', type: 'todo', title: 'orphan todo', createdAt: '2026-01-01T00:00:00Z', completed: false, isTodo: true } as any;
+    // Orphaned reference flagged `uncategorized: true` — typically set by
+    // deleteCollection when its containing collection is removed. Refs
+    // without this flag default to the Inbox, not Uncategorized.
+    const orphanRef: InboxItem = { id: 'r1', type: 'note', title: 'orphan ref', body: '', createdAt: '2026-01-02T00:00:00Z', uncategorized: true } as any;
+    // Items assigned to a real collection — must not leak.
+    const assignedTodo: InboxItem = { id: 't2', type: 'todo', title: 'assigned', createdAt: '2026-01-03T00:00:00Z', completed: false, isTodo: true, collectionId: 'c1' } as any;
+    const assignedRef: InboxItem = { id: 'r2', type: 'note', title: 'assigned ref', body: '', createdAt: '2026-01-04T00:00:00Z', collectionId: 'c1' } as any;
+    // Inbox ref (no flag, no collection) — must stay in the Inbox, not leak.
+    const inboxRef: InboxItem = { id: 'r3', type: 'note', title: 'inbox ref', body: '', createdAt: '2026-01-05T00:00:00Z' } as any;
+    items.set({ t1: todo, r1: orphanRef, t2: assignedTodo, r2: assignedRef, r3: inboxRef });
+
+    const byCollection = get(collectionItems);
+    const uncatItems = byCollection[UNCATEGORIZED_COLLECTION_ID] ?? [];
+    expect(uncatItems.map(i => i.id)).toEqual(['t1', 'r1']);
+  });
+});
+
+describe('reorderUngroupedCollections', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    appConfig.set({});
+  });
+
+  it('persists the new order to collectionsOrder', async () => {
+    await reorderUngroupedCollections(['c2', 'c1', 'c3']);
+
+    expect(get(appConfig).collectionsOrder).toEqual(['c2', 'c1', 'c3']);
+    expect(mockInbox.setConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ collectionsOrder: ['c2', 'c1', 'c3'] })
+    );
+  });
+
+  it('reorders ungroupedCollections to match the persisted order', async () => {
+    const c1 = makeCollection('c1');
+    const c2 = makeCollection('c2');
+    const c3 = makeCollection('c3');
+    collections.set({ c1, c2, c3 });
+    groups.set({});
+
+    await reorderUngroupedCollections(['c3', 'c1', 'c2']);
+
+    expect(get(ungroupedCollections).map(c => c.id)).toEqual(['c3', 'c1', 'c2']);
   });
 });
 
@@ -1144,5 +1364,203 @@ describe('moveCollectionToGroup', () => {
     expect(updatedNewGroup.collectionIds).toContain('c1');
 
     expect(get(collections)['c1'].groupId).toBe('g2');
+  });
+});
+
+describe('allTodos / openTodos', () => {
+  beforeEach(() => {
+    items.set({});
+    appConfig.set({});
+  });
+
+  it('returns every todo-like item across collections and uncategorized', () => {
+    items.set({
+      a: makeTodo('a', { collectionId: 'c1' }),
+      b: makeTodo('b'), // uncategorized
+      c: {
+        id: 'c',
+        type: 'note',
+        title: 'Note-but-todo',
+        body: '',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        isTodo: true,
+      } as InboxItem,
+      // reference item — must not be surfaced as a todo
+      d: {
+        id: 'd',
+        type: 'note',
+        title: 'Plain note',
+        body: '',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      } as InboxItem,
+    });
+
+    const all = get(allTodos).map(t => t.id).sort();
+    expect(all).toEqual(['a', 'b', 'c']);
+  });
+
+  it('openTodos excludes completed todos', () => {
+    items.set({
+      open: makeTodo('open'),
+      done: makeTodo('done', { completed: true, completedAt: '2026-01-02T00:00:00.000Z' }),
+    });
+
+    expect(get(openTodos).map(t => t.id)).toEqual(['open']);
+  });
+});
+
+describe('visibleTodos', () => {
+  beforeEach(() => {
+    items.set({});
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('shows uncategorized todos by default (uncategorized filter on)', () => {
+    items.set({
+      u1: makeTodo('u1', { createdAt: '2026-01-01T00:00:00.000Z' }),
+      u2: makeTodo('u2', { createdAt: '2026-01-02T00:00:00.000Z' }),
+    });
+
+    // Newest first as the fallback sort
+    expect(get(visibleTodos).map(t => t.id)).toEqual(['u2', 'u1']);
+  });
+
+  it('hides uncategorized todos when the uncategorized filter is off', () => {
+    items.set({
+      u1: makeTodo('u1'),
+      c1: makeTodo('c1', { collectionId: 'col1' }),
+    });
+    collections.set({ col1: makeCollection('col1') });
+    appConfig.set({ uncategorizedFilterActive: false });
+
+    expect(get(visibleTodos).map(t => t.id)).toEqual(['c1']);
+  });
+
+  it('hides collection todos whose group is filtered out', () => {
+    items.set({
+      c1: makeTodo('c1', { collectionId: 'col-active' }),
+      c2: makeTodo('c2', { collectionId: 'col-hidden' }),
+    });
+    collections.set({
+      'col-active': { ...makeCollection('col-active', 'g-active') },
+      'col-hidden': { ...makeCollection('col-hidden', 'g-hidden') },
+    });
+    groups.set({
+      'g-active': makeGroup('g-active', ['col-active']),
+      'g-hidden': makeGroup('g-hidden', ['col-hidden']),
+    });
+    // activeGroupFilters = just g-active; uncategorized off so we don't mix
+    // orphan behaviour into this assertion.
+    appConfig.set({
+      activeGroupFilters: ['g-active'],
+      uncategorizedFilterActive: false,
+    });
+
+    expect(get(visibleTodos).map(t => t.id)).toEqual(['c1']);
+  });
+
+  it('keeps todos from ungrouped collections visible even when no groups are active', () => {
+    items.set({
+      orphan: makeTodo('orphan', { collectionId: 'col-orphan' }),
+    });
+    collections.set({
+      'col-orphan': makeCollection('col-orphan'), // no groupId
+    });
+    groups.set({ g1: makeGroup('g1', []) });
+    appConfig.set({
+      activeGroupFilters: [],
+      uncategorizedFilterActive: false,
+    });
+
+    expect(get(visibleTodos).map(t => t.id)).toEqual(['orphan']);
+  });
+
+  it('treats a todo whose collection was deleted as uncategorized for filtering purposes', () => {
+    items.set({
+      stale: makeTodo('stale', { collectionId: 'deleted' }),
+    });
+    collections.set({});
+    appConfig.set({ uncategorizedFilterActive: true });
+
+    expect(get(visibleTodos).map(t => t.id)).toEqual(['stale']);
+
+    // And disappears when the uncategorized pill is off
+    appConfig.set({ uncategorizedFilterActive: false });
+    expect(get(visibleTodos)).toEqual([]);
+  });
+
+  it('respects persisted todosGlobalOrder and falls back to newest-first for missing ids', () => {
+    items.set({
+      t1: makeTodo('t1', { createdAt: '2026-01-01T00:00:00.000Z' }),
+      t2: makeTodo('t2', { createdAt: '2026-01-02T00:00:00.000Z' }),
+      t3: makeTodo('t3', { createdAt: '2026-01-03T00:00:00.000Z' }),
+    });
+    // Only t2 is in the persisted order; t1/t3 fall back to createdAt desc
+    appConfig.set({ todosGlobalOrder: ['t2'] });
+
+    expect(get(visibleTodos).map(t => t.id)).toEqual(['t2', 't3', 't1']);
+  });
+});
+
+describe('reorderTodosGlobal', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    appConfig.set({});
+  });
+
+  it('persists the new order to appConfig.todosGlobalOrder', async () => {
+    await reorderTodosGlobal(['t2', 't1', 't3']);
+
+    expect(get(appConfig).todosGlobalOrder).toEqual(['t2', 't1', 't3']);
+    expect(mockInbox.setConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ todosGlobalOrder: ['t2', 't1', 't3'] })
+    );
+  });
+
+  it('overwrites a previous order', async () => {
+    appConfig.set({ todosGlobalOrder: ['t1', 't2'] });
+
+    await reorderTodosGlobal(['t2', 't1']);
+
+    expect(get(appConfig).todosGlobalOrder).toEqual(['t2', 't1']);
+  });
+});
+
+describe('uncategorizedFilterActive / toggleUncategorizedFilter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    appConfig.set({});
+  });
+
+  it('defaults to true when the flag is unset', () => {
+    expect(get(uncategorizedFilterActive)).toBe(true);
+  });
+
+  it('reflects the persisted flag when explicitly set', () => {
+    appConfig.set({ uncategorizedFilterActive: false });
+    expect(get(uncategorizedFilterActive)).toBe(false);
+
+    appConfig.set({ uncategorizedFilterActive: true });
+    expect(get(uncategorizedFilterActive)).toBe(true);
+  });
+
+  it('toggle flips from unset-default-true to explicit false', async () => {
+    expect(get(uncategorizedFilterActive)).toBe(true);
+
+    await toggleUncategorizedFilter();
+
+    expect(get(uncategorizedFilterActive)).toBe(false);
+    expect(get(appConfig).uncategorizedFilterActive).toBe(false);
+  });
+
+  it('toggle flips from false back to true', async () => {
+    appConfig.set({ uncategorizedFilterActive: false });
+
+    await toggleUncategorizedFilter();
+
+    expect(get(uncategorizedFilterActive)).toBe(true);
+    expect(get(appConfig).uncategorizedFilterActive).toBe(true);
   });
 });

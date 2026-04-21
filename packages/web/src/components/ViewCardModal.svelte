@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack, onDestroy } from 'svelte';
   import type { InboxItem } from '@inbox-rs/rs-module';
-  import { deleteItem, storeItem, blobUrls, connected, sortedGroups, groupCollections, moveItemToCollection, loadFileBlobUrl } from '../lib/stores';
+  import { deleteItem, storeItem, blobUrls, connected, sortedGroups, groupCollections, moveItemToCollection, loadFileBlobUrl, hasUncategorizedItems } from '../lib/stores';
   import rs from '../lib/rs';
   import { transcribeAudio } from '../lib/transcribe';
   import ShareButton from './ShareButton.svelte';
@@ -142,6 +142,25 @@
 
   const canMakeTodo = $derived(item.type !== 'todo' && !item.isTodo);
   const canMakeRef = $derived(item.isTodo || item.type === 'todo');
+
+  // True when the item already lives in the Uncategorized bucket: a todo without
+  // a collection (todos can't be in the Inbox), or a reference flagged with
+  // `uncategorized: true`. Items in this state shouldn't see an "Uncategorized"
+  // move option — it would be a no-op.
+  const isInUncategorized = $derived(
+    !item.collectionId && (item.uncategorized === true || item.isTodo || item.type === 'todo')
+  );
+
+  // Show the "Uncategorized" entry in the move dropdown when:
+  //   - the item is in a real collection (preserves the existing "remove from
+  //     collection" affordance — items leaving a collection always land in
+  //     Uncategorized rather than the Inbox), OR
+  //   - Uncategorized already exists (has stragglers), so an Inbox ref can be
+  //     filed alongside them. Per design, Uncategorized isn't a first-class
+  //     destination unless it already exists.
+  const showUncategorizedOption = $derived(
+    !isInUncategorized && (!!item.collectionId || $hasUncategorizedItems)
+  );
 
   function toggleMoveMenu() {
     showMoveMenu = !showMoveMenu;
@@ -451,9 +470,10 @@
         onclick={() => closeMoveMenu()}
       ></button>
       <div class="move-dropdown" style={dropdownStyle}>
-        {#if item.collectionId}
+        {#if showUncategorizedOption}
           <button class="move-option" onclick={() => { moveItemToCollection(item.id, undefined).catch(e => console.error('Move failed:', e)); closeMoveMenu(); onclose(); }}>
-            Return to Inbox
+            <span class="move-dot" style="background: #9ca3af"></span>
+            Uncategorized
           </button>
           <div class="move-divider"></div>
         {/if}

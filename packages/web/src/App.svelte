@@ -14,7 +14,7 @@
   import CollectionFormModal from './components/CollectionFormModal.svelte';
   import GroupFormModal from './components/GroupFormModal.svelte';
   import {
-    connected, deleteItem, todoItems, pendingMigrationCount, runAllMigrations,
+    connected, deleteItem, openTodos, pendingMigrationCount, runAllMigrations,
     storeCollection, storeGroup, moveCollectionToGroup,
     appConfig, setActiveGroupFilters,
   } from './lib/stores';
@@ -27,6 +27,10 @@
   let viewingItem = $state<InboxItem | null>(null);
   let showCollectionForm = $state(false);
   let showGroupForm = $state(false);
+  // Collection to pre-select when opening the add-entry modal. Used by the
+  // per-row quick-add on the Todos page so the new todo lands in the same
+  // collection as the row the user is adding alongside.
+  let preselectedCollectionId = $state<string | undefined>(undefined);
 
   let route = $state<Route>(parseHash(window.location.hash));
 
@@ -116,11 +120,20 @@
 
   function openAdd(type: InboxItemType) {
     editingItem = undefined;
+    preselectedCollectionId = undefined;
     activeModal = type;
   }
 
   function openAddTodo() {
     openAdd('todo');
+  }
+
+  /** Open the add-todo modal with a specific collection pre-selected.
+      `undefined` means "Uncategorized" — matching the picker's own default. */
+  function openAddTodoInCollection(collectionId: string | undefined) {
+    editingItem = undefined;
+    preselectedCollectionId = collectionId;
+    activeModal = 'todo';
   }
 
   function openView(item: InboxItem) {
@@ -140,6 +153,7 @@
   function closeModal() {
     activeModal = null;
     editingItem = undefined;
+    preselectedCollectionId = undefined;
   }
 
   async function handleCreateCollection(col: Collection) {
@@ -164,7 +178,9 @@
   }
 
   // Surface a small badge with open todo count next to the Todos nav item.
-  const openTodoCount = $derived($todoItems.filter(t => !t.completed).length);
+  // Counts every open todo across all collections (not just uncategorized) so
+  // the badge matches what the user sees on the flat Todos page.
+  const openTodoCount = $derived($openTodos.length);
 </script>
 
 <header>
@@ -236,7 +252,7 @@
       </div>
       <InboxGrid onselect={openView} />
     {:else if route.page === 'todos'}
-      <TodosPage onselect={openView} onaddtodo={openAddTodo} />
+      <TodosPage onselect={openView} onaddtodo={openAddTodo} onaddtodoincollection={openAddTodoInCollection} />
     {:else}
       <CollectionsPage onselect={openView} />
     {/if}
@@ -268,6 +284,7 @@
   <AddEntryModal
     type={activeModal}
     editItem={editingItem}
+    collectionId={preselectedCollectionId}
     onclose={closeModal}
     ondelete={async (item) => { await deleteItem(item.id, item); closeModal(); }}
   />

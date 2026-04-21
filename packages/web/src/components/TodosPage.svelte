@@ -1,266 +1,299 @@
 <script lang="ts">
-  import type { InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
+  import type { InboxItem } from '@inbox-rs/rs-module';
+  import { dndzone } from 'svelte-dnd-action';
+  import { flip } from 'svelte/animate';
+  import { slide, fade } from 'svelte/transition';
   import {
-    visibleGroupedCollections, sortedGroups, storeGroup, deleteGroup,
-    storeCollection, deleteCollection, moveCollectionToGroup,
-    appConfig, updateConfig,
+    visibleTodos, reorderTodosGlobal,
+    collections, sortedGroups, appConfig, updateConfig,
   } from '../lib/stores';
-  import UncategorizedTodos from './UncategorizedTodos.svelte';
-  import GroupSection from './GroupSection.svelte';
-  import CollectionTodoTile from './CollectionTodoTile.svelte';
-  import CollectionFormModal from './CollectionFormModal.svelte';
-  import GroupFormModal from './GroupFormModal.svelte';
+  import TodoRow from './TodoRow.svelte';
+  import Fab from './Fab.svelte';
 
-  let { onselect, onaddtodo }: {
+  let { onselect, onaddtodo, onaddtodoincollection }: {
     onselect: (item: InboxItem) => void;
-    /** Open the add-todo flow targeted at the uncategorized list. */
+    /** Opens the add-todo modal; the modal's built-in collection picker lets
+        the user place the new todo anywhere (including uncategorized). */
     onaddtodo: () => void;
+    /** Opens the add-todo modal with a specific collection pre-selected.
+        Used by the per-row quick-add affordance. Pass `undefined` to target
+        the "Uncategorized" bucket. */
+    onaddtodoincollection: (collectionId: string | undefined) => void;
   } = $props();
 
-  let editingCollection = $state<Collection | null>(null);
-  let editingGroup = $state<CollectionGroup | null>(null);
-  let collectionFormGroupId = $state<string | undefined>(undefined);
-  let creatingCollection = $state(false);
+  const todos = $derived($visibleTodos);
+  const openTodos = $derived(todos.filter(t => !t.completed));
+  // Completed todos are sorted newest-first by completedAt for the collapsed
+  // section — the global order only governs open todos.
+  const completedTodos = $derived(
+    todos.filter(t => t.completed)
+      .slice()
+      .sort((a, b) => new Date(b.completedAt ?? b.createdAt).getTime()
+                     - new Date(a.completedAt ?? a.createdAt).getTime())
+  );
 
-  const sections = $derived($visibleGroupedCollections);
-
-  // Collection ids currently visible on the page — used for expand/collapse all.
-  // Uncategorized todos has its own collapse flag; we treat it as "expanded"
-  // when uncategorizedTodosCollapsed is false (the default).
-  const expandedSet = $derived(new Set($appConfig.expandedCollections ?? []));
-  const visibleIds = $derived(sections.flatMap(s => s.collections.map(c => c.id)));
-  const uncatExpanded = $derived(!($appConfig.uncategorizedTodosCollapsed ?? false));
-  const anyExpanded = $derived(uncatExpanded || visibleIds.some(id => expandedSet.has(id)));
-
-  async function toggleExpandAll() {
-    const expand = !anyExpanded;
-    try {
-      await updateConfig({
-        expandedCollections: expand ? visibleIds : [],
-        uncategorizedTodosCollapsed: !expand,
-      });
-    } catch (e) {
-      console.error('Failed to toggle expand all', e);
-    }
-  }
-
-  function openAddCollection(groupId: string) {
-    collectionFormGroupId = groupId;
-    creatingCollection = true;
-  }
-
-  async function handleCreateCollection(col: Collection) {
-    try {
-      await storeCollection(col);
-      if (col.groupId) {
-        await moveCollectionToGroup(col.id, col.groupId);
-      }
-      creatingCollection = false;
-      collectionFormGroupId = undefined;
-    } catch (error) {
-      console.error('Failed to create collection', error);
-    }
-  }
-
-  async function handleEditCollection(col: Collection) {
-    if (!editingCollection) return;
-    const previousGroupId = editingCollection.groupId;
-    try {
-      await storeCollection(col);
-      if (col.groupId && col.groupId !== previousGroupId) {
-        await moveCollectionToGroup(col.id, col.groupId);
-      }
-      editingCollection = null;
-    } catch (error) {
-      console.error('Failed to update collection', error);
-    }
-  }
-
-  async function handleDeleteCollection() {
-    if (!editingCollection) return;
-    const id = editingCollection.id;
-    editingCollection = null;
-    try {
-      await deleteCollection(id);
-    } catch (error) {
-      console.error('Failed to delete collection', error);
-    }
-  }
-
-  async function handleEditGroup(group: CollectionGroup) {
-    try {
-      await storeGroup(group);
-      editingGroup = null;
-    } catch (error) {
-      console.error('Failed to update group', error);
-    }
-  }
-
-  async function handleDeleteGroup() {
-    if (!editingGroup) return;
-    const id = editingGroup.id;
-    editingGroup = null;
-    try {
-      await deleteGroup(id);
-    } catch (error) {
-      console.error('Failed to delete group', error);
-    }
-  }
-
-  // True when a group has zero collections — required to allow deletion.
-  const editingGroupIsEmpty = $derived.by(() => {
-    if (!editingGroup) return false;
-    const section = sections.find(s => s.group.id === editingGroup!.id);
-    return !section || section.collections.length === 0;
+  // Group map by collection id, so each TodoRow can show its collection's color
+  // and the parent group color without re-deriving per row.
+  const collectionMap = $derived($collections);
+  const groupMap = $derived(() => {
+    const out: Record<string, typeof $sortedGroups[number]> = {};
+    for (const g of $sortedGroups) out[g.id] = g;
+    return out;
   });
+
+  const completedExpanded = $derived($appConfig.completedTodosExpanded === true);
+
+  let isTouchDevice = $state(false);
+  $effect(() => {
+    const mql = window.matchMedia('(pointer: coarse)');
+    isTouchDevice = mql.matches;
+    const handler = (e: MediaQueryListEvent) => { isTouchDevice = e.matches; };
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  });
+
+  // Local mutable copy for the dnd zone. Kept in sync with the derived list
+  // whenever the upstream order changes — except while the user is mid-drag,
+  // where `handleDndConsider` is authoritative.
+  let dndOpen = $state<Array<InboxItem & { id: string }>>([]);
+  $effect(() => {
+    dndOpen = openTodos.map(t => ({ ...t }));
+  });
+
+  function handleDndConsider(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
+    dndOpen = e.detail.items;
+  }
+
+  async function handleDndFinalize(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
+    const previous = openTodos.map(t => ({ ...t }));
+    dndOpen = e.detail.items;
+    try {
+      // Persist just the open ids — completed todos fall back to completedAt
+      // ordering on re-render, so we don't need to thread them through config.
+      await reorderTodosGlobal(dndOpen.map(t => t.id));
+    } catch (error) {
+      console.error('Failed to reorder todos', error);
+      dndOpen = previous;
+    }
+  }
+
+  async function toggleCompletedSection() {
+    try {
+      await updateConfig({ completedTodosExpanded: !completedExpanded });
+    } catch (error) {
+      console.error('Failed to toggle completed todos section', error);
+    }
+  }
+
+  function lookupCollection(id: string | undefined) {
+    if (!id) return null;
+    return collectionMap[id] ?? null;
+  }
+
+  function lookupGroup(collectionId: string | undefined) {
+    const col = lookupCollection(collectionId);
+    if (!col?.groupId) return null;
+    return groupMap()[col.groupId] ?? null;
+  }
 </script>
 
 <div class="todos-page">
-  {#if visibleIds.length > 0}
+  {#if openTodos.length > 0}
     <div class="page-toolbar">
-      <button class="btn-expand-toggle" onclick={toggleExpandAll}>
-        <svg class="chevron" class:open={anyExpanded} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="6 9 12 15 18 9"></polyline>
-        </svg>
-        {anyExpanded ? 'Collapse all' : 'Expand all'}
-      </button>
+      <span class="count-label">
+        {openTodos.length} open
+      </span>
     </div>
   {/if}
 
-  <UncategorizedTodos {onselect} onadd={onaddtodo} />
-
-  {#each sections as section (section.group.id)}
-    <GroupSection
-      group={section.group}
-      onedit={() => editingGroup = section.group}
-      onaddcollection={() => openAddCollection(section.group.id)}
+  {#if openTodos.length === 0 && completedTodos.length === 0}
+    <div class="empty-state" in:fade={{ duration: 180 }}>
+      <div class="empty-icon" aria-hidden="true">✓</div>
+      <p class="empty-title">Nothing to do.</p>
+      <p class="empty-hint">Tap the + button in the bottom right to add a todo — you can pick a collection or leave it in your inbox.</p>
+    </div>
+  {:else}
+    <ul
+      class="todo-list" role="list"
+      use:dndzone={{
+        items: dndOpen,
+        flipDurationMs: 200,
+        dropTargetStyle: {},
+        dragDisabled: isTouchDevice,
+        type: 'todos-global',
+      }}
+      onconsider={handleDndConsider}
+      onfinalize={handleDndFinalize}
     >
-      {#if section.collections.length === 0}
-        <p class="group-empty">
-          No collections in this group yet.
-          <button class="link" onclick={() => openAddCollection(section.group.id)}>Add one</button>.
-        </p>
-      {:else}
-        <div class="tile-grid">
-          {#each section.collections as col (col.id)}
-            <CollectionTodoTile
-              collection={col}
-              {onselect}
-              onedit={() => editingCollection = col}
-            />
-          {/each}
+      {#each dndOpen as todo (todo.id)}
+        <div
+          animate:flip={{ duration: 200 }}
+          in:fade={{ duration: 180 }}
+          out:fade={{ duration: 120 }}
+        >
+          <TodoRow
+            {todo}
+            collection={lookupCollection(todo.collectionId)}
+            group={lookupGroup(todo.collectionId)}
+            {onselect}
+            onaddincollection={onaddtodoincollection}
+          />
         </div>
-      {/if}
-    </GroupSection>
-  {/each}
+      {/each}
+    </ul>
 
-  {#if $sortedGroups.length === 0}
-    <p class="page-empty">
-      No groups yet. Create one from the filter bar above to organise your collections.
-    </p>
+    {#if completedTodos.length > 0}
+      <div class="completed-section">
+        <button
+          class="btn-completed-toggle"
+          onclick={toggleCompletedSection}
+          aria-expanded={completedExpanded}
+        >
+          <svg class="chevron" class:open={completedExpanded} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+          {completedTodos.length} completed
+        </button>
+
+        {#if completedExpanded}
+          <ul
+            class="todo-list completed-list"
+            role="list"
+            transition:slide={{ duration: isTouchDevice ? 0 : 200 }}
+          >
+            {#each completedTodos as todo (todo.id)}
+              <div in:fade={{ duration: 150 }}>
+                <TodoRow
+                  {todo}
+                  collection={lookupCollection(todo.collectionId)}
+                  group={lookupGroup(todo.collectionId)}
+                  {onselect}
+                  onaddincollection={onaddtodoincollection}
+                />
+              </div>
+            {/each}
+          </ul>
+        {/if}
+      </div>
+    {/if}
   {/if}
 </div>
 
-{#if creatingCollection}
-  <CollectionFormModal
-    groupId={collectionFormGroupId}
-    onclose={() => { creatingCollection = false; collectionFormGroupId = undefined; }}
-    onsave={handleCreateCollection}
-  />
-{/if}
-
-{#if editingCollection}
-  <CollectionFormModal
-    collection={editingCollection}
-    onclose={() => editingCollection = null}
-    onsave={handleEditCollection}
-    ondelete={handleDeleteCollection}
-  />
-{/if}
-
-{#if editingGroup}
-  <GroupFormModal
-    group={editingGroup}
-    onclose={() => editingGroup = null}
-    onsave={handleEditGroup}
-    ondelete={editingGroupIsEmpty ? handleDeleteGroup : undefined}
-  />
-{/if}
+<Fab onclick={onaddtodo} label="Add a new todo" />
 
 <style>
   .todos-page {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: 0.75rem;
+    /* Reserve room so the FAB doesn't float over the last todo when scrolled
+       to the bottom. Matches FAB height (56) + inset (~24) + a little air. */
+    padding-bottom: 5rem;
   }
 
   .page-toolbar {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    margin-bottom: -0.5rem;
+    gap: 0.75rem;
+    flex-wrap: wrap;
   }
 
-  .btn-expand-toggle {
+  .count-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    opacity: 0.8;
+  }
+
+  .todo-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .completed-section {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed var(--border);
+  }
+
+  .completed-list {
+    margin-top: 0.4rem;
+    opacity: 0.75;
+  }
+
+  .btn-completed-toggle {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
     background: none;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 0.35rem 0.7rem;
+    border: none;
     color: var(--text-muted);
-    font-size: 0.78rem;
+    font-size: 0.8rem;
+    padding: 0.35rem 0.5rem;
     cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
+    border-radius: var(--radius-sm);
+    transition: color 150ms, background 150ms;
   }
 
-  .btn-expand-toggle:hover {
+  .btn-completed-toggle:hover {
     color: var(--text);
-    border-color: var(--text-muted);
+    background: var(--surface-tint);
   }
 
-  .btn-expand-toggle .chevron {
-    transition: transform 0.2s;
+  .chevron {
+    color: var(--text-muted);
+    transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
     transform: rotate(-90deg);
+    flex-shrink: 0;
   }
 
-  .btn-expand-toggle .chevron.open {
+  .chevron.open {
     transform: rotate(0);
   }
 
-  .tile-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 0.75rem;
-    align-items: start;
-  }
-
-  .group-empty {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-    margin: 0.25rem 0 0.5rem;
-  }
-
-  .page-empty {
-    font-size: 0.9rem;
-    color: var(--text-muted);
+  /* Empty state mirrors the inbox empty state visually so the Todos page
+     doesn't feel jarringly different when users land on it with nothing to
+     do. */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 3rem 1rem;
     text-align: center;
-    margin-top: 1rem;
+    color: var(--text-muted);
   }
 
-  .link {
-    background: none;
-    border: none;
+  .empty-icon {
+    font-size: 2.5rem;
+    line-height: 1;
+    margin-bottom: 0.5rem;
     color: var(--accent);
-    cursor: pointer;
-    padding: 0;
-    font: inherit;
-    text-decoration: underline;
+    opacity: 0.6;
   }
 
-  .link:hover {
-    color: var(--accent-strong, var(--accent));
+  .empty-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0;
+  }
+
+  .empty-hint {
+    font-size: 0.85rem;
+    max-width: 32rem;
+    margin: 0;
+  }
+
+  @media (max-width: 600px) {
+    .todos-page {
+      /* Tighter bottom padding on mobile — the FAB is closer to the edge
+         and the list should feel dense. */
+      padding-bottom: 4.5rem;
+    }
   }
 </style>
