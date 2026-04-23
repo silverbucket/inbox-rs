@@ -139,7 +139,7 @@ function orderedDerived<T extends { id: string; createdAt: string }>(
   });
 }
 
-async function removeFromOrderConfig(id: string, key: 'collectionsOrder' | 'groupsOrder' | 'todosOrder') {
+async function removeFromOrderConfig(id: string, key: 'collectionsOrder' | 'groupsOrder') {
   const currentOrder = get(appConfig)[key] ?? [];
   if (currentOrder.includes(id)) {
     await updateConfig({ [key]: currentOrder.filter((x: string) => x !== id) });
@@ -471,8 +471,15 @@ export const sortedItems = derived(items, ($items) => {
 
 /**
  * Uncategorized todos — every todo without a `collectionId` qualifies, since
- * todos never live in the Inbox. Sorted open-first (respecting `todosOrder`)
- * then completed (by `completedAt` desc).
+ * todos never live in the Inbox. Sorted open-first (respecting
+ * `todosGlobalOrder`) then completed (by `completedAt` desc).
+ *
+ * `todosGlobalOrder` is the single source of truth for todo ordering across
+ * every surface — the flat `/todos` page reads it directly (see
+ * `visibleTodos`), and the virtual Uncategorized collection funnels through
+ * here. Reordering uncategorized todos from either surface goes through
+ * `reorderUncategorizedTodos`, which splices only uncategorized slots so the
+ * categorized todos keep their global positions.
  *
  * Named `todoItems` rather than `uncategorizedTodoItems` for backwards
  * compatibility with callers (CollectionItemPicker, test suite) that used this
@@ -486,7 +493,7 @@ export const todoItems = derived([items, appConfig], ([$items, $config]) => {
 
   sortWithConfiguredOrder(
     open,
-    $config.todosOrder,
+    $config.todosGlobalOrder,
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
 
@@ -525,8 +532,8 @@ export const collectionItems = derived(
     // all surface here when they have no `collectionId` because todos can't
     // live in the Inbox (AddEntryModal enforces this — see its picker).
     //
-    // Order: open todos first (respecting `todosOrder`), then completed todos,
-    // then reference items newest-first.
+    // Order: open todos first (respecting `todosGlobalOrder`), then completed
+    // todos, then reference items newest-first.
     result[UNCATEGORIZED_COLLECTION_ID] = [...$todoItems, ...$uncatRefs];
     return result;
   }
@@ -1000,8 +1007,51 @@ export async function reorderGroups(newOrder: string[]) {
   await updateConfig({ groupsOrder: newOrder });
 }
 
-export async function reorderTodos(newOrder: string[]) {
-  await updateConfig({ todosOrder: newOrder });
+/**
+ * Persist a new order for the uncategorized-todo slice of `todosGlobalOrder`.
+ *
+ * Two surfaces let the user drag uncategorized todos: the flat `/todos` page
+ * (where every todo — categorized and uncategorized — is visible together)
+ * and the virtual Uncategorized collection (which only sees the uncategorized
+ * subset). Both must agree on a single order, otherwise a reorder on one
+ * surface gets clobbered by the next drag on the other.
+ *
+ * We solve that by keeping a single source of truth — `todosGlobalOrder` —
+ * and splicing the new uncategorized order back into their existing slots.
+ * Categorized todos' positions in the global order are preserved exactly; only
+ * the ids that match the new set are replaced, in the order given.
+ *
+ * The caller passes the full new order of the uncategorized subset (not a
+ * delta). Ids not currently in `todosGlobalOrder` are appended at the end.
+ */
+export async function reorderUncategorizedTodos(newUncategorizedOrder: string[]) {
+  const current = get(appConfig).todosGlobalOrder ?? [];
+  const allItems = get(items);
+  const isUncategorized = (id: string) => {
+    const item = allItems[id];
+    return !!item && (item.isTodo || item.type === 'todo') && !item.collectionId;
+  };
+  const newSet = new Set(newUncategorizedOrder);
+  const queue = [...newUncategorizedOrder];
+  const result: string[] = [];
+  for (const id of current) {
+    if (isUncategorized(id) || newSet.has(id)) {
+      // Pop the next id from `queue` that's actually in the new set — skip any
+      // queue entries that dropped out (shouldn't happen in practice, but
+      // keeps the splice resilient to stale callers).
+      while (queue.length && !newSet.has(queue[0])) queue.shift();
+      if (queue.length) result.push(queue.shift()!);
+    } else {
+      result.push(id);
+    }
+  }
+  // Append any ids the caller included that weren't already in the global
+  // order (e.g. freshly-created todos whose id hasn't been persisted yet).
+  while (queue.length) {
+    const id = queue.shift()!;
+    if (newSet.has(id) && !result.includes(id)) result.push(id);
+  }
+  await updateConfig({ todosGlobalOrder: result });
 }
 
 // ---- Group filter (toggle row) ----

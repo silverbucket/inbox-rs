@@ -4,7 +4,7 @@
     collectionItems,
     deleteItem,
     sortedGroups, moveCollectionToGroup,
-    appConfig, updateConfig, reorderCollectionItems, reorderTodos,
+    appConfig, updateConfig, reorderCollectionItems, reorderUncategorizedTodos,
     groups,
   } from '../lib/stores';
   import { makeTodo } from '../lib/item-utils';
@@ -28,8 +28,10 @@
     /**
      * Render as the virtual Uncategorized bucket: hides edit / move-to-group
      * affordances, saves newly-added items with `collectionId: undefined`, and
-     * persists todo reordering via `reorderTodos` (global todo order) rather
-     * than the collection's own `itemIds` list.
+     * persists todo reordering via `reorderUncategorizedTodos` (which splices
+     * into `todosGlobalOrder`) rather than the collection's own `itemIds`
+     * list. Using the global order key keeps this view and the flat `/todos`
+     * page in sync — both read the same source of truth.
      */
     isVirtual?: boolean;
   } = $props();
@@ -100,10 +102,11 @@
     const newOpenIds = dndOpen.map(t => t.id);
     try {
       if (isVirtual) {
-        // Virtual bucket: there's no collection record to update. Persist the
-        // open-todo order into `todosOrder` so the global Todos page and this
-        // view stay in sync.
-        await reorderTodos(newOpenIds);
+        // Virtual bucket: there's no collection record to update. Splice the
+        // new uncategorized order back into `todosGlobalOrder` — the same key
+        // the flat `/todos` page reads — so both surfaces stay in sync and
+        // one view's reorder can't be clobbered by the next drag on the other.
+        await reorderUncategorizedTodos(newOpenIds);
       } else {
         // Splice the new open-todo order into itemIds while preserving the
         // relative order of completed todos and reference items — otherwise a

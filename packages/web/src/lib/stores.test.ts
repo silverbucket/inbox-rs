@@ -53,7 +53,8 @@ import {
   collections, groups, groupCollections, moveCollectionToGroup,
   deleteGroup, ungroupedCollections, appConfig,
   storeCollection, createCollection, deleteCollection,
-  reorderGroupCollections, items, todoItems, reorderTodos, pendingMigrationCount,
+  reorderGroupCollections, items, todoItems, reorderUncategorizedTodos, pendingMigrationCount,
+  moveItemToCollection,
   collectionItems, userSettings,
   activeGroupIds, visibleGroupedCollections,
   toggleGroupFilter, setActiveGroupFilters, storeGroup,
@@ -370,7 +371,7 @@ describe('todoItems ordering', () => {
       t2: makeTodo('t2', { createdAt: '2026-01-02T00:00:00.000Z' }),
       t3: makeTodo('t3', { createdAt: '2026-01-03T00:00:00.000Z' }),
     });
-    appConfig.set({ todosOrder: ['t2'] });
+    appConfig.set({ todosGlobalOrder: ['t2'] });
 
     expect(get(todoItems).map(todo => todo.id)).toEqual(['t2', 't3', 't1']);
   });
@@ -393,13 +394,39 @@ describe('todoItems ordering', () => {
     expect(get(todoItems).map(todo => todo.id)).toEqual(['open', 'done-newer', 'done-older']);
   });
 
-  it('persists reordered inbox todo ids in config', async () => {
+  it('persists reordered uncategorized todo ids into todosGlobalOrder', async () => {
     appConfig.set({});
+    items.set({
+      t1: makeTodo('t1'),
+      t2: makeTodo('t2'),
+      t3: makeTodo('t3'),
+    });
 
-    await reorderTodos(['t3', 't1', 't2']);
+    await reorderUncategorizedTodos(['t3', 't1', 't2']);
 
-    expect(get(appConfig).todosOrder).toEqual(['t3', 't1', 't2']);
-    expect(mockInbox.setConfig).toHaveBeenCalledWith({ todosOrder: ['t3', 't1', 't2'] });
+    expect(get(appConfig).todosGlobalOrder).toEqual(['t3', 't1', 't2']);
+    expect(mockInbox.setConfig).toHaveBeenCalledWith({ todosGlobalOrder: ['t3', 't1', 't2'] });
+  });
+
+  it('splices uncategorized reorders into todosGlobalOrder without moving categorized todos', async () => {
+    // Two categorized todos (c1, c2) flanking three uncategorized (u1, u2, u3).
+    // Reordering the uncategorized subset must preserve c1/c2's global
+    // positions — the flat /todos page relies on that to not scramble the
+    // order of todos it doesn't even see in the Uncategorized view.
+    items.set({
+      c1: makeTodo('c1', { collectionId: 'col-a' }),
+      c2: makeTodo('c2', { collectionId: 'col-b' }),
+      u1: makeTodo('u1'),
+      u2: makeTodo('u2'),
+      u3: makeTodo('u3'),
+    });
+    appConfig.set({ todosGlobalOrder: ['u1', 'c1', 'u2', 'c2', 'u3'] });
+
+    await reorderUncategorizedTodos(['u3', 'u1', 'u2']);
+
+    // u1/u2/u3 occupy the same global slots they did before; only their
+    // relative order has changed. c1 and c2 stay exactly where they were.
+    expect(get(appConfig).todosGlobalOrder).toEqual(['u3', 'c1', 'u1', 'c2', 'u2']);
   });
 });
 
@@ -443,6 +470,50 @@ describe('collection todo consistency', () => {
 
     expect(get(collectionItems)['c1']).toEqual([]);
     expect(get(todoItems).map(todo => todo.id)).toEqual(['t1']);
+  });
+});
+
+describe('moveItemToCollection', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    items.set({});
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('scrubs the source collection itemIds when moving between collections', async () => {
+    // Regression: `convertToTodoInCollection` used to call `storeItem` with
+    // the new collectionId BEFORE `moveItemToCollection`, which made the
+    // helper see the target as the source and skip scrubbing. Callers should
+    // always route the collection change through `moveItemToCollection` while
+    // the store still has the old collectionId.
+    const item = makeTodo('t1', { collectionId: 'source' });
+    const source = { ...makeCollection('source'), itemIds: ['t1'] };
+    const target = { ...makeCollection('target'), itemIds: [] };
+
+    items.set({ t1: item });
+    collections.set({ source, target: target });
+
+    await moveItemToCollection('t1', 'target');
+
+    expect(get(collections)['source'].itemIds).toEqual([]);
+    expect(get(collections)['target'].itemIds).toEqual(['t1']);
+    expect(get(items)['t1'].collectionId).toBe('target');
+  });
+
+  it('adds to the target collection itemIds when moving from uncategorized', async () => {
+    const item = makeTodo('t1'); // no collectionId
+    const target = { ...makeCollection('target'), itemIds: [] };
+
+    items.set({ t1: item });
+    collections.set({ target: target });
+
+    await moveItemToCollection('t1', 'target');
+
+    expect(get(collections)['target'].itemIds).toEqual(['t1']);
+    expect(get(items)['t1'].collectionId).toBe('target');
+    expect((get(items)['t1'] as any).uncategorized).toBeUndefined();
   });
 });
 
@@ -688,9 +759,9 @@ describe('per-item change handling', () => {
   });
 
   it('updates appConfig on config/app change', () => {
-    emitModuleChange({ relativePath: 'config/app', newValue: { todosOrder: ['t1', 't2'] } });
+    emitModuleChange({ relativePath: 'config/app', newValue: { todosGlobalOrder: ['t1', 't2'] } });
 
-    expect(get(appConfig).todosOrder).toEqual(['t1', 't2']);
+    expect(get(appConfig).todosGlobalOrder).toEqual(['t1', 't2']);
   });
 
   it('updates userSettings on config/user change', () => {

@@ -110,9 +110,15 @@
   // Show an explicit "Uncategorized" picker row for refs only when the bucket
   // already exists (has stragglers). Per the design, Uncategorized is a
   // dynamic surface that appears when items live there — it shouldn't be a
-  // first-class destination unless it's already populated. Todos can't route
-  // there at all (they require a real collection), so the row is ref-only.
-  const showUncategorizedInPicker = $derived(!isTodoType && $hasUncategorizedItems);
+  // first-class destination unless it's already populated. Todos normally
+  // can't route there (they require a real collection), but when a caller
+  // explicitly preselected Uncategorized (e.g. the quick-add on an
+  // uncategorized todo row) we surface it in the picker so the current
+  // selection is visible and reselectable.
+  const showUncategorizedInPicker = $derived(
+    (!isTodoType && $hasUncategorizedItems)
+    || selectedCollectionId === UNCATEGORIZED_COLLECTION_ID
+  );
 
   // Whether the user has any real collections at all (grouped or ungrouped).
   // Used to decide when to surface an empty-state hint in the todo picker —
@@ -429,7 +435,12 @@
         if (editItem!.completedAt) item.completedAt = editItem!.completedAt;
       }
 
-      if (!isEdit && collectionId) {
+      if (!isEdit && collectionId && collectionId !== UNCATEGORIZED_COLLECTION_ID) {
+        // The Uncategorized sentinel is a picker-level id, not a real
+        // collection id — writing it to `item.collectionId` would leave a
+        // bogus reference in storage. The branch below (selectedCollectionId
+        // === UNCATEGORIZED_COLLECTION_ID) handles the Uncategorized case by
+        // setting the `uncategorized` flag and leaving `collectionId` unset.
         item.collectionId = collectionId;
       }
 
@@ -866,10 +877,15 @@
                 {/if}
                 {#if showUncategorizedInPicker}
                   <!--
-                    Refs-only explicit "Uncategorized" row, shown when the
-                    bucket already exists. Lets the user file a new ref
-                    alongside existing stragglers without first sending it to
-                    the Inbox and moving it.
+                    Explicit "Uncategorized" destination row. Surfaces for:
+                    (a) refs when the bucket already exists, so the user can
+                        file a new ref alongside existing stragglers without
+                        first sending it to the Inbox and moving it; and
+                    (b) todos when the caller preselected the Uncategorized
+                        sentinel (e.g. the quick-add on an uncategorized todo
+                        row) — shown so the current selection is visible and
+                        the user can reselect it after browsing real
+                        collections.
                   -->
                   <button
                     type="button"

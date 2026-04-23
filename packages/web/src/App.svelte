@@ -129,7 +129,12 @@
   }
 
   /** Open the add-todo modal with a specific collection pre-selected.
-      `undefined` means "Uncategorized" — matching the picker's own default. */
+      Callers pass a real collection id to target that collection, or the
+      `UNCATEGORIZED_COLLECTION_ID` sentinel (from stores) to target the
+      Uncategorized bucket explicitly — e.g. the quick-add on an uncategorized
+      todo row. `undefined` means "no preselection, use the modal's own
+      default cascade" and should only come from callers that genuinely have
+      no target in mind. */
   function openAddTodoInCollection(collectionId: string | undefined) {
     editingItem = undefined;
     preselectedCollectionId = collectionId;

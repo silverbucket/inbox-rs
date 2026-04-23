@@ -147,16 +147,26 @@
   async function convertToTodoInCollection(collectionId: string) {
     convertingTodo = true;
     try {
+      // Snapshot the rest of the item BEFORE we do any writes — once we move
+      // the item, the store reflects the new collectionId and the prop might
+      // be re-read as a different object, so working off a local copy keeps
+      // the todo flip deterministic.
       const { completedAt: _, ...rest } = item;
+      // Route the collection change through moveItemToCollection FIRST. The
+      // helper reads the item's current collectionId from the store to know
+      // which source collection's itemIds to scrub. If we store the new
+      // collectionId via storeItem first, moveItemToCollection would see the
+      // target collection as the source and never remove the item from the
+      // original collection's itemIds — leaving stale membership behind that
+      // later collection operations can trip over.
+      await moveItemToCollection(item.id, collectionId);
+      // Now flip the todo flags. storeItem only touches the item doc — the
+      // itemIds arrays are already reconciled by the move above.
       const updated = { ...rest, isTodo: true, completed: false, collectionId };
       // Moving into a real collection should clear any Uncategorized marker
       // so the item doesn't simultaneously appear in both places.
       delete (updated as any).uncategorized;
       await storeItem(updated as InboxItem);
-      // moveItemToCollection reconciles the collection's itemIds array with
-      // the new placement (and scrubs the old one if any). storeItem alone
-      // only touches the item doc.
-      await moveItemToCollection(updated.id, collectionId);
       closeMakeTodoMenu();
       onclose();
     } finally {

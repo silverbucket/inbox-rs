@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
-  import { storeItem } from '../lib/stores';
+  import { storeItem, UNCATEGORIZED_COLLECTION_ID } from '../lib/stores';
   import { cleanForStorage } from '../lib/clean-for-storage';
   import { typeIconPath } from '../lib/item-utils';
 
@@ -12,8 +12,12 @@
     group: CollectionGroup | null;
     onselect: (item: InboxItem) => void;
     /** Optional quick-add handler: opens the add-todo modal pre-targeted at
-        this row's collection (or Uncategorized). Omit to hide the affordance. */
-    onaddincollection?: (collectionId: string | undefined) => void;
+        this row's collection. Uncategorized rows send the
+        `UNCATEGORIZED_COLLECTION_ID` sentinel so the modal knows to route the
+        follow-up into Uncategorized rather than falling back to the last
+        selected / first real collection. Omit the handler to hide the
+        affordance. */
+    onaddincollection?: (collectionId: string) => void;
   } = $props();
 
   // Show the underlying item type as an icon for items that are "todos by flag"
@@ -73,9 +77,16 @@
     onselect(todo);
   }
 
+  // Uncategorized rows send the sentinel so the modal routes the follow-up
+  // into Uncategorized. Passing `undefined` would fall through to the
+  // last-selected / first-real-collection cascade in pickInitialCollectionId,
+  // which creates the new todo in an unrelated bucket — not what the user
+  // meant when they clicked "+" on an uncategorized row.
+  const quickAddTarget = $derived(todo.collectionId ?? UNCATEGORIZED_COLLECTION_ID);
+
   function handleQuickAdd(e: Event) {
     e.stopPropagation();
-    onaddincollection?.(todo.collectionId);
+    onaddincollection?.(quickAddTarget);
   }
 
   function handleKey(e: KeyboardEvent) {
@@ -86,7 +97,7 @@
     // todo in a run.
     if (onaddincollection && (e.key === '+' || e.key === '=')) {
       e.preventDefault();
-      onaddincollection(todo.collectionId);
+      onaddincollection(quickAddTarget);
       return;
     }
     // Enter/Space opens the view modal — but only when the row itself is the
