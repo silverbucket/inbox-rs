@@ -2,10 +2,29 @@ import RemoteStorage from 'remotestoragejs';
 import InboxModule from '@inbox-rs/rs-module';
 import SharesModule from 'remotestorage-module-shares';
 
+// remotestoragejs' `Authorize._rs_init` unconditionally clears
+// `location.hash` during construction — its `extractParams()` helper returns
+// an empty object (truthy) even when the URL has no OAuth params, and the
+// init code's `if (params) { location.hash = '' }` then wipes our route hash
+// (e.g. `#/todos` → `#`). That breaks our hash-based router on page refresh.
+//
+// Snapshot the hash immediately before construction and replaceState it back
+// if RS cleared it. replaceState avoids firing a spurious hashchange event,
+// and we only restore when the hash actually looks like one of our routes
+// (leading `/`) to stay clear of any legitimate OAuth-callback flow the RS
+// init is trying to handle.
+const savedHash = typeof window !== 'undefined' ? window.location.hash : '';
 const rs = new RemoteStorage({
   modules: [InboxModule, SharesModule],
   changeEvents: { local: true, window: false, remote: true, conflict: true }
 });
+if (
+  typeof window !== 'undefined'
+  && savedHash.startsWith('#/')
+  && window.location.hash !== savedHash
+) {
+  window.history.replaceState(null, '', savedHash);
+}
 
 rs.access.claim('inbox', 'rw');
 rs.access.claim('shares', 'rw');
