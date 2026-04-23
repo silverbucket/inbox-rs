@@ -5,7 +5,19 @@
     deleting?: boolean;
     message?: string;
   } = $props();
+
+  /**
+   * Escape cancels the confirm. If we're already mid-delete, ignore so the
+   * user can't dismiss a dialog that's about to mutate state out from under
+   * them.
+   */
+  function handleEscape(e: KeyboardEvent) {
+    if (e.key !== 'Escape' || deleting) return;
+    onCancel();
+  }
 </script>
+
+<svelte:window onkeydown={handleEscape} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->

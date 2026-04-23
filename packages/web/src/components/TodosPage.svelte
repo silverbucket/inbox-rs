@@ -98,19 +98,26 @@
 </script>
 
 <div class="todos-page">
-  {#if openTodos.length > 0}
-    <div class="page-toolbar">
+  <!--
+    Always render the page-toolbar so the Fab has a home on desktop (where it
+    renders inline as a labelled pill next to the count). On mobile the Fab
+    is `position: fixed`, so it leaves the toolbar flow entirely — an
+    otherwise-empty toolbar collapses to zero height and nothing shows.
+  -->
+  <div class="page-toolbar">
+    {#if openTodos.length > 0}
       <span class="count-label">
         {openTodos.length} open
       </span>
-    </div>
-  {/if}
+    {/if}
+    <Fab onclick={onaddtodo} label="New todo" />
+  </div>
 
   {#if openTodos.length === 0 && completedTodos.length === 0}
     <div class="empty-state" in:fade={{ duration: 180 }}>
       <div class="empty-icon" aria-hidden="true">✓</div>
       <p class="empty-title">Nothing to do.</p>
-      <p class="empty-hint">Tap the + button in the bottom right to add a todo — you can pick a collection or leave it in your inbox.</p>
+      <p class="empty-hint">Tap <strong>+ New todo</strong> to add one — you can pick a collection or leave it in your inbox.</p>
     </div>
   {:else}
     <ul
@@ -179,16 +186,11 @@
   {/if}
 </div>
 
-<Fab onclick={onaddtodo} label="Add a new todo" />
-
 <style>
   .todos-page {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    /* Reserve room so the FAB doesn't float over the last todo when scrolled
-       to the bottom. Matches FAB height (56) + inset (~24) + a little air. */
-    padding-bottom: 5rem;
   }
 
   .page-toolbar {
@@ -196,6 +198,14 @@
     align-items: center;
     gap: 0.75rem;
     flex-wrap: wrap;
+  }
+
+  /* Anchor the Fab (inline on desktop) to the right edge of the toolbar, so
+     the count label reads left-aligned and the primary action sits where
+     the eye finishes scanning the row. On mobile the Fab is position:fixed
+     and out of flow — this margin is a no-op. */
+  .page-toolbar :global(.fab) {
+    margin-left: auto;
   }
 
   .count-label {
@@ -289,10 +299,17 @@
     margin: 0;
   }
 
+  /* Mobile-only: reserve room so the fixed-position FAB doesn't float over
+     the last todo when scrolled to the bottom. Desktop renders the add
+     button inline in the toolbar, so no bottom reservation is needed. */
+  @media (max-width: 768px) {
+    .todos-page {
+      padding-bottom: 5rem;
+    }
+  }
+
   @media (max-width: 600px) {
     .todos-page {
-      /* Tighter bottom padding on mobile — the FAB is closer to the edge
-         and the list should feel dense. */
       padding-bottom: 4.5rem;
     }
   }

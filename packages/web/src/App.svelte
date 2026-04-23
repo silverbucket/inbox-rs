@@ -15,7 +15,7 @@
   import GroupFormModal from './components/GroupFormModal.svelte';
   import {
     connected, deleteItem, openTodos, pendingMigrationCount, runAllMigrations,
-    storeCollection, storeGroup, moveCollectionToGroup,
+    createCollection, storeGroup,
     appConfig, setActiveGroupFilters,
   } from './lib/stores';
   import { parseHash, formatRoute, pageUsesFilters, type Page, type Route } from './lib/route';
@@ -158,10 +158,9 @@
 
   async function handleCreateCollection(col: Collection) {
     try {
-      await storeCollection(col);
-      if (col.groupId) {
-        await moveCollectionToGroup(col.id, col.groupId);
-      }
+      // createCollection guarantees the collection ends up inside a group —
+      // either the one the form picked, or a fresh "UncategorizedN" group.
+      await createCollection(col);
       showCollectionForm = false;
     } catch (error) {
       console.error('Failed to create collection', error);
@@ -248,7 +247,16 @@
 
     {#if route.page === 'inbox'}
       <div class="page-toolbar">
-        <AddEntryBar onadd={openAdd} />
+        <!-- Inbox is a refs-only staging area for unprocessed thoughts.
+             Todos always need a home (a collection), so adding one straight
+             to the Inbox would silently land it in the dynamic Uncategorized
+             bucket — which mixes "I haven't decided what this is" notes with
+             "I committed to doing this" todos. Hide the Todo button here so
+             the only way to create a todo is from a collection or the Todos
+             page picker, both of which force a collection choice. Existing
+             notes can still be converted via `makeTodo` when the user is
+             ready to commit. -->
+        <AddEntryBar onadd={openAdd} excludeTypes={['todo']} />
       </div>
       <InboxGrid onselect={openView} />
     {:else if route.page === 'todos'}
@@ -450,6 +458,7 @@
   .page-toolbar {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.5rem;
     flex-wrap: wrap;
   }

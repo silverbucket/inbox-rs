@@ -12,9 +12,9 @@
   } = $props();
 
   const allButtons: { type: InboxItemType; label: string }[] = [
+    { type: 'note',     label: 'Note'     },
     { type: 'todo',     label: 'Todo'     },
     { type: 'bookmark', label: 'Bookmark' },
-    { type: 'note',     label: 'Note'     },
     { type: 'image',    label: 'Image'    },
     { type: 'audio',    label: 'Audio'    },
     { type: 'document', label: 'File'     },

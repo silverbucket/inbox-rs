@@ -52,7 +52,8 @@ import {
   blobUrls, connected, loadFileBlobUrl,
   collections, groups, groupCollections, moveCollectionToGroup,
   deleteGroup, ungroupedCollections, appConfig,
-  storeCollection, reorderGroupCollections, items, todoItems, reorderTodos, pendingMigrationCount,
+  storeCollection, createCollection, deleteCollection,
+  reorderGroupCollections, items, todoItems, reorderTodos, pendingMigrationCount,
   collectionItems, userSettings,
   activeGroupIds, visibleGroupedCollections,
   toggleGroupFilter, setActiveGroupFilters, storeGroup,
@@ -843,10 +844,14 @@ describe('ungroupedCollections reacts to group deletion', () => {
   });
 });
 
-// ---- Tests exercising the component code paths for the ungrouped route ----
-// These mirror what CollectionsPage and App.svelte do when groupId is "" or undefined.
+// ---- Direct storeCollection writes leave groupId untouched ----
+// `storeCollection` is the low-level write. It does NOT enforce the
+// every-collection-has-a-group invariant — that's `createCollection`'s job
+// (see "createCollection: group assignment" below). These tests pin down the
+// raw store behaviour so other code paths (imports, tests, future callers)
+// know what the primitive does.
 
-describe('ungrouped route: collection creation', () => {
+describe('storeCollection: raw groupId handling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     collections.set({});
@@ -854,15 +859,10 @@ describe('ungrouped route: collection creation', () => {
     appConfig.set({});
   });
 
-  it('collection created without groupId stays ungrouped', async () => {
-    // App.svelte passes groupId=undefined to CollectionFormModal on the ungrouped route.
-    // CollectionFormModal sets groupId to undefined, so handleCreateCollection
-    // calls storeCollection but skips moveCollectionToGroup.
-    const col = makeCollection('c1'); // no groupId — mirrors what CollectionFormModal produces
+  it('preserves an undefined groupId — collection lands in ungroupedCollections', async () => {
+    const col = makeCollection('c1');
 
     await storeCollection(col);
-    // App.svelte: if (col.groupId) { await moveCollectionToGroup(...) }
-    // groupId is undefined so this branch is skipped.
 
     expect(get(collections)['c1']).toBeDefined();
     expect(get(collections)['c1'].groupId).toBeUndefined();
@@ -870,8 +870,7 @@ describe('ungrouped route: collection creation', () => {
     expect(mockInbox.storeGroup).not.toHaveBeenCalled();
   });
 
-  it('collection created with empty-string groupId is treated as ungrouped', async () => {
-    // Edge case: if groupId were "" instead of undefined
+  it('preserves an empty-string groupId — also treated as ungrouped (falsy)', async () => {
     const col: Collection = {
       id: 'c1',
       name: 'Test',
@@ -881,7 +880,6 @@ describe('ungrouped route: collection creation', () => {
     };
 
     await storeCollection(col);
-    // "" is falsy so moveCollectionToGroup would be skipped in handleCreateCollection
 
     expect(get(collections)['c1'].groupId).toBe('');
     // ungroupedCollections checks !c.groupId — empty string is falsy, so it's included
@@ -1184,9 +1182,11 @@ describe('collectionItems virtual Uncategorized entry', () => {
     // Orphan todo (no collectionId) — every uncollected todo is a straggler
     // since todos can't live in the Inbox.
     const todo: InboxItem = { id: 't1', type: 'todo', title: 'orphan todo', createdAt: '2026-01-01T00:00:00Z', completed: false, isTodo: true } as any;
-    // Orphaned reference flagged `uncategorized: true` — typically set by
-    // deleteCollection when its containing collection is removed. Refs
-    // without this flag default to the Inbox, not Uncategorized.
+    // Orphaned reference flagged `uncategorized: true` — set when the user
+    // explicitly chose Uncategorized in the picker, or when an item is moved
+    // out of its collection without picking a new destination
+    // (`moveItemToCollection(id, undefined)`). Refs without this flag default
+    // to the Inbox, not Uncategorized.
     const orphanRef: InboxItem = { id: 'r1', type: 'note', title: 'orphan ref', body: '', createdAt: '2026-01-02T00:00:00Z', uncategorized: true } as any;
     // Items assigned to a real collection — must not leak.
     const assignedTodo: InboxItem = { id: 't2', type: 'todo', title: 'assigned', createdAt: '2026-01-03T00:00:00Z', completed: false, isTodo: true, collectionId: 'c1' } as any;
@@ -1562,5 +1562,153 @@ describe('uncategorizedFilterActive / toggleUncategorizedFilter', () => {
 
     expect(get(uncategorizedFilterActive)).toBe(true);
     expect(get(appConfig).uncategorizedFilterActive).toBe(true);
+  });
+});
+
+// ---- deleteCollection: must-be-empty guard ----
+//
+// Mirrors the deleteGroup rule so the UI can't silently dump filed items into
+// the Uncategorized bucket on an accidental tap. Items are matched by their
+// live `collectionId` rather than the collection's `itemIds` array (which can
+// drift out of sync after partial writes).
+
+describe('deleteCollection: empty-only guard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    items.set({});
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('refuses to delete a collection that still has items', async () => {
+    collections.set({ c1: makeCollection('c1') });
+    items.set({
+      i1: { id: 'i1', type: 'note', title: 'kept', body: '', createdAt: '2026-01-01T00:00:00.000Z', collectionId: 'c1' } as InboxItem,
+    });
+
+    const ok = await deleteCollection('c1');
+
+    expect(ok).toBe(false);
+    expect(get(collections)['c1']).toBeDefined();
+    expect(get(items)['i1'].collectionId).toBe('c1'); // item untouched
+    expect(mockInbox.removeCollection).not.toHaveBeenCalled();
+    expect(mockInbox.store).not.toHaveBeenCalled(); // no orphaning side effect
+  });
+
+  it('deletes an empty collection and removes it from collectionsOrder', async () => {
+    collections.set({ c1: makeCollection('c1'), c2: makeCollection('c2') });
+    appConfig.set({ collectionsOrder: ['c1', 'c2'] });
+
+    const ok = await deleteCollection('c1');
+
+    expect(ok).toBe(true);
+    expect(get(collections)['c1']).toBeUndefined();
+    expect(get(collections)['c2']).toBeDefined();
+    expect(get(appConfig).collectionsOrder).toEqual(['c2']);
+    expect(mockInbox.removeCollection).toHaveBeenCalledWith('c1');
+  });
+
+  it('returns false for a non-existent collection without touching storage', async () => {
+    const ok = await deleteCollection('does-not-exist');
+    expect(ok).toBe(false);
+    expect(mockInbox.removeCollection).not.toHaveBeenCalled();
+  });
+
+  it('checks live item.collectionId rather than the (possibly stale) itemIds array', async () => {
+    // Collection still lists i1 in itemIds, but the item itself was moved
+    // elsewhere — the collection is effectively empty and should delete.
+    const col = makeCollection('c1');
+    col.itemIds = ['i1'];
+    collections.set({ c1: col, c2: makeCollection('c2') });
+    items.set({
+      i1: { id: 'i1', type: 'note', title: 'moved away', body: '', createdAt: '2026-01-01T00:00:00.000Z', collectionId: 'c2' } as InboxItem,
+    });
+
+    const ok = await deleteCollection('c1');
+
+    expect(ok).toBe(true);
+    expect(get(collections)['c1']).toBeUndefined();
+  });
+});
+
+// ---- createCollection: every-collection-has-a-group invariant ----
+//
+// New collections must end up inside a group. If the form picked one we use
+// it; otherwise we route into an `Uncategorized<N>` group, creating one only
+// if none exists. The numbering is intentionally naive — this is the
+// fallback path for users who haven't yet organised their collections.
+
+describe('createCollection: group assignment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    items.set({});
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('honours an explicit groupId and wires up the back-reference', async () => {
+    groups.set({ g1: makeGroup('g1') });
+    const col = makeCollection('c1', 'g1');
+
+    const stored = await createCollection(col);
+
+    expect(stored.groupId).toBe('g1');
+    expect(get(collections)['c1'].groupId).toBe('g1');
+    expect(get(groups)['g1'].collectionIds).toContain('c1');
+    expect(get(groupCollections)['g1'].map(c => c.id)).toEqual(['c1']);
+    // No new group was auto-created
+    expect(Object.keys(get(groups))).toEqual(['g1']);
+  });
+
+  it('creates Uncategorized1 when no Uncategorized group exists', async () => {
+    const col = makeCollection('c1'); // no groupId
+
+    const stored = await createCollection(col);
+
+    const uncatGroup = Object.values(get(groups)).find(g => g.name === 'Uncategorized1');
+    expect(uncatGroup).toBeDefined();
+    expect(stored.groupId).toBe(uncatGroup!.id);
+    expect(get(collections)['c1'].groupId).toBe(uncatGroup!.id);
+    expect(get(groupCollections)[uncatGroup!.id].map(c => c.id)).toEqual(['c1']);
+  });
+
+  it('reuses an existing Uncategorized1 group instead of creating a new one', async () => {
+    const existing = makeGroup('g-existing');
+    existing.name = 'Uncategorized1';
+    groups.set({ 'g-existing': existing });
+
+    const stored = await createCollection(makeCollection('c1'));
+
+    expect(stored.groupId).toBe('g-existing');
+    // Still only one group — we didn't create Uncategorized2
+    expect(Object.keys(get(groups))).toEqual(['g-existing']);
+  });
+
+  it('picks the lowest-numbered Uncategorized group when several exist', async () => {
+    const u3 = makeGroup('g3'); u3.name = 'Uncategorized3';
+    const u1 = makeGroup('g1'); u1.name = 'Uncategorized1';
+    const u2 = makeGroup('g2'); u2.name = 'Uncategorized2';
+    groups.set({ g3: u3, g1: u1, g2: u2 });
+
+    const stored = await createCollection(makeCollection('c1'));
+
+    expect(stored.groupId).toBe('g1');
+  });
+
+  it('ignores groups whose names do not match the Uncategorized<N> pattern', async () => {
+    // "Uncategorized" without a number, or with extra suffix, must NOT be reused.
+    const a = makeGroup('ga'); a.name = 'Uncategorized';
+    const b = makeGroup('gb'); b.name = 'Uncategorized1-archive';
+    groups.set({ ga: a, gb: b });
+
+    const stored = await createCollection(makeCollection('c1'));
+
+    const uncatGroup = Object.values(get(groups)).find(g => g.name === 'Uncategorized1');
+    expect(uncatGroup).toBeDefined();
+    expect(stored.groupId).toBe(uncatGroup!.id);
+    // Original groups are still around — we created a NEW Uncategorized1.
+    expect(Object.keys(get(groups))).toHaveLength(3);
   });
 });

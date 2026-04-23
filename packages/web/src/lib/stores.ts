@@ -607,33 +607,32 @@ export async function storeCollection(collection: Collection) {
   collections.update(current => ({ ...current, [clean.id]: clean }));
 }
 
-export async function deleteCollection(id: string) {
+/**
+ * Delete a collection. Refuses if the collection still contains items — the
+ * caller is expected to either move items out (drag/drop, picker) or delete
+ * them first. This mirrors `deleteGroup`'s "must be empty" rule and avoids
+ * silently orphaning user-filed items into the Uncategorized bucket on a
+ * delete tap. Returns `true` on success, `false` when the delete was refused.
+ *
+ * Items are matched by the live `collectionId` on each item rather than the
+ * collection's `itemIds` array — that array can drift out of sync if a write
+ * was interrupted, and the items themselves are the source of truth for
+ * placement.
+ */
+export async function deleteCollection(id: string): Promise<boolean> {
   const inbox = getInbox();
-  const prevItems = get(items);
+  const collection = get(collections)[id];
+  if (!collection) return false;
+
+  const allItems = get(items);
+  const hasItems = Object.values(allItems).some(i => i.collectionId === id);
+  if (hasItems) {
+    console.warn('[inbox] cannot delete collection with items — remove them first');
+    return false;
+  }
+
   const prevCollections = get(collections);
-
-  // Orphans move to the Uncategorized bucket (not the Inbox). The Inbox is
-  // reserved for items the user has not yet filed — orphans were already filed
-  // into a collection and just lost that placement, so dumping them into the
-  // Inbox would mix user-filed items with unprocessed ones.
-  let orphanedItems: InboxItem[] = [];
-  items.update(current => {
-    const next = { ...current };
-    for (const key of Object.keys(next)) {
-      if (next[key].collectionId === id) {
-        const updated = { ...next[key], uncategorized: true };
-        delete (updated as any).collectionId;
-        next[key] = updated as InboxItem;
-        orphanedItems.push(updated as InboxItem);
-      }
-    }
-    return next;
-  });
-
   try {
-    for (const item of orphanedItems) {
-      await inbox.store(cleanForStorage(item));
-    }
     await inbox.removeCollection(id);
     collections.update(current => {
       const next = { ...current };
@@ -641,8 +640,8 @@ export async function deleteCollection(id: string) {
       return next;
     });
     await removeFromOrderConfig(id, 'collectionsOrder');
+    return true;
   } catch (e) {
-    items.set(prevItems);
     collections.set(prevCollections);
     console.error('[inbox] deleteCollection failed, rolling back:', e);
     throw e;
@@ -926,6 +925,53 @@ export async function moveCollectionToGroup(collectionId: string, groupId: strin
     console.error('[inbox] moveCollectionToGroup failed, rolling back:', e);
     throw e;
   }
+}
+
+/**
+ * Find an existing "Uncategorized<N>" group, or create a fresh one and return
+ * its id. Uncategorized<N> groups are auto-created homes for collections the
+ * user added without picking a group — every collection needs a group, and we
+ * keep these auto-homes obviously distinct from user-named groups by
+ * convention. The numbering is naive on purpose (this is an edge case): we
+ * scan existing groups for `Uncategorized\d+`, take the lowest number, and
+ * create `Uncategorized1` if none exist.
+ */
+async function findOrCreateUncategorizedGroup(): Promise<string> {
+  const allGroups = get(groups);
+  const matches = Object.values(allGroups)
+    .map(g => {
+      const m = g.name.match(/^Uncategorized(\d+)$/);
+      return m ? { id: g.id, n: Number(m[1]) } : null;
+    })
+    .filter((x): x is { id: string; n: number } => x !== null)
+    .sort((a, b) => a.n - b.n);
+  if (matches.length > 0) return matches[0].id;
+
+  const group: CollectionGroup = {
+    id: crypto.randomUUID(),
+    name: 'Uncategorized1',
+    collectionIds: [],
+    createdAt: new Date().toISOString(),
+  };
+  await storeGroup(group);
+  return group.id;
+}
+
+/**
+ * Create a collection, ensuring it ends up inside a group. If the caller
+ * already picked a group (`col.groupId` set), we honour it and wire up the
+ * group ↔ collection back-references via `moveCollectionToGroup`. Otherwise
+ * we route the collection into an `Uncategorized<N>` group (creating one if
+ * needed) so the "every collection has a group" invariant always holds.
+ *
+ * Returns the stored collection (with `groupId` filled in if we auto-assigned).
+ */
+export async function createCollection(col: Collection): Promise<Collection> {
+  const targetGroupId = col.groupId ?? await findOrCreateUncategorizedGroup();
+  const withGroup: Collection = { ...col, groupId: targetGroupId };
+  await storeCollection(withGroup);
+  await moveCollectionToGroup(withGroup.id, targetGroupId);
+  return withGroup;
 }
 
 export async function reorderGroupCollections(groupId: string, newCollectionIds: string[]) {

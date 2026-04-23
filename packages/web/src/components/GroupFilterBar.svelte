@@ -168,7 +168,7 @@
     </button>
   {:else}
     <button class="add-group" onclick={onaddgroup} title="Create new group" aria-label="Create new group">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <line x1="12" y1="5" x2="12" y2="19"></line>
         <line x1="5" y1="12" x2="19" y2="12"></line>
       </svg>
@@ -245,26 +245,37 @@
     max-width: 14rem;
   }
 
+  /* Add-group button uses the same tinted-pill vocabulary as the per-group
+     add-collection button in GroupSection and the per-row quick-add in
+     TodoRow — but keyed off `--accent` because this button creates a new
+     group and has no parent entity to inherit colour from. Kept always
+     visible (no hover-reveal) since it's the only "new group" affordance
+     in the filter bar. */
   .add-group {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 28px;
     height: 28px;
-    border: none;
-    border-radius: 50%;
-    background: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: color 150ms, background 150ms;
     flex-shrink: 0;
-    opacity: 0.6;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border) 65%);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface) 90%);
+    color: var(--accent);
+    cursor: pointer;
+    transition: background 150ms, border-color 150ms, transform 150ms;
+    -webkit-tap-highlight-color: transparent;
   }
 
   .add-group:hover {
-    color: var(--accent);
-    background: var(--accent-subtler);
-    opacity: 1;
+    background: color-mix(in srgb, var(--accent) 22%, var(--surface) 78%);
+    border-color: var(--accent);
+    transform: scale(1.05);
+  }
+
+  .add-group:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 
   .empty-cta {

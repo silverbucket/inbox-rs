@@ -114,13 +114,28 @@ a:hover {
   html {
     font-size: 17px;
   }
+}
 
-  /* Prevent iOS Safari zoom-on-focus: any focused text input/textarea/select
-     with a computed font-size below 16px triggers an automatic viewport zoom
-     that then persists. */
+/* Prevent iOS Safari zoom-on-focus: any focused text input/textarea/select
+   with a computed font-size below 16px triggers an automatic viewport zoom
+   that then persists. The gate is `(pointer: coarse)` rather than a
+   `max-width` breakpoint so iPhone in landscape (up to ~932px on Pro Max)
+   and tablets in any orientation still get the floor — the bug is tied to
+   the touch input mechanism, not the viewport width. We also include the
+   narrow-viewport gate as a belt-and-braces fallback for UAs that don't
+   report `pointer: coarse` correctly.
+
+   `!important` is intentional — component-scoped Svelte styles (e.g.
+   `.search`, `.code-input`, or `input, textarea` inside a modal) compile
+   to `.foo.svelte-xxx` selectors whose specificity beats the plain
+   element selectors here, so without `!important` they punch through
+   and re-introduce the zoom bug. This is a *floor* on input font-size:
+   we never want a form control below 16px on a touch device, no matter
+   what a component set. */
+@media (pointer: coarse), (max-width: 600px) {
   input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
   textarea,
   select {
-    font-size: 16px;
+    font-size: 16px !important;
   }
 }

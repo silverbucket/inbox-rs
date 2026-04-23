@@ -1,16 +1,19 @@
 <script lang="ts">
   import type { Component } from 'svelte';
   import { onDestroy } from 'svelte';
+  import { get } from 'svelte/store';
   import type { InboxItemType, InboxItem } from '@inbox-rs/rs-module';
   import {
     storeItem, moveItemToCollection,
     sortedGroups, groupCollections, ungroupedCollections,
     hasUncategorizedItems, UNCATEGORIZED_COLLECTION_ID,
+    collections, appConfig, updateConfig,
   } from '../lib/stores';
   import { renderMarkdown } from '../lib/markdown';
   import { transcribeAudio } from '../lib/transcribe';
   import { loadMarkdownEditorComponent, shouldLoadMarkdownEditor, shouldSubmitAddEntryForm } from '../lib/add-entry-modal';
   import { isInsideCodeBlock, insertIndent, indentSelection, dedentSelection, insertNewlineWithIndent, isOnClosingFence } from '../lib/code-indent';
+  import { autofocus } from '../lib/actions';
 
   let { type, editItem = undefined, collectionId = undefined, onclose, ondelete }: {
     type: InboxItemType;
@@ -23,30 +26,76 @@
   const isEdit = !!editItem;
   let saving = $state(false);
 
+  /**
+   * Find the first real collection in display order — iterate groups in
+   * sorted order, take the first collection from each, then fall back to
+   * ungrouped. Used as the last-resort default for the todo picker when
+   * there's no explicit `collectionId` prop and no valid
+   * `lastSelectedCollectionId`. Returns `undefined` when the user has no
+   * collections at all (the picker then shows its empty-state hint).
+   */
+  function firstAvailableCollectionId(): string | undefined {
+    for (const group of get(sortedGroups)) {
+      const cols = get(groupCollections)[group.id] ?? [];
+      if (cols.length > 0) return cols[0].id;
+    }
+    return get(ungroupedCollections)[0]?.id;
+  }
+
+  /**
+   * Pick the initial collection for the todo picker so the user doesn't
+   * land on a blank destination when creating repeat todos. Resolution:
+   *   1. Explicit `collectionId` prop (e.g. quick-add from a collection
+   *      row) — honored verbatim.
+   *   2. `lastSelectedCollectionId` from appConfig, validated against the
+   *      collections store. Deleted collections are ignored and we fall
+   *      through.
+   *   3. First available real collection in display order.
+   *   4. `undefined` — no collections exist yet; the picker surfaces a
+   *      "create a collection first" hint and submit stays disabled.
+   *
+   * Only applied to new todos; refs keep defaulting to the Inbox
+   * (`undefined` here means Inbox), and edits reuse the existing item's
+   * collection context.
+   */
+  function pickInitialCollectionId(): string | undefined {
+    if (collectionId !== undefined) return collectionId;
+    if (isEdit) return undefined;
+    if (type !== 'todo') return undefined;
+    const last = get(appConfig).lastSelectedCollectionId;
+    if (last && get(collections)[last]) return last;
+    return firstAvailableCollectionId();
+  }
+
   // Let the user pick the destination collection from within the modal for
-  // every new item. Defaults to the collectionId prop — when the modal is
-  // opened from within a collection context, that collection is pre-selected.
-  let selectedCollectionId = $state<string | undefined>(collectionId);
+  // every new item. See `pickInitialCollectionId` for the default cascade.
+  let selectedCollectionId = $state<string | undefined>(pickInitialCollectionId());
   let collectionPickerOpen = $state(false);
   let collectionPickerEl = $state<HTMLDivElement>();
+  let collectionPickerTriggerEl = $state<HTMLButtonElement>();
+  // Collection dropdown menu position, computed when opened. Positioned
+  // with `position: fixed` so it escapes the modal's `overflow: hidden`
+  // (note modal) and the modal's rounded border clipping (other modals).
+  // Flips upward when there's no room below.
+  let pickerMenuStyle = $state('');
   const showCollectionPicker = $derived(!isEdit);
 
-  // Todos can't live in the Inbox by design — the Inbox is a refs-only
-  // staging area, and any todo without a collection ends up in the
-  // dynamic Uncategorized bucket instead. For todos the picker's default
-  // label reflects that; for refs it's "Inbox" (the real default landing).
+  // Todos must have a collection — they can't live in the Inbox (refs-only
+  // staging area) and the Uncategorized bucket is reserved for stragglers
+  // produced by deleting a collection. So for todos we surface no
+  // "no-collection" default at all; the user picks a real collection or the
+  // Save button stays disabled. For refs, `undefined` means "Inbox" (the
+  // default landing).
   const isTodoType = $derived(type === 'todo');
-  const noCollectionLabel = $derived(isTodoType ? 'Uncategorized' : 'Inbox');
+  const noCollectionLabel = 'Inbox';
 
-  // `undefined` is the default non-collection sentinel — it means:
-  //   - refs  → Inbox (default landing)
-  //   - todos → Uncategorized (since todos can't be in the Inbox)
-  // For refs, the Uncategorized bucket is offered as a separate explicit
-  // option (using UNCATEGORIZED_COLLECTION_ID) when stragglers already exist —
-  // see `showUncategorizedInPicker` below. Todos already land in
-  // Uncategorized via `undefined`, so the explicit row is ref-only.
+  // `undefined` is the non-collection sentinel — for refs it means "Inbox".
+  // Todos never use the `undefined` selection (the picker hides that row),
+  // but we still show a placeholder label until a real collection is picked.
   const collectionLabel = $derived.by(() => {
-    if (selectedCollectionId === undefined) return noCollectionLabel;
+    if (selectedCollectionId === undefined) {
+      return isTodoType ? 'Choose a collection…' : noCollectionLabel;
+    }
     if (selectedCollectionId === UNCATEGORIZED_COLLECTION_ID) return 'Uncategorized';
     for (const group of $sortedGroups) {
       const cols = $groupCollections[group.id] ?? [];
@@ -61,10 +110,20 @@
   // Show an explicit "Uncategorized" picker row for refs only when the bucket
   // already exists (has stragglers). Per the design, Uncategorized is a
   // dynamic surface that appears when items live there — it shouldn't be a
-  // first-class destination unless it's already populated. Todos route there
-  // via the default `undefined` selection, so the explicit row is redundant
-  // for them.
+  // first-class destination unless it's already populated. Todos can't route
+  // there at all (they require a real collection), so the row is ref-only.
   const showUncategorizedInPicker = $derived(!isTodoType && $hasUncategorizedItems);
+
+  // Whether the user has any real collections at all (grouped or ungrouped).
+  // Used to decide when to surface an empty-state hint in the todo picker —
+  // todos require a real collection, so an empty picker is a dead end without
+  // guidance.
+  const hasAnyCollection = $derived.by(() => {
+    for (const group of $sortedGroups) {
+      if (($groupCollections[group.id] ?? []).length > 0) return true;
+    }
+    return $ungroupedCollections.length > 0;
+  });
 
   $effect(() => {
     if (!collectionPickerOpen) return;
@@ -74,17 +133,74 @@
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') collectionPickerOpen = false;
     };
+    // Re-position on resize/scroll so the fixed-position menu stays anchored
+    // to the trigger — the modal content can scroll behind it, and on mobile
+    // the viewport can change on orientation / keyboard appearance.
+    const reposition = () => positionPickerMenu();
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', reposition);
+    window.addEventListener('scroll', reposition, true);
     return () => {
       document.removeEventListener('mousedown', onDoc);
       document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', reposition);
+      window.removeEventListener('scroll', reposition, true);
     };
   });
 
   function selectCollection(id: string | undefined) {
     selectedCollectionId = id;
     collectionPickerOpen = false;
+  }
+
+  /**
+   * Exit the modal and jump to the Collections page. Used from the todo
+   * picker's empty state — the user needs a real collection before they can
+   * save a todo, and there's no in-page affordance to create one without
+   * navigating away. The in-progress form is discarded on `onclose`; that's
+   * acceptable since the Save button is disabled anyway (no collection to
+   * file into).
+   */
+  function goToCollections() {
+    onclose();
+    if (window.location.hash !== '#/collections') {
+      window.location.hash = '#/collections';
+    }
+  }
+
+  /**
+   * Compute the dropdown menu position relative to the trigger using
+   * viewport coordinates. We render the menu with `position: fixed` so it
+   * escapes the modal's clipping contexts (overflow: hidden on the note
+   * modal, rounded border on others) and can always extend past the modal.
+   * If there's not enough room below the trigger for the menu (max 320px),
+   * flip it to open upward.
+   */
+  function positionPickerMenu() {
+    if (!collectionPickerTriggerEl) return;
+    const rect = collectionPickerTriggerEl.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const menuMaxHeight = 320;
+    const gap = 4;
+    const spaceBelow = viewportHeight - rect.bottom - gap;
+    const spaceAbove = rect.top - gap;
+    const preferUp = spaceBelow < Math.min(menuMaxHeight, 200) && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(120, Math.min(menuMaxHeight, preferUp ? spaceAbove : spaceBelow));
+    const left = rect.left;
+    const width = rect.width;
+    if (preferUp) {
+      const bottom = viewportHeight - rect.top + gap;
+      pickerMenuStyle = `left: ${left}px; width: ${width}px; bottom: ${bottom}px; max-height: ${maxHeight}px;`;
+    } else {
+      const top = rect.bottom + gap;
+      pickerMenuStyle = `left: ${left}px; width: ${width}px; top: ${top}px; max-height: ${maxHeight}px;`;
+    }
+  }
+
+  function togglePicker() {
+    if (!collectionPickerOpen) positionPickerMenu();
+    collectionPickerOpen = !collectionPickerOpen;
   }
 
   // Form fields — pre-populate from editItem if editing
@@ -335,6 +451,23 @@
       if (selectedCollectionId && selectedCollectionId !== UNCATEGORIZED_COLLECTION_ID && !isEdit) {
         await moveItemToCollection(item!.id, selectedCollectionId);
       }
+      // Remember the destination for next time, but only for new todos — the
+      // preference seeds `pickInitialCollectionId`. Refs default to Inbox so
+      // there's nothing useful to remember for them; edits don't expose the
+      // picker. Uncategorized is explicitly excluded so we never bring the
+      // user back to the ref-only bucket as a default.
+      if (
+        !isEdit
+        && type === 'todo'
+        && selectedCollectionId
+        && selectedCollectionId !== UNCATEGORIZED_COLLECTION_ID
+      ) {
+        try {
+          await updateConfig({ lastSelectedCollectionId: selectedCollectionId });
+        } catch (e) {
+          console.error('Failed to persist lastSelectedCollectionId', e);
+        }
+      }
       onclose();
     } catch (e) {
       console.error('Save failed:', e);
@@ -358,10 +491,6 @@
     } finally {
       saving = false;
     }
-  }
-
-  function autofocus(node: HTMLElement) {
-    requestAnimationFrame(() => node.focus());
   }
 
   /**
@@ -484,11 +613,30 @@
     : type === 'audio' ? !!(file || recordedBlob || hasExistingFile)
     : needsFile ? !!(file || hasExistingFile)
     : type === 'bookmark' ? !!url
-    : type === 'note' || type === 'email' ? !!body
-    : type === 'todo' ? !!title
+    : type === 'note' ? !!(title || body)
+    : type === 'email' ? !!body
+    : type === 'todo' ? !!title && !!selectedCollectionId
     : true
   );
 </script>
+
+<!--
+  Window-level Escape handler — closes the modal so the user can dismiss it
+  from anywhere (including textareas and rich editors that might otherwise
+  swallow keys). When the collection picker is open, ESC closes the picker
+  first instead of dropping the user out of the whole modal — matches what
+  users expect from layered overlays elsewhere in the app.
+-->
+<svelte:window
+  onkeydown={(e) => {
+    if (e.key !== 'Escape') return;
+    if (collectionPickerOpen) {
+      collectionPickerOpen = false;
+      return;
+    }
+    onclose();
+  }}
+/>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -516,11 +664,20 @@
       {:else if type === 'note'}
         <label class="field">
           <span>Title</span>
-          <input type="text" bind:value={title} placeholder="Note title" />
+          <!--
+            Title is autofocused for the note modal too. The visual editor
+            below is async-loaded and doesn't autofocus on mount, so without
+            this the user opens the modal and lands on no field at all. When
+            in `write` (Markdown) mode the body textarea also has
+            `use:autofocus` and runs later in the DOM, so it wins the focus
+            race and the user lands in the editor — which is what they want
+            once they've explicitly switched to Markdown mode.
+          -->
+          <input use:autofocus type="text" bind:value={title} placeholder="Note title" />
         </label>
         <div class="field note-editor-field">
           <div class="field-header">
-            <span>Content *</span>
+            <span>Content</span>
             <div class="editor-tabs">
               <button type="button" class="tab" class:active={editorMode === 'visual'} onclick={() => editorMode = 'visual'} disabled={!!markdownEditorLoadError}>Visual</button>
               <button type="button" class="tab" class:active={editorMode === 'write'} onclick={() => editorMode = 'write'}>Markdown</button>
@@ -679,7 +836,8 @@
             <button
               type="button"
               class="dest-trigger"
-              onclick={() => collectionPickerOpen = !collectionPickerOpen}
+              bind:this={collectionPickerTriggerEl}
+              onclick={togglePicker}
               aria-haspopup="listbox"
               aria-expanded={collectionPickerOpen}
             >
@@ -689,21 +847,23 @@
               </svg>
             </button>
             {#if collectionPickerOpen}
-              <div class="dest-menu" role="listbox" aria-label="Destination">
+              <div class="dest-menu" role="listbox" aria-label="Destination" style={pickerMenuStyle}>
                 <!--
-                  Default non-collection destination. For refs it's "Inbox"
-                  (default landing); for todos it's "Uncategorized" (since
-                  todos can't live in the Inbox).
+                  Default non-collection destination. Refs-only — the row
+                  files the new ref into the Inbox (the default landing).
+                  Hidden for todos, which require a real collection.
                 -->
-                <button
-                  type="button"
-                  class="dest-item"
-                  class:selected={selectedCollectionId === undefined}
-                  onclick={() => selectCollection(undefined)}
-                >
-                  <span class="dest-dot {isTodoType ? 'uncat' : 'inbox'}" aria-hidden="true"></span>
-                  {noCollectionLabel}
-                </button>
+                {#if !isTodoType}
+                  <button
+                    type="button"
+                    class="dest-item"
+                    class:selected={selectedCollectionId === undefined}
+                    onclick={() => selectCollection(undefined)}
+                  >
+                    <span class="dest-dot inbox" aria-hidden="true"></span>
+                    {noCollectionLabel}
+                  </button>
+                {/if}
                 {#if showUncategorizedInPicker}
                   <!--
                     Refs-only explicit "Uncategorized" row, shown when the
@@ -741,6 +901,52 @@
                     {/each}
                   {/if}
                 {/each}
+                {#if $ungroupedCollections.length > 0}
+                  <!--
+                    Ungrouped collections — either legacy collections from
+                    before groups became mandatory, or collections whose
+                    parent group was deleted. Surface them so todos and refs
+                    can still be filed there instead of falling off the list.
+                  -->
+                  <div class="dest-group-label">
+                    <span class="dest-dot" style="background: #9ca3af" aria-hidden="true"></span>
+                    Ungrouped
+                  </div>
+                  {#each $ungroupedCollections as col (col.id)}
+                    <button
+                      type="button"
+                      class="dest-item nested"
+                      class:selected={selectedCollectionId === col.id}
+                      onclick={() => selectCollection(col.id)}
+                    >
+                      <span class="dest-dot" style="background: {col.color || 'var(--accent)'}" aria-hidden="true"></span>
+                      {col.name}
+                    </button>
+                  {/each}
+                {/if}
+                {#if isTodoType && !hasAnyCollection}
+                  <!--
+                    Todos require a real collection, so when the user has no
+                    collections at all the picker would otherwise render
+                    completely empty. Surface an actionable hint + a jump
+                    button so the user isn't stuck — losing the in-progress
+                    title is acceptable since there's nowhere to save it yet.
+                    Note: the virtual Uncategorized bucket (if present) is a
+                    read-only fallback for stragglers and isn't a real
+                    collection, so it deliberately isn't offered here.
+                  -->
+                  <div class="dest-empty">
+                    <p class="dest-empty-title">No collections yet</p>
+                    <p class="dest-empty-hint">Todos need a collection. Create one to file this todo into.</p>
+                    <button
+                      type="button"
+                      class="dest-empty-cta"
+                      onclick={goToCollections}
+                    >
+                      Go to Collections
+                    </button>
+                  </div>
+                {/if}
               </div>
             {/if}
           </div>
@@ -1067,18 +1273,21 @@
     transform: rotate(180deg);
   }
 
+  /*
+   * Fixed positioning (set dynamically via inline style) lets the menu
+   * escape the modal's clipping contexts — the note modal sets
+   * `overflow: hidden` on the form, and the modal frame's rounded corners
+   * visually clip dropdowns that extend past the modal edge. A higher
+   * z-index than the overlay (200) keeps the menu on top of the modal.
+   */
   .dest-menu {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    right: 0;
-    z-index: 50;
+    position: fixed;
+    z-index: 250;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
     padding: 0.3rem;
-    max-height: 320px;
     overflow-y: auto;
   }
 
@@ -1125,6 +1334,52 @@
     letter-spacing: 0.04em;
   }
 
+  .dest-empty {
+    padding: 0.75rem 0.55rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    align-items: center;
+    text-align: center;
+  }
+
+  .dest-empty-title {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .dest-empty-hint {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+
+  /*
+   * Inline CTA styled as a compact accent button — mirrors the Fab/primary
+   * button look but sized to fit inside the dropdown without dominating it.
+   * Kept tap-target friendly on mobile (36px min height) so it works as the
+   * only escape hatch from the empty state.
+   */
+  .dest-empty-cta {
+    margin-top: 0.2rem;
+    padding: 0.4rem 0.8rem;
+    min-height: 36px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .dest-empty-cta:hover {
+    filter: brightness(1.05);
+  }
+
   .dest-dot {
     width: 8px;
     height: 8px;
@@ -1135,11 +1390,6 @@
 
   .dest-dot.inbox {
     background: var(--accent);
-  }
-
-  .dest-dot.uncat {
-    background: var(--text-muted);
-    opacity: 0.5;
   }
 
   .error {

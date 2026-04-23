@@ -126,6 +126,25 @@ export interface AppConfig {
    * Defaults to false (collapsed behind "N completed").
    */
   completedTodosExpanded?: boolean;
+  /**
+   * Remembered "last picked" destinations for the add-entry modals, so
+   * repeat-create flows don't start on a blank picker every time.
+   *
+   * - `lastSelectedGroupId` — the group the user most recently saved a new
+   *   collection into. When the user opens "New collection" from a neutral
+   *   entry point (page-level Fab), the group picker starts on this value.
+   *   Falls back to the first group in display order if unset or the
+   *   referenced group no longer exists.
+   * - `lastSelectedCollectionId` — same idea for new todos: the collection
+   *   the user most recently filed a todo into. Used only for todos (refs
+   *   keep defaulting to Inbox).
+   *
+   * Both are best-effort hints — callers must validate the referenced id
+   * still exists before using it, because collections/groups can be deleted
+   * between sessions.
+   */
+  lastSelectedGroupId?: string;
+  lastSelectedCollectionId?: string;
 }
 
 export interface Collection {

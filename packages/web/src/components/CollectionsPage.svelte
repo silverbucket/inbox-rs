@@ -2,7 +2,7 @@
   import type { InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
   import { dndzone } from 'svelte-dnd-action';
   import {
-    storeCollection, deleteCollection, moveCollectionToGroup,
+    createCollection, storeCollection, deleteCollection, moveCollectionToGroup,
     visibleGroupedCollections, sortedGroups, storeGroup, deleteGroup,
     appConfig, updateConfig, reorderGroupCollections, setExpandedCollections,
     UNCATEGORIZED_FILTER_ID, reorderUngroupedCollections,
@@ -120,10 +120,10 @@
 
   async function handleCreateCollection(col: Collection) {
     try {
-      await storeCollection(col);
-      if (col.groupId) {
-        await moveCollectionToGroup(col.id, col.groupId);
-      }
+      // The modal enforces an explicit group choice, so `col.groupId` is
+      // always a real group id here — we never route through the store's
+      // Uncategorized fallback from this path.
+      await createCollection(col);
       creatingCollection = false;
       collectionFormGroupId = undefined;
     } catch (error) {
@@ -136,7 +136,11 @@
     const previousGroupId = editingCollection.groupId;
     try {
       await storeCollection(col);
-      if (col.groupId && col.groupId !== previousGroupId) {
+      // Fire the move on any group change — including group → undefined, so
+      // a user who picks "No group" in the edit modal actually ends up in
+      // Uncategorized. The previous `col.groupId && …` guard swallowed the
+      // group-to-none transition silently.
+      if (col.groupId !== previousGroupId) {
         await moveCollectionToGroup(col.id, col.groupId);
       }
       editingCollection = null;
@@ -181,19 +185,43 @@
     const section = sections.find(s => s.group.id === editingGroup!.id);
     return !section || section.collections.length === 0;
   });
+
+  // Collections must be empty before they can be deleted — same rule as
+  // groups. The store-level `deleteCollection` enforces this too, but
+  // hiding the Delete button when it would be refused keeps the UI honest
+  // about why nothing happens. Empty here means "no items reference this
+  // collection's id"; the collection's own `itemIds` array isn't trusted
+  // because it can drift out of sync with the items themselves.
+  const editingCollectionIsEmpty = $derived.by(() => {
+    if (!editingCollection) return false;
+    for (const section of sections) {
+      const found = section.collections.find(c => c.id === editingCollection!.id);
+      if (found) return found.itemIds.length === 0;
+    }
+    return true;
+  });
 </script>
 
 <div class="collections-page">
-  {#if visibleIds.length > 0}
-    <div class="page-toolbar">
+  <!--
+    Always render the page-toolbar so the Fab has a home on desktop (inline
+    labelled pill). The expand-all toggle only shows when there are
+    collections to toggle, but the "New collection" action is useful in
+    every state — including the empty state — so the toolbar is never
+    conditional. On mobile the Fab is position:fixed (out of flow) and the
+    toolbar collapses to zero height when no other controls are present.
+  -->
+  <div class="page-toolbar">
+    {#if visibleIds.length > 0}
       <button class="btn-expand-toggle" onclick={toggleExpandAll}>
         <svg class="chevron" class:open={anyExpanded} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="6 9 12 15 18 9"></polyline>
         </svg>
         {anyExpanded ? 'Collapse all' : 'Expand all'}
       </button>
-    </div>
-  {/if}
+    {/if}
+    <Fab onclick={() => openAddCollection(undefined)} label="New collection" />
+  </div>
 
   {#each sections as section (section.group.id)}
     {@const isUncat = section.group.id === UNCATEGORIZED_FILTER_ID}
@@ -279,7 +307,7 @@
     collection={editingCollection}
     onclose={() => editingCollection = null}
     onsave={handleEditCollection}
-    ondelete={handleDeleteCollection}
+    ondelete={editingCollectionIsEmpty ? handleDeleteCollection : undefined}
   />
 {/if}
 
@@ -292,24 +320,27 @@
   />
 {/if}
 
-<Fab onclick={() => openAddCollection(undefined)} label="New collection" />
-
 <style>
   .collections-page {
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
-    /* Reserve room so the FAB doesn't float over the last group section when
-       scrolled to the bottom. Matches FAB height (56) + inset (~24) + air. */
-    padding-bottom: 5rem;
   }
 
   .page-toolbar {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
     gap: 0.5rem;
+    flex-wrap: wrap;
     margin-bottom: -0.5rem;
+  }
+
+  /* Anchor the Fab (inline on desktop) to the right edge of the toolbar, so
+     the expand-all toggle reads left-aligned and the primary action sits
+     where the eye finishes scanning the row. On mobile the Fab is
+     position:fixed and out of flow — this margin is a no-op. */
+  .page-toolbar :global(.fab) {
+    margin-left: auto;
   }
 
   .btn-expand-toggle {
@@ -371,6 +402,15 @@
 
   .link:hover {
     color: var(--accent-strong, var(--accent));
+  }
+
+  /* Mobile-only: reserve room so the fixed-position FAB doesn't float over
+     the last group section when scrolled to the bottom. Desktop renders the
+     add button inline in the toolbar, so no bottom reservation is needed. */
+  @media (max-width: 768px) {
+    .collections-page {
+      padding-bottom: 5rem;
+    }
   }
 
   @media (max-width: 600px) {

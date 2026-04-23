@@ -1,5 +1,7 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import { PRESET_COLORS } from '../lib/constants';
+  import { autofocus } from '../lib/actions';
 
   let {
     entityName,
@@ -15,6 +17,8 @@
     onclose,
     onsubmit: handleFormSubmit,
     ondelete = undefined,
+    extraFields = undefined,
+    canSubmit = true,
   }: {
     entityName: string;
     title?: string;
@@ -29,12 +33,40 @@
     onclose: () => void;
     onsubmit: () => void;
     ondelete?: () => void;
+    /** Optional extra fields rendered between description and color palette.
+        Consumers use this to inject entity-specific controls (e.g. the
+        Collection form's group picker) without subclassing the whole modal. */
+    extraFields?: Snippet;
+    /** Additional validity signal from the consumer. ANDed with the local
+        name-trimmed check — the submit button is only enabled when both the
+        base check and the consumer's gate pass. Defaults to `true` so
+        forms without extra fields behave as before. */
+    canSubmit?: boolean;
   } = $props();
+
+  const submitDisabled = $derived(!name.trim() || !canSubmit);
 
   let confirmingDelete = $state(false);
 
   const displayTitle = $derived(title ?? (isEdit ? `Edit ${entityName}` : `New ${entityName}`));
+
+  /**
+   * Escape drops out of the inline delete-confirm step first, then closes the
+   * modal. Matches the layered-overlay behaviour elsewhere in the app (e.g.
+   * AddEntryModal's collection picker): Escape always peels the top-most
+   * layer, never skips a step.
+   */
+  function handleEscape(e: KeyboardEvent) {
+    if (e.key !== 'Escape') return;
+    if (confirmingDelete) {
+      confirmingDelete = false;
+      return;
+    }
+    onclose();
+  }
 </script>
+
+<svelte:window onkeydown={handleEscape} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -45,7 +77,7 @@
     <form onsubmit={(e) => { e.preventDefault(); handleFormSubmit(); }}>
       <label class="field">
         <span class="label">Name</span>
-        <input type="text" bind:value={name} placeholder={namePlaceholder} required />
+        <input use:autofocus type="text" bind:value={name} placeholder={namePlaceholder} required />
       </label>
 
       {#if showDescription}
@@ -53,6 +85,10 @@
           <span class="label">Description <span class="optional">(optional)</span></span>
           <textarea bind:value={description} placeholder={descriptionPlaceholder} rows="2"></textarea>
         </label>
+      {/if}
+
+      {#if extraFields}
+        {@render extraFields()}
       {/if}
 
       <fieldset class="field">
@@ -81,11 +117,11 @@
             <button type="button" class="btn-delete" onclick={() => confirmingDelete = true}>Delete</button>
             <div class="actions-spacer"></div>
             <button type="button" class="btn-cancel" onclick={onclose}>Cancel</button>
-            <button type="submit" class="btn-save" disabled={!name.trim()}>Save</button>
+            <button type="submit" class="btn-save" disabled={submitDisabled}>Save</button>
           {/if}
         {:else}
           <button type="button" class="btn-cancel" onclick={onclose}>Cancel</button>
-          <button type="submit" class="btn-save" disabled={!name.trim()}>
+          <button type="submit" class="btn-save" disabled={submitDisabled}>
             {isEdit ? 'Save' : 'Create'}
           </button>
         {/if}
