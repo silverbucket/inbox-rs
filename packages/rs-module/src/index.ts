@@ -104,12 +104,8 @@ const InboxModule = {
           }
           if (fileData && 'filePath' in item && item.filePath && 'mimeType' in item && item.mimeType) {
             // Store file locally for immediate access
-            const bytes = new Uint8Array(fileData);
-            let binaryString = '';
-            for (let i = 0; i < bytes.length; i++) {
-              binaryString += String.fromCharCode(bytes[i]);
-            }
-            await privateClient.storeFile(item.mimeType, item.filePath, binaryString);
+            const fileBlob = new Blob([fileData], { type: item.mimeType });
+            await privateClient.storeFile(item.mimeType, item.filePath, fileBlob);
 
             // Also PUT directly to remote — remotestoragejs sync has a bug
             // where it silently fails to push binary file bodies to the server.
@@ -117,13 +113,16 @@ const InboxModule = {
             if (remote?.connected) {
               const fullPath = '/inbox/' + item.filePath;
               try {
-                // Send the original ArrayBuffer, not the binary string —
-                // fetch encodes strings as UTF-8, corrupting bytes > 127.
+                // Send a Blob, not the binary string or a raw ArrayBuffer:
+                // strings are UTF-8 encoded by fetch, and Safari has been
+                // observed storing raw ArrayBuffer uploads as same-length
+                // zero-filled files on 5apps. Blob preserves the image bytes
+                // and keeps the Content-Type clean (no `charset=binary`).
                 // `remote.put` resolves with `{ statusCode }` for non-2xx
                 // responses too (it only rejects on network errors), so
                 // inspect the status explicitly — otherwise a 401/412/500
                 // silently looks like success and the file is never uploaded.
-                const resp = await remote.put(fullPath, fileData, item.mimeType);
+                const resp = await remote.put(fullPath, fileBlob, item.mimeType);
                 const status = resp?.statusCode;
                 const success = typeof status === 'number' && status >= 200 && status < 300;
                 if (success) {
@@ -149,6 +148,16 @@ const InboxModule = {
         async getFile(path: string): Promise<{ data: ArrayBuffer; mimeType: string } | undefined> {
           const file = await privateClient.getFile(path);
           if (!file?.data) return undefined;
+          if (typeof Blob !== 'undefined' && file.data instanceof Blob) {
+            return { data: await file.data.arrayBuffer(), mimeType: file.mimeType || file.contentType };
+          }
+          if (ArrayBuffer.isView(file.data)) {
+            const view = file.data;
+            return {
+              data: new Uint8Array(view.buffer, view.byteOffset, view.byteLength).slice().buffer,
+              mimeType: file.mimeType || file.contentType
+            };
+          }
           // remotestoragejs may return a binary string; convert to ArrayBuffer
           if (typeof file.data === 'string') {
             const bytes = new Uint8Array(file.data.length);
