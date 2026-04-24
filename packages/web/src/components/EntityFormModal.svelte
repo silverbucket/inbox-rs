@@ -1,5 +1,7 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import { PRESET_COLORS } from '../lib/constants';
+  import { autofocus } from '../lib/actions';
 
   let {
     entityName,
@@ -9,14 +11,14 @@
     color = $bindable('#6366f1'),
     showDescription = false,
     description = $bindable(''),
-    showActive = false,
-    active = $bindable(false),
     namePlaceholder = '',
     descriptionPlaceholder = '',
     maxWidth = '440px',
     onclose,
     onsubmit: handleFormSubmit,
     ondelete = undefined,
+    extraFields = undefined,
+    canSubmit = true,
   }: {
     entityName: string;
     title?: string;
@@ -25,20 +27,46 @@
     color: string;
     showDescription?: boolean;
     description?: string;
-    showActive?: boolean;
-    active?: boolean;
     namePlaceholder?: string;
     descriptionPlaceholder?: string;
     maxWidth?: string;
     onclose: () => void;
     onsubmit: () => void;
     ondelete?: () => void;
+    /** Optional extra fields rendered between description and color palette.
+        Consumers use this to inject entity-specific controls (e.g. the
+        Collection form's group picker) without subclassing the whole modal. */
+    extraFields?: Snippet;
+    /** Additional validity signal from the consumer. ANDed with the local
+        name-trimmed check — the submit button is only enabled when both the
+        base check and the consumer's gate pass. Defaults to `true` so
+        forms without extra fields behave as before. */
+    canSubmit?: boolean;
   } = $props();
+
+  const submitDisabled = $derived(!name.trim() || !canSubmit);
 
   let confirmingDelete = $state(false);
 
   const displayTitle = $derived(title ?? (isEdit ? `Edit ${entityName}` : `New ${entityName}`));
+
+  /**
+   * Escape drops out of the inline delete-confirm step first, then closes the
+   * modal. Matches the layered-overlay behaviour elsewhere in the app (e.g.
+   * AddEntryModal's collection picker): Escape always peels the top-most
+   * layer, never skips a step.
+   */
+  function handleEscape(e: KeyboardEvent) {
+    if (e.key !== 'Escape') return;
+    if (confirmingDelete) {
+      confirmingDelete = false;
+      return;
+    }
+    onclose();
+  }
 </script>
+
+<svelte:window onkeydown={handleEscape} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -49,7 +77,7 @@
     <form onsubmit={(e) => { e.preventDefault(); handleFormSubmit(); }}>
       <label class="field">
         <span class="label">Name</span>
-        <input type="text" bind:value={name} placeholder={namePlaceholder} required />
+        <input use:autofocus type="text" bind:value={name} placeholder={namePlaceholder} required />
       </label>
 
       {#if showDescription}
@@ -57,6 +85,10 @@
           <span class="label">Description <span class="optional">(optional)</span></span>
           <textarea bind:value={description} placeholder={descriptionPlaceholder} rows="2"></textarea>
         </label>
+      {/if}
+
+      {#if extraFields}
+        {@render extraFields()}
       {/if}
 
       <fieldset class="field">
@@ -75,25 +107,6 @@
         </div>
       </fieldset>
 
-      {#if showActive}
-        <label class="field field-toggle">
-          <span class="toggle-text">
-            <span class="label">Active</span>
-            <span class="toggle-hint">Surface top todos in the main todo list</span>
-          </span>
-          <button
-            type="button"
-            class="toggle-switch"
-            class:on={active}
-            onclick={() => active = !active}
-            role="switch"
-            aria-checked={active}
-          >
-            <span class="toggle-knob"></span>
-          </button>
-        </label>
-      {/if}
-
       <div class="actions">
         {#if isEdit && ondelete}
           {#if confirmingDelete}
@@ -104,11 +117,11 @@
             <button type="button" class="btn-delete" onclick={() => confirmingDelete = true}>Delete</button>
             <div class="actions-spacer"></div>
             <button type="button" class="btn-cancel" onclick={onclose}>Cancel</button>
-            <button type="submit" class="btn-save" disabled={!name.trim()}>Save</button>
+            <button type="submit" class="btn-save" disabled={submitDisabled}>Save</button>
           {/if}
         {:else}
           <button type="button" class="btn-cancel" onclick={onclose}>Cancel</button>
-          <button type="submit" class="btn-save" disabled={!name.trim()}>
+          <button type="submit" class="btn-save" disabled={submitDisabled}>
             {isEdit ? 'Save' : 'Create'}
           </button>
         {/if}
@@ -304,62 +317,5 @@
 
   .actions-spacer {
     flex: 1;
-  }
-
-  .field-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    cursor: pointer;
-  }
-
-  .toggle-text {
-    display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
-  }
-
-  .toggle-text .label {
-    margin-bottom: 0;
-  }
-
-  .toggle-hint {
-    font-size: 0.72rem;
-    color: var(--text-muted);
-    opacity: 0.7;
-  }
-
-  .toggle-switch {
-    position: relative;
-    width: 40px;
-    height: 22px;
-    border-radius: 999px;
-    border: none;
-    background: color-mix(in srgb, var(--text-muted) 25%, var(--bg) 75%);
-    cursor: pointer;
-    transition: background 200ms;
-    flex-shrink: 0;
-    padding: 0;
-  }
-
-  .toggle-switch.on {
-    background: var(--accent);
-  }
-
-  .toggle-knob {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: white;
-    transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  }
-
-  .toggle-switch.on .toggle-knob {
-    transform: translateX(18px);
   }
 </style>

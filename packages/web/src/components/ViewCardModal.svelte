@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack, onDestroy } from 'svelte';
   import type { InboxItem } from '@inbox-rs/rs-module';
-  import { deleteItem, storeItem, blobUrls, connected, sortedGroups, groupCollections, moveItemToCollection, loadFileBlobUrl } from '../lib/stores';
+  import { deleteItem, storeItem, blobUrls, connected, sortedGroups, groupCollections, ungroupedCollections, moveItemToCollection, loadFileBlobUrl, hasUncategorizedItems } from '../lib/stores';
   import rs from '../lib/rs';
   import { transcribeAudio } from '../lib/transcribe';
   import ShareButton from './ShareButton.svelte';
@@ -22,6 +22,14 @@
   let showMoveMenu = $state(false);
   let moveButtonEl = $state<HTMLButtonElement | null>(null);
   let dropdownStyle = $state('');
+
+  // "Make Todo" forces the user to choose a collection up-front — a loose
+  // todo sitting in the Inbox/Uncategorized bucket is almost always an
+  // unintended leak. The picker reuses the move-dropdown styling so it
+  // looks and behaves identically to the existing move affordance.
+  let showMakeTodoMenu = $state(false);
+  let makeTodoButtonEl = $state<HTMLButtonElement | null>(null);
+  let makeTodoDropdownStyle = $state('');
 
   // Audio playback
   const audioSrc = $derived(
@@ -66,6 +74,7 @@
   onDestroy(() => {
     if (docBlobUrl) URL.revokeObjectURL(docBlobUrl);
     removeMoveMenuListeners();
+    removeMakeTodoMenuListeners();
   });
 
   async function handleTranscribe() {
@@ -128,12 +137,37 @@
 
   let convertingTodo = $state(false);
 
-  async function convertToTodo() {
+  /**
+   * Promote the current item to a todo and file it into the chosen collection
+   * atomically. We always route through a collection — loose todos (no
+   * collection) tend to be accidental leaks, so the Make Todo flow now
+   * surfaces an inline collection picker rather than silently dropping the
+   * new todo into Uncategorized.
+   */
+  async function convertToTodoInCollection(collectionId: string) {
     convertingTodo = true;
     try {
+      // Snapshot the rest of the item BEFORE we do any writes — once we move
+      // the item, the store reflects the new collectionId and the prop might
+      // be re-read as a different object, so working off a local copy keeps
+      // the todo flip deterministic.
       const { completedAt: _, ...rest } = item;
-      const updated = { ...rest, isTodo: true, completed: false };
+      // Route the collection change through moveItemToCollection FIRST. The
+      // helper reads the item's current collectionId from the store to know
+      // which source collection's itemIds to scrub. If we store the new
+      // collectionId via storeItem first, moveItemToCollection would see the
+      // target collection as the source and never remove the item from the
+      // original collection's itemIds — leaving stale membership behind that
+      // later collection operations can trip over.
+      await moveItemToCollection(item.id, collectionId);
+      // Now flip the todo flags. storeItem only touches the item doc — the
+      // itemIds arrays are already reconciled by the move above.
+      const updated = { ...rest, isTodo: true, completed: false, collectionId };
+      // Moving into a real collection should clear any Uncategorized marker
+      // so the item doesn't simultaneously appear in both places.
+      delete (updated as any).uncategorized;
       await storeItem(updated as InboxItem);
+      closeMakeTodoMenu();
       onclose();
     } finally {
       convertingTodo = false;
@@ -143,7 +177,29 @@
   const canMakeTodo = $derived(item.type !== 'todo' && !item.isTodo);
   const canMakeRef = $derived(item.isTodo || item.type === 'todo');
 
+  // True when the item already lives in the Uncategorized bucket: a todo without
+  // a collection (todos can't be in the Inbox), or a reference flagged with
+  // `uncategorized: true`. Items in this state shouldn't see an "Uncategorized"
+  // move option — it would be a no-op.
+  const isInUncategorized = $derived(
+    !item.collectionId && (item.uncategorized === true || item.isTodo || item.type === 'todo')
+  );
+
+  // Show the "Uncategorized" entry in the move dropdown when:
+  //   - the item is in a real collection (preserves the existing "remove from
+  //     collection" affordance — items leaving a collection always land in
+  //     Uncategorized rather than the Inbox), OR
+  //   - Uncategorized already exists (has stragglers), so an Inbox ref can be
+  //     filed alongside them. Per design, Uncategorized isn't a first-class
+  //     destination unless it already exists.
+  const showUncategorizedOption = $derived(
+    !isInUncategorized && (!!item.collectionId || $hasUncategorizedItems)
+  );
+
   function toggleMoveMenu() {
+    // Only one picker can be open at a time — close Make Todo if it's open
+    // so the overlays don't stack.
+    if (showMakeTodoMenu) closeMakeTodoMenu();
     showMoveMenu = !showMoveMenu;
     if (showMoveMenu) {
       updateDropdownPosition();
@@ -174,6 +230,73 @@
     window.removeEventListener('scroll', handleMoveMenuScroll, true);
     window.removeEventListener('resize', closeMoveMenu);
     window.removeEventListener('keydown', handleMoveMenuKeydown);
+  }
+
+  // ── Make Todo menu ─────────────────────────────────────────────────────
+  // Mirrors the Move menu pattern so the two dropdowns feel identical.
+  // Kept as a parallel menu (rather than collapsed into a single generic
+  // picker) to keep the option list semantics crystal clear: Move can send
+  // items to Uncategorized, Make Todo can't.
+
+  function toggleMakeTodoMenu() {
+    if (showMoveMenu) closeMoveMenu();
+    showMakeTodoMenu = !showMakeTodoMenu;
+    if (showMakeTodoMenu) {
+      updateMakeTodoDropdownPosition();
+      window.addEventListener('scroll', handleMakeTodoMenuScroll, true);
+      window.addEventListener('resize', closeMakeTodoMenu);
+      window.addEventListener('keydown', handleMakeTodoMenuKeydown);
+    } else {
+      removeMakeTodoMenuListeners();
+    }
+  }
+
+  function handleMakeTodoMenuScroll(event: Event) {
+    const target = event.target;
+    if (target instanceof Element && target.closest('.make-todo-dropdown')) return;
+    closeMakeTodoMenu();
+  }
+
+  function handleMakeTodoMenuKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') closeMakeTodoMenu();
+  }
+
+  function closeMakeTodoMenu() {
+    showMakeTodoMenu = false;
+    removeMakeTodoMenuListeners();
+  }
+
+  function removeMakeTodoMenuListeners() {
+    window.removeEventListener('scroll', handleMakeTodoMenuScroll, true);
+    window.removeEventListener('resize', closeMakeTodoMenu);
+    window.removeEventListener('keydown', handleMakeTodoMenuKeydown);
+  }
+
+  function updateMakeTodoDropdownPosition() {
+    if (!makeTodoButtonEl) return;
+    const rect = makeTodoButtonEl.getBoundingClientRect();
+    const spaceAbove = rect.top;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const dropdownMaxHeight = 280;
+    const viewportPadding = 16;
+    const gap = 6;
+
+    const openUpward = spaceAbove > spaceBelow;
+    const available = openUpward ? spaceAbove : spaceBelow;
+    const maxHeight = Math.max(0, Math.min(available - viewportPadding, dropdownMaxHeight));
+
+    const dropdownWidth = Math.min(280, window.innerWidth - viewportPadding * 2);
+    // Anchor to the right edge of the button so the picker doesn't drift off
+    // the right side of the modal on tight layouts — Make Todo lives on the
+    // right side of the header.
+    const right = window.innerWidth - rect.right;
+    const clampedRight = Math.max(viewportPadding, Math.min(right, window.innerWidth - dropdownWidth - viewportPadding));
+
+    if (openUpward) {
+      makeTodoDropdownStyle = `bottom: ${window.innerHeight - rect.top + gap}px; right: ${clampedRight}px; max-height: ${maxHeight}px;`;
+    } else {
+      makeTodoDropdownStyle = `top: ${rect.bottom + gap}px; right: ${clampedRight}px; max-height: ${maxHeight}px;`;
+    }
   }
 
   function updateDropdownPosition() {
@@ -271,7 +394,31 @@
     if (item.type === 'audio' && item.filePath) loadFileBlobUrl(item.filePath);
     if (item.type === 'bookmark' && 'filePath' in item && item.filePath) loadFileBlobUrl(item.filePath);
   });
+
+  /**
+   * Window-level Escape handler. Defers to nested overlays when any are open
+   * so Escape peels one layer at a time instead of collapsing the stack:
+   *
+   *   - DeleteConfirm, Lightbox: they register their own window handlers and
+   *     will close themselves. We only need to keep *this* modal open so the
+   *     user isn't unexpectedly dumped back to the card list.
+   *   - Move / Make-Todo menus: they already close themselves via their own
+   *     document-level escape listeners — we still early-return so both don't
+   *     close simultaneously.
+   *
+   * Since `<svelte:window>` listeners fire in registration order, this outer
+   * listener is registered first (parent mounts before children) and runs
+   * before the nested ones — so checking state here is safe even though the
+   * nested handlers will fire immediately after.
+   */
+  function handleWindowEscape(e: KeyboardEvent) {
+    if (e.key !== 'Escape') return;
+    if (showDelete || showLightbox || showMoveMenu || showMakeTodoMenu) return;
+    onclose();
+  }
 </script>
+
+<svelte:window onkeydown={handleWindowEscape} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -281,12 +428,23 @@
       <span class="type-badge">{item.type}</span>
       <time class="date">{formatDate(item.createdAt)}</time>
       {#if canMakeTodo}
-        <button class="btn-todo btn-todo-top" disabled={convertingTodo} onclick={convertToTodo}>
+        <button
+          class="btn-todo btn-todo-top"
+          class:open={showMakeTodoMenu}
+          bind:this={makeTodoButtonEl}
+          disabled={convertingTodo}
+          onclick={toggleMakeTodoMenu}
+          aria-haspopup="listbox"
+          aria-expanded={showMakeTodoMenu}
+        >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="9 11 12 14 22 4"></polyline>
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
           </svg>
           Make Todo
+          <svg class="caret" class:open={showMakeTodoMenu} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
         </button>
       {/if}
       {#if canMakeRef}
@@ -442,6 +600,44 @@
       />
     {/if}
 
+    {#if showMakeTodoMenu}
+      <button
+        type="button"
+        class="move-backdrop"
+        tabindex="-1"
+        aria-label="Close make todo menu"
+        onclick={() => closeMakeTodoMenu()}
+      ></button>
+      <div class="move-dropdown make-todo-dropdown" style={makeTodoDropdownStyle} role="listbox" aria-label="Choose a collection for this todo">
+        <div class="picker-title">Pick a collection</div>
+        {#each $sortedGroups as group (group.id)}
+          {#each ($groupCollections[group.id] ?? []) as col (col.id)}
+            <button class="move-option" onclick={() => convertToTodoInCollection(col.id)} disabled={convertingTodo}>
+              <span class="move-dot" style="background: {col.color || '#6366f1'}"></span>
+              <span class="move-group-prefix" style="color: {group.color || 'var(--accent)'}">{group.name}</span> : {col.name}
+            </button>
+          {/each}
+        {/each}
+        <!-- Ungrouped collections — legacy collections from before groups
+             became mandatory, or collections whose parent group was deleted.
+             Without this, a user whose only collection is ungrouped would see
+             an empty picker and the "create a collection first" message
+             despite already having one. -->
+        {#each $ungroupedCollections as col (col.id)}
+          <button class="move-option" onclick={() => convertToTodoInCollection(col.id)} disabled={convertingTodo}>
+            <span class="move-dot" style="background: {col.color || '#6366f1'}"></span>
+            <span class="move-group-prefix" style="color: #9ca3af">Ungrouped</span> : {col.name}
+          </button>
+        {/each}
+        {#if $sortedGroups.every((g) => ($groupCollections[g.id] ?? []).length === 0) && $ungroupedCollections.length === 0}
+          <!-- No real collections yet — guide the user instead of silently
+               allowing an Uncategorized-only choice, which would undo the
+               point of this forced-picker flow. -->
+          <div class="move-empty">Create a collection first to file this todo.</div>
+        {/if}
+      </div>
+    {/if}
+
     {#if showMoveMenu}
       <button
         type="button"
@@ -451,9 +647,10 @@
         onclick={() => closeMoveMenu()}
       ></button>
       <div class="move-dropdown" style={dropdownStyle}>
-        {#if item.collectionId}
+        {#if showUncategorizedOption}
           <button class="move-option" onclick={() => { moveItemToCollection(item.id, undefined).catch(e => console.error('Move failed:', e)); closeMoveMenu(); onclose(); }}>
-            Return to Inbox
+            <span class="move-dot" style="background: #9ca3af"></span>
+            Uncategorized
           </button>
           <div class="move-divider"></div>
         {/if}
@@ -467,7 +664,18 @@
             {/if}
           {/each}
         {/each}
-        {#if $sortedGroups.length === 0}
+        <!-- Ungrouped collections — must be offered as move targets too,
+             otherwise an item can't be moved into a collection whose group
+             was deleted (or a legacy ungrouped collection). -->
+        {#each $ungroupedCollections as col (col.id)}
+          {#if col.id !== item.collectionId}
+            <button class="move-option" onclick={() => { moveItemToCollection(item.id, col.id).catch(e => console.error('Move failed:', e)); closeMoveMenu(); onclose(); }}>
+              <span class="move-dot" style="background: {col.color || '#6366f1'}"></span>
+              <span class="move-group-prefix" style="color: #9ca3af">Ungrouped</span> : {col.name}
+            </button>
+          {/if}
+        {/each}
+        {#if $sortedGroups.length === 0 && $ungroupedCollections.length === 0}
           <div class="move-empty">No collections</div>
         {/if}
       </div>
@@ -821,6 +1029,21 @@
     cursor: default;
   }
 
+  .btn-todo.open {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent 90%);
+  }
+
+  .btn-todo .caret {
+    opacity: 0.7;
+    transition: transform 150ms ease;
+  }
+
+  .btn-todo .caret.open {
+    transform: rotate(180deg);
+  }
+
   .btn-todo-top {
     margin-left: auto;
   }
@@ -889,6 +1112,25 @@
     z-index: 300;
     box-shadow: 0 8px 24px var(--shadow);
     overflow-y: auto;
+  }
+
+  /*
+   * Make Todo picker — sized a touch wider so the group : collection
+   * double label doesn't wrap awkwardly when users have long names.
+   */
+  .make-todo-dropdown {
+    min-width: 240px;
+  }
+
+  .picker-title {
+    padding: 0.35rem 0.55rem 0.4rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.25rem;
   }
 
   .move-backdrop {

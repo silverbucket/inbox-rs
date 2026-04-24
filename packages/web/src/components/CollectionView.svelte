@@ -1,35 +1,67 @@
 <script lang="ts">
   import type { InboxItem, InboxItemType, Collection } from '@inbox-rs/rs-module';
-  import { dndzone } from 'svelte-dnd-action';
   import {
-    collectionItems, storeItem, storeCollection,
+    collectionItems,
     deleteItem,
     sortedGroups, moveCollectionToGroup,
-    reorderCollectionItems
+    appConfig, updateConfig, reorderCollectionItems, reorderUncategorizedTodos,
+    groups,
   } from '../lib/stores';
-  import { makeTodo, makeReference, typeBadge, todoNote } from '../lib/item-utils';
-  import { cleanForStorage } from '../lib/clean-for-storage';
-  import { slide } from 'svelte/transition';
+  import { makeTodo } from '../lib/item-utils';
+  import { slide, fade } from 'svelte/transition';
+  import { flip } from 'svelte/animate';
+  import { dndzone } from 'svelte-dnd-action';
   import InboxCard from './InboxCard.svelte';
   import AddEntryBar from './AddEntryBar.svelte';
   import AddEntryModal from './AddEntryModal.svelte';
+  import TodoRow from './TodoRow.svelte';
 
-  let { collection, expanded = false, onselect, onedit, ontoggle, isTouchDevice = false }: {
+  let { collection, expanded = false, onselect, onedit, ontoggle, isTouchDevice = false, isVirtual = false }: {
     collection: Collection;
     expanded?: boolean;
     onselect: (item: InboxItem) => void;
+    /** Called when the edit button is pressed. Ignored when `isVirtual` — the
+        virtual Uncategorized collection has no backing record to edit. */
     onedit: () => void;
     ontoggle: () => void;
     isTouchDevice?: boolean;
+    /**
+     * Render as the virtual Uncategorized bucket: hides edit / move-to-group
+     * affordances, saves newly-added items with `collectionId: undefined`, and
+     * persists todo reordering via `reorderUncategorizedTodos` (which splices
+     * into `todosGlobalOrder`) rather than the collection's own `itemIds`
+     * list. Using the global order key keeps this view and the flat `/todos`
+     * page in sync — both read the same source of truth.
+     */
+    isVirtual?: boolean;
   } = $props();
 
+  // Collection body renders both todos (at the top, drag-sortable) and
+  // reference items (the existing masonry grid below) so the page keeps all
+  // data in context while the flat Todos page shows the cross-collection view.
   const items = $derived($collectionItems[collection.id] ?? []);
   const todoItems = $derived(items.filter(i => i.isTodo || i.type === 'todo'));
   const openTodos = $derived(todoItems.filter(t => !t.completed));
-  const completedTodos = $derived(todoItems.filter(t => t.completed));
+  const completedTodos = $derived(
+    todoItems.filter(t => t.completed)
+      .slice()
+      .sort((a, b) => new Date(b.completedAt ?? b.createdAt).getTime()
+                     - new Date(a.completedAt ?? a.createdAt).getTime())
+  );
   const referenceItems = $derived(items.filter(i => !i.isTodo && i.type !== 'todo'));
 
-  let showCompleted = $state(false);
+  // Shared group lookup for TodoRow styling — collection's own color takes
+  // priority, but we also supply the group so the pill colour degrades
+  // gracefully when a collection has no colour of its own.
+  const group = $derived(
+    collection.groupId ? ($groups[collection.groupId] ?? null) : null
+  );
+
+  // Reuse the global "show completed todos" flag so toggling it here stays in
+  // sync with the flat Todos page — users have a single "show completed work"
+  // preference rather than N per-collection toggles.
+  const completedExpanded = $derived($appConfig.completedTodosExpanded === true);
+
   let addingType = $state<InboxItemType | null>(null);
   let showMoveMenu = $state(false);
   let moveButtonEl = $state<HTMLButtonElement>();
@@ -54,49 +86,48 @@
     await moveCollectionToGroup(collection.id, groupId);
   }
 
-  async function handleToggleActive(e: Event) {
-    e.stopPropagation();
-    await storeCollection({ ...collection, active: !collection.active });
-  }
-
-  async function toggleCompleted(e: Event, item: InboxItem) {
-    e.stopPropagation();
-    const nowCompleted = !item.completed;
-    const updated = {
-      ...item,
-      isTodo: true,
-      completed: nowCompleted,
-      completedAt: nowCompleted ? new Date().toISOString() : undefined,
-    };
-    await storeItem(cleanForStorage(updated));
-  }
-
-  // DnD for open todos within the collection
-  let dndOpenTodos = $state<Array<InboxItem & { id: string }>>([]);
+  // ---- Drag-and-drop reordering of open todos ----
+  let dndOpen = $state<Array<InboxItem & { id: string }>>([]);
   $effect(() => {
-    dndOpenTodos = openTodos.map(t => ({ ...t }));
+    dndOpen = openTodos.map(t => ({ ...t }));
   });
 
-  function handleTodoDndConsider(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
-    dndOpenTodos = e.detail.items;
+  function handleDndConsider(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
+    dndOpen = e.detail.items;
   }
 
-  async function handleTodoDndFinalize(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
+  async function handleDndFinalize(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
     const previous = openTodos.map(t => ({ ...t }));
-    dndOpenTodos = e.detail.items;
-    // Rebuild full itemIds: new open todo order + completed todos + reference items (preserving their relative order)
-    const openTodoIds = new Set(openTodos.map(t => t.id));
-    const newOpenIds = dndOpenTodos.map(t => t.id);
-    const rest = collection.itemIds.filter(id => !openTodoIds.has(id));
-    const newItemIds = [...newOpenIds, ...rest];
+    dndOpen = e.detail.items;
+    const newOpenIds = dndOpen.map(t => t.id);
     try {
-      await reorderCollectionItems(collection.id, newItemIds);
+      if (isVirtual) {
+        // Virtual bucket: there's no collection record to update. Splice the
+        // new uncategorized order back into `todosGlobalOrder` — the same key
+        // the flat `/todos` page reads — so both surfaces stay in sync and
+        // one view's reorder can't be clobbered by the next drag on the other.
+        await reorderUncategorizedTodos(newOpenIds);
+      } else {
+        // Splice the new open-todo order into itemIds while preserving the
+        // relative order of completed todos and reference items — otherwise a
+        // drag of a single open todo would also scramble the refs grid.
+        const openIds = new Set(openTodos.map(t => t.id));
+        const rest = collection.itemIds.filter(id => !openIds.has(id));
+        await reorderCollectionItems(collection.id, [...newOpenIds, ...rest]);
+      }
     } catch (error) {
       console.error('Failed to reorder collection todos', error);
-      dndOpenTodos = previous;
+      dndOpen = previous;
     }
   }
 
+  async function toggleCompletedSection() {
+    try {
+      await updateConfig({ completedTodosExpanded: !completedExpanded });
+    } catch (error) {
+      console.error('Failed to toggle completed todos', error);
+    }
+  }
 </script>
 
 <div class="collection" style="--col-color: {collection.color || '#6366f1'}" class:expanded>
@@ -106,9 +137,9 @@
     role="button"
     tabindex="0"
     onclick={ontoggle}
-    onkeydown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); ontoggle(); } }}
+    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ontoggle(); } }}
     aria-expanded={expanded}
-    aria-label="{expanded ? 'Collapse' : 'Expand'} {collection.name}{collection.active ? ' (active)' : ''}"
+    aria-label="{expanded ? 'Collapse' : 'Expand'} {collection.name}"
   >
     <span class="color-indicator"></span>
     <svg class="chevron" class:open={expanded} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -116,20 +147,13 @@
     </svg>
     <div class="header-info">
       <h3>{collection.name}</h3>
-      <button class="btn-header btn-edit" onclick={(e) => { e.stopPropagation(); onedit(); }} aria-label="Edit collection" title="Edit">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-        </svg>
-      </button>
       {#if collection.description && !expanded}
         <span class="col-description">{collection.description}</span>
       {/if}
     </div>
     <div class="header-badges">
       {#if openTodos.length > 0}
-        <span class="badge badge-todo" title="{openTodos.length} open {openTodos.length === 1 ? 'todo' : 'todos'}">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <span class="badge badge-todos" title="{openTodos.length} open {openTodos.length === 1 ? 'todo' : 'todos'}">
           {openTodos.length}
         </span>
       {/if}
@@ -137,25 +161,20 @@
         <span class="badge badge-ref" title="{referenceItems.length} {referenceItems.length === 1 ? 'item' : 'items'}">
           {referenceItems.length}
         </span>
-      {/if}
-      {#if items.length === 0}
+      {:else if openTodos.length === 0}
         <span class="badge badge-ref">0</span>
       {/if}
     </div>
-    <button
-      type="button"
-      class="header-toggle"
-      class:on={collection.active}
-      onclick={handleToggleActive}
-      role="switch"
-      aria-checked={collection.active ?? false}
-      aria-label="{collection.active ? 'Deactivate' : 'Activate'} collection"
-      title="{collection.active ? 'Active' : 'Inactive'} — click to toggle"
-    >
-      <span class="header-toggle-knob"></span>
-    </button>
     <div class="header-actions">
-      {#if availableGroups.length > 0}
+      {#if !isVirtual}
+        <button class="btn-header" onclick={(e) => { e.stopPropagation(); onedit(); }} aria-label="Edit collection" title="Edit">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+          </svg>
+        </button>
+      {/if}
+      {#if !isVirtual && availableGroups.length > 0}
         <div class="move-menu-wrapper">
           <button class="btn-header" bind:this={moveButtonEl} aria-label="Move to group" aria-haspopup="menu" aria-expanded={showMoveMenu} title="Move to group" onclick={toggleMoveMenu}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -185,16 +204,16 @@
                 {/if}
               </button>
               <div class="move-menu-divider"></div>
-              {#each availableGroups as group (group.id)}
+              {#each availableGroups as g (g.id)}
                 <button
                   class="move-menu-item"
-                  class:current={collection.groupId === group.id}
-                  onclick={() => handleMoveToGroup(group.id)}
-                  disabled={collection.groupId === group.id}
+                  class:current={collection.groupId === g.id}
+                  onclick={() => handleMoveToGroup(g.id)}
+                  disabled={collection.groupId === g.id}
                 >
-                  <span class="move-dot" style="background: {group.color || 'var(--accent)'}"></span>
-                  {group.name}
-                  {#if collection.groupId === group.id}
+                  <span class="move-dot" style="background: {g.color || 'var(--accent)'}"></span>
+                  {g.name}
+                  {#if collection.groupId === g.id}
                     <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                       <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
@@ -208,167 +227,119 @@
     </div>
   </div>
 
-  <!-- Expanded body — mirrors the inbox page layout -->
+  <!-- Expanded body: Todos section (drag-sortable) and References section,
+       each with a simple header + inline add affordance. Both sections are
+       always rendered when expanded so users have a consistent path to add
+       new items regardless of current contents — empty states sit quietly
+       under the headers instead of replacing them. -->
   {#if expanded}
     <div class="collection-body" transition:slide={{ duration: isTouchDevice ? 0 : 200 }}>
-      {#if items.length === 0}
-        <div class="empty-state">
-          <p>No items yet — create one below.</p>
-          <div class="empty-actions">
-            <AddEntryBar onadd={(type) => addingType = type} />
+      <section class="todos-section" aria-label="Todos in {collection.name}">
+        <div class="section-header">
+          <h4>Todos</h4>
+          <button class="btn-inline" onclick={() => addingType = 'todo'} title="Add todo" aria-label="Add todo to {collection.name}">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Add
+          </button>
+        </div>
+
+        {#if dndOpen.length > 0}
+          <ul
+            class="todo-list" role="list"
+            use:dndzone={{
+              items: dndOpen,
+              flipDurationMs: 200,
+              dropTargetStyle: {},
+              dragDisabled: isTouchDevice,
+              type: `todos-collection-${collection.id}`,
+            }}
+            onconsider={handleDndConsider}
+            onfinalize={handleDndFinalize}
+          >
+            {#each dndOpen as todo (todo.id)}
+              <div animate:flip={{ duration: 200 }} in:fade={{ duration: 180 }} out:fade={{ duration: 120 }}>
+                <TodoRow {todo} {collection} {group} {onselect} />
+              </div>
+            {/each}
+          </ul>
+        {:else if completedTodos.length === 0}
+          <p class="section-empty">No todos yet.</p>
+        {/if}
+
+        {#if completedTodos.length > 0}
+          <button
+            class="btn-completed-toggle"
+            onclick={toggleCompletedSection}
+            aria-expanded={completedExpanded}
+          >
+            <svg class="chevron-sm" class:open={completedExpanded} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+            {completedTodos.length} completed
+          </button>
+          {#if completedExpanded}
+            <ul class="todo-list completed-list" role="list" transition:slide={{ duration: isTouchDevice ? 0 : 200 }}>
+              {#each completedTodos as todo (todo.id)}
+                <div in:fade={{ duration: 150 }}>
+                  <TodoRow {todo} {collection} {group} {onselect} />
+                </div>
+              {/each}
+            </ul>
+          {/if}
+        {/if}
+      </section>
+
+      <!-- References section renders for the virtual Uncategorized bucket too.
+           "Uncategorized" is AddEntryModal's label for items saved without a
+           collection — users who file a ref as Uncategorized expect to see it
+           here (alongside the Inbox view). AddEntryBar routes through the
+           modal below; when `isVirtual`, we pass `collectionId: undefined` so
+           new refs land back in the uncategorized bucket. -->
+      <section class="references-section" aria-label="References in {collection.name}">
+        <div class="section-header">
+          <h4>References</h4>
+          <!-- Omit 'todo' — the Todos section above owns that flow, and
+               keeping it here would give two disagreeing entry points in
+               the same view. -->
+          <AddEntryBar onadd={(type) => addingType = type} excludeTypes={['todo']} />
+        </div>
+
+        {#if referenceItems.length > 0}
+          <div class="grid">
+            {#each referenceItems as item (item.id)}
+              <div class="grid-card-wrapper">
+                <InboxCard {item} {onselect} />
+                <div class="card-actions">
+                  <button class="btn-card-action" onclick={() => makeTodo(item)} title="Move to todos" aria-label="Make todo">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            {/each}
           </div>
-        </div>
-      {:else}
-        <div class="content-layout" class:has-todos={todoItems.length > 0} class:has-refs={referenceItems.length > 0}>
-          {#if todoItems.length > 0}
-            <aside class="todo-panel">
-              <div class="todo-header">
-                <h4 class="todo-heading">Todos</h4>
-                {#if openTodos.length > 0}
-                  <span class="todo-badge">{openTodos.length}</span>
-                {:else if todoItems.length > 0}
-                  <span class="todo-count-label">0/{todoItems.length}</span>
-                {/if}
-              </div>
-
-              {#if dndOpenTodos.length > 0}
-                <ul class="todo-list" role="list"
-                  use:dndzone={{ items: dndOpenTodos, flipDurationMs: 200, dropTargetStyle: {}, dragDisabled: isTouchDevice }}
-                  onconsider={handleTodoDndConsider}
-                  onfinalize={handleTodoDndFinalize}
-                >
-                  {#each dndOpenTodos as item (item.id)}
-                    {@const badge = typeBadge(item)}
-                    {@const note = todoNote(item)}
-                    <li class="todo-item" role="button" tabindex="0"
-                      onclick={(e) => {
-                        const target = e.target as HTMLElement;
-                        if (target.closest('input, button')) return;
-                        onselect(item);
-                      }}
-                      onkeydown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onselect(item); }
-                      }}>
-                      <input
-                        type="checkbox"
-                        class="checkbox"
-                        checked={false}
-                        onclick={(e) => e.stopPropagation()}
-                        onchange={(e) => toggleCompleted(e, item)}
-                        aria-label="Mark {item.title} as complete"
-                      />
-                      <div class="todo-content">
-                        <div class="todo-title-row">
-                          <span class="todo-title">{item.title}</span>
-                          <div class="todo-actions">
-                            <button class="btn-action-icon" onclick={(e) => { e.stopPropagation(); makeReference(item); }} title="Move to references" aria-label="Make reference">
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
-                        {#if badge || note}
-                          <div class="todo-meta">
-                            {#if badge}<span class="type-badge">{badge}</span>{/if}
-                            {#if note}<span class="todo-note">{note}</span>{/if}
-                          </div>
-                        {/if}
-                      </div>
-                    </li>
-                  {/each}
-                </ul>
-              {:else if todoItems.length === 0}
-                <p class="empty-sub">No todos yet.</p>
-              {/if}
-
-              {#if completedTodos.length > 0}
-                <button class="btn-show-completed" onclick={() => showCompleted = !showCompleted}>
-                  <svg class="chevron-sm" class:collapsed={!showCompleted} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                  {completedTodos.length} completed
-                </button>
-                {#if showCompleted}
-                  <ul class="todo-list completed-list" role="list">
-                    {#each completedTodos as item (item.id)}
-                      {@const badge = typeBadge(item)}
-                      {@const note = todoNote(item)}
-                      <li class="todo-item completed" role="button" tabindex="0"
-                        onclick={(e) => {
-                          const target = e.target as HTMLElement;
-                          if (target.closest('input, button')) return;
-                          onselect(item);
-                        }}
-                        onkeydown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onselect(item); }
-                        }}>
-                        <input
-                          type="checkbox"
-                          class="checkbox"
-                          checked={true}
-                          onclick={(e) => e.stopPropagation()}
-                          onchange={(e) => toggleCompleted(e, item)}
-                          aria-label="Mark {item.title} as incomplete"
-                        />
-                        <div class="todo-content">
-                          <div class="todo-title-row">
-                            <span class="todo-title">{item.title}</span>
-                            <div class="todo-actions">
-                              <button class="btn-action-icon" onclick={(e) => { e.stopPropagation(); makeReference(item); }} title="Move to references" aria-label="Make reference">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-                                </svg>
-                              </button>
-                            </div>
-                          </div>
-                          {#if badge || note}
-                            <div class="todo-meta">
-                              {#if badge}<span class="type-badge">{badge}</span>{/if}
-                              {#if note}<span class="todo-note">{note}</span>{/if}
-                            </div>
-                          {/if}
-                        </div>
-                      </li>
-                    {/each}
-                  </ul>
-                {/if}
-              {/if}
-            </aside>
-          {/if}
-
-          {#if referenceItems.length > 0}
-            <div class="ref-area">
-              <div class="grid">
-                {#each referenceItems as item (item.id)}
-                  <div class="grid-card-wrapper">
-                    <InboxCard {item} {onselect} />
-                    <div class="card-actions">
-                      <button class="btn-card-action" onclick={() => makeTodo(item)} title="Move to todos" aria-label="Make todo">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                          <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                {/each}
-              </div>
-            </div>
-          {/if}
-        </div>
-
-        <div class="collection-toolbar">
-          <AddEntryBar onadd={(type) => addingType = type} />
-        </div>
-      {/if}
+        {:else}
+          <p class="section-empty">No references yet.</p>
+        {/if}
+      </section>
     </div>
   {/if}
 </div>
 
 {#if addingType}
-  <AddEntryModal type={addingType} collectionId={collection.id} onclose={() => addingType = null} ondelete={async (item) => { await deleteItem(item.id, item); addingType = null; }} />
+  <!-- Virtual bucket: pass `undefined` so the modal stores the new item as
+       uncategorized (no collectionId). Real collections forward their id so
+       items land inside. -->
+  <AddEntryModal
+    type={addingType}
+    collectionId={isVirtual ? undefined : collection.id}
+    onclose={() => addingType = null}
+    ondelete={async (item) => { await deleteItem(item.id, item); addingType = null; }}
+  />
 {/if}
 
 <style>
@@ -426,57 +397,6 @@
     flex-shrink: 0;
   }
 
-  .header-toggle {
-    position: relative;
-    width: 32px;
-    height: 18px;
-    border-radius: 999px;
-    border: none;
-    background: color-mix(in srgb, var(--text-muted) 25%, var(--bg) 75%);
-    cursor: pointer;
-    transition: background 200ms;
-    flex-shrink: 0;
-    padding: 0;
-  }
-
-  .header-toggle.on {
-    background: var(--_col);
-  }
-
-  .header-toggle-knob {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: white;
-    transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  }
-
-  .header-toggle.on .header-toggle-knob {
-    transform: translateX(14px);
-  }
-
-  .btn-edit {
-    width: 28px;
-    height: 28px;
-    opacity: 0;
-    transition: opacity 150ms, color 150ms, background 150ms;
-    flex-shrink: 0;
-  }
-
-  .collection-header:hover .btn-edit {
-    opacity: 1;
-  }
-
-  @media (hover: none) {
-    .btn-edit {
-      opacity: 1;
-    }
-  }
-
   .chevron {
     flex-shrink: 0;
     transition: transform 250ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -520,7 +440,6 @@
     align-items: center;
     gap: 0.3rem;
     flex-shrink: 0;
-    margin-left: auto;
   }
 
   .badge {
@@ -534,15 +453,17 @@
     line-height: 1.3;
   }
 
-  .badge-todo {
-    color: white;
-    background: var(--_col);
-  }
-
   .badge-ref {
     color: var(--text-muted);
     background: color-mix(in srgb, var(--text-muted) 12%, transparent 88%);
     font-weight: 500;
+  }
+
+  /* Separate open-todo badge so the colored count reads as "active work" and
+     doesn't blend into the neutral reference count. */
+  .badge-todos {
+    color: white;
+    background: var(--_col);
   }
 
   .header-actions {
@@ -679,230 +600,112 @@
     padding: 1.25rem;
   }
 
-  /* ---- Content layout: sidebar + masonry grid (mirrors inbox) ---- */
-  .content-layout {
+  /* ---- Section framing (Todos + References share the same pattern) ---- */
+  .todos-section {
+    margin-bottom: 1.25rem;
+  }
+
+  .section-header {
     display: flex;
-    gap: 1.5rem;
-    align-items: flex-start;
-  }
-
-  /* ---- Todo panel (sidebar) ---- */
-  .todo-panel {
-    width: 280px;
-    flex-shrink: 0;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 1rem;
-  }
-
-  .ref-area {
-    flex: 1;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+    /* Allow the add-strip to shrink/scroll rather than push the title out. */
     min-width: 0;
   }
 
-  /* ---- Todo list styles ---- */
-  .todo-header {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-  }
-
-  .todo-heading {
-    font-size: 0.85rem;
+  .section-header h4 {
+    font-size: 0.72rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.08em;
     color: var(--text-muted);
+    margin: 0;
+    flex-shrink: 0;
   }
 
-  .todo-badge {
-    font-size: 0.65rem;
-    font-weight: 600;
-    color: white;
-    background: var(--accent);
-    min-width: 18px;
-    height: 18px;
-    border-radius: 999px;
+  /* The references header hosts the AddEntryBar directly — give it room to
+     shrink with horizontal scroll so a long button strip doesn't break the
+     layout on narrow screens. */
+  .references-section .section-header {
+    gap: 0.5rem;
+  }
+
+  .references-section .section-header :global(.add-strip) {
+    min-width: 0;
+    flex-shrink: 1;
+  }
+
+  .section-empty {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin: 0.25rem 0 0.15rem;
+    opacity: 0.75;
+  }
+
+  .btn-inline {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    padding: 0 5px;
-    line-height: 1;
+    gap: 0.3rem;
+    background: none;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    padding: 0.25rem 0.55rem;
+    cursor: pointer;
+    transition: color 150ms, border-color 150ms;
+    flex-shrink: 0;
   }
 
-  .todo-count-label {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    opacity: 0.7;
+  .btn-inline:hover {
+    color: var(--accent);
+    border-color: var(--accent);
   }
 
   .todo-list {
     list-style: none;
     padding: 0;
-    margin: 0.75rem 0 0;
+    margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
+    gap: 0.3rem;
   }
 
   .completed-list {
-    margin-top: 0.25rem;
+    margin-top: 0.4rem;
+    opacity: 0.75;
   }
 
-  .todo-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.5rem;
-    padding: 0.5rem 0.4rem;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: background 0.1s;
-    min-height: 2.5rem;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .todo-item:hover {
-    background: var(--surface-tint);
-  }
-
-  .todo-item:active {
-    background: var(--surface-tint-hover);
-  }
-
-  .todo-content {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .todo-title-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.25rem;
-  }
-
-  .todo-title {
-    font-size: 0.9rem;
-    flex: 1;
-    min-width: 0;
-    word-break: break-word;
-  }
-
-  .completed .todo-title {
-    text-decoration: line-through;
-    opacity: 0.5;
-  }
-
-  .todo-meta {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    margin-top: 0.15rem;
-  }
-
-  .todo-note {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    opacity: 0.7;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-  }
-
-  .checkbox {
-    width: 18px;
-    height: 18px;
-    flex-shrink: 0;
-    accent-color: var(--_col);
-    cursor: pointer;
-    margin-top: 1px;
-  }
-
-  .type-badge {
-    font-size: 0.6rem;
-    color: var(--accent);
-    background: var(--accent-subtle);
-    padding: 0.1rem 0.35rem;
-    border-radius: 999px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    flex-shrink: 0;
-  }
-
-  .todo-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.15rem;
-    flex-shrink: 0;
-    opacity: 0;
-    transition: opacity 0.15s;
-  }
-
-  .todo-item:hover .todo-actions {
-    opacity: 1;
-  }
-
-  @media (hover: none) {
-    .todo-actions {
-      opacity: 1;
-    }
-  }
-
-  .btn-action-icon {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    padding: 0.3rem;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    transition: color 0.15s, background 0.15s;
-    cursor: pointer;
-    min-width: 28px;
-    min-height: 28px;
-    justify-content: center;
-  }
-
-  .btn-action-icon:hover {
-    color: var(--accent);
-    background: var(--accent-subtler);
-  }
-
-  .btn-show-completed {
-    display: flex;
+  .btn-completed-toggle {
+    display: inline-flex;
     align-items: center;
     gap: 0.3rem;
     background: none;
     border: none;
     color: var(--text-muted);
     font-size: 0.75rem;
-    padding: 0.45rem 0.4rem;
-    margin-top: 0.5rem;
+    padding: 0.4rem 0.3rem;
+    margin-top: 0.6rem;
     cursor: pointer;
-    transition: color 0.15s;
     border-radius: var(--radius-sm);
-    min-height: 2rem;
+    transition: color 150ms;
   }
 
-  .btn-show-completed:hover {
+  .btn-completed-toggle:hover {
     color: var(--text);
   }
 
   .chevron-sm {
     color: var(--text-muted);
-    transition: transform 0.15s;
+    transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    transform: rotate(-90deg);
     flex-shrink: 0;
   }
 
-  .chevron-sm.collapsed {
-    transform: rotate(-90deg);
-  }
-
-  .empty-sub {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    margin: 0.75rem 0 0;
+  .chevron-sm.open {
+    transform: rotate(0);
   }
 
   /* ---- Reference grid (masonry — same as InboxGrid) ---- */
@@ -957,40 +760,6 @@
     background: var(--bg);
   }
 
-  /* ---- Toolbar ---- */
-  .collection-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    margin-top: 1.25rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--border);
-  }
-
-  /* ---- Empty state ---- */
-  .empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1rem;
-    padding: 2rem 1rem;
-    text-align: center;
-  }
-
-  .empty-state p {
-    color: var(--text-muted);
-    font-size: 0.85rem;
-  }
-
-  .empty-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
   /* ================================================================
      RESPONSIVE — mobile-first breakpoints
      ================================================================ */
@@ -1003,15 +772,6 @@
   }
 
   @media (max-width: 768px) {
-    .content-layout {
-      flex-direction: column;
-      gap: 1rem;
-    }
-
-    .todo-panel {
-      width: 100%;
-    }
-
     .collection-body {
       padding: 1rem;
     }
@@ -1028,19 +788,6 @@
 
     .collection-header {
       padding: 0.65rem 0.75rem;
-      gap: 0.35rem;
-    }
-
-    .col-description {
-      display: none;
-    }
-
-    .header-badges {
-      display: none;
-    }
-
-    .header-toggle {
-      margin-left: auto;
     }
 
     .collection-body {

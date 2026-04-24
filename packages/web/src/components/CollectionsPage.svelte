@@ -1,26 +1,26 @@
 <script lang="ts">
   import type { InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
-  import { get } from 'svelte/store';
   import { dndzone } from 'svelte-dnd-action';
   import {
-    storeCollection, deleteCollection,
-    groups, groupCollections, sortedGroups, storeGroup, deleteGroup, moveCollectionToGroup,
-    ungroupedCollections,
-    appConfig, updateConfig, reorderGroupCollections,
+    createCollection, storeCollection, deleteCollection, moveCollectionToGroup,
+    visibleGroupedCollections, sortedGroups, storeGroup, deleteGroup,
+    appConfig, updateConfig, reorderGroupCollections, setExpandedCollections,
+    UNCATEGORIZED_FILTER_ID, reorderUngroupedCollections,
   } from '../lib/stores';
   import CollectionView from './CollectionView.svelte';
+  import GroupSection from './GroupSection.svelte';
   import CollectionFormModal from './CollectionFormModal.svelte';
   import GroupFormModal from './GroupFormModal.svelte';
+  import Fab from './Fab.svelte';
 
-  let { onselect, oncreate, groupId }: {
+  let { onselect }: {
     onselect: (item: InboxItem) => void;
-    oncreate: () => void;
-    groupId: string;
   } = $props();
 
-  let expandedIds = $state<Set<string>>(new Set($appConfig.expandedCollections ?? []));
   let editingCollection = $state<Collection | null>(null);
   let editingGroup = $state<CollectionGroup | null>(null);
+  let collectionFormGroupId = $state<string | undefined>(undefined);
+  let creatingCollection = $state(false);
 
   let isTouchDevice = $state(false);
   $effect(() => {
@@ -31,185 +31,283 @@
     return () => mql.removeEventListener('change', handler);
   });
 
-  // Sync expanded state from config when it loads/changes
-  let configInitialized = false;
-  $effect(() => {
-    const saved = $appConfig.expandedCollections;
-    if (saved && !configInitialized) {
-      expandedIds = new Set(saved);
-      configInitialized = true;
-    }
-  });
+  // Collapse state persists in appConfig.expandedCollections. Collections
+  // default to collapsed; expanding a row adds its id to the set.
+  const expandedSet = $derived(new Set($appConfig.expandedCollections ?? []));
 
-  const isUngrouped = $derived(!groupId);
-  const currentGroup = $derived(groupId ? $groups[groupId] : undefined);
-
-  const filteredCollections = $derived(
-    isUngrouped ? $ungroupedCollections : ($groupCollections[groupId] ?? [])
-  );
-
-  // DnD: local mutable copy of filtered collections
-  let dndCollections = $state<Array<Collection & { id: string }>>([]);
-  $effect(() => {
-    dndCollections = filteredCollections.map(c => ({ ...c }));
-  });
-
-  function handleDndConsider(e: CustomEvent<{ items: Array<Collection & { id: string }> }>) {
-    dndCollections = e.detail.items;
+  function isExpanded(col: Collection): boolean {
+    return expandedSet.has(col.id);
   }
 
-  async function handleDndFinalize(e: CustomEvent<{ items: Array<Collection & { id: string }> }>) {
-    const previous = filteredCollections.map(c => ({ ...c }));
-    dndCollections = e.detail.items;
-    const newIds = dndCollections.map(c => c.id);
+  async function toggleExpand(col: Collection) {
+    const next = new Set(expandedSet);
+    if (isExpanded(col)) {
+      next.delete(col.id);
+    } else {
+      next.add(col.id);
+    }
     try {
-      await reorderGroupCollections(groupId, newIds);
-    } catch (error) {
-      console.error('Failed to reorder collections', error);
-      dndCollections = previous;
+      await updateConfig({ expandedCollections: [...next] });
+    } catch (e) {
+      console.error('Failed to persist expanded state', e);
     }
   }
 
-  function toggleExpand(id: string) {
-    const next = new Set(expandedIds);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    expandedIds = next;
-    void updateConfig({ expandedCollections: [...next] }).catch(e => {
-      console.error('Failed to persist expanded state', e);
-    });
+  const sections = $derived($visibleGroupedCollections);
+
+  // Collection ids currently visible on the page — used for expand/collapse all.
+  // Includes virtual collections (e.g. the Uncategorized bucket) so the toggle
+  // covers everything the user can see, not just rows backed by stored records.
+  const visibleIds = $derived(sections.flatMap(s => [
+    ...(s.virtualCollection ? [s.virtualCollection.id] : []),
+    ...s.collections.map(c => c.id),
+  ]));
+  const anyExpanded = $derived(visibleIds.some(id => expandedSet.has(id)));
+
+  async function toggleExpandAll() {
+    const next = anyExpanded ? [] : visibleIds;
+    try {
+      await setExpandedCollections(next);
+    } catch (e) {
+      console.error('Failed to toggle expand all', e);
+    }
   }
 
-  async function handleEditSave(col: Collection) {
-    await storeCollection(col);
-    editingCollection = null;
+  // Per-group DnD state — keyed by group id, mirrored from sections.
+  let dndByGroup = $state<Record<string, Array<Collection & { id: string }>>>({});
+  $effect(() => {
+    const next: Record<string, Array<Collection & { id: string }>> = {};
+    for (const section of sections) {
+      next[section.group.id] = section.collections.map(c => ({ ...c }));
+    }
+    dndByGroup = next;
+  });
+
+  function makeConsider(groupId: string) {
+    return (e: CustomEvent<{ items: Array<Collection & { id: string }> }>) => {
+      dndByGroup = { ...dndByGroup, [groupId]: e.detail.items };
+    };
+  }
+
+  function makeFinalize(groupId: string) {
+    return async (e: CustomEvent<{ items: Array<Collection & { id: string }> }>) => {
+      const previous = (sections.find(s => s.group.id === groupId)?.collections ?? []).map(c => ({ ...c }));
+      const updated = e.detail.items;
+      dndByGroup = { ...dndByGroup, [groupId]: updated };
+      try {
+        // The Uncategorized section is virtual — there's no backing group
+        // record to update, so route reorders to collectionsOrder instead.
+        if (groupId === UNCATEGORIZED_FILTER_ID) {
+          await reorderUngroupedCollections(updated.map(c => c.id));
+        } else {
+          await reorderGroupCollections(groupId, updated.map(c => c.id));
+        }
+      } catch (error) {
+        console.error('Failed to reorder collections', error);
+        dndByGroup = { ...dndByGroup, [groupId]: previous };
+      }
+    };
+  }
+
+  function openAddCollection(groupId: string | undefined) {
+    // `undefined` means the user triggered creation outside any group (e.g.
+    // from the page-level FAB). The modal's form captures name/colour only;
+    // ungrouped collections land in the "Collections" bucket and can be
+    // dragged into a group afterwards.
+    collectionFormGroupId = groupId;
+    creatingCollection = true;
+  }
+
+  async function handleCreateCollection(col: Collection) {
+    try {
+      // The modal enforces an explicit group choice, so `col.groupId` is
+      // always a real group id here — we never route through the store's
+      // Uncategorized fallback from this path.
+      await createCollection(col);
+      creatingCollection = false;
+      collectionFormGroupId = undefined;
+    } catch (error) {
+      console.error('Failed to create collection', error);
+    }
+  }
+
+  async function handleEditCollection(col: Collection) {
+    if (!editingCollection) return;
+    const previousGroupId = editingCollection.groupId;
+    try {
+      await storeCollection(col);
+      // Fire the move on any group change — including group → undefined, so
+      // a user who picks "No group" in the edit modal actually ends up in
+      // Uncategorized. The previous `col.groupId && …` guard swallowed the
+      // group-to-none transition silently.
+      if (col.groupId !== previousGroupId) {
+        await moveCollectionToGroup(col.id, col.groupId);
+      }
+      editingCollection = null;
+    } catch (error) {
+      console.error('Failed to update collection', error);
+    }
   }
 
   async function handleDeleteCollection() {
     if (!editingCollection) return;
     const id = editingCollection.id;
     editingCollection = null;
-    await deleteCollection(id);
-    expandedIds.delete(id);
-    expandedIds = new Set(expandedIds);
+    try {
+      await deleteCollection(id);
+    } catch (error) {
+      console.error('Failed to delete collection', error);
+    }
   }
 
   async function handleEditGroup(group: CollectionGroup) {
-    await storeGroup(group);
-    editingGroup = null;
+    try {
+      await storeGroup(group);
+      editingGroup = null;
+    } catch (error) {
+      console.error('Failed to update group', error);
+    }
   }
 
   async function handleDeleteGroup() {
-    if (!groupId) return;
+    if (!editingGroup) return;
+    const id = editingGroup.id;
     editingGroup = null;
-    const deleted = await deleteGroup(groupId);
-    if (deleted) {
-      const remaining = get(sortedGroups);
-      window.location.hash = remaining.length > 0 ? `#/group/${remaining[0].id}` : '#/';
+    try {
+      await deleteGroup(id);
+    } catch (error) {
+      console.error('Failed to delete group', error);
     }
   }
 
-  const hasAnyActive = $derived(filteredCollections.some(c => c.active));
-  const hasAnyInactive = $derived(filteredCollections.some(c => !c.active));
+  const editingGroupIsEmpty = $derived.by(() => {
+    if (!editingGroup) return false;
+    const section = sections.find(s => s.group.id === editingGroup!.id);
+    return !section || section.collections.length === 0;
+  });
 
-  async function activateAll() {
-    for (const col of filteredCollections) {
-      if (!col.active) {
-        await storeCollection({ ...col, active: true });
-      }
+  // Collections must be empty before they can be deleted — same rule as
+  // groups. The store-level `deleteCollection` enforces this too, but
+  // hiding the Delete button when it would be refused keeps the UI honest
+  // about why nothing happens. Empty here means "no items reference this
+  // collection's id"; the collection's own `itemIds` array isn't trusted
+  // because it can drift out of sync with the items themselves.
+  const editingCollectionIsEmpty = $derived.by(() => {
+    if (!editingCollection) return false;
+    for (const section of sections) {
+      const found = section.collections.find(c => c.id === editingCollection!.id);
+      if (found) return found.itemIds.length === 0;
     }
-  }
-
-  async function deactivateAll() {
-    for (const col of filteredCollections) {
-      if (col.active) {
-        await storeCollection({ ...col, active: false });
-      }
-    }
-  }
+    return true;
+  });
 </script>
 
 <div class="collections-page">
-  <div class="page-header">
-    {#if isUngrouped}
-      <h2>Ungrouped</h2>
-    {:else if currentGroup}
-      <div class="group-header">
-        <span class="group-dot-lg" style="background: {currentGroup.color || 'var(--accent)'}"></span>
-        <h2>{currentGroup.name}</h2>
-        <div class="group-actions">
-          <button class="btn-icon-sm" onclick={() => editingGroup = currentGroup} title="Edit group" aria-label="Edit group">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-            </svg>
-          </button>
-        </div>
-      </div>
+  <!--
+    Always render the page-toolbar so the Fab has a home on desktop (inline
+    labelled pill). The expand-all toggle only shows when there are
+    collections to toggle, but the "New collection" action is useful in
+    every state — including the empty state — so the toolbar is never
+    conditional. On mobile the Fab is position:fixed (out of flow) and the
+    toolbar collapses to zero height when no other controls are present.
+  -->
+  <div class="page-toolbar">
+    {#if visibleIds.length > 0}
+      <button class="btn-expand-toggle" onclick={toggleExpandAll}>
+        <svg class="chevron" class:open={anyExpanded} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+        {anyExpanded ? 'Collapse all' : 'Expand all'}
+      </button>
     {/if}
-    {#if filteredCollections.length > 0}
-      <div class="batch-actions">
-        <button
-          class="btn-batch"
-          onclick={activateAll}
-          disabled={!hasAnyInactive}
-          title="Activate all collections"
-        >Activate All</button>
-        <button
-          class="btn-batch"
-          onclick={deactivateAll}
-          disabled={!hasAnyActive}
-          title="Deactivate all collections"
-        >Deactivate All</button>
-      </div>
-    {/if}
-    <button class="btn-new" onclick={oncreate}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="12" y1="5" x2="12" y2="19"></line>
-        <line x1="5" y1="12" x2="19" y2="12"></line>
-      </svg>
-      New Collection
-    </button>
+    <Fab onclick={() => openAddCollection(undefined)} label="New collection" />
   </div>
 
-  {#if dndCollections.length === 0}
-    <div class="empty-state">
-      <p>{groupId ? 'No collections in this group yet.' : 'No collections yet.'} Create one to start organizing your items.</p>
-      <button class="btn-new" onclick={oncreate}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-        New Collection
-      </button>
-    </div>
-  {:else}
-    <div
-      class="collection-list"
-      use:dndzone={{ items: dndCollections, flipDurationMs: 200, dropTargetStyle: {}, dragDisabled: isTouchDevice }}
-      onconsider={handleDndConsider}
-      onfinalize={handleDndFinalize}
+  {#each sections as section (section.group.id)}
+    {@const isUncat = section.group.id === UNCATEGORIZED_FILTER_ID}
+    {@const addGroupId = isUncat ? undefined : section.group.id}
+    {@const realCount = dndByGroup[section.group.id]?.length ?? 0}
+    <GroupSection
+      group={section.group}
+      onedit={isUncat ? undefined : () => editingGroup = section.group}
+      onaddcollection={() => openAddCollection(addGroupId)}
     >
-      {#each dndCollections as col (col.id)}
-        <CollectionView
-          collection={col}
-          expanded={expandedIds.has(col.id)}
-          {onselect}
-          {isTouchDevice}
-          onedit={() => { editingCollection = col; }}
-          ontoggle={() => toggleExpand(col.id)}
-        />
-      {/each}
-    </div>
+      {#if section.virtualCollection}
+        <!-- Virtual Uncategorized bucket — rendered outside the dndzone since
+             it's not reorderable and has no backing record. Still participates
+             in the page's expand/collapse state so users can scan their
+             uncategorized items at a glance. -->
+        <div class="collection-list">
+          <CollectionView
+            collection={section.virtualCollection}
+            expanded={isExpanded(section.virtualCollection)}
+            {onselect}
+            {isTouchDevice}
+            isVirtual
+            onedit={() => {}}
+            ontoggle={() => toggleExpand(section.virtualCollection!)}
+          />
+        </div>
+      {/if}
+
+      {#if realCount > 0}
+        <div
+          class="collection-list"
+          use:dndzone={{
+            items: dndByGroup[section.group.id],
+            flipDurationMs: 200,
+            dropTargetStyle: {},
+            dragDisabled: isTouchDevice,
+            type: `cols-${section.group.id}`,
+          }}
+          onconsider={makeConsider(section.group.id)}
+          onfinalize={makeFinalize(section.group.id)}
+        >
+          {#each dndByGroup[section.group.id] as col (col.id)}
+            <CollectionView
+              collection={col}
+              expanded={isExpanded(col)}
+              {onselect}
+              {isTouchDevice}
+              onedit={() => editingCollection = col}
+              ontoggle={() => toggleExpand(col)}
+            />
+          {/each}
+        </div>
+      {:else if !section.virtualCollection}
+        <p class="group-empty">
+          No collections in this group yet.
+          <button class="link" onclick={() => openAddCollection(addGroupId)}>Add one</button>.
+        </p>
+      {/if}
+    </GroupSection>
+  {/each}
+
+  {#if $sortedGroups.length === 0 && sections.length === 0}
+    <p class="page-empty">
+      No groups yet. Create one from the filter bar above to organise your collections.
+    </p>
+  {:else if sections.length === 0}
+    <p class="page-empty">
+      All groups are filtered out. Toggle one on in the filter bar to see collections.
+    </p>
   {/if}
 </div>
+
+{#if creatingCollection}
+  <CollectionFormModal
+    groupId={collectionFormGroupId}
+    onclose={() => { creatingCollection = false; collectionFormGroupId = undefined; }}
+    onsave={handleCreateCollection}
+  />
+{/if}
 
 {#if editingCollection}
   <CollectionFormModal
     collection={editingCollection}
     onclose={() => editingCollection = null}
-    onsave={handleEditSave}
-    ondelete={handleDeleteCollection}
+    onsave={handleEditCollection}
+    ondelete={editingCollectionIsEmpty ? handleDeleteCollection : undefined}
   />
 {/if}
 
@@ -218,111 +316,59 @@
     group={editingGroup}
     onclose={() => editingGroup = null}
     onsave={handleEditGroup}
-    ondelete={filteredCollections.length === 0 ? handleDeleteGroup : undefined}
+    ondelete={editingGroupIsEmpty ? handleDeleteGroup : undefined}
   />
 {/if}
 
 <style>
   .collections-page {
-    max-width: 100%;
-  }
-
-  .page-header {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 1.25rem;
+    flex-direction: column;
+    gap: 1.25rem;
   }
 
-  h2 {
-    font-size: 1.3rem;
-    font-weight: 700;
-  }
-
-  .group-header {
+  .page-toolbar {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: -0.5rem;
   }
 
-  .group-dot-lg {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    flex-shrink: 0;
+  /* Anchor the Fab (inline on desktop) to the right edge of the toolbar, so
+     the expand-all toggle reads left-aligned and the primary action sits
+     where the eye finishes scanning the row. On mobile the Fab is
+     position:fixed and out of flow — this margin is a no-op. */
+  .page-toolbar :global(.fab) {
+    margin-left: auto;
   }
 
-  .group-actions {
-    display: flex;
-    gap: 0.15rem;
-    margin-left: 0.25rem;
-  }
-
-  .btn-icon-sm {
+  .btn-expand-toggle {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border: none;
-    border-radius: var(--radius-sm);
-    background: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: color 150ms, background 150ms;
-  }
-
-  .btn-icon-sm:hover {
-    color: var(--text);
-    background: var(--surface-tint);
-  }
-
-  .batch-actions {
-    display: flex;
     gap: 0.35rem;
-    margin-left: auto;
-    margin-right: 0.75rem;
-  }
-
-  .btn-batch {
     background: none;
     border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.35rem 0.7rem;
     color: var(--text-muted);
-    font-size: 0.75rem;
-    padding: 0.3rem 0.6rem;
-    border-radius: var(--radius-sm);
+    font-size: 0.78rem;
     cursor: pointer;
-    transition: color 150ms, background 150ms, border-color 150ms;
+    transition: color 0.15s, border-color 0.15s;
   }
 
-  .btn-batch:hover:not(:disabled) {
+  .btn-expand-toggle:hover {
     color: var(--text);
-    background: var(--surface-tint);
-    border-color: color-mix(in srgb, var(--text-muted) 30%, var(--border) 70%);
+    border-color: var(--text-muted);
   }
 
-  .btn-batch:disabled {
-    opacity: 0.4;
-    cursor: default;
+  .btn-expand-toggle .chevron {
+    transition: transform 0.2s;
+    transform: rotate(-90deg);
   }
 
-  .btn-new {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    background: var(--accent-subtle);
-    color: var(--accent);
-    border: none;
-    padding: 0.45rem 0.85rem;
-    border-radius: var(--radius-sm);
-    font-size: 0.85rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-
-  .btn-new:hover {
-    background: var(--accent-subtle-strong);
+  .btn-expand-toggle .chevron.open {
+    transform: rotate(0);
   }
 
   .collection-list {
@@ -331,41 +377,47 @@
     gap: 0.75rem;
   }
 
-  .empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 40vh;
-    text-align: center;
-    gap: 0.75rem;
-  }
-
-  .empty-state p {
+  .group-empty {
+    font-size: 0.85rem;
     color: var(--text-muted);
-    font-size: 0.9rem;
-    max-width: 400px;
+    margin: 0.25rem 0 0.5rem;
   }
 
-  @media (max-width: 550px) {
-    .page-header {
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
+  .page-empty {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 1rem;
+  }
 
-    .batch-actions {
-      order: 3;
-      width: 100%;
-      margin-left: 0;
-      margin-right: 0;
-    }
+  .link {
+    background: none;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    padding: 0;
+    font: inherit;
+    text-decoration: underline;
+  }
 
-    .btn-batch {
-      flex: 1;
-    }
+  .link:hover {
+    color: var(--accent-strong, var(--accent));
+  }
 
-    .btn-new {
-      margin-left: auto;
+  /* Mobile-only: reserve room so the fixed-position FAB doesn't float over
+     the last group section when scrolled to the bottom. Desktop renders the
+     add button inline in the toolbar, so no bottom reservation is needed. */
+  @media (max-width: 768px) {
+    .collections-page {
+      padding-bottom: 5rem;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .collections-page {
+      /* Tighter bottom padding on mobile — the FAB sits closer to the edge
+         and the list should feel dense. */
+      padding-bottom: 4.5rem;
     }
   }
 </style>

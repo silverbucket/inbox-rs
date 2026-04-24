@@ -19,8 +19,15 @@
     state = null;
   }
 
+  /**
+   * Window-level Escape — the backdrop's onkeydown only fires when focus is
+   * inside the dialog, which isn't guaranteed (there's no autofocus target
+   * when the modal is in its progress/done/error states). Listening at the
+   * window ensures Escape always dismisses dismissable states. `close()`
+   * already no-ops during exports/imports so mid-operation is safe.
+   */
   function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') close();
+    if (e.key === 'Escape' && open) close();
   }
 
   function onBackdropClick(e: MouseEvent) {
@@ -86,9 +93,11 @@
   }
 </script>
 
+<svelte:window onkeydown={onKeydown} />
+
 {#if open && state}
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-  <div class="backdrop" role="dialog" aria-modal="true" onkeydown={onKeydown} onclick={onBackdropClick}>
+  <div class="backdrop" role="dialog" aria-modal="true" onclick={onBackdropClick}>
     <div class="modal">
       {#if state.kind === 'confirm-import'}
         <h3>Import Data</h3>

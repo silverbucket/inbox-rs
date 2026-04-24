@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
   import { sortedItems, todoItems } from '../lib/stores';
+  import { autofocus } from '../lib/actions';
 
   let { onclose, onpick }: {
     onclose: () => void;
@@ -21,6 +22,8 @@
   });
 </script>
 
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape') onclose(); }} />
+
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="overlay" onclick={onclose}>
@@ -28,6 +31,7 @@
     <h2>Add Items to Collection</h2>
 
     <input
+      use:autofocus
       type="text"
       class="search"
       bind:value={search}

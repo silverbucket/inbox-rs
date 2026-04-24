@@ -10,7 +10,20 @@ export interface InboxItemBase {
   isTodo?: boolean;
   completed?: boolean;
   completedAt?: string;
-  collectionId?: string; // undefined = lives in inbox
+  collectionId?: string; // undefined = lives in Inbox (or Uncategorized, see `uncategorized`)
+  /**
+   * When true AND `collectionId` is unset, the item belongs to the
+   * Uncategorized bucket on the Collections/Todos pages rather than the
+   * Inbox. Typical sources:
+   *   - user explicitly picks "Uncategorized" in the AddEntryModal picker
+   *   - an item is orphaned when its parent collection is deleted
+   *
+   * Items without a `collectionId` and without this flag default to the Inbox
+   * — they surface only in the Inbox view and never in the Uncategorized
+   * bucket. Ignored when `collectionId` is set (a collection placement always
+   * wins over Uncategorized).
+   */
+  uncategorized?: boolean;
 }
 
 export interface BookmarkItem extends InboxItemBase {
@@ -87,8 +100,51 @@ export interface AppConfig {
   todosCollapsed?: boolean;
   collectionsOrder?: string[]; // ordered list of collection IDs for nav display
   groupsOrder?: string[];      // ordered list of group IDs for nav display
-  todosOrder?: string[];       // ordered list of inbox todo IDs for manual sorting
+  todosOrder?: string[];       // ordered list of inbox todo IDs for manual sorting (within-inbox)
   expandedCollections?: string[]; // IDs of collections currently expanded
+  /**
+   * Group IDs that are toggled ON in the filter row.
+   * When undefined: treat all groups as active (default for new users).
+   * When set: only groups in this list are visible/filtered in.
+   */
+  activeGroupFilters?: string[];
+  /**
+   * Whether uncategorized todos (items without a collectionId) are visible on
+   * the Todos page. Treated as a filter pill alongside group filters.
+   * When undefined: defaults to true (visible).
+   */
+  uncategorizedFilterActive?: boolean;
+  /**
+   * Ordered list of todo IDs for the flat Todos page. Controls cross-collection
+   * drag-sort order on that page only — collection-internal order (used by the
+   * Collections page) still lives in `Collection.itemIds`.
+   * Ids missing from this list fall back to their natural order (newest first).
+   */
+  todosGlobalOrder?: string[];
+  /**
+   * Whether the completed-todos section on the Todos page is expanded.
+   * Defaults to false (collapsed behind "N completed").
+   */
+  completedTodosExpanded?: boolean;
+  /**
+   * Remembered "last picked" destinations for the add-entry modals, so
+   * repeat-create flows don't start on a blank picker every time.
+   *
+   * - `lastSelectedGroupId` — the group the user most recently saved a new
+   *   collection into. When the user opens "New collection" from a neutral
+   *   entry point (page-level Fab), the group picker starts on this value.
+   *   Falls back to the first group in display order if unset or the
+   *   referenced group no longer exists.
+   * - `lastSelectedCollectionId` — same idea for new todos: the collection
+   *   the user most recently filed a todo into. Used only for todos (refs
+   *   keep defaulting to Inbox).
+   *
+   * Both are best-effort hints — callers must validate the referenced id
+   * still exists before using it, because collections/groups can be deleted
+   * between sessions.
+   */
+  lastSelectedGroupId?: string;
+  lastSelectedCollectionId?: string;
 }
 
 export interface Collection {
@@ -99,7 +155,6 @@ export interface Collection {
   createdAt: string;       // ISO 8601
   color?: string;          // optional accent color
   groupId?: string;        // optional group membership
-  active?: boolean;        // when true, top todos surface in main todo list
 }
 
 export interface CollectionGroup {
