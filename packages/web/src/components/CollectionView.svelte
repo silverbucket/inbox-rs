@@ -81,7 +81,7 @@
     showMoveMenu = !showMoveMenu;
   }
 
-  async function handleMoveToGroup(groupId: string | undefined) {
+  async function handleMoveToGroup(groupId: string) {
     showMoveMenu = false;
     await moveCollectionToGroup(collection.id, groupId);
   }
@@ -189,21 +189,6 @@
             <div class="move-menu-backdrop" onclick={(e) => { e.stopPropagation(); showMoveMenu = false; }}></div>
             <div class="move-menu" style="top: {menuPos.top}px; right: {menuPos.right}px;" onclick={(e) => e.stopPropagation()}>
               <div class="move-menu-label">Move to group</div>
-              <button
-                class="move-menu-item"
-                class:current={!collection.groupId}
-                onclick={() => handleMoveToGroup(undefined)}
-                disabled={!collection.groupId}
-              >
-                <span class="move-dot" style="background: var(--text-muted)"></span>
-                Collections
-                {#if !collection.groupId}
-                  <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                {/if}
-              </button>
-              <div class="move-menu-divider"></div>
               {#each availableGroups as g (g.id)}
                 <button
                   class="move-menu-item"
@@ -581,12 +566,6 @@
     margin-left: auto;
     color: var(--accent);
     flex-shrink: 0;
-  }
-
-  .move-menu-divider {
-    height: 1px;
-    background: var(--border);
-    margin: 0.25rem 0;
   }
 
   /* ================================================================

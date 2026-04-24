@@ -5,7 +5,7 @@
   import type { InboxItemType, InboxItem } from '@inbox-rs/rs-module';
   import {
     storeItem, moveItemToCollection,
-    sortedGroups, groupCollections, ungroupedCollections,
+    sortedGroups, groupCollections,
     hasUncategorizedItems, UNCATEGORIZED_COLLECTION_ID,
     collections, appConfig, updateConfig,
   } from '../lib/stores';
@@ -28,8 +28,8 @@
 
   /**
    * Find the first real collection in display order — iterate groups in
-   * sorted order, take the first collection from each, then fall back to
-   * ungrouped. Used as the last-resort default for the todo picker when
+   * sorted order, then take the first collection from each. Used as the
+   * last-resort default for the todo picker when
    * there's no explicit `collectionId` prop and no valid
    * `lastSelectedCollectionId`. Returns `undefined` when the user has no
    * collections at all (the picker then shows its empty-state hint).
@@ -39,7 +39,7 @@
       const cols = get(groupCollections)[group.id] ?? [];
       if (cols.length > 0) return cols[0].id;
     }
-    return get(ungroupedCollections)[0]?.id;
+    return undefined;
   }
 
   /**
@@ -102,8 +102,6 @@
       const found = cols.find(c => c.id === selectedCollectionId);
       if (found) return found.name;
     }
-    const orphan = $ungroupedCollections.find(c => c.id === selectedCollectionId);
-    if (orphan) return orphan.name;
     return noCollectionLabel;
   });
 
@@ -120,7 +118,7 @@
     || selectedCollectionId === UNCATEGORIZED_COLLECTION_ID
   );
 
-  // Whether the user has any real collections at all (grouped or ungrouped).
+  // Whether the user has any real grouped collections at all.
   // Used to decide when to surface an empty-state hint in the todo picker —
   // todos require a real collection, so an empty picker is a dead end without
   // guidance.
@@ -128,7 +126,7 @@
     for (const group of $sortedGroups) {
       if (($groupCollections[group.id] ?? []).length > 0) return true;
     }
-    return $ungroupedCollections.length > 0;
+    return false;
   });
 
   $effect(() => {
@@ -917,29 +915,6 @@
                     {/each}
                   {/if}
                 {/each}
-                {#if $ungroupedCollections.length > 0}
-                  <!--
-                    Ungrouped collections — either legacy collections from
-                    before groups became mandatory, or collections whose
-                    parent group was deleted. Surface them so todos and refs
-                    can still be filed there instead of falling off the list.
-                  -->
-                  <div class="dest-group-label">
-                    <span class="dest-dot" style="background: #9ca3af" aria-hidden="true"></span>
-                    Ungrouped
-                  </div>
-                  {#each $ungroupedCollections as col (col.id)}
-                    <button
-                      type="button"
-                      class="dest-item nested"
-                      class:selected={selectedCollectionId === col.id}
-                      onclick={() => selectCollection(col.id)}
-                    >
-                      <span class="dest-dot" style="background: {col.color || 'var(--accent)'}" aria-hidden="true"></span>
-                      {col.name}
-                    </button>
-                  {/each}
-                {/if}
                 {#if isTodoType && !hasAnyCollection}
                   <!--
                     Todos require a real collection, so when the user has no

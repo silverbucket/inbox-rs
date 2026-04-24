@@ -5,7 +5,7 @@
     createCollection, storeCollection, deleteCollection, moveCollectionToGroup,
     visibleGroupedCollections, sortedGroups, storeGroup, deleteGroup,
     appConfig, updateConfig, reorderGroupCollections, setExpandedCollections,
-    UNCATEGORIZED_FILTER_ID, reorderUngroupedCollections,
+    UNCATEGORIZED_FILTER_ID, collectionItems, groups,
   } from '../lib/stores';
   import CollectionView from './CollectionView.svelte';
   import GroupSection from './GroupSection.svelte';
@@ -95,13 +95,7 @@
       const updated = e.detail.items;
       dndByGroup = { ...dndByGroup, [groupId]: updated };
       try {
-        // The Uncategorized section is virtual — there's no backing group
-        // record to update, so route reorders to collectionsOrder instead.
-        if (groupId === UNCATEGORIZED_FILTER_ID) {
-          await reorderUngroupedCollections(updated.map(c => c.id));
-        } else {
-          await reorderGroupCollections(groupId, updated.map(c => c.id));
-        }
+        await reorderGroupCollections(groupId, updated.map(c => c.id));
       } catch (error) {
         console.error('Failed to reorder collections', error);
         dndByGroup = { ...dndByGroup, [groupId]: previous };
@@ -111,9 +105,8 @@
 
   function openAddCollection(groupId: string | undefined) {
     // `undefined` means the user triggered creation outside any group (e.g.
-    // from the page-level FAB). The modal's form captures name/colour only;
-    // ungrouped collections land in the "Collections" bucket and can be
-    // dragged into a group afterwards.
+    // from the page-level FAB). The modal itself chooses an explicit real
+    // group before saving; collections should never be created ungrouped.
     collectionFormGroupId = groupId;
     creatingCollection = true;
   }
@@ -135,14 +128,11 @@
     if (!editingCollection) return;
     const previousGroupId = editingCollection.groupId;
     try {
-      await storeCollection(col);
-      // Fire the move on any group change — including group → undefined, so
-      // a user who picks "No group" in the edit modal actually ends up in
-      // Uncategorized. The previous `col.groupId && …` guard swallowed the
-      // group-to-none transition silently.
+      if (!col.groupId || !$groups[col.groupId]) throw new Error('Collection must have a real group');
       if (col.groupId !== previousGroupId) {
         await moveCollectionToGroup(col.id, col.groupId);
       }
+      await storeCollection(col);
       editingCollection = null;
     } catch (error) {
       console.error('Failed to update collection', error);
@@ -187,18 +177,11 @@
   });
 
   // Collections must be empty before they can be deleted — same rule as
-  // groups. The store-level `deleteCollection` enforces this too, but
-  // hiding the Delete button when it would be refused keeps the UI honest
-  // about why nothing happens. Empty here means "no items reference this
-  // collection's id"; the collection's own `itemIds` array isn't trusted
-  // because it can drift out of sync with the items themselves.
+  // groups. Match the store-level guard by checking live item placement, not
+  // `Collection.itemIds`, which can drift after interrupted writes.
   const editingCollectionIsEmpty = $derived.by(() => {
     if (!editingCollection) return false;
-    for (const section of sections) {
-      const found = section.collections.find(c => c.id === editingCollection!.id);
-      if (found) return found.itemIds.length === 0;
-    }
-    return true;
+    return ($collectionItems[editingCollection.id] ?? []).length === 0;
   });
 </script>
 
@@ -225,12 +208,11 @@
 
   {#each sections as section (section.group.id)}
     {@const isUncat = section.group.id === UNCATEGORIZED_FILTER_ID}
-    {@const addGroupId = isUncat ? undefined : section.group.id}
     {@const realCount = dndByGroup[section.group.id]?.length ?? 0}
     <GroupSection
       group={section.group}
       onedit={isUncat ? undefined : () => editingGroup = section.group}
-      onaddcollection={() => openAddCollection(addGroupId)}
+      onaddcollection={isUncat ? undefined : () => openAddCollection(section.group.id)}
     >
       {#if section.virtualCollection}
         <!-- Virtual Uncategorized bucket — rendered outside the dndzone since
@@ -277,7 +259,7 @@
       {:else if !section.virtualCollection}
         <p class="group-empty">
           No collections in this group yet.
-          <button class="link" onclick={() => openAddCollection(addGroupId)}>Add one</button>.
+          <button class="link" onclick={() => openAddCollection(section.group.id)}>Add one</button>.
         </p>
       {/if}
     </GroupSection>

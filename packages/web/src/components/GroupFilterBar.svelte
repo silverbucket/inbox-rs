@@ -4,7 +4,6 @@
     sortedGroups, activeGroupIds, toggleGroupFilter, reorderGroups,
     uncategorizedFilterActive, toggleUncategorizedFilter,
     UNCATEGORIZED_FILTER_ID, appConfig, hasUncategorizedItems,
-    ungroupedCollections,
   } from '../lib/stores';
 
   let { onaddgroup, dimmed = false }: {
@@ -30,11 +29,8 @@
   const uncatActive = $derived($uncategorizedFilterActive);
   const groupsOrder = $derived($appConfig.groupsOrder ?? []);
   // Uncategorized is a dynamic pill — it appears only when the system has
-  // something to show there. "Something" means either straggler items (todos
-  // without a collection, or orphaned refs) OR ungrouped collections the user
-  // might want to filter. Without either, the pill would be a confusing
-  // no-op, so we hide it entirely.
-  const showUncat = $derived($hasUncategorizedItems || $ungroupedCollections.length > 0);
+  // straggler items to show there. It is not a group or a collection home.
+  const showUncat = $derived($hasUncategorizedItems);
 
   let isTouchDevice = $state(false);
   $effect(() => {
@@ -66,8 +62,7 @@
     const sentinelIdx = groupsOrder.indexOf(UNCATEGORIZED_FILTER_ID);
     // If the user has never reordered the pills, default to Uncategorized
     // at the end — same visual cadence as a newly-created group. Skip the
-    // sentinel when it has nothing to show (no stragglers, no ungrouped
-    // collections).
+    // sentinel when it has nothing to show.
     if (sentinelIdx < 0) return showUncat ? [...realPills, uncatPill] : realPills;
 
     // Walk the persisted order and rebuild the list so the sentinel's slot
