@@ -1,5 +1,5 @@
 import RemoteStorage from 'remotestoragejs';
-import InboxModule from '@inbox-rs/rs-module';
+import InboxModule, { recoverLegacyBinaryStringEncoding } from '@inbox-rs/rs-module';
 import SharesModule from 'remotestorage-module-shares';
 
 // remotestoragejs' `Authorize._rs_init` unconditionally clears
@@ -42,6 +42,12 @@ rs.caching.enable('/inbox/');
  * the charset suffix, producing a valid-looking `blob:` URL that never paints.
  * Callers who know the intended type (all current call sites read `item.mimeType`)
  * should pass it so we never depend on the server's Content-Type staying clean.
+ *
+ * The bytes are passed through `recoverLegacyBinaryStringEncoding` to repair
+ * files that were uploaded by the v1.8-and-earlier store path, which sent
+ * the file body to the server as a UTF-8-encoded binary string. New uploads
+ * are raw binary and pass through unchanged. See the helper's JSDoc for the
+ * detection invariant.
  */
 export async function fetchFileWithAuth(
   href: string,
@@ -60,7 +66,7 @@ export async function fetchFileWithAuth(
       expectedMimeType?.trim() ||
       serverType.split(';')[0].trim() ||
       'application/octet-stream';
-    const buffer = await resp.arrayBuffer();
+    const buffer = recoverLegacyBinaryStringEncoding(await resp.arrayBuffer());
     return URL.createObjectURL(new Blob([buffer], { type: cleanType }));
   } catch {
     return null;
