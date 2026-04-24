@@ -546,13 +546,18 @@ const pendingBlobLoads = new Set<string>();
 /**
  * Fetch a file from RS and create a blob URL, stored in blobUrls for reactive display.
  * No-ops if already loaded or in progress. Components should call this on mount.
+ *
+ * Callers should pass `mimeType` when they know it (e.g. from item metadata) so the
+ * resulting blob is created with a clean image/audio/... type regardless of what the
+ * server echoes back in its Content-Type header. See `fetchFileWithAuth` for the
+ * `charset=binary` quirk that makes this necessary.
  */
-export function loadFileBlobUrl(filePath: string): void {
+export function loadFileBlobUrl(filePath: string, mimeType?: string): void {
   if (!filePath) return;
   if (get(blobUrls)[filePath] || pendingBlobLoads.has(filePath)) return;
   if (!get(connected)) return;
   pendingBlobLoads.add(filePath);
-  fetchFileBlobUrl(filePath)
+  fetchFileBlobUrl(filePath, mimeType)
     .then((url) => {
       if (url) {
         const old = get(blobUrls)[filePath];
