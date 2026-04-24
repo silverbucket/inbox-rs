@@ -103,22 +103,30 @@ const InboxModule = {
             item._migrateVersion = migrator.getLatestVersion('items');
           }
           if (fileData && 'filePath' in item && item.filePath && 'mimeType' in item && item.mimeType) {
-            // Store file locally for immediate access
-            const bytes = new Uint8Array(fileData);
-            let binaryString = '';
-            for (let i = 0; i < bytes.length; i++) {
-              binaryString += String.fromCharCode(bytes[i]);
-            }
-            await privateClient.storeFile(item.mimeType, item.filePath, binaryString);
+            // Store file locally as the original ArrayBuffer (not a binary
+            // string). Two reasons this matters:
+            //
+            //   1. The local IndexedDB cache stays exact — `getFile` returns
+            //      the same bytes we wrote, with no string/byte round-trip.
+            //   2. `remotestoragejs`'s sync layer guards remote PUT with
+            //      `needsRemotePut(node) { return typeof node.local.body === 'string' }`
+            //      (see release/remotestorage.js). Passing an ArrayBuffer
+            //      makes that check return false, so the sync **does not**
+            //      try to push the body. That's what we want, because when
+            //      the sync did push, it sent the binary-string body via
+            //      `fetch(..., { body: string })` which UTF-8 encodes bytes
+            //      > 127 and corrupts JPEGs (the file came back as zeros on
+            //      5apps). Our direct `remote.put` below handles the upload
+            //      with the original bytes; we just need sync to keep its
+            //      hands off.
+            await privateClient.storeFile(item.mimeType, item.filePath, fileData);
 
-            // Also PUT directly to remote — remotestoragejs sync has a bug
-            // where it silently fails to push binary file bodies to the server.
+            // Push the file to the server ourselves, since the sync layer
+            // intentionally skips ArrayBuffer bodies (see above).
             const remote = privateClient.storage.remote;
             if (remote?.connected) {
               const fullPath = '/inbox/' + item.filePath;
               try {
-                // Send the original ArrayBuffer, not the binary string —
-                // fetch encodes strings as UTF-8, corrupting bytes > 127.
                 // `remote.put` resolves with `{ statusCode }` for non-2xx
                 // responses too (it only rejects on network errors), so
                 // inspect the status explicitly — otherwise a 401/412/500
