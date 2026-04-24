@@ -8,9 +8,12 @@
 
   const imageSrc = $derived($blobUrls[item.filePath] || null);
 
-  // Fetch file via Authorization header when connected (works on all RS servers)
+  // Fetch file via Authorization header when connected (works on all RS servers).
+  // Pass mimeType so the blob is tagged as `image/jpeg` rather than whatever
+  // the server echoes back (e.g. `image/jpeg; charset=binary` on 5apps, which
+  // Chrome refuses to render as an <img> source).
   $effect(() => {
-    if ($connected && item.filePath) loadFileBlobUrl(item.filePath);
+    if ($connected && item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
   });
 </script>
 

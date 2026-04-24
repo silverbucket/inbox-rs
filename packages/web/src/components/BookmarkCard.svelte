@@ -25,9 +25,12 @@
     (item.filePath ? ($blobUrls[item.filePath] || null) : null) || item.ogImage || null
   );
 
-  // Fetch stored file via Authorization header (works on all RS servers)
+  // Fetch stored file via Authorization header (works on all RS servers).
+  // Pass mimeType so the blob is tagged with the clean type from item metadata
+  // rather than the server's Content-Type (which on 5apps carries the
+  // `; charset=binary` suffix that Chrome won't render as <img>).
   $effect(() => {
-    if ($connected && item.filePath) loadFileBlobUrl(item.filePath);
+    if ($connected && item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
   });
 </script>
 

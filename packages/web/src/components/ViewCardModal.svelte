@@ -387,12 +387,16 @@
         : null
   );
 
-  // Fetch file-backed items via Authorization header (works on all RS servers)
+  // Fetch file-backed items via Authorization header (works on all RS servers).
+  // Forward mimeType so the blob is tagged with the clean type from item
+  // metadata rather than the server's Content-Type (5apps preserves the
+  // `; charset=binary` suffix that wireclient adds on upload, and Chrome won't
+  // render an <img>/<audio> whose Blob type carries that suffix).
   $effect(() => {
     if (!$connected) return;
-    if (item.type === 'image' && item.filePath) loadFileBlobUrl(item.filePath);
-    if (item.type === 'audio' && item.filePath) loadFileBlobUrl(item.filePath);
-    if (item.type === 'bookmark' && 'filePath' in item && item.filePath) loadFileBlobUrl(item.filePath);
+    if (item.type === 'image' && item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
+    if (item.type === 'audio' && item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
+    if (item.type === 'bookmark' && 'filePath' in item && item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
   });
 
   /**

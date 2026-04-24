@@ -118,9 +118,19 @@ const InboxModule = {
               const fullPath = '/inbox/' + item.filePath;
               try {
                 // Send the original ArrayBuffer, not the binary string —
-                // fetch encodes strings as UTF-8, corrupting bytes > 127
-                await remote.put(fullPath, fileData, item.mimeType);
-                console.log('[rs-module] direct PUT succeeded:', fullPath);
+                // fetch encodes strings as UTF-8, corrupting bytes > 127.
+                // `remote.put` resolves with `{ statusCode }` for non-2xx
+                // responses too (it only rejects on network errors), so
+                // inspect the status explicitly — otherwise a 401/412/500
+                // silently looks like success and the file is never uploaded.
+                const resp = await remote.put(fullPath, fileData, item.mimeType);
+                const status = resp?.statusCode;
+                const success = typeof status === 'number' && status >= 200 && status < 300;
+                if (success) {
+                  console.log('[rs-module] direct PUT succeeded:', fullPath, status);
+                } else {
+                  console.warn('[rs-module] direct PUT returned non-success status:', fullPath, status);
+                }
               } catch (e) {
                 console.warn('[rs-module] direct PUT failed:', fullPath, e);
               }

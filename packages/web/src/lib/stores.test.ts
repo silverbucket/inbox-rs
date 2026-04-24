@@ -120,7 +120,23 @@ describe('loadFileBlobUrl', () => {
       expect(get(blobUrls)['files/photo.jpg']).toBe('blob:test/123');
     });
 
-    expect(mockFetchFileBlobUrl).toHaveBeenCalledWith('files/photo.jpg');
+    expect(mockFetchFileBlobUrl).toHaveBeenCalledWith('files/photo.jpg', undefined);
+  });
+
+  it('forwards mimeType through to fetchFileBlobUrl', async () => {
+    // Callers (ImageCard, BookmarkCard, ViewCardModal) pass the item's
+    // mimeType so the resulting blob gets a clean type instead of whatever
+    // the server echoes back (5apps appends `; charset=binary`, which
+    // Chrome refuses to render).
+    mockFetchFileBlobUrl.mockResolvedValue('blob:test/typed');
+
+    loadFileBlobUrl('files/photo.jpg', 'image/jpeg');
+
+    await vi.waitFor(() => {
+      expect(get(blobUrls)['files/photo.jpg']).toBe('blob:test/typed');
+    });
+
+    expect(mockFetchFileBlobUrl).toHaveBeenCalledWith('files/photo.jpg', 'image/jpeg');
   });
 
   it('does not fetch if blob URL already exists', () => {
