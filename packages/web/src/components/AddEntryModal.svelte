@@ -29,19 +29,12 @@
   const isEdit = !!editItem;
   let saving = $state(false);
 
-  /**
-   * Pick the initial collection for new todos. Explicit collection entry
-   * points (for example a collection quick-add button) are honored, but the
-   * generic todo modal starts unfiled. We deliberately don't auto-create or
-   * auto-select organization here: normal capture should stay frictionless.
-   */
-  function pickInitialCollectionId(): string | undefined {
-    return collectionId;
-  }
-
-  // Let the user pick a destination for new items. See
-  // `pickInitialCollectionId` for the default cascade.
-  let selectedCollectionId = $state<string | undefined>(pickInitialCollectionId());
+  // Initial destination for new items: honour the caller's explicit
+  // `collectionId` prop (e.g. a collection quick-add button), otherwise leave
+  // unset. For todos, unset means "unfiled" — we deliberately don't
+  // auto-select organization so capture stays frictionless. For refs, unset
+  // means Inbox.
+  let selectedCollectionId = $state<string | undefined>(collectionId);
   let collectionPickerOpen = $state(false);
   let collectionPickerEl = $state<HTMLDivElement>();
   let collectionPickerTriggerEl = $state<HTMLButtonElement>();

@@ -222,27 +222,53 @@ async function loadGroups() {
   return loadEntities<CollectionGroup>(() => inbox.getAllGroups(), groups, 'collectionIds');
 }
 
-async function loadCachedData() {
-  await Promise.all([
+// Single in-flight load promise so the cached preload (queueMicrotask at
+// module init) and the post-connect reload don't run concurrent loaders
+// against the same five stores. Each entry-point waits for any pending load
+// to settle before kicking off its own.
+let inFlightLoad: Promise<void> | null = null;
+
+function runLoaders(): Promise<void> {
+  return Promise.all([
     loadItems(),
     loadConfig(),
     loadUserSettings(),
     loadCollections(),
     loadGroups(),
-  ]);
-  markMigrationAlertReady();
+  ]).then(() => undefined);
+}
+
+async function loadCachedData() {
+  // Skip if the connect handler has already taken over — its load is
+  // authoritative once we're online.
+  if (get(connected)) return;
+  if (inFlightLoad) {
+    await inFlightLoad;
+    return;
+  }
+  inFlightLoad = runLoaders();
+  try {
+    await inFlightLoad;
+    markMigrationAlertReady();
+  } finally {
+    inFlightLoad = null;
+  }
 }
 
 async function loadConnectedData() {
   resetMigrationAlertReadiness();
-  await Promise.all([
-    loadItems(),
-    loadConfig(),
-    loadUserSettings(),
-    loadCollections(),
-    loadGroups(),
-  ]);
-  scheduleMigrationAlertFallback();
+  if (inFlightLoad) {
+    // Let the cached load settle before starting a fresh one so we don't
+    // double-read the same stores in parallel.
+    try { await inFlightLoad; } catch { /* errors handled inside loaders */ }
+  }
+  inFlightLoad = runLoaders();
+  try {
+    await inFlightLoad;
+    scheduleMigrationAlertFallback();
+  } finally {
+    inFlightLoad = null;
+  }
 }
 
 // Debounced sync indicator: stays visible for at least 1 second to avoid flicker

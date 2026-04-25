@@ -63,6 +63,13 @@
     }
   }
 
+  // Clear any stale error as soon as the user edits the input — they've
+  // acknowledged it and are taking another swing.
+  $effect(() => {
+    quickTitle;
+    if (quickError) quickError = '';
+  });
+
   $effect(() => {
     const mql = window.matchMedia('(pointer: coarse)');
     isTouchDevice = mql.matches;
@@ -154,9 +161,10 @@
         </button>
       </form>
       <p class="empty-hint">Capture it now. Organize it later.</p>
-      {#if quickError}
-        <p class="quick-error" aria-live="polite">{quickError}</p>
-      {/if}
+      <!-- Persistent aria-live region — kept in the DOM so screen readers
+           reliably announce errors as they appear. The visually-empty state
+           collapses via the `:empty` selector below. -->
+      <p class="quick-error" role="status" aria-live="polite">{quickError}</p>
     </div>
   {:else}
     <ul
@@ -387,6 +395,12 @@
     margin: 0;
     color: var(--danger);
     font-size: 0.82rem;
+  }
+
+  /* Collapse the live region visually when there's no message — the element
+     stays mounted so screen readers keep tracking it. */
+  .quick-error:empty {
+    display: none;
   }
 
   /* Mobile-only: reserve room so the fixed-position FAB doesn't float over

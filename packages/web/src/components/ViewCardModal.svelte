@@ -135,10 +135,14 @@
   }
 
   let convertingTodo = $state(false);
+  // Surface conversion failures inline. Both Make-Todo paths share this so
+  // either flow can announce its error in the same dropdown.
+  let convertError = $state('');
 
   /** Promote the current item to an unfiled todo. */
   async function convertToUnfiledTodo() {
     convertingTodo = true;
+    convertError = '';
     try {
       const { completedAt: _, ...rest } = item;
       await moveItemToCollection(item.id, undefined);
@@ -147,6 +151,9 @@
       await storeItem(updated as InboxItem);
       closeMakeTodoMenu();
       onclose();
+    } catch (error) {
+      console.error('Failed to convert to unfiled todo', error);
+      convertError = error instanceof Error ? error.message : 'Failed to convert to todo';
     } finally {
       convertingTodo = false;
     }
@@ -155,6 +162,7 @@
   /** Promote the current item to a todo and file it into the chosen collection. */
   async function convertToTodoInCollection(collectionId: string) {
     convertingTodo = true;
+    convertError = '';
     try {
       // Snapshot the rest of the item BEFORE we do any writes — once we move
       // the item, the store reflects the new collectionId and the prop might
@@ -175,6 +183,9 @@
       await storeItem(updated as InboxItem);
       closeMakeTodoMenu();
       onclose();
+    } catch (error) {
+      console.error('Failed to convert to todo', error);
+      convertError = error instanceof Error ? error.message : 'Failed to convert to todo';
     } finally {
       convertingTodo = false;
     }
@@ -600,6 +611,9 @@
       ></button>
       <div class="move-dropdown make-todo-dropdown" style={makeTodoDropdownStyle} role="listbox" aria-label="Choose a collection for this todo">
         <div class="picker-title">File todo</div>
+        {#if convertError}
+          <p class="move-error" role="status" aria-live="polite">{convertError}</p>
+        {/if}
         <button class="move-option" onclick={convertToUnfiledTodo} disabled={convertingTodo}>
           <span class="move-dot" style="background: #9ca3af"></span>
           Unfiled
@@ -1153,5 +1167,12 @@
     padding: 0.4rem 0.5rem;
     font-size: 0.8rem;
     color: var(--text-muted);
+  }
+
+  .move-error {
+    margin: 0 0.2rem 0.4rem;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.8rem;
+    color: var(--danger);
   }
 </style>
