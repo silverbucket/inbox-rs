@@ -57,7 +57,7 @@ import {
   reorderGroupCollections, items, todoItems, reorderUnfiledTodos, pendingMigrationCount,
   moveItemToCollection,
   collectionItems, userSettings,
-  activeGroupIds, visibleGroupedCollections,
+  activeGroupIds, visibleGroupedCollections, orphanCollections,
   toggleGroupFilter, setActiveGroupFilters, storeGroup,
   allTodos, openTodos, visibleTodos, reorderTodosGlobal,
 } from './stores';
@@ -1008,6 +1008,54 @@ describe('visibleGroupedCollections', () => {
     groups.set({ g1: makeGroup('g1', []) });
     appConfig.set({ activeGroupFilters: [] });
     expect(get(visibleGroupedCollections)).toHaveLength(0);
+  });
+});
+
+describe('orphanCollections', () => {
+  beforeEach(() => {
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('is empty when every collection has a real group', () => {
+    collections.set({
+      c1: makeCollection('c1', 'g1'),
+      c2: makeCollection('c2', 'g1'),
+    });
+    groups.set({ g1: makeGroup('g1', ['c1', 'c2']) });
+
+    expect(get(orphanCollections)).toEqual([]);
+  });
+
+  it('surfaces collections with no groupId', () => {
+    const c1 = makeCollection('c1');
+    delete (c1 as any).groupId;
+    collections.set({ c1 });
+
+    expect(get(orphanCollections).map(c => c.id)).toEqual(['c1']);
+  });
+
+  it('surfaces collections whose groupId points at a deleted group', () => {
+    collections.set({
+      c1: makeCollection('c1', 'g1'),
+      stale: makeCollection('stale', 'g_deleted'),
+    });
+    groups.set({ g1: makeGroup('g1', ['c1']) });
+
+    expect(get(orphanCollections).map(c => c.id)).toEqual(['stale']);
+  });
+
+  it('orders orphans by createdAt for a stable display order', () => {
+    const newer = makeCollection('newer');
+    const older = makeCollection('older');
+    delete (newer as any).groupId;
+    delete (older as any).groupId;
+    newer.createdAt = '2026-03-01T00:00:00.000Z';
+    older.createdAt = '2026-01-01T00:00:00.000Z';
+    collections.set({ newer, older });
+
+    expect(get(orphanCollections).map(c => c.id)).toEqual(['older', 'newer']);
   });
 });
 

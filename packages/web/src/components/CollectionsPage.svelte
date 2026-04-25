@@ -5,7 +5,7 @@
     createCollection, storeCollection, deleteCollection, moveCollectionToGroup,
     visibleGroupedCollections, sortedGroups, storeGroup, deleteGroup,
     appConfig, updateConfig, reorderGroupCollections, setExpandedCollections,
-    collectionItems, groups,
+    collectionItems, groups, orphanCollections,
   } from '../lib/stores';
   import CollectionView from './CollectionView.svelte';
   import GroupSection from './GroupSection.svelte';
@@ -54,9 +54,15 @@
   }
 
   const sections = $derived($visibleGroupedCollections);
+  const orphans = $derived($orphanCollections);
 
   // Collection ids currently visible on the page — used for expand/collapse all.
-  const visibleIds = $derived(sections.flatMap(s => s.collections.map(c => c.id)));
+  // Includes orphans so the toggle covers every collection rendered on the page,
+  // not just the ones inside real groups.
+  const visibleIds = $derived([
+    ...sections.flatMap(s => s.collections.map(c => c.id)),
+    ...orphans.map(c => c.id),
+  ]);
   const anyExpanded = $derived(visibleIds.some(id => expandedSet.has(id)));
 
   async function toggleExpandAll() {
@@ -240,11 +246,67 @@
     </GroupSection>
   {/each}
 
-  {#if $sortedGroups.length === 0 && sections.length === 0}
+  {#if orphans.length > 0}
+    <!--
+      Advisory section for collections whose groupId is unset or points at a
+      deleted group. Read-only by design: no add, no group edit, no drag.
+      Recovery is per-collection via the existing CollectionView affordances
+      (edit modal lets the user pick a real group, move-to-group dropdown
+      does the same, delete works when the collection is empty). The section
+      disappears reactively as soon as the last orphan is reassigned.
+    -->
+    <section
+      class="orphan-section"
+      aria-labelledby="orphan-collections-heading"
+    >
+      <header class="orphan-header">
+        <svg
+          class="orphan-icon"
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+        <div class="orphan-text">
+          <h2 id="orphan-collections-heading" class="orphan-title">
+            Needs a group
+            <span class="orphan-count" aria-label="{orphans.length} {orphans.length === 1 ? 'collection' : 'collections'}">{orphans.length}</span>
+          </h2>
+          <p class="orphan-subtitle">
+            {orphans.length === 1 ? 'This collection isn\'t' : 'These collections aren\'t'} in any group.
+            Edit {orphans.length === 1 ? 'it' : 'one'} to assign a group, or delete {orphans.length === 1 ? 'it' : 'them'} if no longer needed.
+          </p>
+        </div>
+      </header>
+      <div class="collection-list orphan-list">
+        {#each orphans as col (col.id)}
+          <CollectionView
+            collection={col}
+            expanded={isExpanded(col)}
+            {onselect}
+            {isTouchDevice}
+            onedit={() => editingCollection = col}
+            ontoggle={() => toggleExpand(col)}
+          />
+        {/each}
+      </div>
+    </section>
+  {/if}
+
+  {#if $sortedGroups.length === 0 && sections.length === 0 && orphans.length === 0}
     <p class="page-empty">
       No groups yet. Create one from the filter bar above to organise your collections.
     </p>
-  {:else if sections.length === 0}
+  {:else if sections.length === 0 && orphans.length === 0}
     <p class="page-empty">
       All groups are filtered out. Toggle one on in the filter bar to see collections.
     </p>
@@ -345,6 +407,81 @@
     color: var(--text-muted);
     text-align: center;
     margin-top: 1rem;
+  }
+
+  /* Advisory section for orphan collections. Visually distinct from real
+     GroupSections — dashed top border, muted tint, no group color stripe,
+     no group-level controls — so users read it as a recovery surface, not
+     "another bucket" they can put things into. */
+  .orphan-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-top: 0.5rem;
+    padding-top: 0.85rem;
+    border-top: 1px dashed var(--border);
+  }
+
+  .orphan-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.65rem 0.85rem;
+    background: var(--surface-tint);
+    border-radius: var(--radius-sm);
+  }
+
+  .orphan-icon {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    margin-top: 0.1rem;
+  }
+
+  .orphan-text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Match other section headings in size/weight but stay neutral — this
+     isn't an error, just a hint, so we deliberately avoid --danger here. */
+  .orphan-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .orphan-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.4rem;
+    height: 1.4rem;
+    padding: 0 0.4rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--surface-tint-hover);
+    border-radius: 999px;
+  }
+
+  .orphan-subtitle {
+    margin: 0.2rem 0 0;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    color: var(--text-muted);
+  }
+
+  /* Static stack — no dndzone, no drag handles. The list reuses
+     CollectionView so the per-card edit/move/delete affordances are the
+     same as anywhere else on the page. */
+  .orphan-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
   }
 
   .link {

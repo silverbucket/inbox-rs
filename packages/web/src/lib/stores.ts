@@ -1056,6 +1056,24 @@ export const visibleGroupedCollections = derived(
 );
 
 /**
+ * Collections whose `groupId` is unset or refers to a group that no longer
+ * exists. Surfaced read-only on the Collections page as an advisory section
+ * so users can edit each one back into a real group (or delete it). We do
+ * NOT auto-rewrite these on load — see the v2.0.4 regression note in the
+ * connect handler — and we do NOT create a synthetic group/collection for
+ * them. The list is empty in the normal case; the UI only renders a section
+ * when this is non-empty. Sorted by createdAt for a stable order.
+ */
+export const orphanCollections = derived(
+  [collections, groups],
+  ([$collections, $groups]): Collection[] => {
+    return Object.values($collections)
+      .filter(col => !col.groupId || !$groups[col.groupId])
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }
+);
+
+/**
  * Toggle a group's filter on/off. Persists to config.
  * If activeGroupFilters was undefined (default-all), this materializes the
  * current set first, then flips the requested id.
