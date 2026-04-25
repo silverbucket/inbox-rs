@@ -4,20 +4,20 @@
   import { flip } from 'svelte/animate';
   import { slide, fade } from 'svelte/transition';
   import {
-    visibleTodos, reorderTodosGlobal,
+    visibleTodos, reorderTodosGlobal, storeItem,
     collections, sortedGroups, appConfig, updateConfig,
   } from '../lib/stores';
+  import { canCaptureTodo, makeUnfiledTodo } from '../lib/add-entry-modal';
   import TodoRow from './TodoRow.svelte';
   import Fab from './Fab.svelte';
 
   let { onselect, onaddtodo, onaddtodoincollection }: {
     onselect: (item: InboxItem) => void;
-    /** Opens the add-todo modal; the modal's built-in collection picker lets
-        the user place the new todo anywhere (including uncategorized). */
+    /** Opens the add-todo modal for richer details and optional filing. */
     onaddtodo: () => void;
     /** Opens the add-todo modal with a specific collection pre-selected.
         Used by the per-row quick-add affordance. Pass `undefined` to target
-        the "Uncategorized" bucket. */
+        an unfiled todo. */
     onaddtodoincollection: (collectionId: string | undefined) => void;
   } = $props();
 
@@ -44,6 +44,25 @@
   const completedExpanded = $derived($appConfig.completedTodosExpanded === true);
 
   let isTouchDevice = $state(false);
+  let quickTitle = $state('');
+  let quickSaving = $state(false);
+  let quickError = $state('');
+
+  async function addQuickTodo() {
+    if (!canCaptureTodo(quickTitle) || quickSaving) return;
+    quickSaving = true;
+    quickError = '';
+    try {
+      await storeItem(makeUnfiledTodo(quickTitle));
+      quickTitle = '';
+    } catch (error) {
+      console.error('Failed to add todo', error);
+      quickError = error instanceof Error ? error.message : 'Failed to add todo';
+    } finally {
+      quickSaving = false;
+    }
+  }
+
   $effect(() => {
     const mql = window.matchMedia('(pointer: coarse)');
     isTouchDevice = mql.matches;
@@ -115,9 +134,29 @@
 
   {#if openTodos.length === 0 && completedTodos.length === 0}
     <div class="empty-state" in:fade={{ duration: 180 }}>
-      <div class="empty-icon" aria-hidden="true">✓</div>
-      <p class="empty-title">Nothing to do.</p>
-      <p class="empty-hint">Tap <strong>+ New todo</strong> to add one — you can pick a collection or leave it in your inbox.</p>
+      <p class="empty-title">Jot a todo</p>
+      <form
+        class="quick-add"
+        onsubmit={(e) => {
+          e.preventDefault();
+          addQuickTodo();
+        }}
+      >
+        <input
+          type="text"
+          bind:value={quickTitle}
+          placeholder="What needs doing?"
+          aria-label="Todo title"
+          disabled={quickSaving}
+        />
+        <button type="submit" disabled={!canCaptureTodo(quickTitle) || quickSaving}>
+          {quickSaving ? 'Adding...' : 'Add'}
+        </button>
+      </form>
+      <p class="empty-hint">Capture it now. Organize it later.</p>
+      {#if quickError}
+        <p class="quick-error" aria-live="polite">{quickError}</p>
+      {/if}
     </div>
   {:else}
     <ul
@@ -264,26 +303,15 @@
     transform: rotate(0);
   }
 
-  /* Empty state mirrors the inbox empty state visually so the Todos page
-     doesn't feel jarringly different when users land on it with nothing to
-     do. */
   .empty-state {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0.35rem;
+    gap: 0.75rem;
     padding: 3rem 1rem;
     text-align: center;
     color: var(--text-muted);
-  }
-
-  .empty-icon {
-    font-size: 2.5rem;
-    line-height: 1;
-    margin-bottom: 0.5rem;
-    color: var(--accent);
-    opacity: 0.6;
   }
 
   .empty-title {
@@ -293,10 +321,72 @@
     margin: 0;
   }
 
+  .quick-add {
+    width: min(100%, 34rem);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .quick-add input {
+    min-height: 2.75rem;
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    padding: 0 0.9rem;
+    font: inherit;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    transition: border-color 150ms, box-shadow 150ms;
+  }
+
+  .quick-add input:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+
+  .quick-add button {
+    min-height: 2.75rem;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: white;
+    padding: 0 1rem;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 150ms, transform 150ms, box-shadow 150ms;
+  }
+
+  .quick-add button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+
+  .quick-add button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  .quick-add button:disabled,
+  .quick-add input:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
   .empty-hint {
     font-size: 0.85rem;
     max-width: 32rem;
     margin: 0;
+  }
+
+  .quick-error {
+    margin: 0;
+    color: var(--danger);
+    font-size: 0.82rem;
   }
 
   /* Mobile-only: reserve room so the fixed-position FAB doesn't float over
@@ -311,6 +401,20 @@
   @media (max-width: 600px) {
     .todos-page {
       padding-bottom: 4.5rem;
+    }
+
+    .empty-state {
+      align-items: stretch;
+      text-align: left;
+      padding-inline: 0;
+    }
+
+    .quick-add {
+      grid-template-columns: 1fr;
+    }
+
+    .quick-add button {
+      width: 100%;
     }
   }
 </style>

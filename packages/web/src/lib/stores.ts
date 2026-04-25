@@ -247,6 +247,32 @@ function queueCollectionGroupRepair() {
   });
 }
 
+async function loadCachedData() {
+  await Promise.all([
+    loadItems(),
+    loadConfig(),
+    loadUserSettings(),
+    loadCollections(),
+    loadGroups(),
+  ]);
+  markMigrationAlertReady();
+}
+
+async function loadConnectedData() {
+  resetMigrationAlertReadiness();
+  const [, , , collectionsLoaded, groupsLoaded] = await Promise.all([
+    loadItems(),
+    loadConfig(),
+    loadUserSettings(),
+    loadCollections(),
+    loadGroups(),
+  ]);
+  if (collectionsLoaded && groupsLoaded) {
+    await repairCollectionsWithoutValidGroup();
+  }
+  scheduleMigrationAlertFallback();
+}
+
 // Debounced sync indicator: stays visible for at least 1 second to avoid flicker
 let syncTimeout: ReturnType<typeof setTimeout> | null = null;
 let syncVisibleUntil = 0;
@@ -294,23 +320,12 @@ rs.on('wire-done', () => console.log('[inbox] wire-done'));
 
 rs.on('connected', async () => {
   connected.set(true);
-  resetMigrationAlertReadiness();
   const addr =
     (rs as any).remote?.userAddress ||
     localStorage.getItem('inbox-rs:userAddress') ||
     '';
   userAddress.set(addr);
-  const [, , , collectionsLoaded, groupsLoaded] = await Promise.all([
-    loadItems(),
-    loadConfig(),
-    loadUserSettings(),
-    loadCollections(),
-    loadGroups(),
-  ]);
-  if (collectionsLoaded && groupsLoaded) {
-    await repairCollectionsWithoutValidGroup();
-  }
-  scheduleMigrationAlertFallback();
+  await loadConnectedData();
 });
 
 rs.on('disconnected', () => {
@@ -325,6 +340,10 @@ rs.on('disconnected', () => {
   userSettings.set({});
   collections.set({});
   groups.set({});
+});
+
+queueMicrotask(() => {
+  void loadCachedData();
 });
 
 export async function runAllMigrations() {

@@ -53,6 +53,7 @@ import {
   collections, groups, groupCollections, moveCollectionToGroup,
   deleteGroup, appConfig,
   storeCollection, createCollection, deleteCollection,
+  storeItem,
   reorderGroupCollections, items, todoItems, reorderUncategorizedTodos, pendingMigrationCount,
   moveItemToCollection,
   collectionItems, userSettings,
@@ -379,6 +380,30 @@ describe('todoItems ordering', () => {
     vi.clearAllMocks();
     items.set({});
     appConfig.set({});
+  });
+
+  it('stores a new todo while disconnected without groups or collections as unfiled', async () => {
+    connected.set(false);
+    collections.set({});
+    groups.set({});
+    const todo = makeTodo('quick', {
+      title: 'Quick thought',
+      completed: false,
+      isTodo: true,
+    });
+
+    await storeItem(todo);
+
+    expect(mockInbox.store).toHaveBeenCalledWith(todo, undefined);
+    expect(get(items).quick).toMatchObject({
+      id: 'quick',
+      title: 'Quick thought',
+      type: 'todo',
+      completed: false,
+      isTodo: true,
+    });
+    expect(get(items).quick.collectionId).toBeUndefined();
+    expect(get(todoItems).map(t => t.id)).toEqual(['quick']);
   });
 
   it('keeps configured open todo order and falls back to newest-first for new todos', () => {

@@ -1,17 +1,23 @@
 <script lang="ts">
   import type { Component } from 'svelte';
   import { onDestroy } from 'svelte';
-  import { get } from 'svelte/store';
   import type { InboxItemType, InboxItem } from '@inbox-rs/rs-module';
   import {
     storeItem, moveItemToCollection,
     sortedGroups, groupCollections,
     hasUncategorizedItems, UNCATEGORIZED_COLLECTION_ID,
-    collections, appConfig, updateConfig,
   } from '../lib/stores';
   import { renderMarkdown } from '../lib/markdown';
   import { transcribeAudio } from '../lib/transcribe';
-  import { loadMarkdownEditorComponent, shouldLoadMarkdownEditor, shouldSubmitAddEntryForm } from '../lib/add-entry-modal';
+  import {
+    canCaptureTodo,
+    loadMarkdownEditorComponent,
+    normalizeInitialCollectionId,
+    shouldLoadMarkdownEditor,
+    shouldMarkUncategorized,
+    shouldShowCollectionPicker,
+    shouldSubmitAddEntryForm,
+  } from '../lib/add-entry-modal';
   import { isInsideCodeBlock, insertIndent, indentSelection, dedentSelection, insertNewlineWithIndent, isOnClosingFence } from '../lib/code-indent';
   import { autofocus } from '../lib/actions';
 
@@ -27,48 +33,17 @@
   let saving = $state(false);
 
   /**
-   * Find the first real collection in display order — iterate groups in
-   * sorted order, then take the first collection from each. Used as the
-   * last-resort default for the todo picker when
-   * there's no explicit `collectionId` prop and no valid
-   * `lastSelectedCollectionId`. Returns `undefined` when the user has no
-   * collections at all (the picker then shows its empty-state hint).
-   */
-  function firstAvailableCollectionId(): string | undefined {
-    for (const group of get(sortedGroups)) {
-      const cols = get(groupCollections)[group.id] ?? [];
-      if (cols.length > 0) return cols[0].id;
-    }
-    return undefined;
-  }
-
-  /**
-   * Pick the initial collection for the todo picker so the user doesn't
-   * land on a blank destination when creating repeat todos. Resolution:
-   *   1. Explicit `collectionId` prop (e.g. quick-add from a collection
-   *      row) — honored verbatim.
-   *   2. `lastSelectedCollectionId` from appConfig, validated against the
-   *      collections store. Deleted collections are ignored and we fall
-   *      through.
-   *   3. First available real collection in display order.
-   *   4. `undefined` — no collections exist yet; the picker surfaces a
-   *      "create a collection first" hint and submit stays disabled.
-   *
-   * Only applied to new todos; refs keep defaulting to the Inbox
-   * (`undefined` here means Inbox), and edits reuse the existing item's
-   * collection context.
+   * Pick the initial collection for new todos. Explicit collection entry
+   * points (for example a collection quick-add button) are honored, but the
+   * generic todo modal starts unfiled. We deliberately don't auto-create or
+   * auto-select organization here: normal capture should stay frictionless.
    */
   function pickInitialCollectionId(): string | undefined {
-    if (collectionId !== undefined) return collectionId;
-    if (isEdit) return undefined;
-    if (type !== 'todo') return undefined;
-    const last = get(appConfig).lastSelectedCollectionId;
-    if (last && get(collections)[last]) return last;
-    return firstAvailableCollectionId();
+    return normalizeInitialCollectionId(type, collectionId, UNCATEGORIZED_COLLECTION_ID);
   }
 
-  // Let the user pick the destination collection from within the modal for
-  // every new item. See `pickInitialCollectionId` for the default cascade.
+  // Let the user pick a destination for new items. See
+  // `pickInitialCollectionId` for the default cascade.
   let selectedCollectionId = $state<string | undefined>(pickInitialCollectionId());
   let collectionPickerOpen = $state(false);
   let collectionPickerEl = $state<HTMLDivElement>();
@@ -78,25 +53,19 @@
   // (note modal) and the modal's rounded border clipping (other modals).
   // Flips upward when there's no room below.
   let pickerMenuStyle = $state('');
-  const showCollectionPicker = $derived(!isEdit);
-
-  // Todos must have a collection — they can't live in the Inbox (refs-only
-  // staging area) and the Uncategorized bucket is reserved for stragglers
-  // produced by deleting a collection. So for todos we surface no
-  // "no-collection" default at all; the user picks a real collection or the
-  // Save button stays disabled. For refs, `undefined` means "Inbox" (the
-  // default landing).
+  // For refs, `undefined` means Inbox. For todos, `undefined` means unfiled:
+  // no collectionId is written, and the todo stays available to organize
+  // later without creating any synthetic group or collection.
   const isTodoType = $derived(type === 'todo');
   const noCollectionLabel = 'Inbox';
 
-  // `undefined` is the non-collection sentinel — for refs it means "Inbox".
-  // Todos never use the `undefined` selection (the picker hides that row),
-  // but we still show a placeholder label until a real collection is picked.
+  // `undefined` is the non-collection sentinel: Inbox for refs, unfiled for
+  // todos.
   const collectionLabel = $derived.by(() => {
     if (selectedCollectionId === undefined) {
-      return isTodoType ? 'Choose a collection…' : noCollectionLabel;
+      return isTodoType ? 'Unfiled' : noCollectionLabel;
     }
-    if (selectedCollectionId === UNCATEGORIZED_COLLECTION_ID) return 'Uncategorized';
+    if (selectedCollectionId === UNCATEGORIZED_COLLECTION_ID) return isTodoType ? 'Unfiled' : 'Uncategorized';
     for (const group of $sortedGroups) {
       const cols = $groupCollections[group.id] ?? [];
       const found = cols.find(c => c.id === selectedCollectionId);
@@ -108,26 +77,24 @@
   // Show an explicit "Uncategorized" picker row for refs only when the bucket
   // already exists (has stragglers). Per the design, Uncategorized is a
   // dynamic surface that appears when items live there — it shouldn't be a
-  // first-class destination unless it's already populated. Todos normally
-  // can't route there (they require a real collection), but when a caller
-  // explicitly preselected Uncategorized (e.g. the quick-add on an
-  // uncategorized todo row) we surface it in the picker so the current
-  // selection is visible and reselectable.
+  // first-class destination unless it's already populated. Todo capture uses
+  // `undefined` for unfiled; the sentinel is normalized away for todos.
   const showUncategorizedInPicker = $derived(
     (!isTodoType && $hasUncategorizedItems)
     || selectedCollectionId === UNCATEGORIZED_COLLECTION_ID
   );
 
-  // Whether the user has any real grouped collections at all.
-  // Used to decide when to surface an empty-state hint in the todo picker —
-  // todos require a real collection, so an empty picker is a dead end without
-  // guidance.
+  // Whether the user has any real grouped collections at all. Todo capture
+  // hides the picker entirely when this is false so an empty account can still
+  // jot things down immediately.
   const hasAnyCollection = $derived.by(() => {
     for (const group of $sortedGroups) {
       if (($groupCollections[group.id] ?? []).length > 0) return true;
     }
     return false;
   });
+
+  const showCollectionPicker = $derived(shouldShowCollectionPicker(isEdit, type, hasAnyCollection, selectedCollectionId, UNCATEGORIZED_COLLECTION_ID));
 
   $effect(() => {
     if (!collectionPickerOpen) return;
@@ -156,21 +123,6 @@
   function selectCollection(id: string | undefined) {
     selectedCollectionId = id;
     collectionPickerOpen = false;
-  }
-
-  /**
-   * Exit the modal and jump to the Collections page. Used from the todo
-   * picker's empty state — the user needs a real collection before they can
-   * save a todo, and there's no in-page affordance to create one without
-   * navigating away. The in-progress form is discarded on `onclose`; that's
-   * acceptable since the Save button is disabled anyway (no collection to
-   * file into).
-   */
-  function goToCollections() {
-    onclose();
-    if (window.location.hash !== '#/collections') {
-      window.location.hash = '#/collections';
-    }
   }
 
   /**
@@ -437,45 +389,26 @@
         // The Uncategorized sentinel is a picker-level id, not a real
         // collection id — writing it to `item.collectionId` would leave a
         // bogus reference in storage. The branch below (selectedCollectionId
-        // === UNCATEGORIZED_COLLECTION_ID) handles the Uncategorized case by
-        // setting the `uncategorized` flag and leaving `collectionId` unset.
+        // === UNCATEGORIZED_COLLECTION_ID) handles the ref Uncategorized case
+        // by setting the `uncategorized` flag and leaving `collectionId` unset.
         item.collectionId = collectionId;
       }
 
       // Picker → storage shape:
       //   undefined + ref         → Inbox (default; no flag, no collectionId)
-      //   undefined + todo        → Uncategorized (no flag needed — todos
-      //                              without a collectionId are uncategorized
-      //                              by definition, see
-      //                              uncategorizedVirtualCollection)
+      //   undefined + todo        → unfiled todo (no collectionId, no fake
+      //                              collection/group written)
       //   UNCATEGORIZED_... + ref → Uncategorized (set `uncategorized: true`
       //                              before storage; no moveItemToCollection
       //                              call since there's no real collection
       //                              record to update)
       //   real id                 → assign via moveItemToCollection after storage
-      if (!isEdit && selectedCollectionId === UNCATEGORIZED_COLLECTION_ID) {
+      if (shouldMarkUncategorized(isEdit, type, selectedCollectionId, UNCATEGORIZED_COLLECTION_ID)) {
         item!.uncategorized = true;
       }
       await storeItem(item!, fileData);
       if (selectedCollectionId && selectedCollectionId !== UNCATEGORIZED_COLLECTION_ID && !isEdit) {
         await moveItemToCollection(item!.id, selectedCollectionId);
-      }
-      // Remember the destination for next time, but only for new todos — the
-      // preference seeds `pickInitialCollectionId`. Refs default to Inbox so
-      // there's nothing useful to remember for them; edits don't expose the
-      // picker. Uncategorized is explicitly excluded so we never bring the
-      // user back to the ref-only bucket as a default.
-      if (
-        !isEdit
-        && type === 'todo'
-        && selectedCollectionId
-        && selectedCollectionId !== UNCATEGORIZED_COLLECTION_ID
-      ) {
-        try {
-          await updateConfig({ lastSelectedCollectionId: selectedCollectionId });
-        } catch (e) {
-          console.error('Failed to persist lastSelectedCollectionId', e);
-        }
       }
       onclose();
     } catch (e) {
@@ -624,7 +557,7 @@
     : type === 'bookmark' ? !!url
     : type === 'note' ? !!(title || body)
     : type === 'email' ? !!body
-    : type === 'todo' ? !!title && !!selectedCollectionId
+    : type === 'todo' ? canCaptureTodo(title)
     : true
   );
 </script>
@@ -840,7 +773,7 @@
 
       {#if showCollectionPicker}
         <div class="field">
-          <span>Collection</span>
+          <span>{isTodoType ? 'File in' : 'Collection'}</span>
           <div class="dest-wrapper" bind:this={collectionPickerEl}>
             <button
               type="button"
@@ -858,11 +791,20 @@
             {#if collectionPickerOpen}
               <div class="dest-menu" role="listbox" aria-label="Destination" style={pickerMenuStyle}>
                 <!--
-                  Default non-collection destination. Refs-only — the row
-                  files the new ref into the Inbox (the default landing).
-                  Hidden for todos, which require a real collection.
+                  Default non-collection destination. For refs this is Inbox;
+                  for todos this is unfiled so they can be organized later.
                 -->
-                {#if !isTodoType}
+                {#if isTodoType && selectedCollectionId !== UNCATEGORIZED_COLLECTION_ID}
+                  <button
+                    type="button"
+                    class="dest-item"
+                    class:selected={selectedCollectionId === undefined}
+                    onclick={() => selectCollection(undefined)}
+                  >
+                    <span class="dest-dot" style="background: #9ca3af" aria-hidden="true"></span>
+                    Unfiled
+                  </button>
+                {:else if !isTodoType}
                   <button
                     type="button"
                     class="dest-item"
@@ -879,11 +821,8 @@
                     (a) refs when the bucket already exists, so the user can
                         file a new ref alongside existing stragglers without
                         first sending it to the Inbox and moving it; and
-                    (b) todos when the caller preselected the Uncategorized
-                        sentinel (e.g. the quick-add on an uncategorized todo
-                        row) — shown so the current selection is visible and
-                        the user can reselect it after browsing real
-                        collections.
+                    (b) legacy/defensive sentinel selections, so the current
+                        selection is visible and reselectable.
                   -->
                   <button
                     type="button"
@@ -892,7 +831,7 @@
                     onclick={() => selectCollection(UNCATEGORIZED_COLLECTION_ID)}
                   >
                     <span class="dest-dot" style="background: #9ca3af" aria-hidden="true"></span>
-                    Uncategorized
+                    {isTodoType ? 'Unfiled' : 'Uncategorized'}
                   </button>
                 {/if}
                 {#each $sortedGroups as group (group.id)}
@@ -915,29 +854,6 @@
                     {/each}
                   {/if}
                 {/each}
-                {#if isTodoType && !hasAnyCollection}
-                  <!--
-                    Todos require a real collection, so when the user has no
-                    collections at all the picker would otherwise render
-                    completely empty. Surface an actionable hint + a jump
-                    button so the user isn't stuck — losing the in-progress
-                    title is acceptable since there's nowhere to save it yet.
-                    Note: the virtual Uncategorized bucket (if present) is a
-                    read-only fallback for stragglers and isn't a real
-                    collection, so it deliberately isn't offered here.
-                  -->
-                  <div class="dest-empty">
-                    <p class="dest-empty-title">No collections yet</p>
-                    <p class="dest-empty-hint">Todos need a collection. Create one to file this todo into.</p>
-                    <button
-                      type="button"
-                      class="dest-empty-cta"
-                      onclick={goToCollections}
-                    >
-                      Go to Collections
-                    </button>
-                  </div>
-                {/if}
               </div>
             {/if}
           </div>
@@ -1323,52 +1239,6 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-  }
-
-  .dest-empty {
-    padding: 0.75rem 0.55rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-    align-items: center;
-    text-align: center;
-  }
-
-  .dest-empty-title {
-    margin: 0;
-    font-size: 0.85rem;
-    color: var(--text);
-    font-weight: 600;
-  }
-
-  .dest-empty-hint {
-    margin: 0;
-    font-size: 0.78rem;
-    color: var(--text-muted);
-    line-height: 1.4;
-  }
-
-  /*
-   * Inline CTA styled as a compact accent button — mirrors the Fab/primary
-   * button look but sized to fit inside the dropdown without dominating it.
-   * Kept tap-target friendly on mobile (36px min height) so it works as the
-   * only escape hatch from the empty state.
-   */
-  .dest-empty-cta {
-    margin-top: 0.2rem;
-    padding: 0.4rem 0.8rem;
-    min-height: 36px;
-    background: var(--accent);
-    color: white;
-    border: none;
-    border-radius: var(--radius);
-    font-size: 0.8rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  .dest-empty-cta:hover {
-    filter: brightness(1.05);
   }
 
   .dest-dot {
