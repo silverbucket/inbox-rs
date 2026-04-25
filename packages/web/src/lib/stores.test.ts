@@ -1664,20 +1664,11 @@ describe('load-time collection group repair', () => {
     expect(Object.values(get(groups)).some((g) => g.name === 'Uncategorized1')).toBe(false);
   });
 
-  it('repairs collections when a remote group deletion leaves them orphaned', async () => {
-    collections.set({ c1: makeCollection('c1', 'g1') });
-    groups.set({ g1: makeGroup('g1', ['c1']) });
-
-    emitModuleChange({
-      relativePath: 'groups/g1',
-      oldValue: makeGroup('g1', ['c1']),
-      newValue: undefined,
-    });
-    for (let i = 0; i < 5; i += 1) await Promise.resolve();
-
-    const uncatGroup = Object.values(get(groups)).find((g) => g.name === 'Uncategorized1');
-    expect(uncatGroup).toBeDefined();
-    expect(get(collections)['c1'].groupId).toBe(uncatGroup!.id);
-    expect(get(groups)[uncatGroup!.id].collectionIds).toContain('c1');
-  });
+  // Intentionally NOT auto-repaired: a 'groups/<id>' delete arriving via the
+  // RS change handler can be a transient mid-sync state (e.g. a group write
+  // hasn't landed yet on this device), and rewriting every dependent
+  // collection's groupId is destructive and propagates to all devices. This
+  // is exactly the v2.0.4 regression that wiped users' organization. Repair
+  // only runs at load time, where we can assert both stores are populated
+  // before deciding a collection is genuinely orphaned.
 });
