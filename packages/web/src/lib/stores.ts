@@ -1088,11 +1088,16 @@ export async function toggleGroupFilter(groupId: string): Promise<void> {
   await updateConfig({ activeGroupFilters: next });
 }
 
-/** Set the active group filter list to exactly these IDs. Persists to config. */
+/** Set the active group filter list to exactly these IDs. Persists to config.
+ *
+ * Does not filter against known groups — the URL→config sync runs before
+ * `groups` finishes loading on cold refresh, and dropping ids whose group
+ * hasn't loaded yet would wipe valid filters and immediately rewrite the URL
+ * to `?g=` empty. Stale ids (groups that were deleted) are filtered out at
+ * read time by `activeGroupIds`, so persisting them is harmless.
+ */
 export async function setActiveGroupFilters(ids: string[]): Promise<void> {
-  // Dedupe and only keep ids that correspond to real groups.
-  const allGroupIds = new Set(get(sortedGroups).map(g => g.id));
-  const filtered = Array.from(new Set(ids)).filter(id => allGroupIds.has(id));
+  const filtered = Array.from(new Set(ids));
   const current = get(appConfig).activeGroupFilters;
   // Skip if equal to current (avoids URL ↔ config write loops)
   if (current && current.length === filtered.length && current.every((v, i) => v === filtered[i])) {

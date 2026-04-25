@@ -1103,12 +1103,17 @@ describe('setActiveGroupFilters', () => {
     expect(get(appConfig).activeGroupFilters).toEqual(['g1', 'g2']);
   });
 
-  it('drops ids that do not correspond to real groups', async () => {
+  it('preserves unknown ids so URL filters survive cold refreshes before groups load', async () => {
+    // Cold-refresh race: URL→config sync runs before `groups` populates from
+    // the cached load. Filtering against the (still-empty) groups set here
+    // would wipe valid filters and immediately rewrite the URL to `?g=`.
+    // `activeGroupIds` filters stale ids at read time, so we keep them in
+    // config.
     groups.set({ g1: makeGroup('g1') });
 
     await setActiveGroupFilters(['g1', 'g_unknown']);
 
-    expect(get(appConfig).activeGroupFilters).toEqual(['g1']);
+    expect(get(appConfig).activeGroupFilters).toEqual(['g1', 'g_unknown']);
   });
 
   it('skips persistence when value is unchanged (avoids URL ↔ config loops)', async () => {
