@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack, onDestroy } from 'svelte';
   import type { InboxItem } from '@inbox-rs/rs-module';
-  import { deleteItem, storeItem, blobUrls, connected, sortedGroups, groupCollections, moveItemToCollection, loadFileBlobUrl, hasUncategorizedItems } from '../lib/stores';
+  import { deleteItem, storeItem, blobUrls, connected, sortedGroups, groupCollections, ungroupedCollections, moveItemToCollection, loadFileBlobUrl, hasUncategorizedItems } from '../lib/stores';
   import rs from '../lib/rs';
   import { transcribeAudio } from '../lib/transcribe';
   import ShareButton from './ShareButton.svelte';
@@ -622,7 +622,18 @@
             </button>
           {/each}
         {/each}
-        {#if $sortedGroups.every((g) => ($groupCollections[g.id] ?? []).length === 0)}
+        <!-- Ungrouped collections — legacy collections from before groups
+             became mandatory, or collections whose parent group was deleted.
+             Without this, a user whose only collection is ungrouped would see
+             an empty picker and the "create a collection first" message
+             despite already having one. -->
+        {#each $ungroupedCollections as col (col.id)}
+          <button class="move-option" onclick={() => convertToTodoInCollection(col.id)} disabled={convertingTodo}>
+            <span class="move-dot" style="background: {col.color || '#6366f1'}"></span>
+            <span class="move-group-prefix" style="color: #9ca3af">Ungrouped</span> : {col.name}
+          </button>
+        {/each}
+        {#if $sortedGroups.every((g) => ($groupCollections[g.id] ?? []).length === 0) && $ungroupedCollections.length === 0}
           <!-- No real collections yet — guide the user instead of silently
                allowing an Uncategorized-only choice, which would undo the
                point of this forced-picker flow. -->
@@ -657,7 +668,18 @@
             {/if}
           {/each}
         {/each}
-        {#if $sortedGroups.every((g) => ($groupCollections[g.id] ?? []).every((col) => col.id === item.collectionId))}
+        <!-- Ungrouped collections — must be offered as move targets too,
+             otherwise an item can't be moved into a collection whose group
+             was deleted (or a legacy ungrouped collection). -->
+        {#each $ungroupedCollections as col (col.id)}
+          {#if col.id !== item.collectionId}
+            <button class="move-option" onclick={() => { moveItemToCollection(item.id, col.id).catch(e => console.error('Move failed:', e)); closeMoveMenu(); onclose(); }}>
+              <span class="move-dot" style="background: {col.color || '#6366f1'}"></span>
+              <span class="move-group-prefix" style="color: #9ca3af">Ungrouped</span> : {col.name}
+            </button>
+          {/if}
+        {/each}
+        {#if $sortedGroups.length === 0 && $ungroupedCollections.length === 0}
           <div class="move-empty">No collections</div>
         {/if}
       </div>

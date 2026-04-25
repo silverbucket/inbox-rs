@@ -50,12 +50,11 @@
   let selectedGroupId = $state<string>(pickInitialGroupId());
 
   const hasGroups = $derived($sortedGroups.length > 0);
-  const canSubmit = $derived(!!selectedGroupId && !!$groups[selectedGroupId]);
+  const canSubmit = $derived(!!selectedGroupId);
 
   async function handleSubmit() {
     if (!name.trim()) return;
     if (!selectedGroupId) return;
-    if (!$groups[selectedGroupId]) return;
     // Persist the picked group as the next default before the parent's
     // onsave runs. Best-effort: if the write fails the user's creation
     // still succeeds, they just lose the preference memory this once.

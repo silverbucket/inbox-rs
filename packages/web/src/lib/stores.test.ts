@@ -51,7 +51,7 @@ vi.mock('./clean-for-storage', () => ({
 import {
   blobUrls, connected, loadFileBlobUrl,
   collections, groups, groupCollections, moveCollectionToGroup,
-  deleteGroup, appConfig,
+  deleteGroup, ungroupedCollections, appConfig,
   storeCollection, createCollection, deleteCollection,
   reorderGroupCollections, items, todoItems, reorderUncategorizedTodos, pendingMigrationCount,
   moveItemToCollection,
@@ -60,7 +60,7 @@ import {
   toggleGroupFilter, setActiveGroupFilters, storeGroup,
   allTodos, openTodos, visibleTodos, reorderTodosGlobal,
   uncategorizedFilterActive, toggleUncategorizedFilter,
-  UNCATEGORIZED_FILTER_ID,
+  UNCATEGORIZED_FILTER_ID, reorderUngroupedCollections,
   UNCATEGORIZED_COLLECTION_ID, uncategorizedVirtualCollection,
 } from './stores';
 import type { Collection, CollectionGroup, InboxItem } from '@inbox-rs/rs-module';
@@ -647,6 +647,61 @@ describe('pendingMigrationCount visibility timing', () => {
   });
 });
 
+describe('ungroupedCollections', () => {
+  beforeEach(() => {
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('returns collections with no groupId', () => {
+    const col1 = makeCollection('c1');
+    const col2 = makeCollection('c2', 'g1');
+    const group = makeGroup('g1', ['c2']);
+
+    collections.set({ c1: col1, c2: col2 });
+    groups.set({ g1: group });
+
+    const result = get(ungroupedCollections);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('c1');
+  });
+
+  it('returns collections whose groupId points to a non-existent group', () => {
+    const col = makeCollection('c1', 'g_deleted');
+
+    collections.set({ c1: col });
+    groups.set({});
+
+    const result = get(ungroupedCollections);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('c1');
+  });
+
+  it('does not include collections with a valid groupId', () => {
+    const col = makeCollection('c1', 'g1');
+    const group = makeGroup('g1', ['c1']);
+
+    collections.set({ c1: col });
+    groups.set({ g1: group });
+
+    const result = get(ungroupedCollections);
+    expect(result).toHaveLength(0);
+  });
+
+  it('returns empty array when all collections belong to groups', () => {
+    const col1 = makeCollection('c1', 'g1');
+    const col2 = makeCollection('c2', 'g1');
+    const group = makeGroup('g1', ['c1', 'c2']);
+
+    collections.set({ c1: col1, c2: col2 });
+    groups.set({ g1: group });
+
+    const result = get(ungroupedCollections);
+    expect(result).toHaveLength(0);
+  });
+});
+
 describe('no group recreation after deletion', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -828,10 +883,60 @@ describe('deleteGroup with non-existent group', () => {
   });
 });
 
+describe('ungroupedCollections reacts to group deletion', () => {
+  beforeEach(() => {
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('collections appear in ungroupedCollections after their group is deleted', async () => {
+    const col = makeCollection('c1', 'g1');
+    const group = makeGroup('g1', ['c1']);
+
+    collections.set({ c1: col });
+    groups.set({ g1: group });
+
+    // Before deletion: c1 is grouped
+    expect(get(ungroupedCollections)).toHaveLength(0);
+    expect(get(groupCollections)['g1']).toHaveLength(1);
+
+    // Simulate the group being removed from the store (as if deleted on another device)
+    groups.update(current => {
+      const next = { ...current };
+      delete next['g1'];
+      return next;
+    });
+
+    // c1 still has groupId 'g1' but that group no longer exists
+    expect(get(ungroupedCollections)).toHaveLength(1);
+    expect(get(ungroupedCollections)[0].id).toBe('c1');
+  });
+
+  it('collections move from ungrouped to grouped when assigned a valid group', async () => {
+    const col = makeCollection('c1');
+    const group = makeGroup('g1', []);
+
+    collections.set({ c1: col });
+    groups.set({ g1: group });
+
+    // Before: ungrouped
+    expect(get(ungroupedCollections)).toHaveLength(1);
+
+    await moveCollectionToGroup('c1', 'g1');
+
+    // After: grouped
+    expect(get(ungroupedCollections)).toHaveLength(0);
+    expect(get(groupCollections)['g1']).toHaveLength(1);
+  });
+});
+
 // ---- Direct storeCollection writes leave groupId untouched ----
-// `storeCollection` is the low-level write. It does not repair legacy
-// collection group membership; the app-load repair path handles that once
-// collections and groups have both been loaded.
+// `storeCollection` is the low-level write. It does NOT enforce the
+// every-collection-has-a-group invariant — that's `createCollection`'s job
+// (see "createCollection: group assignment" below). These tests pin down the
+// raw store behaviour so other code paths (imports, tests, future callers)
+// know what the primitive does.
 
 describe('storeCollection: raw groupId handling', () => {
   beforeEach(() => {
@@ -841,17 +946,18 @@ describe('storeCollection: raw groupId handling', () => {
     appConfig.set({});
   });
 
-  it('preserves an undefined groupId without creating a group', async () => {
+  it('preserves an undefined groupId — collection lands in ungroupedCollections', async () => {
     const col = makeCollection('c1');
 
     await storeCollection(col);
 
     expect(get(collections)['c1']).toBeDefined();
     expect(get(collections)['c1'].groupId).toBeUndefined();
+    expect(get(ungroupedCollections)).toHaveLength(1);
     expect(mockInbox.storeGroup).not.toHaveBeenCalled();
   });
 
-  it('preserves an empty-string groupId without creating a group', async () => {
+  it('preserves an empty-string groupId — also treated as ungrouped (falsy)', async () => {
     const col: Collection = {
       id: 'c1',
       name: 'Test',
@@ -863,10 +969,12 @@ describe('storeCollection: raw groupId handling', () => {
     await storeCollection(col);
 
     expect(get(collections)['c1'].groupId).toBe('');
+    // ungroupedCollections checks !c.groupId — empty string is falsy, so it's included
+    expect(get(ungroupedCollections)).toHaveLength(1);
   });
 });
 
-describe('reorderGroupCollections with invalid group ids', () => {
+describe('ungrouped route: reorder is a no-op', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     collections.set({});
@@ -875,6 +983,8 @@ describe('reorderGroupCollections with invalid group ids', () => {
   });
 
   it('reorderGroupCollections with empty groupId does not modify any group', async () => {
+    // CollectionsPage calls reorderGroupCollections(groupId, newIds) on DnD finalize.
+    // When groupId is "", no group matches, so it should be a no-op.
     const group = makeGroup('g1', ['c1', 'c2']);
     const col1 = makeCollection('c1', 'g1');
     const col2 = makeCollection('c2', 'g1');
@@ -906,7 +1016,6 @@ describe('reorderGroupCollections with invalid group ids', () => {
 
 describe('activeGroupIds', () => {
   beforeEach(() => {
-    items.set({});
     collections.set({});
     groups.set({});
     appConfig.set({});
@@ -953,7 +1062,6 @@ describe('activeGroupIds', () => {
 
 describe('visibleGroupedCollections', () => {
   beforeEach(() => {
-    items.set({});
     collections.set({});
     groups.set({});
     appConfig.set({});
@@ -965,7 +1073,8 @@ describe('visibleGroupedCollections', () => {
     collections.set({ c1, c2 });
     groups.set({ g1: makeGroup('g1', ['c2', 'c1']) });
     // Disable the Uncategorized pill so this test stays focused on real-group
-    // behaviour.
+    // behaviour — with the pill on (the default) an empty Uncategorized
+    // section is appended.
     appConfig.set({ uncategorizedFilterActive: false });
 
     const sections = get(visibleGroupedCollections);
@@ -992,14 +1101,23 @@ describe('visibleGroupedCollections', () => {
     expect(get(visibleGroupedCollections)).toHaveLength(0);
   });
 
+  it('appends an Uncategorized section when ungrouped collections exist and the pill is on', () => {
+    const grouped = makeCollection('c1', 'g1');
+    const ungrouped = makeCollection('c2');
+    collections.set({ c1: grouped, c2: ungrouped });
+    groups.set({ g1: makeGroup('g1', ['c1']) });
+
+    const sections = get(visibleGroupedCollections);
+    expect(sections.map(s => s.group.id)).toEqual(['g1', UNCATEGORIZED_FILTER_ID]);
+    expect(sections[1].collections.map(c => c.id)).toEqual(['c2']);
+  });
+
   it('places the Uncategorized section at the sentinel slot in groupsOrder', () => {
     const grouped = makeCollection('c1', 'g1');
+    const ungrouped = makeCollection('c2');
     const grouped2 = makeCollection('c3', 'g2');
-    collections.set({ c1: grouped, c3: grouped2 });
+    collections.set({ c1: grouped, c2: ungrouped, c3: grouped2 });
     groups.set({ g1: makeGroup('g1', ['c1']), g2: makeGroup('g2', ['c3']) });
-    items.set({
-      t1: { id: 't1', type: 'todo', title: 'straggler', createdAt: '2026-01-01T00:00:00Z', completed: false, isTodo: true } as any,
-    });
     // Sentinel placed between g1 and g2
     appConfig.set({ groupsOrder: ['g1', UNCATEGORIZED_FILTER_ID, 'g2'] });
 
@@ -1007,17 +1125,15 @@ describe('visibleGroupedCollections', () => {
     expect(sections.map(s => s.group.id)).toEqual(['g1', UNCATEGORIZED_FILTER_ID, 'g2']);
   });
 
-  it('hides the Uncategorized section when the pill is off even if straggler items exist', () => {
-    items.set({
-      t1: { id: 't1', type: 'todo', title: 'straggler', createdAt: '2026-01-01T00:00:00Z', completed: false, isTodo: true } as any,
-    });
+  it('hides the Uncategorized section when the pill is off even if ungrouped collections exist', () => {
+    collections.set({ c1: makeCollection('c1') });
     groups.set({});
     appConfig.set({ uncategorizedFilterActive: false });
 
     expect(get(visibleGroupedCollections)).toHaveLength(0);
   });
 
-  it('hides the Uncategorized section when there are no straggler items', () => {
+  it('hides the Uncategorized section when there are neither ungrouped collections nor straggler items', () => {
     // Uncategorized is a dynamic surface — unlike a real group, it has no
     // persistent identity for the user to "keep". When everything is filed
     // (all collections have a group, all items have a collection, no
@@ -1030,7 +1146,7 @@ describe('visibleGroupedCollections', () => {
     expect(sections.map(s => s.group.id)).toEqual(['g1']);
   });
 
-  it('renders the Uncategorized section when there are straggler items', () => {
+  it('renders the Uncategorized section when there are straggler items but no ungrouped collections', () => {
     // A loose todo or an orphaned ref is enough to bring the Uncategorized
     // surface back — the straggler needs somewhere to live.
     const grouped = makeCollection('c1', 'g1');
@@ -1044,10 +1160,24 @@ describe('visibleGroupedCollections', () => {
     expect(sections[1].collections).toEqual([]);
   });
 
+  it('treats a collection whose group was deleted as ungrouped in the section', () => {
+    const orphan = makeCollection('c1', 'g_deleted');
+    collections.set({ c1: orphan });
+    groups.set({});
+
+    const sections = get(visibleGroupedCollections);
+    expect(sections.map(s => s.group.id)).toEqual([UNCATEGORIZED_FILTER_ID]);
+    expect(sections[0].collections.map(c => c.id)).toEqual(['c1']);
+  });
+
   it('attaches the virtual Uncategorized collection to the Uncategorized section when stragglers exist', () => {
-    // The virtual collection is exposed on `section.virtualCollection` so
-    // CollectionsPage can render straggler items without creating a real
-    // collection or group destination.
+    // The virtual collection rides alongside real ungrouped collections on
+    // `section.virtualCollection` so CollectionsPage can render it outside the
+    // reorderable drag zone. Its id is the UNCATEGORIZED_COLLECTION_ID sentinel
+    // — distinct from the group sentinel so items-without-collectionId don't
+    // collide with collections-without-groupId in downstream lookups. The
+    // section only appears when there's something to show, so we seed a
+    // straggler todo to trigger it.
     collections.set({});
     groups.set({});
     const straggler: InboxItem = { id: 't1', type: 'todo', title: 'straggler', createdAt: '2026-01-01T00:00:00Z', completed: false, isTodo: true } as any;
@@ -1155,6 +1285,34 @@ describe('collectionItems virtual Uncategorized entry', () => {
     const byCollection = get(collectionItems);
     const uncatItems = byCollection[UNCATEGORIZED_COLLECTION_ID] ?? [];
     expect(uncatItems.map(i => i.id)).toEqual(['t1', 'r1']);
+  });
+});
+
+describe('reorderUngroupedCollections', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    appConfig.set({});
+  });
+
+  it('persists the new order to collectionsOrder', async () => {
+    await reorderUngroupedCollections(['c2', 'c1', 'c3']);
+
+    expect(get(appConfig).collectionsOrder).toEqual(['c2', 'c1', 'c3']);
+    expect(mockInbox.setConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ collectionsOrder: ['c2', 'c1', 'c3'] })
+    );
+  });
+
+  it('reorders ungroupedCollections to match the persisted order', async () => {
+    const c1 = makeCollection('c1');
+    const c2 = makeCollection('c2');
+    const c3 = makeCollection('c3');
+    collections.set({ c1, c2, c3 });
+    groups.set({});
+
+    await reorderUngroupedCollections(['c3', 'c1', 'c2']);
+
+    expect(get(ungroupedCollections).map(c => c.id)).toEqual(['c3', 'c1', 'c2']);
   });
 });
 
@@ -1294,21 +1452,6 @@ describe('moveCollectionToGroup', () => {
 
     expect(get(collections)['c1'].groupId).toBe('g2');
   });
-
-  it('throws without mutating when target group is missing', async () => {
-    const col = makeCollection('c1', 'g1');
-    const group = makeGroup('g1', ['c1']);
-
-    collections.set({ c1: col });
-    groups.set({ g1: group });
-
-    await expect(moveCollectionToGroup('c1', 'missing')).rejects.toThrow('Cannot move collection to missing group');
-
-    expect(get(collections)['c1'].groupId).toBe('g1');
-    expect(get(groups)['g1'].collectionIds).toEqual(['c1']);
-    expect(mockInbox.storeCollection).not.toHaveBeenCalled();
-    expect(mockInbox.storeGroup).not.toHaveBeenCalled();
-  });
 });
 
 describe('allTodos / openTodos', () => {
@@ -1376,8 +1519,7 @@ describe('visibleTodos', () => {
       u1: makeTodo('u1'),
       c1: makeTodo('c1', { collectionId: 'col1' }),
     });
-    collections.set({ col1: makeCollection('col1', 'g1') });
-    groups.set({ g1: makeGroup('g1', ['col1']) });
+    collections.set({ col1: makeCollection('col1') });
     appConfig.set({ uncategorizedFilterActive: false });
 
     expect(get(visibleTodos).map(t => t.id)).toEqual(['c1']);
@@ -1406,7 +1548,7 @@ describe('visibleTodos', () => {
     expect(get(visibleTodos).map(t => t.id)).toEqual(['c1']);
   });
 
-  it('hides todos from collections without a real group', () => {
+  it('keeps todos from ungrouped collections visible even when no groups are active', () => {
     items.set({
       orphan: makeTodo('orphan', { collectionId: 'col-orphan' }),
     });
@@ -1419,7 +1561,7 @@ describe('visibleTodos', () => {
       uncategorizedFilterActive: false,
     });
 
-    expect(get(visibleTodos)).toEqual([]);
+    expect(get(visibleTodos).map(t => t.id)).toEqual(['orphan']);
   });
 
   it('treats a todo whose collection was deleted as uncategorized for filtering purposes', () => {
@@ -1577,6 +1719,13 @@ describe('deleteCollection: empty-only guard', () => {
   });
 });
 
+// ---- createCollection: every-collection-has-a-group invariant ----
+//
+// New collections must end up inside a group. If the form picked one we use
+// it; otherwise we route into an `Uncategorized<N>` group, creating one only
+// if none exists. The numbering is intentionally naive — this is the
+// fallback path for users who haven't yet organised their collections.
+
 describe('createCollection: group assignment', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -1600,84 +1749,53 @@ describe('createCollection: group assignment', () => {
     expect(Object.keys(get(groups))).toEqual(['g1']);
   });
 
-  it('rejects collection creation without a real group', async () => {
-    await expect(createCollection(makeCollection('c1'))).rejects.toThrow('Cannot create collection without a real group');
-    expect(get(collections)['c1']).toBeUndefined();
-    expect(mockInbox.storeGroup).not.toHaveBeenCalled();
-  });
+  it('creates Uncategorized1 when no Uncategorized group exists', async () => {
+    const col = makeCollection('c1'); // no groupId
 
-  it('rejects collection creation with a missing group', async () => {
-    await expect(createCollection(makeCollection('c1', 'missing'))).rejects.toThrow('Cannot create collection without a real group');
-    expect(get(collections)['c1']).toBeUndefined();
-  });
-});
+    const stored = await createCollection(col);
 
-describe('load-time collection group repair', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    items.set({});
-    collections.set({});
-    groups.set({});
-    appConfig.set({});
-    mockInbox.getAll.mockResolvedValue({});
-    mockInbox.getConfig.mockResolvedValue({});
-    mockInbox.getUserSettings.mockResolvedValue(undefined);
-  });
-
-  it('creates Uncategorized1 and moves loaded collections without a group into it', async () => {
-    mockInbox.getAllCollections.mockResolvedValue({ c1: makeCollection('c1') });
-    mockInbox.getAllGroups.mockResolvedValue({});
-
-    await rsHandlers['connected']();
-
-    const uncatGroup = Object.values(get(groups)).find((g) => g.name === 'Uncategorized1');
+    const uncatGroup = Object.values(get(groups)).find(g => g.name === 'Uncategorized1');
     expect(uncatGroup).toBeDefined();
+    expect(stored.groupId).toBe(uncatGroup!.id);
     expect(get(collections)['c1'].groupId).toBe(uncatGroup!.id);
-    expect(get(groups)[uncatGroup!.id].collectionIds).toContain('c1');
+    expect(get(groupCollections)[uncatGroup!.id].map(c => c.id)).toEqual(['c1']);
   });
 
-  it('reuses the lowest existing Uncategorized<N> group during load repair', async () => {
+  it('reuses an existing Uncategorized1 group instead of creating a new one', async () => {
+    const existing = makeGroup('g-existing');
+    existing.name = 'Uncategorized1';
+    groups.set({ 'g-existing': existing });
+
+    const stored = await createCollection(makeCollection('c1'));
+
+    expect(stored.groupId).toBe('g-existing');
+    // Still only one group — we didn't create Uncategorized2
+    expect(Object.keys(get(groups))).toEqual(['g-existing']);
+  });
+
+  it('picks the lowest-numbered Uncategorized group when several exist', async () => {
     const u3 = makeGroup('g3'); u3.name = 'Uncategorized3';
     const u1 = makeGroup('g1'); u1.name = 'Uncategorized1';
     const u2 = makeGroup('g2'); u2.name = 'Uncategorized2';
-    mockInbox.getAllCollections.mockResolvedValue({ c1: makeCollection('c1', 'deleted-group') });
-    mockInbox.getAllGroups.mockResolvedValue({ g3: u3, g1: u1, g2: u2 });
+    groups.set({ g3: u3, g1: u1, g2: u2 });
 
-    await rsHandlers['connected']();
+    const stored = await createCollection(makeCollection('c1'));
 
-    expect(get(collections)['c1'].groupId).toBe('g1');
-    expect(get(groups)['g1'].collectionIds).toContain('c1');
-    expect(Object.values(get(groups)).filter((g) => g.name === 'Uncategorized1')).toHaveLength(1);
+    expect(stored.groupId).toBe('g1');
   });
 
-  it('does not repair when groups fail to load', async () => {
-    const existing = makeGroup('g1', ['c1']);
-    groups.set({ g1: existing });
-    collections.set({ c1: makeCollection('c1', 'g1') });
-    mockInbox.getAllCollections.mockResolvedValue({ c1: makeCollection('c1', 'g1') });
-    mockInbox.getAllGroups.mockRejectedValue(new Error('temporary groups read failure'));
+  it('ignores groups whose names do not match the Uncategorized<N> pattern', async () => {
+    // "Uncategorized" without a number, or with extra suffix, must NOT be reused.
+    const a = makeGroup('ga'); a.name = 'Uncategorized';
+    const b = makeGroup('gb'); b.name = 'Uncategorized1-archive';
+    groups.set({ ga: a, gb: b });
 
-    await rsHandlers['connected']();
+    const stored = await createCollection(makeCollection('c1'));
 
-    expect(get(collections)['c1'].groupId).toBe('g1');
-    expect(get(groups)['g1']).toBeDefined();
-    expect(Object.values(get(groups)).some((g) => g.name === 'Uncategorized1')).toBe(false);
-  });
-
-  it('repairs collections when a remote group deletion leaves them orphaned', async () => {
-    collections.set({ c1: makeCollection('c1', 'g1') });
-    groups.set({ g1: makeGroup('g1', ['c1']) });
-
-    emitModuleChange({
-      relativePath: 'groups/g1',
-      oldValue: makeGroup('g1', ['c1']),
-      newValue: undefined,
-    });
-    for (let i = 0; i < 5; i += 1) await Promise.resolve();
-
-    const uncatGroup = Object.values(get(groups)).find((g) => g.name === 'Uncategorized1');
+    const uncatGroup = Object.values(get(groups)).find(g => g.name === 'Uncategorized1');
     expect(uncatGroup).toBeDefined();
-    expect(get(collections)['c1'].groupId).toBe(uncatGroup!.id);
-    expect(get(groups)[uncatGroup!.id].collectionIds).toContain('c1');
+    expect(stored.groupId).toBe(uncatGroup!.id);
+    // Original groups are still around — we created a NEW Uncategorized1.
+    expect(Object.keys(get(groups))).toHaveLength(3);
   });
 });
