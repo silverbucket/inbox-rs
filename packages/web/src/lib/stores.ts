@@ -233,20 +233,6 @@ async function repairCollectionsWithoutValidGroup() {
   }
 }
 
-let repairCollectionsQueued = false;
-function queueCollectionGroupRepair() {
-  if (repairCollectionsQueued) return;
-  repairCollectionsQueued = true;
-  queueMicrotask(async () => {
-    repairCollectionsQueued = false;
-    try {
-      await repairCollectionsWithoutValidGroup();
-    } catch (error) {
-      console.error('[inbox] failed to repair collection group membership:', error);
-    }
-  });
-}
-
 async function loadCachedData() {
   await Promise.all([
     loadItems(),
@@ -432,7 +418,6 @@ if (inboxRef) {
           ...current,
           [key]: { ...col, itemIds: Array.isArray(col.itemIds) ? col.itemIds : [] },
         }));
-        queueCollectionGroupRepair();
       } else if (!value) {
         collections.update(current => {
           const next = { ...current };
@@ -449,14 +434,12 @@ if (inboxRef) {
           ...current,
           [key]: { ...grp, collectionIds: Array.isArray(grp.collectionIds) ? grp.collectionIds : [] },
         }));
-        queueCollectionGroupRepair();
       } else if (!value) {
         groups.update(current => {
           const next = { ...current };
           delete next[key];
           return next;
         });
-        queueCollectionGroupRepair();
       }
     } else if (path === 'config/app') {
       if (value && typeof value === 'object') {
