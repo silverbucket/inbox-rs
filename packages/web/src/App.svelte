@@ -27,6 +27,7 @@
   let viewingItem = $state<InboxItem | null>(null);
   let showCollectionForm = $state(false);
   let showGroupForm = $state(false);
+  let userMenu = $state<InstanceType<typeof UserMenu> | null>(null);
   // Collection to pre-select when opening the add-entry modal. Used by the
   // per-row quick-add on the Todos page so the new todo lands in the same
   // collection as the row the user is adding alongside.
@@ -129,12 +130,8 @@
   }
 
   /** Open the add-todo modal with a specific collection pre-selected.
-      Callers pass a real collection id to target that collection, or the
-      `UNCATEGORIZED_COLLECTION_ID` sentinel (from stores) to target the
-      Uncategorized bucket explicitly — e.g. the quick-add on an uncategorized
-      todo row. `undefined` means "no preselection, use the modal's own
-      default cascade" and should only come from callers that genuinely have
-      no target in mind. */
+      Callers pass a real collection id to target that collection, or
+      `undefined` to keep the new todo unfiled. */
   function openAddTodoInCollection(collectionId: string | undefined) {
     editingItem = undefined;
     preselectedCollectionId = collectionId;
@@ -161,10 +158,12 @@
     preselectedCollectionId = undefined;
   }
 
+  function openConnectMenu() {
+    void userMenu?.openConnectMenu();
+  }
+
   async function handleCreateCollection(col: Collection) {
     try {
-      // createCollection guarantees the collection ends up inside a group —
-      // either the one the form picked, or a fresh "UncategorizedN" group.
       await createCollection(col);
       showCollectionForm = false;
     } catch (error) {
@@ -182,8 +181,7 @@
   }
 
   // Surface a small badge with open todo count next to the Todos nav item.
-  // Counts every open todo across all collections (not just uncategorized) so
-  // the badge matches what the user sees on the flat Todos page.
+  // Counts every open todo so the badge matches the flat Todos page.
   const openTodoCount = $derived($openTodos.length);
 </script>
 
@@ -221,10 +219,10 @@
       >Collections</button>
     </nav>
     <div class="header-right">
-      <UserMenu />
+      <UserMenu bind:this={userMenu} />
     </div>
   </div>
-  {#if $connected && route.page !== 'plugins'}
+  {#if route.page !== 'plugins'}
     <div class="header-filters">
       <div class="header-filters-inner">
         <GroupFilterBar
@@ -239,12 +237,6 @@
 <main>
   {#if route.page === 'plugins'}
     <PluginsPage />
-  {:else if !$connected}
-    <div class="empty-state">
-      <div class="empty-icon">📥</div>
-      <h2>Connect your storage</h2>
-      <p>Enter your remoteStorage address above to view your inbox.</p>
-    </div>
   {:else}
     {#if $pendingMigrationCount > 0}
       <MigrationAlert count={$pendingMigrationCount} onrun={runAllMigrations} />
@@ -253,17 +245,13 @@
     {#if route.page === 'inbox'}
       <div class="page-toolbar">
         <!-- Inbox is a refs-only staging area for unprocessed thoughts.
-             Todos always need a home (a collection), so adding one straight
-             to the Inbox would silently land it in the dynamic Uncategorized
-             bucket — which mixes "I haven't decided what this is" notes with
-             "I committed to doing this" todos. Hide the Todo button here so
-             the only way to create a todo is from a collection or the Todos
-             page picker, both of which force a collection choice. Existing
-             notes can still be converted via `makeTodo` when the user is
-             ready to commit. -->
+             Todos are captured from the dedicated Todos surface so they can
+             be added quickly, then optionally filed into a collection later.
+             Existing notes can still be converted via `makeTodo` when the
+             user is ready to commit. -->
         <AddEntryBar onadd={openAdd} excludeTypes={['todo']} />
       </div>
-      <InboxGrid onselect={openView} />
+      <InboxGrid onselect={openView} onconnect={openConnectMenu} />
     {:else if route.page === 'todos'}
       <TodosPage onselect={openView} onaddtodo={openAddTodo} onaddtodoincollection={openAddTodoInCollection} />
     {:else}
@@ -574,28 +562,4 @@
     letter-spacing: 0.02em;
   }
 
-  .empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 60vh;
-    text-align: center;
-    gap: 0.75rem;
-  }
-
-  .empty-icon {
-    font-size: 3rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .empty-state h2 {
-    font-size: 1.5rem;
-    font-weight: 600;
-  }
-
-  .empty-state p {
-    color: var(--text-muted);
-    max-width: 400px;
-  }
 </style>

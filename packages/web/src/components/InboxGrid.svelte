@@ -1,9 +1,15 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
-  import { sortedItems } from '../lib/stores';
+  import { connected, sortedItems } from '../lib/stores';
   import InboxCard from './InboxCard.svelte';
 
-  let { onselect }: { onselect: (item: InboxItem) => void } = $props();
+  let {
+    onselect,
+    onconnect,
+  }: {
+    onselect: (item: InboxItem) => void;
+    onconnect: () => void;
+  } = $props();
   const items = $derived($sortedItems);
 
 </script>
@@ -17,7 +23,14 @@
       </svg>
     </div>
     <h2 class="zero-heading">Inbox zero</h2>
-    <p class="zero-sub">You're all caught up. Nothing to process.</p>
+    {#if $connected}
+      <p class="zero-sub">You're all caught up. Nothing to process.</p>
+    {:else}
+      <p class="zero-sub">
+        <button class="connect-link" type="button" onclick={onconnect}>Connect to your remoteStorage</button>
+        to sync your inbox across devices.
+      </p>
+    {/if}
   </div>
 {:else}
   <div class="status-bar">You've got <span class="status-count">{items.length}</span> {items.length === 1 ? 'thing' : 'things'} waiting</div>
@@ -113,6 +126,30 @@
     font-size: 0.95rem;
     color: var(--text-muted);
     animation: fade-in 0.6s ease-out 0.2s both;
+  }
+
+  .connect-link {
+    display: inline;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 600;
+    padding: 0;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.16em;
+  }
+
+  .connect-link:hover {
+    color: var(--accent-hover);
+  }
+
+  .connect-link:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 2px;
   }
 
   @keyframes fade-in {

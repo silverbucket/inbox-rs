@@ -85,7 +85,7 @@
   bind:color
   showDescription
   bind:description
-  namePlaceholder="e.g. Sockethub Bugs"
+  namePlaceholder="e.g. Reading List"
   descriptionPlaceholder="What's this collection for?"
   maxWidth="440px"
   {onclose}

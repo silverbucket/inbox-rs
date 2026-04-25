@@ -10,20 +10,7 @@ export interface InboxItemBase {
   isTodo?: boolean;
   completed?: boolean;
   completedAt?: string;
-  collectionId?: string; // undefined = lives in Inbox (or Uncategorized, see `uncategorized`)
-  /**
-   * When true AND `collectionId` is unset, the item belongs to the
-   * Uncategorized bucket on the Collections/Todos pages rather than the
-   * Inbox. Typical sources:
-   *   - user explicitly picks "Uncategorized" in the AddEntryModal picker
-   *   - an item is orphaned when its parent collection is deleted
-   *
-   * Items without a `collectionId` and without this flag default to the Inbox
-   * — they surface only in the Inbox view and never in the Uncategorized
-   * bucket. Ignored when `collectionId` is set (a collection placement always
-   * wins over Uncategorized).
-   */
-  uncategorized?: boolean;
+  collectionId?: string; // undefined = Inbox for refs, unfiled for todos
 }
 
 export interface BookmarkItem extends InboxItemBase {
@@ -109,12 +96,6 @@ export interface AppConfig {
    */
   activeGroupFilters?: string[];
   /**
-   * Whether uncategorized todos (items without a collectionId) are visible on
-   * the Todos page. Treated as a filter pill alongside group filters.
-   * When undefined: defaults to true (visible).
-   */
-  uncategorizedFilterActive?: boolean;
-  /**
    * Ordered list of todo IDs for the flat Todos page. Controls cross-collection
    * drag-sort order on that page only — collection-internal order (used by the
    * Collections page) still lives in `Collection.itemIds`.
@@ -127,24 +108,11 @@ export interface AppConfig {
    */
   completedTodosExpanded?: boolean;
   /**
-   * Remembered "last picked" destinations for the add-entry modals, so
-   * repeat-create flows don't start on a blank picker every time.
-   *
-   * - `lastSelectedGroupId` — the group the user most recently saved a new
-   *   collection into. When the user opens "New collection" from a neutral
-   *   entry point (page-level Fab), the group picker starts on this value.
-   *   Falls back to the first group in display order if unset or the
-   *   referenced group no longer exists.
-   * - `lastSelectedCollectionId` — same idea for new todos: the collection
-   *   the user most recently filed a todo into. Used only for todos (refs
-   *   keep defaulting to Inbox).
-   *
-   * Both are best-effort hints — callers must validate the referenced id
-   * still exists before using it, because collections/groups can be deleted
-   * between sessions.
+   * Best-effort hint for the group the user most recently saved a new
+   * collection into. Callers must validate the referenced id still exists
+   * before using it, because groups can be deleted between sessions.
    */
   lastSelectedGroupId?: string;
-  lastSelectedCollectionId?: string;
 }
 
 export interface Collection {

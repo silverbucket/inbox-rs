@@ -1,23 +1,20 @@
 <script lang="ts">
   import type { InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
-  import { storeItem, UNCATEGORIZED_COLLECTION_ID } from '../lib/stores';
+  import { storeItem } from '../lib/stores';
   import { cleanForStorage } from '../lib/clean-for-storage';
   import { typeIconPath } from '../lib/item-utils';
 
   let { todo, collection, group, onselect, onaddincollection }: {
     todo: InboxItem;
-    /** The collection this todo belongs to, or null for uncategorized. */
+    /** The collection this todo belongs to, or null when unfiled. */
     collection: Collection | null;
-    /** The group the collection belongs to, or null if ungrouped / uncategorized. */
+    /** The group the collection belongs to, or null when unfiled. */
     group: CollectionGroup | null;
     onselect: (item: InboxItem) => void;
     /** Optional quick-add handler: opens the add-todo modal pre-targeted at
-        this row's collection. Uncategorized rows send the
-        `UNCATEGORIZED_COLLECTION_ID` sentinel so the modal knows to route the
-        follow-up into Uncategorized rather than falling back to the last
-        selected / first real collection. Omit the handler to hide the
-        affordance. */
-    onaddincollection?: (collectionId: string) => void;
+        this row's collection. Unfiled rows pass `undefined` so the follow-up
+        stays unfiled too. Omit the handler to hide the affordance. */
+    onaddincollection?: (collectionId: string | undefined) => void;
   } = $props();
 
   // Show the underlying item type as an icon for items that are "todos by flag"
@@ -26,10 +23,9 @@
   const showTypeIcon = $derived(todo.type !== 'todo');
   const typeLabel = $derived(todo.type.charAt(0).toUpperCase() + todo.type.slice(1));
   const typeIconSvg = $derived(typeIconPath(todo.type));
-  // TodoRow only renders todos, and todos without a collection always belong
-  // to the Uncategorized bucket — the Inbox is refs-only, so "Inbox" is never
-  // a valid label here (see stores.ts bucket semantics).
-  const collectionName = $derived(collection?.name ?? 'Uncategorized');
+  // TodoRow only renders todos. A todo without a collection is unfiled and can
+  // be organized later.
+  const collectionName = $derived(collection?.name ?? 'Unfiled');
   // Group and collection colours are exposed as separate CSS custom properties
   // so hierarchy is legible at a glance: the pill border and row hover tint
   // take the *group* colour, and the pill dot takes the *collection* colour.
@@ -38,7 +34,7 @@
   // without reading the name. Missing colours degrade to text-muted.
   const groupColor = $derived(group?.color || 'var(--text-muted)');
   const collectionColor = $derived(collection?.color || 'var(--text-muted)');
-  const isUncategorized = $derived(!collection);
+  const isUnfiled = $derived(!collection);
 
   // Human-friendly relative date — "today", "yesterday", "3d ago", or the date.
   // Designed to fit in the horizontal toolbar without wrapping on desktop.
@@ -77,12 +73,7 @@
     onselect(todo);
   }
 
-  // Uncategorized rows send the sentinel so the modal routes the follow-up
-  // into Uncategorized. Passing `undefined` would fall through to the
-  // last-selected / first-real-collection cascade in pickInitialCollectionId,
-  // which creates the new todo in an unrelated bucket — not what the user
-  // meant when they clicked "+" on an uncategorized row.
-  const quickAddTarget = $derived(todo.collectionId ?? UNCATEGORIZED_COLLECTION_ID);
+  const quickAddTarget = $derived(todo.collectionId);
 
   function handleQuickAdd(e: Event) {
     e.stopPropagation();
@@ -116,7 +107,7 @@
 <li
   class="todo-row"
   class:completed={todo.completed}
-  class:uncategorized={isUncategorized}
+  class:unfiled={isUnfiled}
   role="button"
   tabindex="0"
   onclick={handleClick}
@@ -251,7 +242,7 @@
     min-width: 0;
   }
 
-  .uncategorized .collection-pill {
+  .unfiled .collection-pill {
     border-style: dashed;
   }
 

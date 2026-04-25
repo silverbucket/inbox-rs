@@ -10,6 +10,7 @@
   let editingAbbrev = $state(false);
   let abbrevInput = $state('');
   let abbrevInputEl = $state<HTMLInputElement | null>(null);
+  let connectInputEl = $state<HTMLInputElement | null>(null);
   let importExportModal = $state<ReturnType<typeof ImportExportModal>>();
   let importExportOpen = $state(false);
   let fileInputEl = $state<HTMLInputElement | null>(null);
@@ -51,6 +52,17 @@
     open = !open;
   }
 
+  async function focusConnectInput() {
+    if ($connected) return;
+    await tick();
+    connectInputEl?.focus();
+  }
+
+  export async function openConnectMenu() {
+    open = true;
+    await focusConnectInput();
+  }
+
   function closeMenu(e: MouseEvent) {
     const target = e.target as HTMLElement;
     if (!target.closest('.user-menu')) {
@@ -66,6 +78,7 @@
     if (open) {
       document.addEventListener('click', closeMenu, true);
       document.addEventListener('keydown', handleKeydown, true);
+      void focusConnectInput();
     }
     return () => {
       document.removeEventListener('click', closeMenu, true);
@@ -91,6 +104,12 @@
 
   $effect(() => {
     if ($connected) connecting = false;
+  });
+
+  $effect(() => {
+    if (!$connected && !inputAddress && $userAddress) {
+      inputAddress = $userAddress;
+    }
   });
 
   const atIdx = $derived($userAddress.indexOf('@'));
@@ -233,6 +252,7 @@
         <form class="connect-form" onsubmit={(e) => { e.preventDefault(); handleConnect(); }}>
           <input
             type="text"
+            bind:this={connectInputEl}
             bind:value={inputAddress}
             placeholder="user@storage.example"
             disabled={connecting}
