@@ -164,8 +164,6 @@
 
   async function handleCreateCollection(col: Collection) {
     try {
-      // createCollection guarantees the collection ends up inside a group —
-      // either the one the form picked, or a fresh "UncategorizedN" group.
       await createCollection(col);
       showCollectionForm = false;
     } catch (error) {
@@ -183,8 +181,7 @@
   }
 
   // Surface a small badge with open todo count next to the Todos nav item.
-  // Counts every open todo across all collections (not just uncategorized) so
-  // the badge matches what the user sees on the flat Todos page.
+  // Counts every open todo so the badge matches the flat Todos page.
   const openTodoCount = $derived($openTodos.length);
 </script>
 

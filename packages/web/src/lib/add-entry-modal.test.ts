@@ -4,8 +4,6 @@ import {
   canCaptureTodo,
   loadMarkdownEditorComponent,
   makeUnfiledTodo,
-  normalizeInitialCollectionId,
-  shouldMarkUncategorized,
   shouldLoadMarkdownEditor,
   shouldShowCollectionPicker,
   shouldSubmitAddEntryForm,
@@ -88,28 +86,15 @@ describe('todo capture helpers', () => {
 });
 
 describe('collection picker todo capture rules', () => {
-  const uncatId = '__uncategorized_collection';
-
   it('hides the optional file picker for new todos when no real collections exist', () => {
-    expect(shouldShowCollectionPicker(false, 'todo', false, undefined, uncatId)).toBe(false);
+    expect(shouldShowCollectionPicker(false, 'todo', false)).toBe(false);
   });
 
   it('shows the optional file picker for new todos when real collections exist', () => {
-    expect(shouldShowCollectionPicker(false, 'todo', true, undefined, uncatId)).toBe(true);
+    expect(shouldShowCollectionPicker(false, 'todo', true)).toBe(true);
   });
 
   it('keeps the collection picker visible for non-todo refs', () => {
-    expect(shouldShowCollectionPicker(false, 'note', false, undefined, uncatId)).toBe(true);
-  });
-
-  it('does not mark unfiled todos with the ref-only uncategorized flag', () => {
-    expect(shouldMarkUncategorized(false, 'todo', uncatId, uncatId)).toBe(false);
-    expect(shouldMarkUncategorized(false, 'note', uncatId, uncatId)).toBe(true);
-  });
-
-  it('normalizes the virtual uncategorized sentinel away for todo capture', () => {
-    expect(normalizeInitialCollectionId('todo', uncatId, uncatId)).toBeUndefined();
-    expect(normalizeInitialCollectionId('note', uncatId, uncatId)).toBe(uncatId);
-    expect(normalizeInitialCollectionId('todo', 'real-collection', uncatId)).toBe('real-collection');
+    expect(shouldShowCollectionPicker(false, 'note', false)).toBe(true);
   });
 });

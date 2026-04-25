@@ -5,7 +5,7 @@
     createCollection, storeCollection, deleteCollection, moveCollectionToGroup,
     visibleGroupedCollections, sortedGroups, storeGroup, deleteGroup,
     appConfig, updateConfig, reorderGroupCollections, setExpandedCollections,
-    UNCATEGORIZED_FILTER_ID, collectionItems, groups,
+    collectionItems, groups,
   } from '../lib/stores';
   import CollectionView from './CollectionView.svelte';
   import GroupSection from './GroupSection.svelte';
@@ -56,12 +56,7 @@
   const sections = $derived($visibleGroupedCollections);
 
   // Collection ids currently visible on the page — used for expand/collapse all.
-  // Includes virtual collections (e.g. the Uncategorized bucket) so the toggle
-  // covers everything the user can see, not just rows backed by stored records.
-  const visibleIds = $derived(sections.flatMap(s => [
-    ...(s.virtualCollection ? [s.virtualCollection.id] : []),
-    ...s.collections.map(c => c.id),
-  ]));
+  const visibleIds = $derived(sections.flatMap(s => s.collections.map(c => c.id)));
   const anyExpanded = $derived(visibleIds.some(id => expandedSet.has(id)));
 
   async function toggleExpandAll() {
@@ -114,8 +109,7 @@
   async function handleCreateCollection(col: Collection) {
     try {
       // The modal enforces an explicit group choice, so `col.groupId` is
-      // always a real group id here — we never route through the store's
-      // Uncategorized fallback from this path.
+      // always a real group id here.
       await createCollection(col);
       creatingCollection = false;
       collectionFormGroupId = undefined;
@@ -207,31 +201,12 @@
   </div>
 
   {#each sections as section (section.group.id)}
-    {@const isUncat = section.group.id === UNCATEGORIZED_FILTER_ID}
     {@const realCount = dndByGroup[section.group.id]?.length ?? 0}
     <GroupSection
       group={section.group}
-      onedit={isUncat ? undefined : () => editingGroup = section.group}
-      onaddcollection={isUncat ? undefined : () => openAddCollection(section.group.id)}
+      onedit={() => editingGroup = section.group}
+      onaddcollection={() => openAddCollection(section.group.id)}
     >
-      {#if section.virtualCollection}
-        <!-- Virtual Uncategorized bucket — rendered outside the dndzone since
-             it's not reorderable and has no backing record. Still participates
-             in the page's expand/collapse state so users can scan their
-             uncategorized items at a glance. -->
-        <div class="collection-list">
-          <CollectionView
-            collection={section.virtualCollection}
-            expanded={isExpanded(section.virtualCollection)}
-            {onselect}
-            {isTouchDevice}
-            isVirtual
-            onedit={() => {}}
-            ontoggle={() => toggleExpand(section.virtualCollection!)}
-          />
-        </div>
-      {/if}
-
       {#if realCount > 0}
         <div
           class="collection-list"
@@ -256,7 +231,7 @@
             />
           {/each}
         </div>
-      {:else if !section.virtualCollection}
+      {:else}
         <p class="group-empty">
           No collections in this group yet.
           <button class="link" onclick={() => openAddCollection(section.group.id)}>Add one</button>.

@@ -1,5 +1,5 @@
 import type { Component } from 'svelte';
-import type { InboxItem, InboxItemType } from '@inbox-rs/rs-module';
+import type { InboxItemType, TodoItem } from '@inbox-rs/rs-module';
 
 const SUBMITTABLE_INPUT_TYPES = new Set(['text', 'url', 'email', 'search', 'tel']);
 
@@ -41,7 +41,7 @@ export function makeUnfiledTodo(
   title: string,
   now: Date = new Date(),
   id: string = crypto.randomUUID(),
-): InboxItem {
+): TodoItem {
   return {
     id,
     type: 'todo',
@@ -52,30 +52,10 @@ export function makeUnfiledTodo(
   };
 }
 
-export function normalizeInitialCollectionId(
-  type: InboxItemType,
-  collectionId: string | undefined,
-  uncategorizedCollectionId: string,
-): string | undefined {
-  if (type === 'todo' && collectionId === uncategorizedCollectionId) return undefined;
-  return collectionId;
-}
-
 export function shouldShowCollectionPicker(
   isEdit: boolean,
   type: InboxItemType,
   hasAnyCollection: boolean,
-  selectedCollectionId: string | undefined,
-  uncategorizedCollectionId: string,
 ): boolean {
-  return !isEdit && (type !== 'todo' || hasAnyCollection || selectedCollectionId === uncategorizedCollectionId);
-}
-
-export function shouldMarkUncategorized(
-  isEdit: boolean,
-  type: InboxItemType,
-  selectedCollectionId: string | undefined,
-  uncategorizedCollectionId: string,
-): boolean {
-  return !isEdit && type !== 'todo' && selectedCollectionId === uncategorizedCollectionId;
+  return !isEdit && (type !== 'todo' || hasAnyCollection);
 }

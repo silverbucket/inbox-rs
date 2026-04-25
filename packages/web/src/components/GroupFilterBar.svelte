@@ -2,8 +2,7 @@
   import { dndzone } from 'svelte-dnd-action';
   import {
     sortedGroups, activeGroupIds, toggleGroupFilter, reorderGroups,
-    uncategorizedFilterActive, toggleUncategorizedFilter,
-    UNCATEGORIZED_FILTER_ID, appConfig, hasUncategorizedItems,
+    appConfig,
   } from '../lib/stores';
 
   let { onaddgroup, dimmed = false }: {
@@ -12,25 +11,14 @@
     dimmed?: boolean;
   } = $props();
 
-  /**
-   * Row shape used by the dnd zone. Both real groups and the virtual
-   * Uncategorized entry share this so drag-reorder, key-based animation,
-   * and the render template all work without any special casing.
-   */
   type FilterPill = {
     id: string;
     name: string;
     color: string;
-    isUncat: boolean;
   };
 
   const groups = $derived($sortedGroups);
   const active = $derived($activeGroupIds);
-  const uncatActive = $derived($uncategorizedFilterActive);
-  const groupsOrder = $derived($appConfig.groupsOrder ?? []);
-  // Uncategorized is a dynamic pill — it appears only when the system has
-  // straggler items to show there. It is not a group or a collection home.
-  const showUncat = $derived($hasUncategorizedItems);
 
   let isTouchDevice = $state(false);
   $effect(() => {
@@ -41,49 +29,12 @@
     return () => mql.removeEventListener('change', handler);
   });
 
-  // Uncategorized is folded into the pill list as a peer of real groups.
-  // Its position is recorded by writing the sentinel id into `groupsOrder`;
-  // `sortedGroups` filters unknown ids out naturally, so no other consumer
-  // needs to know about the sentinel.
-  const uncatPill: FilterPill = {
-    id: UNCATEGORIZED_FILTER_ID,
-    name: 'Uncategorized',
-    color: 'var(--accent)',
-    isUncat: true,
-  };
-
   const pills = $derived.by<FilterPill[]>(() => {
-    const realPills: FilterPill[] = groups.map(g => ({
+    return groups.map(g => ({
       id: g.id,
       name: g.name,
       color: g.color || 'var(--accent)',
-      isUncat: false,
     }));
-    const sentinelIdx = groupsOrder.indexOf(UNCATEGORIZED_FILTER_ID);
-    // If the user has never reordered the pills, default to Uncategorized
-    // at the end — same visual cadence as a newly-created group. Skip the
-    // sentinel when it has nothing to show.
-    if (sentinelIdx < 0) return showUncat ? [...realPills, uncatPill] : realPills;
-
-    // Walk the persisted order and rebuild the list so the sentinel's slot
-    // is preserved relative to the real groups. Any real groups not yet in
-    // `groupsOrder` (e.g. just-created) are appended afterwards.
-    const byId = new Map(realPills.map(p => [p.id, p]));
-    const placed: FilterPill[] = [];
-    const seen = new Set<string>();
-    for (const id of groupsOrder) {
-      if (id === UNCATEGORIZED_FILTER_ID) {
-        if (showUncat) placed.push(uncatPill);
-        seen.add(id);
-      } else if (byId.has(id)) {
-        placed.push(byId.get(id)!);
-        seen.add(id);
-      }
-    }
-    for (const p of realPills) {
-      if (!seen.has(p.id)) placed.push(p);
-    }
-    return placed;
   });
 
   let dndPills = $state<FilterPill[]>([]);
@@ -97,8 +48,6 @@
     const previous = pills.map(p => ({ ...p }));
     dndPills = e.detail.items;
     try {
-      // Persist every id — including the sentinel — so Uncategorized keeps
-      // its slot across reloads alongside the real group order.
       await reorderGroups(dndPills.map(p => p.id));
     } catch (error) {
       console.error('Failed to reorder filter pills', error);
@@ -109,21 +58,18 @@
   async function handleToggle(e: Event, pill: FilterPill) {
     e.preventDefault();
     try {
-      if (pill.isUncat) await toggleUncategorizedFilter();
-      else await toggleGroupFilter(pill.id);
+      await toggleGroupFilter(pill.id);
     } catch (error) {
       console.error('Failed to toggle filter pill', error);
     }
   }
 
   function isPillActive(pill: FilterPill): boolean {
-    return pill.isUncat ? uncatActive : active.has(pill.id);
+    return active.has(pill.id);
   }
 </script>
 
 <div class="filter-bar" class:dimmed role="toolbar" aria-label="Filters">
-  <!-- Single dnd zone: real groups and Uncategorized are the same shape and
-       participate in the same drag-sort flow. No divider, no special slot. -->
   <div
     class="pills"
     use:dndzone={{

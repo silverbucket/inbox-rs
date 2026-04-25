@@ -5,16 +5,13 @@
   import {
     storeItem, moveItemToCollection,
     sortedGroups, groupCollections,
-    hasUncategorizedItems, UNCATEGORIZED_COLLECTION_ID,
   } from '../lib/stores';
   import { renderMarkdown } from '../lib/markdown';
   import { transcribeAudio } from '../lib/transcribe';
   import {
     canCaptureTodo,
     loadMarkdownEditorComponent,
-    normalizeInitialCollectionId,
     shouldLoadMarkdownEditor,
-    shouldMarkUncategorized,
     shouldShowCollectionPicker,
     shouldSubmitAddEntryForm,
   } from '../lib/add-entry-modal';
@@ -39,7 +36,7 @@
    * auto-select organization here: normal capture should stay frictionless.
    */
   function pickInitialCollectionId(): string | undefined {
-    return normalizeInitialCollectionId(type, collectionId, UNCATEGORIZED_COLLECTION_ID);
+    return collectionId;
   }
 
   // Let the user pick a destination for new items. See
@@ -65,24 +62,13 @@
     if (selectedCollectionId === undefined) {
       return isTodoType ? 'Unfiled' : noCollectionLabel;
     }
-    if (selectedCollectionId === UNCATEGORIZED_COLLECTION_ID) return isTodoType ? 'Unfiled' : 'Uncategorized';
     for (const group of $sortedGroups) {
       const cols = $groupCollections[group.id] ?? [];
       const found = cols.find(c => c.id === selectedCollectionId);
       if (found) return found.name;
     }
-    return noCollectionLabel;
+    return isTodoType ? 'Unfiled' : noCollectionLabel;
   });
-
-  // Show an explicit "Uncategorized" picker row for refs only when the bucket
-  // already exists (has stragglers). Per the design, Uncategorized is a
-  // dynamic surface that appears when items live there — it shouldn't be a
-  // first-class destination unless it's already populated. Todo capture uses
-  // `undefined` for unfiled; the sentinel is normalized away for todos.
-  const showUncategorizedInPicker = $derived(
-    (!isTodoType && $hasUncategorizedItems)
-    || selectedCollectionId === UNCATEGORIZED_COLLECTION_ID
-  );
 
   // Whether the user has any real grouped collections at all. Todo capture
   // hides the picker entirely when this is false so an empty account can still
@@ -94,7 +80,7 @@
     return false;
   });
 
-  const showCollectionPicker = $derived(shouldShowCollectionPicker(isEdit, type, hasAnyCollection, selectedCollectionId, UNCATEGORIZED_COLLECTION_ID));
+  const showCollectionPicker = $derived(shouldShowCollectionPicker(isEdit, type, hasAnyCollection));
 
   $effect(() => {
     if (!collectionPickerOpen) return;
@@ -385,29 +371,13 @@
         if (editItem!.completedAt) item.completedAt = editItem!.completedAt;
       }
 
-      if (!isEdit && collectionId && collectionId !== UNCATEGORIZED_COLLECTION_ID) {
-        // The Uncategorized sentinel is a picker-level id, not a real
-        // collection id — writing it to `item.collectionId` would leave a
-        // bogus reference in storage. The branch below (selectedCollectionId
-        // === UNCATEGORIZED_COLLECTION_ID) handles the ref Uncategorized case
-        // by setting the `uncategorized` flag and leaving `collectionId` unset.
-        item.collectionId = collectionId;
-      }
-
       // Picker → storage shape:
       //   undefined + ref         → Inbox (default; no flag, no collectionId)
       //   undefined + todo        → unfiled todo (no collectionId, no fake
       //                              collection/group written)
-      //   UNCATEGORIZED_... + ref → Uncategorized (set `uncategorized: true`
-      //                              before storage; no moveItemToCollection
-      //                              call since there's no real collection
-      //                              record to update)
       //   real id                 → assign via moveItemToCollection after storage
-      if (shouldMarkUncategorized(isEdit, type, selectedCollectionId, UNCATEGORIZED_COLLECTION_ID)) {
-        item!.uncategorized = true;
-      }
       await storeItem(item!, fileData);
-      if (selectedCollectionId && selectedCollectionId !== UNCATEGORIZED_COLLECTION_ID && !isEdit) {
+      if (selectedCollectionId && !isEdit) {
         await moveItemToCollection(item!.id, selectedCollectionId);
       }
       onclose();
@@ -794,7 +764,7 @@
                   Default non-collection destination. For refs this is Inbox;
                   for todos this is unfiled so they can be organized later.
                 -->
-                {#if isTodoType && selectedCollectionId !== UNCATEGORIZED_COLLECTION_ID}
+                {#if isTodoType}
                   <button
                     type="button"
                     class="dest-item"
@@ -813,25 +783,6 @@
                   >
                     <span class="dest-dot inbox" aria-hidden="true"></span>
                     {noCollectionLabel}
-                  </button>
-                {/if}
-                {#if showUncategorizedInPicker}
-                  <!--
-                    Explicit "Uncategorized" destination row. Surfaces for:
-                    (a) refs when the bucket already exists, so the user can
-                        file a new ref alongside existing stragglers without
-                        first sending it to the Inbox and moving it; and
-                    (b) legacy/defensive sentinel selections, so the current
-                        selection is visible and reselectable.
-                  -->
-                  <button
-                    type="button"
-                    class="dest-item"
-                    class:selected={selectedCollectionId === UNCATEGORIZED_COLLECTION_ID}
-                    onclick={() => selectCollection(UNCATEGORIZED_COLLECTION_ID)}
-                  >
-                    <span class="dest-dot" style="background: #9ca3af" aria-hidden="true"></span>
-                    {isTodoType ? 'Unfiled' : 'Uncategorized'}
                   </button>
                 {/if}
                 {#each $sortedGroups as group (group.id)}

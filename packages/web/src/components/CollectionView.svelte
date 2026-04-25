@@ -4,7 +4,7 @@
     collectionItems,
     deleteItem,
     sortedGroups, moveCollectionToGroup,
-    appConfig, updateConfig, reorderCollectionItems, reorderUncategorizedTodos,
+    appConfig, updateConfig, reorderCollectionItems,
     groups,
   } from '../lib/stores';
   import { makeTodo } from '../lib/item-utils';
@@ -16,24 +16,13 @@
   import AddEntryModal from './AddEntryModal.svelte';
   import TodoRow from './TodoRow.svelte';
 
-  let { collection, expanded = false, onselect, onedit, ontoggle, isTouchDevice = false, isVirtual = false }: {
+  let { collection, expanded = false, onselect, onedit, ontoggle, isTouchDevice = false }: {
     collection: Collection;
     expanded?: boolean;
     onselect: (item: InboxItem) => void;
-    /** Called when the edit button is pressed. Ignored when `isVirtual` — the
-        virtual Uncategorized collection has no backing record to edit. */
     onedit: () => void;
     ontoggle: () => void;
     isTouchDevice?: boolean;
-    /**
-     * Render as the virtual Uncategorized bucket: hides edit / move-to-group
-     * affordances, saves newly-added items with `collectionId: undefined`, and
-     * persists todo reordering via `reorderUncategorizedTodos` (which splices
-     * into `todosGlobalOrder`) rather than the collection's own `itemIds`
-     * list. Using the global order key keeps this view and the flat `/todos`
-     * page in sync — both read the same source of truth.
-     */
-    isVirtual?: boolean;
   } = $props();
 
   // Collection body renders both todos (at the top, drag-sortable) and
@@ -101,20 +90,12 @@
     dndOpen = e.detail.items;
     const newOpenIds = dndOpen.map(t => t.id);
     try {
-      if (isVirtual) {
-        // Virtual bucket: there's no collection record to update. Splice the
-        // new uncategorized order back into `todosGlobalOrder` — the same key
-        // the flat `/todos` page reads — so both surfaces stay in sync and
-        // one view's reorder can't be clobbered by the next drag on the other.
-        await reorderUncategorizedTodos(newOpenIds);
-      } else {
-        // Splice the new open-todo order into itemIds while preserving the
-        // relative order of completed todos and reference items — otherwise a
-        // drag of a single open todo would also scramble the refs grid.
-        const openIds = new Set(openTodos.map(t => t.id));
-        const rest = collection.itemIds.filter(id => !openIds.has(id));
-        await reorderCollectionItems(collection.id, [...newOpenIds, ...rest]);
-      }
+      // Splice the new open-todo order into itemIds while preserving the
+      // relative order of completed todos and reference items — otherwise a
+      // drag of a single open todo would also scramble the refs grid.
+      const openIds = new Set(openTodos.map(t => t.id));
+      const rest = collection.itemIds.filter(id => !openIds.has(id));
+      await reorderCollectionItems(collection.id, [...newOpenIds, ...rest]);
     } catch (error) {
       console.error('Failed to reorder collection todos', error);
       dndOpen = previous;
@@ -166,15 +147,13 @@
       {/if}
     </div>
     <div class="header-actions">
-      {#if !isVirtual}
-        <button class="btn-header" onclick={(e) => { e.stopPropagation(); onedit(); }} aria-label="Edit collection" title="Edit">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-          </svg>
-        </button>
-      {/if}
-      {#if !isVirtual && availableGroups.length > 0}
+      <button class="btn-header" onclick={(e) => { e.stopPropagation(); onedit(); }} aria-label="Edit collection" title="Edit">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+        </svg>
+      </button>
+      {#if availableGroups.length > 0}
         <div class="move-menu-wrapper">
           <button class="btn-header" bind:this={moveButtonEl} aria-label="Move to group" aria-haspopup="menu" aria-expanded={showMoveMenu} title="Move to group" onclick={toggleMoveMenu}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -277,12 +256,6 @@
         {/if}
       </section>
 
-      <!-- References section renders for the virtual Uncategorized bucket too.
-           "Uncategorized" is AddEntryModal's label for items saved without a
-           collection — users who file a ref as Uncategorized expect to see it
-           here (alongside the Inbox view). AddEntryBar routes through the
-           modal below; when `isVirtual`, we pass `collectionId: undefined` so
-           new refs land back in the uncategorized bucket. -->
       <section class="references-section" aria-label="References in {collection.name}">
         <div class="section-header">
           <h4>References</h4>
@@ -316,12 +289,9 @@
 </div>
 
 {#if addingType}
-  <!-- Virtual bucket: pass `undefined` so the modal stores the new item as
-       uncategorized (no collectionId). Real collections forward their id so
-       items land inside. -->
   <AddEntryModal
     type={addingType}
-    collectionId={isVirtual ? undefined : collection.id}
+    collectionId={collection.id}
     onclose={() => addingType = null}
     ondelete={async (item) => { await deleteItem(item.id, item); addingType = null; }}
   />

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack, onDestroy } from 'svelte';
   import type { InboxItem } from '@inbox-rs/rs-module';
-  import { deleteItem, storeItem, blobUrls, connected, sortedGroups, groupCollections, moveItemToCollection, loadFileBlobUrl, hasUncategorizedItems } from '../lib/stores';
+  import { deleteItem, storeItem, blobUrls, connected, sortedGroups, groupCollections, moveItemToCollection, loadFileBlobUrl } from '../lib/stores';
   import rs from '../lib/rs';
   import { transcribeAudio } from '../lib/transcribe';
   import ShareButton from './ShareButton.svelte';
@@ -23,10 +23,9 @@
   let moveButtonEl = $state<HTMLButtonElement | null>(null);
   let dropdownStyle = $state('');
 
-  // "Make Todo" forces the user to choose a collection up-front — a loose
-  // todo sitting in the Inbox/Uncategorized bucket is almost always an
-  // unintended leak. The picker reuses the move-dropdown styling so it
-  // looks and behaves identically to the existing move affordance.
+  // "Make Todo" can file into a collection when one exists. Without a
+  // collection choice, converted todos stay unfiled and appear on the Todos
+  // page without creating any organization.
   let showMakeTodoMenu = $state(false);
   let makeTodoButtonEl = $state<HTMLButtonElement | null>(null);
   let makeTodoDropdownStyle = $state('');
@@ -137,13 +136,23 @@
 
   let convertingTodo = $state(false);
 
-  /**
-   * Promote the current item to a todo and file it into the chosen collection
-   * atomically. We always route through a collection — loose todos (no
-   * collection) tend to be accidental leaks, so the Make Todo flow now
-   * surfaces an inline collection picker rather than silently dropping the
-   * new todo into Uncategorized.
-   */
+  /** Promote the current item to an unfiled todo. */
+  async function convertToUnfiledTodo() {
+    convertingTodo = true;
+    try {
+      const { completedAt: _, ...rest } = item;
+      await moveItemToCollection(item.id, undefined);
+      const updated = { ...rest, isTodo: true, completed: false };
+      delete (updated as any).collectionId;
+      await storeItem(updated as InboxItem);
+      closeMakeTodoMenu();
+      onclose();
+    } finally {
+      convertingTodo = false;
+    }
+  }
+
+  /** Promote the current item to a todo and file it into the chosen collection. */
   async function convertToTodoInCollection(collectionId: string) {
     convertingTodo = true;
     try {
@@ -163,9 +172,6 @@
       // Now flip the todo flags. storeItem only touches the item doc — the
       // itemIds arrays are already reconciled by the move above.
       const updated = { ...rest, isTodo: true, completed: false, collectionId };
-      // Moving into a real collection should clear any Uncategorized marker
-      // so the item doesn't simultaneously appear in both places.
-      delete (updated as any).uncategorized;
       await storeItem(updated as InboxItem);
       closeMakeTodoMenu();
       onclose();
@@ -176,25 +182,6 @@
 
   const canMakeTodo = $derived(item.type !== 'todo' && !item.isTodo);
   const canMakeRef = $derived(item.isTodo || item.type === 'todo');
-
-  // True when the item already lives in the Uncategorized bucket: a todo without
-  // a collection (todos can't be in the Inbox), or a reference flagged with
-  // `uncategorized: true`. Items in this state shouldn't see an "Uncategorized"
-  // move option — it would be a no-op.
-  const isInUncategorized = $derived(
-    !item.collectionId && (item.uncategorized === true || item.isTodo || item.type === 'todo')
-  );
-
-  // Show the "Uncategorized" entry in the move dropdown when:
-  //   - the item is in a real collection (preserves the existing "remove from
-  //     collection" affordance — items leaving a collection always land in
-  //     Uncategorized rather than the Inbox), OR
-  //   - Uncategorized already exists (has stragglers), so an Inbox ref can be
-  //     filed alongside them. Per design, Uncategorized isn't a first-class
-  //     destination unless it already exists.
-  const showUncategorizedOption = $derived(
-    !isInUncategorized && (!!item.collectionId || $hasUncategorizedItems)
-  );
 
   function toggleMoveMenu() {
     // Only one picker can be open at a time — close Make Todo if it's open
@@ -235,8 +222,7 @@
   // ── Make Todo menu ─────────────────────────────────────────────────────
   // Mirrors the Move menu pattern so the two dropdowns feel identical.
   // Kept as a parallel menu (rather than collapsed into a single generic
-  // picker) to keep the option list semantics crystal clear: Move can send
-  // items to Uncategorized, Make Todo can't.
+  // picker) to keep the option list semantics crystal clear.
 
   function toggleMakeTodoMenu() {
     if (showMoveMenu) closeMoveMenu();
@@ -613,7 +599,14 @@
         onclick={() => closeMakeTodoMenu()}
       ></button>
       <div class="move-dropdown make-todo-dropdown" style={makeTodoDropdownStyle} role="listbox" aria-label="Choose a collection for this todo">
-        <div class="picker-title">Pick a collection</div>
+        <div class="picker-title">File todo</div>
+        <button class="move-option" onclick={convertToUnfiledTodo} disabled={convertingTodo}>
+          <span class="move-dot" style="background: #9ca3af"></span>
+          Unfiled
+        </button>
+        {#if $sortedGroups.some((g) => ($groupCollections[g.id] ?? []).length > 0)}
+          <div class="move-divider"></div>
+        {/if}
         {#each $sortedGroups as group (group.id)}
           {#each ($groupCollections[group.id] ?? []) as col (col.id)}
             <button class="move-option" onclick={() => convertToTodoInCollection(col.id)} disabled={convertingTodo}>
@@ -622,12 +615,6 @@
             </button>
           {/each}
         {/each}
-        {#if $sortedGroups.every((g) => ($groupCollections[g.id] ?? []).length === 0)}
-          <!-- No real collections yet — guide the user instead of silently
-               allowing an Uncategorized-only choice, which would undo the
-               point of this forced-picker flow. -->
-          <div class="move-empty">Create a collection first to file this todo.</div>
-        {/if}
       </div>
     {/if}
 
@@ -640,10 +627,10 @@
         onclick={() => closeMoveMenu()}
       ></button>
       <div class="move-dropdown" style={dropdownStyle}>
-        {#if showUncategorizedOption}
+        {#if item.collectionId}
           <button class="move-option" onclick={() => { moveItemToCollection(item.id, undefined).catch(e => console.error('Move failed:', e)); closeMoveMenu(); onclose(); }}>
             <span class="move-dot" style="background: #9ca3af"></span>
-            Uncategorized
+            {item.isTodo || item.type === 'todo' ? 'Unfile' : 'Inbox'}
           </button>
           <div class="move-divider"></div>
         {/if}

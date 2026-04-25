@@ -6,11 +6,8 @@ const todoFields = {
 };
 
 // Shared collection field — any item can belong to a collection.
-// `uncategorized` is the opt-in flag that sends items without a `collectionId`
-// to the Uncategorized bucket instead of the Inbox.
 const collectionFields = {
   collectionId: { type: 'string' },
-  uncategorized: { type: 'boolean' },
 };
 
 // rs-migrate version stamp — must be in every item schema so remoteStorage persists it
@@ -168,7 +165,6 @@ export const appConfigSchema = {
     todosOrder: { type: 'array', items: { type: 'string' } },
     expandedCollections: { type: 'array', items: { type: 'string' } },
     activeGroupFilters: { type: 'array', items: { type: 'string' } },
-    uncategorizedFilterActive: { type: 'boolean' },
     todosGlobalOrder: { type: 'array', items: { type: 'string' } },
     completedTodosExpanded: { type: 'boolean' },
   }

@@ -10,20 +10,7 @@ export interface InboxItemBase {
   isTodo?: boolean;
   completed?: boolean;
   completedAt?: string;
-  collectionId?: string; // undefined = lives in Inbox (or Uncategorized, see `uncategorized`)
-  /**
-   * When true AND `collectionId` is unset, the item belongs to the
-   * Uncategorized bucket on the Collections/Todos pages rather than the
-   * Inbox. Typical sources:
-   *   - user explicitly picks "Uncategorized" in the AddEntryModal picker
-   *   - an item is orphaned when its parent collection is deleted
-   *
-   * Items without a `collectionId` and without this flag default to the Inbox
-   * — they surface only in the Inbox view and never in the Uncategorized
-   * bucket. Ignored when `collectionId` is set (a collection placement always
-   * wins over Uncategorized).
-   */
-  uncategorized?: boolean;
+  collectionId?: string; // undefined = Inbox for refs, unfiled for todos
 }
 
 export interface BookmarkItem extends InboxItemBase {
@@ -108,12 +95,6 @@ export interface AppConfig {
    * When set: only groups in this list are visible/filtered in.
    */
   activeGroupFilters?: string[];
-  /**
-   * Whether uncategorized todos (items without a collectionId) are visible on
-   * the Todos page. Treated as a filter pill alongside group filters.
-   * When undefined: defaults to true (visible).
-   */
-  uncategorizedFilterActive?: boolean;
   /**
    * Ordered list of todo IDs for the flat Todos page. Controls cross-collection
    * drag-sort order on that page only — collection-internal order (used by the
