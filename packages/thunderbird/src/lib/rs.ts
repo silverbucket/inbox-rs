@@ -1,92 +1,28 @@
-import type { RSConfig } from './storage';
+import {
+  connectViaOAuth as sharedConnectViaOAuth,
+  DirectRS,
+  type RSConfig,
+} from '@inbox-rs/rs-module';
+
+export { DirectRS };
+export type { RSConfig };
+
+/** Static OAuth client id — Thunderbird does not provide a redirect-derived origin. */
+const THUNDERBIRD_CLIENT_ID = 'inbox-rs-thunderbird';
 
 /**
- * Discover storage info via WebFinger, then do OAuth via
- * browser.identity.launchWebAuthFlow.
+ * WebFinger discovery + OAuth via Thunderbird's identity API.
+ *
+ * Discovery, OAuth params, and token extraction live in the shared
+ * `@inbox-rs/rs-module` runtime; this wrapper supplies Thunderbird-specific
+ * glue (the global `browser.identity` API and a static client id).
  */
 export async function connectViaOAuth(userAddress: string): Promise<RSConfig> {
-  const parts = userAddress.split('@');
-  if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    throw new Error('Invalid remoteStorage address. Expected format: user@host');
-  }
-  const host = parts[1];
-  const scheme = (host === 'localhost' || host.startsWith('localhost:')) ? 'http' : 'https';
-  const webfingerUrl = `${scheme}://${host}/.well-known/webfinger?resource=acct:${encodeURIComponent(userAddress)}`;
-  const wfResp = await fetch(webfingerUrl);
-  if (!wfResp.ok) throw new Error(`WebFinger failed: ${wfResp.status}`);
-  const wfData = await wfResp.json();
-
-  const rsLink = wfData.links?.find((l: any) =>
-    l.rel === 'http://tools.ietf.org/id/draft-dejong-remotestorage' ||
-    l.rel === 'remotestorage'
-  );
-  if (!rsLink) throw new Error('No remoteStorage link found in WebFinger');
-
-  const href = rsLink.href;
-  const storageApi = rsLink.type || rsLink.properties?.['http://remotestorage.io/spec/version'];
-  const props = rsLink.properties || {};
-  const authUrl = props['http://tools.ietf.org/html/rfc6749#section-4.2']
-    || props['http://tools.ietf.org/html/rfc6749#section-4.2.1']
-    || props['auth-endpoint']
-    || props['auth-url'];
-  if (!authUrl) throw new Error('No OAuth endpoint found');
-
   const redirectUrl = browser.identity.getRedirectURL();
-  const oauthParams = new URLSearchParams({
-    client_id: 'inbox-rs-thunderbird',
-    redirect_uri: redirectUrl,
-    response_type: 'token',
-    scope: 'inbox:rw'
+  return sharedConnectViaOAuth(userAddress, {
+    clientId: THUNDERBIRD_CLIENT_ID,
+    redirectUrl,
+    launchAuthFlow: (url) =>
+      browser.identity.launchWebAuthFlow({ url, interactive: true }) as Promise<string>,
   });
-  const fullAuthUrl = `${authUrl}?${oauthParams}`;
-
-  const resultUrl = await browser.identity.launchWebAuthFlow({
-    url: fullAuthUrl,
-    interactive: true
-  });
-
-  // Extract token from redirect URL
-  const redirectParsed = new URL(resultUrl);
-  const hashParams = new URLSearchParams(redirectParsed.hash.substring(1));
-  const queryParams = redirectParsed.searchParams;
-
-  // Check for OAuth error first
-  const oauthError = hashParams.get('error') || queryParams.get('error');
-  if (oauthError) {
-    const desc = hashParams.get('error_description') || queryParams.get('error_description') || '';
-    throw new Error(`OAuth error: ${oauthError}${desc ? ` — ${desc}` : ''}`);
-  }
-
-  const token = hashParams.get('access_token') || queryParams.get('access_token');
-  if (!token) throw new Error('No access token in OAuth response');
-
-  return { userAddress, token, href, storageApi };
-}
-
-/**
- * Direct HTTP client for RS storage operations.
- */
-export class DirectRS {
-  constructor(private config: RSConfig) {}
-
-  private get headers() {
-    return { 'Authorization': `Bearer ${this.config.token}` };
-  }
-
-  private url(path: string): string {
-    return `${this.config.href}/inbox/${path}`;
-  }
-
-  async storeObject(path: string, obj: object): Promise<void> {
-    const resp = await fetch(this.url(path), {
-      method: 'PUT',
-      headers: { ...this.headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify(obj)
-    });
-    if (!resp.ok) throw new Error(`Store failed: ${resp.status}`);
-  }
-
-  async store(item: any): Promise<void> {
-    await this.storeObject(`items/${item.id}`, item);
-  }
 }
