@@ -25,9 +25,13 @@ const savedHash = typeof window !== 'undefined' ? window.location.hash : '';
 // already has it. When v1 is empty, the upgrade ends up creating only
 // `changes`, then RS's onsuccess notices `nodes` is missing and calls
 // `IndexedDB.clean()` to recover. But `clean()` doesn't close its own open
-// connection first, so `deleteDatabase` blocks indefinitely until RS's 10s
-// timeout fires and the feature falls back to LocalStorage. Net effect: a
-// 10-second hang on every page load and reads/writes silently dropped.
+// connection first, so `deleteDatabase` blocks (no `onblocked` handler) and
+// `clean()`'s callback never fires — leaving RS's IDB feature init Promise
+// pending indefinitely. The 10s `IndexedDB.open` timer doesn't help: it was
+// already cleared at onsuccess before `clean()` ran. In practice the app
+// stalls for ~10s on every reload and falls back to LocalStorage; the exact
+// mechanism for the wall-clock delay is browser-dependent (likely related
+// to `deleteDatabase` blocked behavior). See remotestorage/remotestorage.js#1376.
 //
 // We key the deletion decision on the actual object-store schema, NOT on
 // version. A healthy v1 DB with `nodes` is a legitimate state RS upgrades

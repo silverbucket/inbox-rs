@@ -1023,6 +1023,30 @@ export async function reorderUnfiledTodos(newUnfiledOrder: string[]) {
 /**
  * Set of group IDs currently active (visible) in the filter row.
  * When `activeGroupFilters` is undefined in config, all groups default to active.
+ *
+ * Stale-filter recovery: if `activeGroupFilters` is non-empty but every id in
+ * it is stale (no matching real group), we fall back to "all active" instead
+ * of returning an empty set. This is the offline-create-then-login recovery
+ * path. Concrete sequence:
+ *   1. The user has stale ids in `activeGroupFilters` from a previous session
+ *      (e.g. a group they deleted long ago, whose id `setActiveGroupFilters`
+ *      intentionally retains because the URL→config sync runs before groups
+ *      load — see that function's note).
+ *   2. While offline they create a new group `Zg`. `storeGroup` only appends
+ *      to `activeGroupFilters` when it's already defined; if it was undefined
+ *      ("default-all") locally, no append happens — so `Zg.id` may not be in
+ *      filters.
+ *   3. They log in. Sync pulls down the server's older `config/app` document
+ *      (with just the stale ids, no `Zg`), which replaces the local copy.
+ *   4. Without this fallback, `activeGroupIds` returns `∅`, and
+ *      `visibleGroupedCollections` hides every group — the new `Zg` "remains"
+ *      as a pill (pills render from `sortedGroups` directly) but nothing
+ *      shows up on the page, making the offline-created collection appear
+ *      "gone" even though it's intact in storage.
+ *
+ * An explicit empty array (`activeGroupFilters: []`, set by toggling every
+ * pill off) keeps its meaning: "show nothing" — `length === 0` so the
+ * fallback doesn't trigger.
  */
 export const activeGroupIds = derived(
   [sortedGroups, appConfig],
@@ -1032,6 +1056,9 @@ export const activeGroupIds = derived(
     const filtered = new Set<string>();
     for (const id of $config.activeGroupFilters) {
       if (all.has(id)) filtered.add(id);
+    }
+    if (filtered.size === 0 && $config.activeGroupFilters.length > 0) {
+      return all;
     }
     return filtered;
   }
