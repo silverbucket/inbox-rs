@@ -120,10 +120,13 @@ async function loadEntities<T extends { id: string }>(
         }
       }
     }
-    store.set(valid);
+    // Merge into the store rather than replacing — the change handler may
+    // have already inserted entries during the await window, and a .set()
+    // would silently drop them.
+    store.update(current => ({ ...current, ...valid }));
     return true;
-  } catch {
-    // RS sync/fetch error — keep existing data
+  } catch (e) {
+    console.error('[inbox] loadEntities failed:', e);
     return false;
   }
 }
@@ -165,7 +168,10 @@ function normalizeLoadedItem(item: object): InboxItem {
 
 async function loadItems() {
   const inbox = getInbox();
-  if (!inbox) return;
+  if (!inbox) {
+    console.warn('[inbox] loadItems: inbox module not available');
+    return;
+  }
   try {
     const all = await inbox.getAll();
     const valid: Record<string, InboxItem> = {};
@@ -179,10 +185,15 @@ async function loadItems() {
         valid[key] = normalizeLoadedItem(item);
       }
     }
-    rawItems.set(rawValid);
-    items.set(valid);
-  } catch {
-    // RS sync/fetch error — keep existing items
+    // Merge rather than overwrite. The RS change handler can populate `items`
+    // optimistically (via 'local' cache-replay events) before getAll() resolves;
+    // calling .set() with the getAll result would clobber any items that were
+    // added by storeItem() while we were awaiting. We trust getAll's snapshot
+    // for entries it returned, but preserve any keys it didn't.
+    rawItems.update(current => ({ ...current, ...rawValid }));
+    items.update(current => ({ ...current, ...valid }));
+  } catch (e) {
+    console.error('[inbox] loadItems failed:', e);
   }
 }
 
@@ -194,8 +205,8 @@ async function loadConfig() {
     if (config && typeof config === 'object') {
       appConfig.set(config);
     }
-  } catch {
-    // ignore
+  } catch (e) {
+    console.error('[inbox] loadConfig failed:', e);
   }
 }
 
@@ -207,8 +218,8 @@ async function loadUserSettings() {
     if (settings && typeof settings === 'object') {
       userSettings.set(settings);
     }
-  } catch {
-    // ignore
+  } catch (e) {
+    console.error('[inbox] loadUserSettings failed:', e);
   }
 }
 
@@ -306,15 +317,7 @@ rs.on('sync-done', () => {
   markMigrationAlertReady();
 });
 
-// Debug: log sync activity
-rs.on('sync-req-done', (e: any) => {
-  console.log('[inbox] sync-req-done, tasks remaining:', e?.tasksRemaining);
-});
-rs.on('sync-done', (e: any) => {
-  console.log('[inbox] sync-done:', e);
-});
-rs.on('wire-busy', () => console.log('[inbox] wire-busy'));
-rs.on('wire-done', () => console.log('[inbox] wire-done'));
+rs.on('error', (e: any) => console.warn('[inbox] rs:error', e));
 
 rs.on('connected', async () => {
   connected.set(true);
@@ -340,9 +343,22 @@ rs.on('disconnected', () => {
   groups.set({});
 });
 
-queueMicrotask(() => {
-  void loadCachedData();
-});
+// Kick the cached preload from RS's `ready` event — fires after features
+// are loaded and the caching layer is wired up. This is the correct moment
+// to call getAll(), because:
+//   - Before `features-loaded`, `rs.get` is wired to `_pendingGPD`, which
+//     queues calls until `_processPending` runs at the end of
+//     `featuresLoaded()`. That queue is gated on every feature's `_rs_init`
+//     completing — and `IndexedDB.open` has a 10s timeout (see
+//     remotestoragejs `indexeddb.ts`). On a browser where the IDB handle is
+//     stalled, calling `getAll()` from `queueMicrotask` (which runs before
+//     features finish loading) makes the call sit in the queue for the full
+//     10s before `maxAge: false` even gets a chance to short-circuit it.
+//   - `RemoteStorage.on` automatically replays `ready` for listeners
+//     registered after the event has already fired (see remotestorage.ts
+//     `on` override), so HMR re-runs of this module still trigger the
+//     load — no `queueMicrotask` fallback needed.
+rs.on('ready', () => { void loadCachedData(); });
 
 export async function runAllMigrations() {
   const inbox = getInbox();

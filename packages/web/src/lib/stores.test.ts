@@ -618,6 +618,11 @@ describe('pendingMigrationCount visibility timing', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    // Trigger the disconnected handler so private stores (rawItems used by
+    // pendingMigrationCount) are reset alongside the public ones — loadItems
+    // now merges into rawItems instead of replacing, so leftover entries
+    // from prior tests in this file would otherwise leak in here.
+    rsHandlers['disconnected']?.();
     connected.set(false);
     items.set({});
     collections.set({});
