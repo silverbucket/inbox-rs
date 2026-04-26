@@ -4,8 +4,8 @@
   import { flip } from 'svelte/animate';
   import { slide, fade } from 'svelte/transition';
   import {
-    visibleTodos, reorderTodosGlobal, storeItem,
-    collections, sortedGroups, appConfig, updateConfig,
+    visibleTodos, reorderTodosGlobal, storeItem, moveItemToCollection,
+    collections, sortedGroups, groupCollections, appConfig, updateConfig,
   } from '../lib/stores';
   import { canCaptureTodo, makeUnfiledTodo } from '../lib/add-entry-modal';
   import TodoRow from './TodoRow.svelte';
@@ -48,12 +48,81 @@
   let quickSaving = $state(false);
   let quickError = $state('');
 
+  // Quick-add collection target. Stored in localStorage rather than the synced
+  // appConfig because:
+  //   1. It's a per-device UX preference (a phone vs. desktop might want
+  //      different default collections), and
+  //   2. RS-synced fields race on rapid refreshes — a remote-change event
+  //      can deliver the server's pre-write copy of `config/app` and clobber
+  //      the just-set local value before the push completes. localStorage
+  //      writes are immediate and never overwritten by sync.
+  const QUICK_ADD_KEY = 'inbox-rs:quickAddCollectionId';
+  // Hydrate synchronously at component init rather than in an $effect — the
+  // initial render already has the correct value, and we avoid a flicker
+  // where the select briefly shows "Unfiled" before snapping to the saved
+  // collection. localStorage access can throw in some privacy modes, so
+  // we wrap it; falling back to undefined matches the pre-feature behavior.
+  function readStoredQuickAddId(): string | undefined {
+    try {
+      return localStorage.getItem(QUICK_ADD_KEY) ?? undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  let storedQuickAddId = $state<string | undefined>(readStoredQuickAddId());
+
+  // Auto-focus the quick-add input on mount. The composer is rendered via
+  // a snippet in two branches of the page (empty state vs. compact above the
+  // list), but only one input is in the DOM at a time, so this action runs
+  // once per branch transition and lands focus on whichever is showing.
+  function focusOnMount(node: HTMLInputElement) {
+    node.focus();
+  }
+
+  // Collections that aren't members of any group — surfaced as a trailing
+  // "Other" optgroup so they remain pickable. Without this, a user with only
+  // ungrouped collections would see no options beyond "Unfiled".
+  const ungroupedCollections = $derived(
+    Object.values(collectionMap).filter(c => !c.groupId || !groupMap()[c.groupId])
+  );
+
+  // Resolved quick-add target collection. Validates that the referenced
+  // collection still exists — between sessions (or via another client) the
+  // saved id can become stale, in which case we silently fall back to
+  // Unfiled rather than erroring on save. We do NOT scrub stale ids from
+  // localStorage here because collections may not have finished loading;
+  // a transient empty `collectionMap` would otherwise wipe a valid id.
+  const quickAddCollectionId = $derived.by(() => {
+    const id = storedQuickAddId;
+    return id && collectionMap[id] ? id : undefined;
+  });
+
+  function setQuickAddCollection(id: string | undefined) {
+    storedQuickAddId = id;
+    try {
+      if (id) {
+        localStorage.setItem(QUICK_ADD_KEY, id);
+      } else {
+        localStorage.removeItem(QUICK_ADD_KEY);
+      }
+    } catch (error) {
+      console.error('Failed to persist quick-add collection', error);
+    }
+  }
+
   async function addQuickTodo() {
     if (!canCaptureTodo(quickTitle) || quickSaving) return;
     quickSaving = true;
     quickError = '';
     try {
-      await storeItem(makeUnfiledTodo(quickTitle));
+      const todo = makeUnfiledTodo(quickTitle);
+      await storeItem(todo);
+      // File into the persisted collection if one is selected. Done as a
+      // separate step so the collection's `itemIds` stay in sync — matches
+      // the AddEntryModal flow.
+      if (quickAddCollectionId) {
+        await moveItemToCollection(todo.id, quickAddCollectionId);
+      }
       quickTitle = '';
     } catch (error) {
       console.error('Failed to add todo', error);
@@ -139,27 +208,70 @@
     <Fab onclick={onaddtodo} label="New todo" />
   </div>
 
+  <!-- Quick-add composer is rendered in both states so frictionless capture
+       stays one tap away after the first todo. The empty state wraps it in
+       hero text; once the list is non-empty, a compact variant sits above
+       the list and the richer New todo Fab still handles details/filing. -->
+  {#snippet quickAddComposer(compact: boolean)}
+    <form
+      class="quick-add"
+      class:quick-add--compact={compact}
+      onsubmit={(e) => {
+        e.preventDefault();
+        addQuickTodo();
+      }}
+    >
+      <input
+        type="text"
+        bind:value={quickTitle}
+        placeholder={compact ? 'Add a todo…' : 'What needs doing?'}
+        aria-label="Todo title"
+        disabled={quickSaving}
+        use:focusOnMount
+      />
+      <!-- Collection picker. Sits between input and Add button so frequent
+           filers can re-target without leaving the keyboard, and the choice
+           sticks across sessions via localStorage (per-device). The
+           empty-string sentinel maps to undefined (Unfiled) on save. -->
+      <select
+        class="quick-add__collection"
+        aria-label="File into collection"
+        value={quickAddCollectionId ?? ''}
+        disabled={quickSaving}
+        onchange={(e) => {
+          const v = (e.currentTarget as HTMLSelectElement).value;
+          setQuickAddCollection(v === '' ? undefined : v);
+        }}
+      >
+        <option value="">Unfiled</option>
+        {#each $sortedGroups as group (group.id)}
+          {@const cols = $groupCollections[group.id] ?? []}
+          {#if cols.length > 0}
+            <optgroup label={group.name}>
+              {#each cols as col (col.id)}
+                <option value={col.id}>{col.name}</option>
+              {/each}
+            </optgroup>
+          {/if}
+        {/each}
+        {#if ungroupedCollections.length > 0}
+          <optgroup label="Other">
+            {#each ungroupedCollections as col (col.id)}
+              <option value={col.id}>{col.name}</option>
+            {/each}
+          </optgroup>
+        {/if}
+      </select>
+      <button type="submit" disabled={!canCaptureTodo(quickTitle) || quickSaving}>
+        {quickSaving ? 'Adding...' : 'Add'}
+      </button>
+    </form>
+  {/snippet}
+
   {#if openTodos.length === 0 && completedTodos.length === 0}
     <div class="empty-state" in:fade={{ duration: 180 }}>
       <p class="empty-title">Jot a todo</p>
-      <form
-        class="quick-add"
-        onsubmit={(e) => {
-          e.preventDefault();
-          addQuickTodo();
-        }}
-      >
-        <input
-          type="text"
-          bind:value={quickTitle}
-          placeholder="What needs doing?"
-          aria-label="Todo title"
-          disabled={quickSaving}
-        />
-        <button type="submit" disabled={!canCaptureTodo(quickTitle) || quickSaving}>
-          {quickSaving ? 'Adding...' : 'Add'}
-        </button>
-      </form>
+      {@render quickAddComposer(false)}
       <p class="empty-hint">Capture it now. Organize it later.</p>
       <!-- Persistent aria-live region — kept in the DOM so screen readers
            reliably announce errors as they appear. The visually-empty state
@@ -167,6 +279,10 @@
       <p class="quick-error" role="status" aria-live="polite">{quickError}</p>
     </div>
   {:else}
+    {@render quickAddComposer(true)}
+    <!-- Same persistent live region used in the empty state — collapses when
+         empty so it doesn't push the list down on the happy path. -->
+    <p class="quick-error quick-error--inline" role="status" aria-live="polite">{quickError}</p>
     <ul
       class="todo-list" role="list"
       use:dndzone={{
@@ -332,9 +448,32 @@
   .quick-add {
     width: min(100%, 34rem);
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 0.5rem;
     align-items: center;
+  }
+
+  /* Compact variant: when todos already exist, the composer sits as a slim
+     row above the list — full container width, smaller control height —
+     instead of the centered hero treatment used in the empty state. */
+  .quick-add--compact {
+    width: 100%;
+    gap: 0.4rem;
+  }
+
+  .quick-add--compact input {
+    min-height: 2.25rem;
+  }
+
+  .quick-add--compact button {
+    min-height: 2.25rem;
+    padding: 0 0.85rem;
+    font-size: 0.88rem;
+  }
+
+  .quick-add--compact .quick-add__collection {
+    min-height: 2.25rem;
+    font-size: 0.88rem;
   }
 
   .quick-add input {
@@ -380,9 +519,33 @@
   }
 
   .quick-add button:disabled,
-  .quick-add input:disabled {
+  .quick-add input:disabled,
+  .quick-add__collection:disabled {
     opacity: 0.55;
     cursor: not-allowed;
+  }
+
+  /* Collection picker matches the input's surface treatment so the row reads
+     as a single unit. Capped width so long collection names truncate via the
+     native control instead of pushing the Add button off-screen. */
+  .quick-add__collection {
+    min-height: 2.75rem;
+    max-width: 12rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    padding: 0 0.6rem;
+    font: inherit;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    transition: border-color 150ms, box-shadow 150ms;
+  }
+
+  .quick-add__collection:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
   }
 
   .empty-hint {
@@ -401,6 +564,13 @@
      stays mounted so screen readers keep tracking it. */
   .quick-error:empty {
     display: none;
+  }
+
+  /* Inline variant sits between the compact composer and the todo list, so
+     align it with the rest of the column and give it a tighter top margin. */
+  .quick-error--inline {
+    margin-top: -0.25rem;
+    text-align: left;
   }
 
   /* Mobile-only: reserve room so the fixed-position FAB doesn't float over
@@ -423,12 +593,17 @@
       padding-inline: 0;
     }
 
-    .quick-add {
+    /* Empty-state hero variant stacks vertically on small screens — but the
+       compact above-the-list variant stays as a single row so it doesn't
+       eat vertical space when the user just wants to add another todo. */
+    .quick-add:not(.quick-add--compact) {
       grid-template-columns: 1fr;
     }
 
-    .quick-add button {
+    .quick-add:not(.quick-add--compact) button,
+    .quick-add:not(.quick-add--compact) .quick-add__collection {
       width: 100%;
+      max-width: none;
     }
   }
 </style>
