@@ -618,6 +618,11 @@ describe('pendingMigrationCount visibility timing', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    // Trigger the disconnected handler so private stores (rawItems used by
+    // pendingMigrationCount) are reset alongside the public ones — loadItems
+    // now merges into rawItems instead of replacing, so leftover entries
+    // from prior tests in this file would otherwise leak in here.
+    rsHandlers['disconnected']?.();
     connected.set(false);
     items.set({});
     collections.set({});
@@ -1056,6 +1061,231 @@ describe('orphanCollections', () => {
     collections.set({ newer, older });
 
     expect(get(orphanCollections).map(c => c.id)).toEqual(['older', 'newer']);
+  });
+});
+
+// ---- Offline-create-then-login flow ----
+//
+// Bug report: a user offline-creates a group + a collection inside it.
+// On login, the collection appears as an orphan ("Needs a group") even
+// though both records still exist. These tests simulate the post-login
+// data-loading and change-event sequence to verify groupId survives.
+
+describe('offline-create-then-login: group association is preserved', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    items.set({});
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+    mockInbox.getAll.mockResolvedValue({});
+    mockInbox.getConfig.mockResolvedValue({});
+    mockInbox.getAllCollections.mockResolvedValue({});
+    mockInbox.getAllGroups.mockResolvedValue({});
+    mockInbox.getUserSettings.mockResolvedValue(undefined);
+  });
+
+  it('keeps groupId after the connected handler loads from IDB', async () => {
+    // Cache state we'd see after offline create+move: collection has
+    // groupId pointing at the local group, and the group's collectionIds
+    // lists the collection.
+    mockInbox.getAllCollections.mockResolvedValue({
+      c1: makeCollection('c1', 'g1'),
+    });
+    mockInbox.getAllGroups.mockResolvedValue({
+      g1: makeGroup('g1', ['c1']),
+    });
+
+    await rsHandlers['connected']();
+
+    expect(get(collections)['c1'].groupId).toBe('g1');
+    expect(get(groups)['g1'].collectionIds).toEqual(['c1']);
+    expect(get(orphanCollections)).toEqual([]);
+  });
+
+  it('keeps groupId when fireInitial replays cached docs as local events', async () => {
+    // After connect, RS replays every cached document as an `origin: local`
+    // change event (see remoteStorage.fireInitial). The handler must merge
+    // these in without dropping the groupId off the in-memory record.
+    mockInbox.getAllCollections.mockResolvedValue({
+      c1: makeCollection('c1', 'g1'),
+    });
+    mockInbox.getAllGroups.mockResolvedValue({
+      g1: makeGroup('g1', ['c1']),
+    });
+
+    await rsHandlers['connected']();
+
+    // Now simulate the fireInitial replay — emits a 'local' event for every
+    // cached document. Both group and collection are replayed.
+    emitModuleChange({
+      relativePath: 'groups/g1',
+      origin: 'local',
+      newValue: makeGroup('g1', ['c1']),
+      oldValue: undefined,
+    });
+    emitModuleChange({
+      relativePath: 'collections/c1',
+      origin: 'local',
+      newValue: makeCollection('c1', 'g1'),
+      oldValue: undefined,
+    });
+
+    expect(get(orphanCollections)).toEqual([]);
+    expect(get(collections)['c1'].groupId).toBe('g1');
+  });
+
+  it('survives collection-before-group event ordering during fireInitial', async () => {
+    // RS iterates the cached node tree in `forAllNodes`. The order isn't
+    // alphabetical — a collection event can arrive before its parent group
+    // event. The store handlers must not drop groupId based on the (still
+    // empty) groups store at the moment the collection event arrives.
+    mockInbox.getAllCollections.mockResolvedValue({});
+    mockInbox.getAllGroups.mockResolvedValue({});
+
+    await rsHandlers['connected']();
+
+    // Collection arrives first, before the group is in the store.
+    emitModuleChange({
+      relativePath: 'collections/c1',
+      origin: 'local',
+      newValue: makeCollection('c1', 'g1'),
+      oldValue: undefined,
+    });
+    // Group arrives second.
+    emitModuleChange({
+      relativePath: 'groups/g1',
+      origin: 'local',
+      newValue: makeGroup('g1', ['c1']),
+      oldValue: undefined,
+    });
+
+    expect(get(collections)['c1'].groupId).toBe('g1');
+    expect(get(orphanCollections)).toEqual([]);
+  });
+
+  it('does not drop groupId when getAll merges into a partially-populated store', async () => {
+    // Simulate the in-flight race: the change handler put c1 into the
+    // store via fireInitial *before* loadCollections resolved. Then
+    // loadEntities merges its getAll result on top — and must not strip
+    // groupId.
+    collections.set({ c1: makeCollection('c1', 'g1') });
+
+    mockInbox.getAllCollections.mockResolvedValue({
+      c1: makeCollection('c1', 'g1'),
+    });
+    mockInbox.getAllGroups.mockResolvedValue({
+      g1: makeGroup('g1', ['c1']),
+    });
+
+    await rsHandlers['connected']();
+
+    expect(get(collections)['c1'].groupId).toBe('g1');
+    expect(get(orphanCollections)).toEqual([]);
+  });
+
+  it('does not drop groupId when sync emits a remote event with the same body', async () => {
+    // After PUT completes for a fresh sync, RS does NOT emit a change for
+    // the document — completePush updates node.common.body silently. But
+    // some related codepaths (folder GET on first connect) can emit
+    // 'remote' events with the merged body. Verify the handler preserves
+    // groupId even on a 'remote' replay.
+    mockInbox.getAllCollections.mockResolvedValue({
+      c1: makeCollection('c1', 'g1'),
+    });
+    mockInbox.getAllGroups.mockResolvedValue({
+      g1: makeGroup('g1', ['c1']),
+    });
+
+    await rsHandlers['connected']();
+
+    emitModuleChange({
+      relativePath: 'collections/c1',
+      origin: 'remote',
+      newValue: makeCollection('c1', 'g1'),
+      oldValue: undefined,
+    });
+
+    expect(get(collections)['c1'].groupId).toBe('g1');
+    expect(get(orphanCollections)).toEqual([]);
+  });
+
+  it('does not orphan when getAllCollections returns a folder-listing fallback', async () => {
+    // remotestoragejs's getAll('collections/', false) returns the folder
+    // listing first, then fans out per-document GETs. If the per-document
+    // fetches haven't filled in the bodies yet, getAll can return
+    // `{ c1: true }` (the folder itemsMap with placeholder values).
+    // loadEntities filters non-objects out, so the store stays unchanged
+    // for c1 — and any earlier insert (e.g. via change events) is
+    // preserved.
+    collections.set({ c1: makeCollection('c1', 'g1') });
+    groups.set({ g1: makeGroup('g1', ['c1']) });
+
+    mockInbox.getAllCollections.mockResolvedValue({
+      c1: true as unknown as Collection,
+    });
+    mockInbox.getAllGroups.mockResolvedValue({
+      g1: true as unknown as CollectionGroup,
+    });
+
+    await rsHandlers['connected']();
+
+    expect(get(collections)['c1'].groupId).toBe('g1');
+    expect(get(orphanCollections)).toEqual([]);
+  });
+
+  it('keeps the offline-created collection visible when synced appConfig has only stale filter ids', async () => {
+    // The actual orphaning bug as observed in user data:
+    //   - The offline cache (or the synced server appConfig) has
+    //     `activeGroupFilters` containing only ids of long-deleted groups.
+    //   - The user offline-creates a fresh group `Zg` and a collection `Zc`
+    //     in it; `storeGroup` only appends to `activeGroupFilters` when the
+    //     filter is already defined — and even when it does, sync may
+    //     replace local config with the server's older copy.
+    //   - After login, `activeGroupIds` would historically return `∅`, and
+    //     `visibleGroupedCollections` would hide `Zg`/`Zc` entirely.
+    // Verify that with the stale-filter fallback, every real group becomes
+    // active again so the offline-created data is visible.
+    groups.set({
+      A: makeGroup('A'),
+      Zg: makeGroup('Zg', ['Zc']),
+    });
+    collections.set({
+      Zc: makeCollection('Zc', 'Zg'),
+    });
+    appConfig.set({ activeGroupFilters: ['stale-deleted-group-id'] });
+
+    expect(get(activeGroupIds)).toEqual(new Set(['A', 'Zg']));
+    expect(get(visibleGroupedCollections).map(s => s.group.id)).toEqual(['A', 'Zg']);
+    expect(get(visibleGroupedCollections).find(s => s.group.id === 'Zg')?.collections.map(c => c.id))
+      .toEqual(['Zc']);
+  });
+
+  it('keeps the explicit "show nothing" state distinct from the stale-only state', async () => {
+    // Symmetric guard: an empty array (length === 0) is the user's explicit
+    // "no groups visible" choice from toggling every pill off, and must
+    // continue to hide everything. The fallback only triggers when the
+    // configured ids are all stale.
+    groups.set({ A: makeGroup('A') });
+    collections.set({});
+    appConfig.set({ activeGroupFilters: [] });
+
+    expect(get(activeGroupIds)).toEqual(new Set());
+    expect(get(visibleGroupedCollections)).toEqual([]);
+  });
+
+  it('honors a partially valid filter without falling back to all', async () => {
+    // If even one configured id matches a real group, that group wins —
+    // the fallback only kicks in when every id is stale. Stale ids
+    // continue to be ignored at read time.
+    groups.set({
+      A: makeGroup('A'),
+      B: makeGroup('B'),
+    });
+    collections.set({});
+    appConfig.set({ activeGroupFilters: ['A', 'stale-id'] });
+
+    expect(get(activeGroupIds)).toEqual(new Set(['A']));
   });
 });
 

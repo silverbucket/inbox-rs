@@ -120,10 +120,13 @@ async function loadEntities<T extends { id: string }>(
         }
       }
     }
-    store.set(valid);
+    // Merge into the store rather than replacing — the change handler may
+    // have already inserted entries during the await window, and a .set()
+    // would silently drop them.
+    store.update(current => ({ ...current, ...valid }));
     return true;
-  } catch {
-    // RS sync/fetch error — keep existing data
+  } catch (e) {
+    console.error('[inbox] loadEntities failed:', e);
     return false;
   }
 }
@@ -165,7 +168,10 @@ function normalizeLoadedItem(item: object): InboxItem {
 
 async function loadItems() {
   const inbox = getInbox();
-  if (!inbox) return;
+  if (!inbox) {
+    console.warn('[inbox] loadItems: inbox module not available');
+    return;
+  }
   try {
     const all = await inbox.getAll();
     const valid: Record<string, InboxItem> = {};
@@ -179,10 +185,15 @@ async function loadItems() {
         valid[key] = normalizeLoadedItem(item);
       }
     }
-    rawItems.set(rawValid);
-    items.set(valid);
-  } catch {
-    // RS sync/fetch error — keep existing items
+    // Merge rather than overwrite. The RS change handler can populate `items`
+    // optimistically (via 'local' cache-replay events) before getAll() resolves;
+    // calling .set() with the getAll result would clobber any items that were
+    // added by storeItem() while we were awaiting. We trust getAll's snapshot
+    // for entries it returned, but preserve any keys it didn't.
+    rawItems.update(current => ({ ...current, ...rawValid }));
+    items.update(current => ({ ...current, ...valid }));
+  } catch (e) {
+    console.error('[inbox] loadItems failed:', e);
   }
 }
 
@@ -194,8 +205,8 @@ async function loadConfig() {
     if (config && typeof config === 'object') {
       appConfig.set(config);
     }
-  } catch {
-    // ignore
+  } catch (e) {
+    console.error('[inbox] loadConfig failed:', e);
   }
 }
 
@@ -207,8 +218,8 @@ async function loadUserSettings() {
     if (settings && typeof settings === 'object') {
       userSettings.set(settings);
     }
-  } catch {
-    // ignore
+  } catch (e) {
+    console.error('[inbox] loadUserSettings failed:', e);
   }
 }
 
@@ -306,15 +317,7 @@ rs.on('sync-done', () => {
   markMigrationAlertReady();
 });
 
-// Debug: log sync activity
-rs.on('sync-req-done', (e: any) => {
-  console.log('[inbox] sync-req-done, tasks remaining:', e?.tasksRemaining);
-});
-rs.on('sync-done', (e: any) => {
-  console.log('[inbox] sync-done:', e);
-});
-rs.on('wire-busy', () => console.log('[inbox] wire-busy'));
-rs.on('wire-done', () => console.log('[inbox] wire-done'));
+rs.on('error', (e: any) => console.warn('[inbox] rs:error', e));
 
 rs.on('connected', async () => {
   connected.set(true);
@@ -340,9 +343,11 @@ rs.on('disconnected', () => {
   groups.set({});
 });
 
-queueMicrotask(() => {
-  void loadCachedData();
-});
+// Wait for `ready` before getAll() — earlier calls sit in `_pendingGPD`
+// until features finish loading, which means a stalled IDB init drags the
+// preload into its 10s timeout even with `maxAge: false`. RS replays `ready`
+// for late listeners, so HMR still triggers this on module re-run.
+rs.on('ready', () => { void loadCachedData(); });
 
 export async function runAllMigrations() {
   const inbox = getInbox();
@@ -1018,6 +1023,30 @@ export async function reorderUnfiledTodos(newUnfiledOrder: string[]) {
 /**
  * Set of group IDs currently active (visible) in the filter row.
  * When `activeGroupFilters` is undefined in config, all groups default to active.
+ *
+ * Stale-filter recovery: if `activeGroupFilters` is non-empty but every id in
+ * it is stale (no matching real group), we fall back to "all active" instead
+ * of returning an empty set. This is the offline-create-then-login recovery
+ * path. Concrete sequence:
+ *   1. The user has stale ids in `activeGroupFilters` from a previous session
+ *      (e.g. a group they deleted long ago, whose id `setActiveGroupFilters`
+ *      intentionally retains because the URL→config sync runs before groups
+ *      load — see that function's note).
+ *   2. While offline they create a new group `Zg`. `storeGroup` only appends
+ *      to `activeGroupFilters` when it's already defined; if it was undefined
+ *      ("default-all") locally, no append happens — so `Zg.id` may not be in
+ *      filters.
+ *   3. They log in. Sync pulls down the server's older `config/app` document
+ *      (with just the stale ids, no `Zg`), which replaces the local copy.
+ *   4. Without this fallback, `activeGroupIds` returns `∅`, and
+ *      `visibleGroupedCollections` hides every group — the new `Zg` "remains"
+ *      as a pill (pills render from `sortedGroups` directly) but nothing
+ *      shows up on the page, making the offline-created collection appear
+ *      "gone" even though it's intact in storage.
+ *
+ * An explicit empty array (`activeGroupFilters: []`, set by toggling every
+ * pill off) keeps its meaning: "show nothing" — `length === 0` so the
+ * fallback doesn't trigger.
  */
 export const activeGroupIds = derived(
   [sortedGroups, appConfig],
@@ -1027,6 +1056,9 @@ export const activeGroupIds = derived(
     const filtered = new Set<string>();
     for (const id of $config.activeGroupFilters) {
       if (all.has(id)) filtered.add(id);
+    }
+    if (filtered.size === 0 && $config.activeGroupFilters.length > 0) {
+      return all;
     }
     return filtered;
   }
