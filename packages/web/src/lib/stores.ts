@@ -343,21 +343,10 @@ rs.on('disconnected', () => {
   groups.set({});
 });
 
-// Kick the cached preload from RS's `ready` event — fires after features
-// are loaded and the caching layer is wired up. This is the correct moment
-// to call getAll(), because:
-//   - Before `features-loaded`, `rs.get` is wired to `_pendingGPD`, which
-//     queues calls until `_processPending` runs at the end of
-//     `featuresLoaded()`. That queue is gated on every feature's `_rs_init`
-//     completing — and `IndexedDB.open` has a 10s timeout (see
-//     remotestoragejs `indexeddb.ts`). On a browser where the IDB handle is
-//     stalled, calling `getAll()` from `queueMicrotask` (which runs before
-//     features finish loading) makes the call sit in the queue for the full
-//     10s before `maxAge: false` even gets a chance to short-circuit it.
-//   - `RemoteStorage.on` automatically replays `ready` for listeners
-//     registered after the event has already fired (see remotestorage.ts
-//     `on` override), so HMR re-runs of this module still trigger the
-//     load — no `queueMicrotask` fallback needed.
+// Wait for `ready` before getAll() — earlier calls sit in `_pendingGPD`
+// until features finish loading, which means a stalled IDB init drags the
+// preload into its 10s timeout even with `maxAge: false`. RS replays `ready`
+// for late listeners, so HMR still triggers this on module re-run.
 rs.on('ready', () => { void loadCachedData(); });
 
 export async function runAllMigrations() {

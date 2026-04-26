@@ -17,63 +17,49 @@ const savedHash = typeof window !== 'undefined' ? window.location.hash : '';
 
 // Detect and auto-recover a corrupt `remotestorage` IndexedDB before RS opens it.
 //
-// The corrupt state we're guarding against: a `remotestorage` DB at version 1
-// with NO object stores. RS's upgrade handler (`indexeddb.ts:327-340`) has
+// The corrupt state we're guarding against: any `remotestorage` DB that's
+// missing one of the required object stores (`nodes`, plus `changes` at v2).
+// RS's upgrade handler (`indexeddb.ts:327-340`) has
 // `if (event.oldVersion !== 1) { createObjectStore('nodes') }` — i.e. it
 // SKIPS creating `nodes` when upgrading from v1, on the assumption that v1
-// already has it. When the v1 DB is empty, the upgrade ends up creating only
+// already has it. When v1 is empty, the upgrade ends up creating only
 // `changes`, then RS's onsuccess notices `nodes` is missing and calls
 // `IndexedDB.clean()` to recover. But `clean()` doesn't close its own open
 // connection first, so `deleteDatabase` blocks indefinitely until RS's 10s
 // timeout fires and the feature falls back to LocalStorage. Net effect: a
 // 10-second hang on every page load and reads/writes silently dropped.
 //
-// Strategy: prefer `indexedDB.databases()` (Chrome 71+, Safari 14+, Firefox
-// 126+) to read the DB's existence and version WITHOUT opening it. If we see
-// the DB present at v<2, delete it and let RS construct a clean v2 from
-// `oldVersion=0`. We never call `indexedDB.open()` ourselves — that's
-// important because in some Chrome states (a previous-session aborted
-// `deleteDatabase` from RS's failed clean()), `open()` itself stays pending
-// forever, and using it as our probe would just inherit the hang.
+// We key the deletion decision on the actual object-store schema, NOT on
+// version. A healthy v1 DB with `nodes` is a legitimate state RS upgrades
+// cleanly; deleting it would discard cached nodes and any queued offline
+// changes. Only DBs missing the required stores actually hit the upstream
+// bug.
 //
-// For browsers without `databases()`, we fall back to the open-probe. That
-// path can hang if the DB is in the same stuck state — we time out after 2s
-// and proceed, accepting that very-old-browser users with a previously-
-// corrupted DB still hit RS's 10s timeout (one-time, until they manually
-// run `__cleanupRSDb()`).
+// We use `indexedDB.databases()` (Chrome 71+, Safari 14+, Firefox 126+) as
+// an existence gate so we never call `indexedDB.open(name)` without a
+// version on a non-existent DB — that itself creates an empty v1, the very
+// trap we're recovering from. After confirming the DB exists, we open it
+// without a version (which doesn't trigger an upgrade) to read its actual
+// `objectStoreNames`. The open-probe can hang if a previous-session
+// `deleteDatabase` was aborted; we cap it at 2s and proceed.
 async function detectAndRecoverCorruptDb(): Promise<void> {
   if (typeof indexedDB === 'undefined') return;
 
   if (typeof (indexedDB as any).databases === 'function') {
-    let dbs: Array<{ name?: string; version?: number }> | null = null;
     try {
-      dbs = await (indexedDB as any).databases();
-    } catch (e) {
-      console.warn(`[idb-probe] databases() threw — falling back to open-probe`, e);
-    }
-    if (dbs) {
-      const rsDb = dbs.find((db) => db.name === 'remotestorage');
-      if (!rsDb) {
+      const dbs = await (indexedDB as any).databases() as Array<{ name?: string; version?: number }>;
+      if (!dbs.find((db) => db.name === 'remotestorage')) {
         console.log(`[idb-probe] no existing 'remotestorage' DB — RS will create one fresh`);
         return;
       }
-      // Anything below v2 hits the bug. v1 is the well-known corrupt state;
-      // v0/undefined shouldn't normally happen but is also pre-bug.
-      if ((rsDb.version ?? 0) < 2) {
-        console.warn(`[idb-probe] 'remotestorage' is at v${rsDb.version ?? '?'} — pre-upgrade-bug version, auto-cleaning before RS init`);
-        await deleteRsDb();
-        return;
-      }
-      console.log(`[idb-probe] 'remotestorage' is at v${rsDb.version} — healthy, RS can open it directly`);
-      return;
+    } catch (e) {
+      // Fall through to the open-probe; on ancient browsers without
+      // databases() we accept the empty-v1 risk for the rare no-DB case.
+      console.warn(`[idb-probe] databases() threw — falling back to open-probe`, e);
     }
   }
 
-  // Fallback for browsers without databases(). The open-probe can be hung by
-  // a previous-session abort, so we cap it at 2s and proceed.
   const probeStart = Date.now();
-  console.log(`[idb-probe] T+0ms (fallback) opening 'remotestorage' to inspect state`);
-
   type ProbeOk = { version: number; stores: string[] };
   const result: ProbeOk | 'failed' = await new Promise((resolve) => {
     let settled = false;
@@ -86,7 +72,6 @@ async function detectAndRecoverCorruptDb(): Promise<void> {
     probe.onsuccess = () => {
       const db = probe.result;
       const stores = Array.from(db.objectStoreNames);
-      console.log(`[idb-probe] T+${Date.now() - probeStart}ms onsuccess — version=${db.version}, stores=[${stores.join(',')}]`);
       db.close();
       settle({ version: db.version, stores });
     };
@@ -107,10 +92,16 @@ async function detectAndRecoverCorruptDb(): Promise<void> {
   });
 
   if (result === 'failed') return;
-  if ((result.version ?? 0) >= 2) return;
-  // The fallback open-probe creates an empty v1 DB if none existed; either
-  // way we delete-and-let-RS-recreate.
-  console.warn(`[idb-probe] DB is at v${result.version} with stores=[${result.stores.join(',')}] — auto-cleaning before RS init`);
+
+  // v1 schema: `nodes` only. v2 schema: `nodes` + `changes`. Either case
+  // missing a required store is corrupt.
+  const required = result.version >= 2 ? ['nodes', 'changes'] : ['nodes'];
+  const missing = required.filter((s) => !result.stores.includes(s));
+  if (missing.length === 0) {
+    console.log(`[idb-probe] 'remotestorage' v${result.version} stores=[${result.stores.join(',')}] — healthy, RS can open it directly`);
+    return;
+  }
+  console.warn(`[idb-probe] 'remotestorage' v${result.version} stores=[${result.stores.join(',')}] missing [${missing.join(',')}] — auto-cleaning before RS init`);
   await deleteRsDb();
 }
 

@@ -48,20 +48,11 @@
   let quickSaving = $state(false);
   let quickError = $state('');
 
-  // Quick-add collection target. Stored in localStorage rather than the synced
-  // appConfig because:
-  //   1. It's a per-device UX preference (a phone vs. desktop might want
-  //      different default collections), and
-  //   2. RS-synced fields race on rapid refreshes — a remote-change event
-  //      can deliver the server's pre-write copy of `config/app` and clobber
-  //      the just-set local value before the push completes. localStorage
-  //      writes are immediate and never overwritten by sync.
+  // Quick-add collection target. Stored in localStorage rather than the
+  // synced appConfig: it's a per-device preference, and a `config/app`
+  // remote-change event can otherwise deliver the server's pre-write copy
+  // and clobber a just-set local value before the push completes.
   const QUICK_ADD_KEY = 'inbox-rs:quickAddCollectionId';
-  // Hydrate synchronously at component init rather than in an $effect — the
-  // initial render already has the correct value, and we avoid a flicker
-  // where the select briefly shows "Unfiled" before snapping to the saved
-  // collection. localStorage access can throw in some privacy modes, so
-  // we wrap it; falling back to undefined matches the pre-feature behavior.
   function readStoredQuickAddId(): string | undefined {
     try {
       return localStorage.getItem(QUICK_ADD_KEY) ?? undefined;
@@ -71,27 +62,19 @@
   }
   let storedQuickAddId = $state<string | undefined>(readStoredQuickAddId());
 
-  // Auto-focus the quick-add input on mount. The composer is rendered via
-  // a snippet in two branches of the page (empty state vs. compact above the
-  // list), but only one input is in the DOM at a time, so this action runs
-  // once per branch transition and lands focus on whichever is showing.
   function focusOnMount(node: HTMLInputElement) {
     node.focus();
   }
 
-  // Collections that aren't members of any group — surfaced as a trailing
-  // "Other" optgroup so they remain pickable. Without this, a user with only
-  // ungrouped collections would see no options beyond "Unfiled".
+  // Trailing "Other" optgroup — without this, a user with only ungrouped
+  // collections would see no options beyond "Unfiled".
   const ungroupedCollections = $derived(
     Object.values(collectionMap).filter(c => !c.groupId || !groupMap()[c.groupId])
   );
 
-  // Resolved quick-add target collection. Validates that the referenced
-  // collection still exists — between sessions (or via another client) the
-  // saved id can become stale, in which case we silently fall back to
-  // Unfiled rather than erroring on save. We do NOT scrub stale ids from
-  // localStorage here because collections may not have finished loading;
-  // a transient empty `collectionMap` would otherwise wipe a valid id.
+  // Stale ids (collection deleted in another session/tab) silently fall
+  // back to Unfiled. We don't scrub localStorage here because a transient
+  // empty `collectionMap` during cold load would otherwise wipe a valid id.
   const quickAddCollectionId = $derived.by(() => {
     const id = storedQuickAddId;
     return id && collectionMap[id] ? id : undefined;
@@ -117,9 +100,7 @@
     try {
       const todo = makeUnfiledTodo(quickTitle);
       await storeItem(todo);
-      // File into the persisted collection if one is selected. Done as a
-      // separate step so the collection's `itemIds` stay in sync — matches
-      // the AddEntryModal flow.
+      // Separate step keeps collection.itemIds in sync, matching AddEntryModal.
       if (quickAddCollectionId) {
         await moveItemToCollection(todo.id, quickAddCollectionId);
       }
@@ -208,10 +189,8 @@
     <Fab onclick={onaddtodo} label="New todo" />
   </div>
 
-  <!-- Quick-add composer is rendered in both states so frictionless capture
-       stays one tap away after the first todo. The empty state wraps it in
-       hero text; once the list is non-empty, a compact variant sits above
-       the list and the richer New todo Fab still handles details/filing. -->
+  <!-- Rendered in both empty and populated states. The Fab still handles
+       richer flows; this is the keep-it-moving capture path. -->
   {#snippet quickAddComposer(compact: boolean)}
     <form
       class="quick-add"
@@ -229,10 +208,7 @@
         disabled={quickSaving}
         use:focusOnMount
       />
-      <!-- Collection picker. Sits between input and Add button so frequent
-           filers can re-target without leaving the keyboard, and the choice
-           sticks across sessions via localStorage (per-device). The
-           empty-string sentinel maps to undefined (Unfiled) on save. -->
+      <!-- Empty-string sentinel maps to undefined (Unfiled) on save. -->
       <select
         class="quick-add__collection"
         aria-label="File into collection"
@@ -280,8 +256,6 @@
     </div>
   {:else}
     {@render quickAddComposer(true)}
-    <!-- Same persistent live region used in the empty state — collapses when
-         empty so it doesn't push the list down on the happy path. -->
     <p class="quick-error quick-error--inline" role="status" aria-live="polite">{quickError}</p>
     <ul
       class="todo-list" role="list"
@@ -453,9 +427,7 @@
     align-items: center;
   }
 
-  /* Compact variant: when todos already exist, the composer sits as a slim
-     row above the list — full container width, smaller control height —
-     instead of the centered hero treatment used in the empty state. */
+  /* Slim variant used above the list when todos already exist. */
   .quick-add--compact {
     width: 100%;
     gap: 0.4rem;
@@ -525,9 +497,8 @@
     cursor: not-allowed;
   }
 
-  /* Collection picker matches the input's surface treatment so the row reads
-     as a single unit. Capped width so long collection names truncate via the
-     native control instead of pushing the Add button off-screen. */
+  /* Capped width so long names truncate via the native control instead of
+     pushing the Add button off-screen. */
   .quick-add__collection {
     min-height: 2.75rem;
     max-width: 12rem;
@@ -566,8 +537,6 @@
     display: none;
   }
 
-  /* Inline variant sits between the compact composer and the todo list, so
-     align it with the rest of the column and give it a tighter top margin. */
   .quick-error--inline {
     margin-top: -0.25rem;
     text-align: left;
@@ -593,9 +562,7 @@
       padding-inline: 0;
     }
 
-    /* Empty-state hero variant stacks vertically on small screens — but the
-       compact above-the-list variant stays as a single row so it doesn't
-       eat vertical space when the user just wants to add another todo. */
+    /* Hero variant stacks vertically on phones; compact stays single-row. */
     .quick-add:not(.quick-add--compact) {
       grid-template-columns: 1fr;
     }
