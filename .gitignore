@@ -25,8 +25,7 @@ rs-data/
 # Dev-only download staging area (copied into dist/ during build)
 packages/web/public/downloads/
 
-# Python end-to-end test artefacts (see tests/e2e/README.md)
-tests/e2e/.venv/
-tests/e2e/artifacts/
-**/__pycache__/
-.pytest_cache/
+# End-to-end test artefacts (see tests/e2e/README.md)
+tests/e2e/playwright-report/
+tests/e2e/test-results/
+tests/e2e/blob-report/

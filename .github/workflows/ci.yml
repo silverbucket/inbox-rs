@@ -47,12 +47,6 @@ jobs:
           node-version: 20
           cache: npm
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: tests/e2e/requirements.txt
-
       - run: npm ci
 
       # Pull the prebuilt dist from the build job — `vite preview` will
@@ -63,11 +57,11 @@ jobs:
           name: web-dist
           path: packages/web/dist
 
-      - name: Install Python + Playwright deps
+      - name: Install Playwright browser
         run: npm run test:e2e:install
 
-      # Pre-pull the Armadietto image so the test harness's wait_for_port
-      # timer doesn't double-count the container build.
+      # Pre-pull the Armadietto image so Playwright's webServer wait
+      # doesn't double-count the container build.
       - name: Build Armadietto image
         run: docker compose build armadietto
 
@@ -79,6 +73,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: e2e-artifacts
-          path: tests/e2e/artifacts
+          path: |
+            tests/e2e/playwright-report
+            tests/e2e/test-results
           retention-days: 7
           if-no-files-found: ignore

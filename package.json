@@ -3,7 +3,8 @@
   "version": "2.1.0",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "tests/e2e"
   ],
   "scripts": {
     "dev": "npm run dev --workspace=packages/web",
@@ -12,7 +13,7 @@
     "build:extension": "npm run build --workspace=packages/extension",
     "build:thunderbird": "npm run build --workspace=packages/thunderbird",
     "test": "npm run test --workspace=packages/rs-module && npm run test --workspace=packages/extension && npm run test --workspace=packages/web",
-    "test:e2e": "python3 tests/e2e/scripts/with_servers.py --server \"docker compose up armadietto\" --port 8000 --server \"npm run preview -w packages/web -- --port 4173 --strictPort\" --port 4173 -- pytest tests/e2e",
-    "test:e2e:install": "pip3 install -r tests/e2e/requirements.txt && python3 -m playwright install --with-deps chromium"
+    "test:e2e": "npm run test --workspace=@inbox-rs/e2e",
+    "test:e2e:install": "npm run test:install --workspace=@inbox-rs/e2e"
   }
 }
