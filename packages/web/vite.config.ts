@@ -20,5 +20,13 @@ export default defineConfig({
       'onnxruntime-node': 'onnxruntime-web',
       'sharp': 'onnxruntime-web',
     }
-  }
+  },
+  build: {
+    // Bump above Vite's default `modules` baseline so top-level `await` is
+    // available. Used in `src/lib/rs.ts` to gate RS construction on a
+    // corrupt-IndexedDB self-recovery probe. TLA shipped in Chrome 89 / Edge
+    // 89 / Firefox 89 / Safari 15 — all 2021 baselines, well below our
+    // supported floor.
+    target: ['chrome89', 'edge89', 'firefox89', 'safari15'],
+  },
 });

@@ -53,15 +53,13 @@ import {
   collections, groups, groupCollections, moveCollectionToGroup,
   deleteGroup, appConfig,
   storeCollection, createCollection, deleteCollection,
-  reorderGroupCollections, items, todoItems, reorderUncategorizedTodos, pendingMigrationCount,
+  storeItem,
+  reorderGroupCollections, items, todoItems, reorderUnfiledTodos, pendingMigrationCount,
   moveItemToCollection,
   collectionItems, userSettings,
-  activeGroupIds, visibleGroupedCollections,
+  activeGroupIds, visibleGroupedCollections, orphanCollections,
   toggleGroupFilter, setActiveGroupFilters, storeGroup,
   allTodos, openTodos, visibleTodos, reorderTodosGlobal,
-  uncategorizedFilterActive, toggleUncategorizedFilter,
-  UNCATEGORIZED_FILTER_ID,
-  UNCATEGORIZED_COLLECTION_ID, uncategorizedVirtualCollection,
 } from './stores';
 import type { Collection, CollectionGroup, InboxItem } from '@inbox-rs/rs-module';
 
@@ -381,6 +379,30 @@ describe('todoItems ordering', () => {
     appConfig.set({});
   });
 
+  it('stores a new todo while disconnected without groups or collections as unfiled', async () => {
+    connected.set(false);
+    collections.set({});
+    groups.set({});
+    const todo = makeTodo('quick', {
+      title: 'Quick thought',
+      completed: false,
+      isTodo: true,
+    });
+
+    await storeItem(todo);
+
+    expect(mockInbox.store).toHaveBeenCalledWith(todo, undefined);
+    expect(get(items).quick).toMatchObject({
+      id: 'quick',
+      title: 'Quick thought',
+      type: 'todo',
+      completed: false,
+      isTodo: true,
+    });
+    expect(get(items).quick.collectionId).toBeUndefined();
+    expect(get(todoItems).map(t => t.id)).toEqual(['quick']);
+  });
+
   it('keeps configured open todo order and falls back to newest-first for new todos', () => {
     items.set({
       t1: makeTodo('t1', { createdAt: '2026-01-01T00:00:00.000Z' }),
@@ -410,7 +432,7 @@ describe('todoItems ordering', () => {
     expect(get(todoItems).map(todo => todo.id)).toEqual(['open', 'done-newer', 'done-older']);
   });
 
-  it('persists reordered uncategorized todo ids into todosGlobalOrder', async () => {
+  it('persists reordered unfiled todo ids into todosGlobalOrder', async () => {
     appConfig.set({});
     items.set({
       t1: makeTodo('t1'),
@@ -418,17 +440,17 @@ describe('todoItems ordering', () => {
       t3: makeTodo('t3'),
     });
 
-    await reorderUncategorizedTodos(['t3', 't1', 't2']);
+    await reorderUnfiledTodos(['t3', 't1', 't2']);
 
     expect(get(appConfig).todosGlobalOrder).toEqual(['t3', 't1', 't2']);
     expect(mockInbox.setConfig).toHaveBeenCalledWith({ todosGlobalOrder: ['t3', 't1', 't2'] });
   });
 
-  it('splices uncategorized reorders into todosGlobalOrder without moving categorized todos', async () => {
-    // Two categorized todos (c1, c2) flanking three uncategorized (u1, u2, u3).
-    // Reordering the uncategorized subset must preserve c1/c2's global
+  it('splices unfiled reorders into todosGlobalOrder without moving filed todos', async () => {
+    // Two filed todos (c1, c2) flanking three unfiled (u1, u2, u3).
+    // Reordering the unfiled subset must preserve c1/c2's global
     // positions — the flat /todos page relies on that to not scramble the
-    // order of todos it doesn't even see in the Uncategorized view.
+    // order of todos it doesn't see.
     items.set({
       c1: makeTodo('c1', { collectionId: 'col-a' }),
       c2: makeTodo('c2', { collectionId: 'col-b' }),
@@ -438,7 +460,7 @@ describe('todoItems ordering', () => {
     });
     appConfig.set({ todosGlobalOrder: ['u1', 'c1', 'u2', 'c2', 'u3'] });
 
-    await reorderUncategorizedTodos(['u3', 'u1', 'u2']);
+    await reorderUnfiledTodos(['u3', 'u1', 'u2']);
 
     // u1/u2/u3 occupy the same global slots they did before; only their
     // relative order has changed. c1 and c2 stay exactly where they were.
@@ -518,7 +540,7 @@ describe('moveItemToCollection', () => {
     expect(get(items)['t1'].collectionId).toBe('target');
   });
 
-  it('adds to the target collection itemIds when moving from uncategorized', async () => {
+  it('adds to the target collection itemIds when moving from unfiled', async () => {
     const item = makeTodo('t1'); // no collectionId
     const target = { ...makeCollection('target'), itemIds: [] };
 
@@ -529,7 +551,6 @@ describe('moveItemToCollection', () => {
 
     expect(get(collections)['target'].itemIds).toEqual(['t1']);
     expect(get(items)['t1'].collectionId).toBe('target');
-    expect((get(items)['t1'] as any).uncategorized).toBeUndefined();
   });
 });
 
@@ -597,6 +618,11 @@ describe('pendingMigrationCount visibility timing', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    // Trigger the disconnected handler so private stores (rawItems used by
+    // pendingMigrationCount) are reset alongside the public ones — loadItems
+    // now merges into rawItems instead of replacing, so leftover entries
+    // from prior tests in this file would otherwise leak in here.
+    rsHandlers['disconnected']?.();
     connected.set(false);
     items.set({});
     collections.set({});
@@ -964,9 +990,6 @@ describe('visibleGroupedCollections', () => {
     const c2 = makeCollection('c2', 'g1');
     collections.set({ c1, c2 });
     groups.set({ g1: makeGroup('g1', ['c2', 'c1']) });
-    // Disable the Uncategorized pill so this test stays focused on real-group
-    // behaviour.
-    appConfig.set({ uncategorizedFilterActive: false });
 
     const sections = get(visibleGroupedCollections);
     expect(sections).toHaveLength(1);
@@ -980,7 +1003,7 @@ describe('visibleGroupedCollections', () => {
       g1: makeGroup('g1', []),
       g2: makeGroup('g2', []),
     });
-    appConfig.set({ activeGroupFilters: ['g2'], uncategorizedFilterActive: false });
+    appConfig.set({ activeGroupFilters: ['g2'] });
 
     const sections = get(visibleGroupedCollections);
     expect(sections.map(s => s.group.id)).toEqual(['g2']);
@@ -988,173 +1011,281 @@ describe('visibleGroupedCollections', () => {
 
   it('returns empty when all groups are filtered out', () => {
     groups.set({ g1: makeGroup('g1', []) });
-    appConfig.set({ activeGroupFilters: [], uncategorizedFilterActive: false });
+    appConfig.set({ activeGroupFilters: [] });
     expect(get(visibleGroupedCollections)).toHaveLength(0);
-  });
-
-  it('places the Uncategorized section at the sentinel slot in groupsOrder', () => {
-    const grouped = makeCollection('c1', 'g1');
-    const grouped2 = makeCollection('c3', 'g2');
-    collections.set({ c1: grouped, c3: grouped2 });
-    groups.set({ g1: makeGroup('g1', ['c1']), g2: makeGroup('g2', ['c3']) });
-    items.set({
-      t1: { id: 't1', type: 'todo', title: 'straggler', createdAt: '2026-01-01T00:00:00Z', completed: false, isTodo: true } as any,
-    });
-    // Sentinel placed between g1 and g2
-    appConfig.set({ groupsOrder: ['g1', UNCATEGORIZED_FILTER_ID, 'g2'] });
-
-    const sections = get(visibleGroupedCollections);
-    expect(sections.map(s => s.group.id)).toEqual(['g1', UNCATEGORIZED_FILTER_ID, 'g2']);
-  });
-
-  it('hides the Uncategorized section when the pill is off even if straggler items exist', () => {
-    items.set({
-      t1: { id: 't1', type: 'todo', title: 'straggler', createdAt: '2026-01-01T00:00:00Z', completed: false, isTodo: true } as any,
-    });
-    groups.set({});
-    appConfig.set({ uncategorizedFilterActive: false });
-
-    expect(get(visibleGroupedCollections)).toHaveLength(0);
-  });
-
-  it('hides the Uncategorized section when there are no straggler items', () => {
-    // Uncategorized is a dynamic surface — unlike a real group, it has no
-    // persistent identity for the user to "keep". When everything is filed
-    // (all collections have a group, all items have a collection, no
-    // orphans), the Uncategorized section collapses away entirely.
-    const grouped = makeCollection('c1', 'g1');
-    collections.set({ c1: grouped });
-    groups.set({ g1: makeGroup('g1', ['c1']) });
-
-    const sections = get(visibleGroupedCollections);
-    expect(sections.map(s => s.group.id)).toEqual(['g1']);
-  });
-
-  it('renders the Uncategorized section when there are straggler items', () => {
-    // A loose todo or an orphaned ref is enough to bring the Uncategorized
-    // surface back — the straggler needs somewhere to live.
-    const grouped = makeCollection('c1', 'g1');
-    collections.set({ c1: grouped });
-    groups.set({ g1: makeGroup('g1', ['c1']) });
-    const straggler: InboxItem = { id: 't1', type: 'todo', title: 'straggler', createdAt: '2026-01-01T00:00:00Z', completed: false, isTodo: true } as any;
-    items.set({ t1: straggler });
-
-    const sections = get(visibleGroupedCollections);
-    expect(sections.map(s => s.group.id)).toEqual(['g1', UNCATEGORIZED_FILTER_ID]);
-    expect(sections[1].collections).toEqual([]);
-  });
-
-  it('attaches the virtual Uncategorized collection to the Uncategorized section when stragglers exist', () => {
-    // The virtual collection is exposed on `section.virtualCollection` so
-    // CollectionsPage can render straggler items without creating a real
-    // collection or group destination.
-    collections.set({});
-    groups.set({});
-    const straggler: InboxItem = { id: 't1', type: 'todo', title: 'straggler', createdAt: '2026-01-01T00:00:00Z', completed: false, isTodo: true } as any;
-    items.set({ t1: straggler });
-
-    const sections = get(visibleGroupedCollections);
-    const uncat = sections.find(s => s.group.id === UNCATEGORIZED_FILTER_ID);
-    expect(uncat).toBeDefined();
-    expect(uncat!.virtualCollection?.id).toBe(UNCATEGORIZED_COLLECTION_ID);
-    expect(uncat!.virtualCollection?.name).toBe('Uncategorized');
   });
 });
 
-describe('uncategorizedVirtualCollection', () => {
+describe('orphanCollections', () => {
   beforeEach(() => {
-    items.set({});
+    collections.set({});
+    groups.set({});
     appConfig.set({});
   });
 
-  it('has a stable sentinel id and a placeholder createdAt even with no items', () => {
-    const virt = get(uncategorizedVirtualCollection);
-    expect(virt.id).toBe(UNCATEGORIZED_COLLECTION_ID);
-    expect(virt.itemIds).toEqual([]);
-    // Placeholder createdAt (epoch) — the virtual collection isn't stored, so
-    // there's no real creation timestamp to reference.
-    expect(virt.createdAt).toBe(new Date(0).toISOString());
+  it('is empty when every collection has a real group', () => {
+    collections.set({
+      c1: makeCollection('c1', 'g1'),
+      c2: makeCollection('c2', 'g1'),
+    });
+    groups.set({ g1: makeGroup('g1', ['c1', 'c2']) });
+
+    expect(get(orphanCollections)).toEqual([]);
   });
 
-  it('includes every straggler — todos without a collection, plus refs explicitly flagged uncategorized', () => {
-    // Todos can't live in the Inbox, so any todo without a `collectionId`
-    // is implicitly a straggler. Refs, by contrast, default to the Inbox and
-    // only land here when explicitly flagged `uncategorized: true` (e.g.
-    // orphaned by a collection deletion). Order: todos first (open then
-    // completed, via todoItems), then refs (newest first, via
-    // uncategorizedReferenceItems).
-    const todo1: InboxItem = { id: 't1', type: 'todo', title: 'first', createdAt: '2026-01-01T00:00:00Z', completed: false, isTodo: true } as any;
-    const note1: InboxItem = { id: 'n1', type: 'note', title: 'note', body: 'x', createdAt: '2026-01-02T00:00:00Z', uncategorized: true } as any;
-    items.set({ t1: todo1, n1: note1 });
+  it('surfaces collections with no groupId', () => {
+    const c1 = makeCollection('c1');
+    delete (c1 as any).groupId;
+    collections.set({ c1 });
 
-    const virt = get(uncategorizedVirtualCollection);
-    expect(virt.itemIds).toEqual(['t1', 'n1']);
+    expect(get(orphanCollections).map(c => c.id)).toEqual(['c1']);
   });
 
-  it('excludes refs without the `uncategorized` flag — those live in the Inbox, not Uncategorized', () => {
-    // Refs without a collectionId and without the `uncategorized` flag are
-    // *Inbox* items, not stragglers. They must not surface in the virtual
-    // Uncategorized collection.
-    const inboxRef: InboxItem = { id: 'n1', type: 'note', title: 'inbox', body: 'x', createdAt: '2026-01-01T00:00:00Z' } as any;
-    items.set({ n1: inboxRef });
+  it('surfaces collections whose groupId points at a deleted group', () => {
+    collections.set({
+      c1: makeCollection('c1', 'g1'),
+      stale: makeCollection('stale', 'g_deleted'),
+    });
+    groups.set({ g1: makeGroup('g1', ['c1']) });
 
-    const virt = get(uncategorizedVirtualCollection);
-    expect(virt.itemIds).toEqual([]);
+    expect(get(orphanCollections).map(c => c.id)).toEqual(['stale']);
   });
 
-  it('excludes items that are assigned to a real collection', () => {
-    const uncat: InboxItem = { id: 't1', type: 'todo', title: 'uncat', createdAt: '2026-01-01T00:00:00Z', completed: false, isTodo: true } as any;
-    const assigned: InboxItem = { id: 't2', type: 'todo', title: 'assigned', createdAt: '2026-01-02T00:00:00Z', completed: false, isTodo: true, collectionId: 'c1' } as any;
-    const assignedRef: InboxItem = { id: 'n1', type: 'note', title: 'note', body: 'x', createdAt: '2026-01-03T00:00:00Z', collectionId: 'c1' } as any;
-    items.set({ t1: uncat, t2: assigned, n1: assignedRef });
+  it('orders orphans by createdAt for a stable display order', () => {
+    const newer = makeCollection('newer');
+    const older = makeCollection('older');
+    delete (newer as any).groupId;
+    delete (older as any).groupId;
+    newer.createdAt = '2026-03-01T00:00:00.000Z';
+    older.createdAt = '2026-01-01T00:00:00.000Z';
+    collections.set({ newer, older });
 
-    const virt = get(uncategorizedVirtualCollection);
-    expect(virt.itemIds).toEqual(['t1']);
-  });
-
-  it('orders todos before refs, with completed todos between the two', () => {
-    // `todoItems` enforces open-first-then-completed for todos;
-    // `uncategorizedReferenceItems` returns refs newest-first. Concatenating
-    // them yields: open todos, completed todos, refs (newest first). Refs
-    // need the `uncategorized: true` flag to surface here — without it they'd
-    // default to the Inbox.
-    const openTodo: InboxItem = { id: 't-open', type: 'todo', title: 'open', createdAt: '2026-01-01T00:00:00Z', completed: false, isTodo: true } as any;
-    const doneTodo: InboxItem = { id: 't-done', type: 'todo', title: 'done', createdAt: '2026-01-02T00:00:00Z', completed: true, isTodo: true, completedAt: '2026-01-02T00:00:00Z' } as any;
-    const oldRef: InboxItem = { id: 'r-old', type: 'note', title: 'old', body: '', createdAt: '2026-01-01T00:00:00Z', uncategorized: true } as any;
-    const newRef: InboxItem = { id: 'r-new', type: 'note', title: 'new', body: '', createdAt: '2026-01-05T00:00:00Z', uncategorized: true } as any;
-    items.set({ 't-open': openTodo, 't-done': doneTodo, 'r-old': oldRef, 'r-new': newRef });
-
-    const virt = get(uncategorizedVirtualCollection);
-    expect(virt.itemIds).toEqual(['t-open', 't-done', 'r-new', 'r-old']);
+    expect(get(orphanCollections).map(c => c.id)).toEqual(['older', 'newer']);
   });
 });
 
-describe('collectionItems virtual Uncategorized entry', () => {
+// ---- Offline-create-then-login flow ----
+//
+// Bug report: a user offline-creates a group + a collection inside it.
+// On login, the collection appears as an orphan ("Needs a group") even
+// though both records still exist. These tests simulate the post-login
+// data-loading and change-event sequence to verify groupId survives.
+
+describe('offline-create-then-login: group association is preserved', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     items.set({});
     collections.set({});
+    groups.set({});
+    appConfig.set({});
+    mockInbox.getAll.mockResolvedValue({});
+    mockInbox.getConfig.mockResolvedValue({});
+    mockInbox.getAllCollections.mockResolvedValue({});
+    mockInbox.getAllGroups.mockResolvedValue({});
+    mockInbox.getUserSettings.mockResolvedValue(undefined);
   });
 
-  it('surfaces every straggler under UNCATEGORIZED_COLLECTION_ID — todos, and refs flagged uncategorized', () => {
-    // Orphan todo (no collectionId) — every uncollected todo is a straggler
-    // since todos can't live in the Inbox.
-    const todo: InboxItem = { id: 't1', type: 'todo', title: 'orphan todo', createdAt: '2026-01-01T00:00:00Z', completed: false, isTodo: true } as any;
-    // Orphaned reference flagged `uncategorized: true` — set when the user
-    // explicitly chose Uncategorized in the picker, or when an item is moved
-    // out of its collection without picking a new destination
-    // (`moveItemToCollection(id, undefined)`). Refs without this flag default
-    // to the Inbox, not Uncategorized.
-    const orphanRef: InboxItem = { id: 'r1', type: 'note', title: 'orphan ref', body: '', createdAt: '2026-01-02T00:00:00Z', uncategorized: true } as any;
-    // Items assigned to a real collection — must not leak.
-    const assignedTodo: InboxItem = { id: 't2', type: 'todo', title: 'assigned', createdAt: '2026-01-03T00:00:00Z', completed: false, isTodo: true, collectionId: 'c1' } as any;
-    const assignedRef: InboxItem = { id: 'r2', type: 'note', title: 'assigned ref', body: '', createdAt: '2026-01-04T00:00:00Z', collectionId: 'c1' } as any;
-    // Inbox ref (no flag, no collection) — must stay in the Inbox, not leak.
-    const inboxRef: InboxItem = { id: 'r3', type: 'note', title: 'inbox ref', body: '', createdAt: '2026-01-05T00:00:00Z' } as any;
-    items.set({ t1: todo, r1: orphanRef, t2: assignedTodo, r2: assignedRef, r3: inboxRef });
+  it('keeps groupId after the connected handler loads from IDB', async () => {
+    // Cache state we'd see after offline create+move: collection has
+    // groupId pointing at the local group, and the group's collectionIds
+    // lists the collection.
+    mockInbox.getAllCollections.mockResolvedValue({
+      c1: makeCollection('c1', 'g1'),
+    });
+    mockInbox.getAllGroups.mockResolvedValue({
+      g1: makeGroup('g1', ['c1']),
+    });
 
-    const byCollection = get(collectionItems);
-    const uncatItems = byCollection[UNCATEGORIZED_COLLECTION_ID] ?? [];
-    expect(uncatItems.map(i => i.id)).toEqual(['t1', 'r1']);
+    await rsHandlers['connected']();
+
+    expect(get(collections)['c1'].groupId).toBe('g1');
+    expect(get(groups)['g1'].collectionIds).toEqual(['c1']);
+    expect(get(orphanCollections)).toEqual([]);
+  });
+
+  it('keeps groupId when fireInitial replays cached docs as local events', async () => {
+    // After connect, RS replays every cached document as an `origin: local`
+    // change event (see remoteStorage.fireInitial). The handler must merge
+    // these in without dropping the groupId off the in-memory record.
+    mockInbox.getAllCollections.mockResolvedValue({
+      c1: makeCollection('c1', 'g1'),
+    });
+    mockInbox.getAllGroups.mockResolvedValue({
+      g1: makeGroup('g1', ['c1']),
+    });
+
+    await rsHandlers['connected']();
+
+    // Now simulate the fireInitial replay — emits a 'local' event for every
+    // cached document. Both group and collection are replayed.
+    emitModuleChange({
+      relativePath: 'groups/g1',
+      origin: 'local',
+      newValue: makeGroup('g1', ['c1']),
+      oldValue: undefined,
+    });
+    emitModuleChange({
+      relativePath: 'collections/c1',
+      origin: 'local',
+      newValue: makeCollection('c1', 'g1'),
+      oldValue: undefined,
+    });
+
+    expect(get(orphanCollections)).toEqual([]);
+    expect(get(collections)['c1'].groupId).toBe('g1');
+  });
+
+  it('survives collection-before-group event ordering during fireInitial', async () => {
+    // RS iterates the cached node tree in `forAllNodes`. The order isn't
+    // alphabetical — a collection event can arrive before its parent group
+    // event. The store handlers must not drop groupId based on the (still
+    // empty) groups store at the moment the collection event arrives.
+    mockInbox.getAllCollections.mockResolvedValue({});
+    mockInbox.getAllGroups.mockResolvedValue({});
+
+    await rsHandlers['connected']();
+
+    // Collection arrives first, before the group is in the store.
+    emitModuleChange({
+      relativePath: 'collections/c1',
+      origin: 'local',
+      newValue: makeCollection('c1', 'g1'),
+      oldValue: undefined,
+    });
+    // Group arrives second.
+    emitModuleChange({
+      relativePath: 'groups/g1',
+      origin: 'local',
+      newValue: makeGroup('g1', ['c1']),
+      oldValue: undefined,
+    });
+
+    expect(get(collections)['c1'].groupId).toBe('g1');
+    expect(get(orphanCollections)).toEqual([]);
+  });
+
+  it('does not drop groupId when getAll merges into a partially-populated store', async () => {
+    // Simulate the in-flight race: the change handler put c1 into the
+    // store via fireInitial *before* loadCollections resolved. Then
+    // loadEntities merges its getAll result on top — and must not strip
+    // groupId.
+    collections.set({ c1: makeCollection('c1', 'g1') });
+
+    mockInbox.getAllCollections.mockResolvedValue({
+      c1: makeCollection('c1', 'g1'),
+    });
+    mockInbox.getAllGroups.mockResolvedValue({
+      g1: makeGroup('g1', ['c1']),
+    });
+
+    await rsHandlers['connected']();
+
+    expect(get(collections)['c1'].groupId).toBe('g1');
+    expect(get(orphanCollections)).toEqual([]);
+  });
+
+  it('does not drop groupId when sync emits a remote event with the same body', async () => {
+    // After PUT completes for a fresh sync, RS does NOT emit a change for
+    // the document — completePush updates node.common.body silently. But
+    // some related codepaths (folder GET on first connect) can emit
+    // 'remote' events with the merged body. Verify the handler preserves
+    // groupId even on a 'remote' replay.
+    mockInbox.getAllCollections.mockResolvedValue({
+      c1: makeCollection('c1', 'g1'),
+    });
+    mockInbox.getAllGroups.mockResolvedValue({
+      g1: makeGroup('g1', ['c1']),
+    });
+
+    await rsHandlers['connected']();
+
+    emitModuleChange({
+      relativePath: 'collections/c1',
+      origin: 'remote',
+      newValue: makeCollection('c1', 'g1'),
+      oldValue: undefined,
+    });
+
+    expect(get(collections)['c1'].groupId).toBe('g1');
+    expect(get(orphanCollections)).toEqual([]);
+  });
+
+  it('does not orphan when getAllCollections returns a folder-listing fallback', async () => {
+    // remotestoragejs's getAll('collections/', false) returns the folder
+    // listing first, then fans out per-document GETs. If the per-document
+    // fetches haven't filled in the bodies yet, getAll can return
+    // `{ c1: true }` (the folder itemsMap with placeholder values).
+    // loadEntities filters non-objects out, so the store stays unchanged
+    // for c1 — and any earlier insert (e.g. via change events) is
+    // preserved.
+    collections.set({ c1: makeCollection('c1', 'g1') });
+    groups.set({ g1: makeGroup('g1', ['c1']) });
+
+    mockInbox.getAllCollections.mockResolvedValue({
+      c1: true as unknown as Collection,
+    });
+    mockInbox.getAllGroups.mockResolvedValue({
+      g1: true as unknown as CollectionGroup,
+    });
+
+    await rsHandlers['connected']();
+
+    expect(get(collections)['c1'].groupId).toBe('g1');
+    expect(get(orphanCollections)).toEqual([]);
+  });
+
+  it('keeps the offline-created collection visible when synced appConfig has only stale filter ids', async () => {
+    // The actual orphaning bug as observed in user data:
+    //   - The offline cache (or the synced server appConfig) has
+    //     `activeGroupFilters` containing only ids of long-deleted groups.
+    //   - The user offline-creates a fresh group `Zg` and a collection `Zc`
+    //     in it; `storeGroup` only appends to `activeGroupFilters` when the
+    //     filter is already defined — and even when it does, sync may
+    //     replace local config with the server's older copy.
+    //   - After login, `activeGroupIds` would historically return `∅`, and
+    //     `visibleGroupedCollections` would hide `Zg`/`Zc` entirely.
+    // Verify that with the stale-filter fallback, every real group becomes
+    // active again so the offline-created data is visible.
+    groups.set({
+      A: makeGroup('A'),
+      Zg: makeGroup('Zg', ['Zc']),
+    });
+    collections.set({
+      Zc: makeCollection('Zc', 'Zg'),
+    });
+    appConfig.set({ activeGroupFilters: ['stale-deleted-group-id'] });
+
+    expect(get(activeGroupIds)).toEqual(new Set(['A', 'Zg']));
+    expect(get(visibleGroupedCollections).map(s => s.group.id)).toEqual(['A', 'Zg']);
+    expect(get(visibleGroupedCollections).find(s => s.group.id === 'Zg')?.collections.map(c => c.id))
+      .toEqual(['Zc']);
+  });
+
+  it('keeps the explicit "show nothing" state distinct from the stale-only state', async () => {
+    // Symmetric guard: an empty array (length === 0) is the user's explicit
+    // "no groups visible" choice from toggling every pill off, and must
+    // continue to hide everything. The fallback only triggers when the
+    // configured ids are all stale.
+    groups.set({ A: makeGroup('A') });
+    collections.set({});
+    appConfig.set({ activeGroupFilters: [] });
+
+    expect(get(activeGroupIds)).toEqual(new Set());
+    expect(get(visibleGroupedCollections)).toEqual([]);
+  });
+
+  it('honors a partially valid filter without falling back to all', async () => {
+    // If even one configured id matches a real group, that group wins —
+    // the fallback only kicks in when every id is stale. Stale ids
+    // continue to be ignored at read time.
+    groups.set({
+      A: makeGroup('A'),
+      B: makeGroup('B'),
+    });
+    collections.set({});
+    appConfig.set({ activeGroupFilters: ['A', 'stale-id'] });
+
+    expect(get(activeGroupIds)).toEqual(new Set(['A']));
   });
 });
 
@@ -1202,12 +1333,17 @@ describe('setActiveGroupFilters', () => {
     expect(get(appConfig).activeGroupFilters).toEqual(['g1', 'g2']);
   });
 
-  it('drops ids that do not correspond to real groups', async () => {
+  it('preserves unknown ids so URL filters survive cold refreshes before groups load', async () => {
+    // Cold-refresh race: URL→config sync runs before `groups` populates from
+    // the cached load. Filtering against the (still-empty) groups set here
+    // would wipe valid filters and immediately rewrite the URL to `?g=`.
+    // `activeGroupIds` filters stale ids at read time, so we keep them in
+    // config.
     groups.set({ g1: makeGroup('g1') });
 
     await setActiveGroupFilters(['g1', 'g_unknown']);
 
-    expect(get(appConfig).activeGroupFilters).toEqual(['g1']);
+    expect(get(appConfig).activeGroupFilters).toEqual(['g1', 'g_unknown']);
   });
 
   it('skips persistence when value is unchanged (avoids URL ↔ config loops)', async () => {
@@ -1317,10 +1453,10 @@ describe('allTodos / openTodos', () => {
     appConfig.set({});
   });
 
-  it('returns every todo-like item across collections and uncategorized', () => {
+  it('returns every todo-like item across filed and unfiled items', () => {
     items.set({
       a: makeTodo('a', { collectionId: 'c1' }),
-      b: makeTodo('b'), // uncategorized
+      b: makeTodo('b'), // unfiled
       c: {
         id: 'c',
         type: 'note',
@@ -1361,7 +1497,7 @@ describe('visibleTodos', () => {
     appConfig.set({});
   });
 
-  it('shows uncategorized todos by default (uncategorized filter on)', () => {
+  it('shows unfiled todos', () => {
     items.set({
       u1: makeTodo('u1', { createdAt: '2026-01-01T00:00:00.000Z' }),
       u2: makeTodo('u2', { createdAt: '2026-01-02T00:00:00.000Z' }),
@@ -1369,18 +1505,6 @@ describe('visibleTodos', () => {
 
     // Newest first as the fallback sort
     expect(get(visibleTodos).map(t => t.id)).toEqual(['u2', 'u1']);
-  });
-
-  it('hides uncategorized todos when the uncategorized filter is off', () => {
-    items.set({
-      u1: makeTodo('u1'),
-      c1: makeTodo('c1', { collectionId: 'col1' }),
-    });
-    collections.set({ col1: makeCollection('col1', 'g1') });
-    groups.set({ g1: makeGroup('g1', ['col1']) });
-    appConfig.set({ uncategorizedFilterActive: false });
-
-    expect(get(visibleTodos).map(t => t.id)).toEqual(['c1']);
   });
 
   it('hides collection todos whose group is filtered out', () => {
@@ -1396,11 +1520,8 @@ describe('visibleTodos', () => {
       'g-active': makeGroup('g-active', ['col-active']),
       'g-hidden': makeGroup('g-hidden', ['col-hidden']),
     });
-    // activeGroupFilters = just g-active; uncategorized off so we don't mix
-    // orphan behaviour into this assertion.
     appConfig.set({
       activeGroupFilters: ['g-active'],
-      uncategorizedFilterActive: false,
     });
 
     expect(get(visibleTodos).map(t => t.id)).toEqual(['c1']);
@@ -1416,24 +1537,18 @@ describe('visibleTodos', () => {
     groups.set({ g1: makeGroup('g1', []) });
     appConfig.set({
       activeGroupFilters: [],
-      uncategorizedFilterActive: false,
     });
 
     expect(get(visibleTodos)).toEqual([]);
   });
 
-  it('treats a todo whose collection was deleted as uncategorized for filtering purposes', () => {
+  it('keeps a todo visible when its collection is missing', () => {
     items.set({
       stale: makeTodo('stale', { collectionId: 'deleted' }),
     });
     collections.set({});
-    appConfig.set({ uncategorizedFilterActive: true });
 
     expect(get(visibleTodos).map(t => t.id)).toEqual(['stale']);
-
-    // And disappears when the uncategorized pill is off
-    appConfig.set({ uncategorizedFilterActive: false });
-    expect(get(visibleTodos)).toEqual([]);
   });
 
   it('respects persisted todosGlobalOrder and falls back to newest-first for missing ids', () => {
@@ -1473,49 +1588,12 @@ describe('reorderTodosGlobal', () => {
   });
 });
 
-describe('uncategorizedFilterActive / toggleUncategorizedFilter', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    appConfig.set({});
-  });
-
-  it('defaults to true when the flag is unset', () => {
-    expect(get(uncategorizedFilterActive)).toBe(true);
-  });
-
-  it('reflects the persisted flag when explicitly set', () => {
-    appConfig.set({ uncategorizedFilterActive: false });
-    expect(get(uncategorizedFilterActive)).toBe(false);
-
-    appConfig.set({ uncategorizedFilterActive: true });
-    expect(get(uncategorizedFilterActive)).toBe(true);
-  });
-
-  it('toggle flips from unset-default-true to explicit false', async () => {
-    expect(get(uncategorizedFilterActive)).toBe(true);
-
-    await toggleUncategorizedFilter();
-
-    expect(get(uncategorizedFilterActive)).toBe(false);
-    expect(get(appConfig).uncategorizedFilterActive).toBe(false);
-  });
-
-  it('toggle flips from false back to true', async () => {
-    appConfig.set({ uncategorizedFilterActive: false });
-
-    await toggleUncategorizedFilter();
-
-    expect(get(uncategorizedFilterActive)).toBe(true);
-    expect(get(appConfig).uncategorizedFilterActive).toBe(true);
-  });
-});
-
 // ---- deleteCollection: must-be-empty guard ----
 //
-// Mirrors the deleteGroup rule so the UI can't silently dump filed items into
-// the Uncategorized bucket on an accidental tap. Items are matched by their
-// live `collectionId` rather than the collection's `itemIds` array (which can
-// drift out of sync after partial writes).
+// Mirrors the deleteGroup rule so the UI can't silently orphan filed items on
+// an accidental tap. Items are matched by their live `collectionId` rather
+// than the collection's `itemIds` array, which can drift out of sync after
+// partial writes.
 
 describe('deleteCollection: empty-only guard', () => {
   beforeEach(() => {
@@ -1612,7 +1690,7 @@ describe('createCollection: group assignment', () => {
   });
 });
 
-describe('load-time collection group repair', () => {
+describe('load-time collection/group loading', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     items.set({});
@@ -1624,33 +1702,32 @@ describe('load-time collection group repair', () => {
     mockInbox.getUserSettings.mockResolvedValue(undefined);
   });
 
-  it('creates Uncategorized1 and moves loaded collections without a group into it', async () => {
+  it('loads collections without a group without creating or assigning organization', async () => {
     mockInbox.getAllCollections.mockResolvedValue({ c1: makeCollection('c1') });
     mockInbox.getAllGroups.mockResolvedValue({});
 
     await rsHandlers['connected']();
 
-    const uncatGroup = Object.values(get(groups)).find((g) => g.name === 'Uncategorized1');
-    expect(uncatGroup).toBeDefined();
-    expect(get(collections)['c1'].groupId).toBe(uncatGroup!.id);
-    expect(get(groups)[uncatGroup!.id].collectionIds).toContain('c1');
+    expect(get(collections)['c1'].groupId).toBeUndefined();
+    expect(get(groups)).toEqual({});
+    expect(mockInbox.storeGroup).not.toHaveBeenCalled();
+    expect(mockInbox.storeCollection).not.toHaveBeenCalled();
   });
 
-  it('reuses the lowest existing Uncategorized<N> group during load repair', async () => {
-    const u3 = makeGroup('g3'); u3.name = 'Uncategorized3';
-    const u1 = makeGroup('g1'); u1.name = 'Uncategorized1';
-    const u2 = makeGroup('g2'); u2.name = 'Uncategorized2';
+  it('loads collections with a missing groupId without rewriting them', async () => {
+    const g1 = makeGroup('g1');
     mockInbox.getAllCollections.mockResolvedValue({ c1: makeCollection('c1', 'deleted-group') });
-    mockInbox.getAllGroups.mockResolvedValue({ g3: u3, g1: u1, g2: u2 });
+    mockInbox.getAllGroups.mockResolvedValue({ g1 });
 
     await rsHandlers['connected']();
 
-    expect(get(collections)['c1'].groupId).toBe('g1');
-    expect(get(groups)['g1'].collectionIds).toContain('c1');
-    expect(Object.values(get(groups)).filter((g) => g.name === 'Uncategorized1')).toHaveLength(1);
+    expect(get(collections)['c1'].groupId).toBe('deleted-group');
+    expect(get(groups)).toEqual({ g1 });
+    expect(mockInbox.storeGroup).not.toHaveBeenCalled();
+    expect(mockInbox.storeCollection).not.toHaveBeenCalled();
   });
 
-  it('does not repair when groups fail to load', async () => {
+  it('does not mutate collections when groups fail to load', async () => {
     const existing = makeGroup('g1', ['c1']);
     groups.set({ g1: existing });
     collections.set({ c1: makeCollection('c1', 'g1') });
@@ -1661,14 +1738,7 @@ describe('load-time collection group repair', () => {
 
     expect(get(collections)['c1'].groupId).toBe('g1');
     expect(get(groups)['g1']).toBeDefined();
-    expect(Object.values(get(groups)).some((g) => g.name === 'Uncategorized1')).toBe(false);
+    expect(mockInbox.storeGroup).not.toHaveBeenCalled();
+    expect(mockInbox.storeCollection).not.toHaveBeenCalled();
   });
-
-  // Intentionally NOT auto-repaired: a 'groups/<id>' delete arriving via the
-  // RS change handler can be a transient mid-sync state (e.g. a group write
-  // hasn't landed yet on this device), and rewriting every dependent
-  // collection's groupId is destructive and propagates to all devices. This
-  // is exactly the v2.0.4 regression that wiped users' organization. Repair
-  // only runs at load time, where we can assert both stores are populated
-  // before deciding a collection is genuinely orphaned.
 });

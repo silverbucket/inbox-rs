@@ -1,21 +1,17 @@
-const STORAGE_KEY = 'inbox-rs-config';
+import { createConfigStore, type RSConfig } from '@inbox-rs/rs-module';
 
-export interface RSConfig {
-  userAddress: string;
-  token?: string;
-  href?: string;
-  storageApi?: string;
-}
+export type { RSConfig };
+
+const store = createConfigStore(browser.storage.local);
 
 export async function getConfig(): Promise<RSConfig | null> {
-  const result = await browser.storage.local.get(STORAGE_KEY);
-  return result[STORAGE_KEY] || null;
+  return store.get();
 }
 
 export async function saveConfig(config: RSConfig): Promise<void> {
-  await browser.storage.local.set({ [STORAGE_KEY]: config });
+  await store.save(config);
 }
 
 export async function clearConfig(): Promise<void> {
-  await browser.storage.local.remove(STORAGE_KEY);
+  await store.clear();
 }

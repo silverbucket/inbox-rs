@@ -4,9 +4,7 @@
 
   let { group, onedit, onaddcollection = undefined, children }: {
     group: CollectionGroup;
-    /** Omit for virtual groups (e.g. the Uncategorized section) that have no
-        editable backing record — the edit button is hidden when this is
-        undefined. */
+    /** Omit to hide the edit button. */
     onedit?: () => void;
     onaddcollection?: () => void;
     children: Snippet;

@@ -9,6 +9,23 @@ import {
 export { migrator } from './migrations.js';
 export { wrapCodeBlock } from './migrations.js';
 export { recoverLegacyBinaryStringEncoding } from './legacy/binary-recovery.js';
+export {
+  DirectRS,
+  connectViaOAuth,
+  createConfigStore,
+  discoverStorage,
+  extractTokenFromRedirect,
+  parseUserAddress,
+  schemeForHost,
+  DEFAULT_CONFIG_STORAGE_KEY,
+} from './runtime.js';
+export type {
+  BrowserStorageArea,
+  ConfigStore,
+  ConnectViaOAuthOptions,
+  RSConfig,
+  RSDiscovery,
+} from './runtime.js';
 
 /** Current item types — legacy types like 'voice-memo' are excluded */
 const CURRENT_TYPES: Set<string> = new Set<string>([
@@ -75,7 +92,21 @@ const InboxModule = {
     return {
       exports: {
         async getAll(): Promise<Record<string, InboxItem>> {
-          const items = await privateClient.getAll('items/');
+          // Pass `maxAge: false` to skip the cache-freshness check.
+          //
+          // remotestoragejs's default is `2 * syncInterval` (≈20s when
+          // connected), and with that default `getAll` queues a remote sync
+          // GET when cached nodes are older than the threshold and only
+          // resolves once that sync round-trip completes. On a cold refresh
+          // this means landing on a page like /todos shows nothing for
+          // several seconds while the GET drains, and any item operation
+          // queued in the meantime appears to "block" until sync fires.
+          //
+          // We get fresh data through the `change` event subscription
+          // (origin: 'remote') in stores.ts, so the snapshot can be cache-
+          // first without losing remote updates — this just stops blocking
+          // the UI on the first fetch.
+          const items = await privateClient.getAll('items/', false);
           if (!items) return {};
           // Stamp _migrateVersion on items that lack it (e.g. written by
           // the mobile app's direct HTTP client) so they aren't falsely
@@ -153,7 +184,8 @@ const InboxModule = {
         },
 
         async getAllCollections(): Promise<Record<string, Collection>> {
-          const cols = await privateClient.getAll('collections/');
+          // See `getAll` above for why we pass `maxAge: false`.
+          const cols = await privateClient.getAll('collections/', false);
           return cols || {};
         },
 
@@ -170,7 +202,8 @@ const InboxModule = {
         },
 
         async getAllGroups(): Promise<Record<string, CollectionGroup>> {
-          const groups = await privateClient.getAll('groups/');
+          // See `getAll` above for why we pass `maxAge: false`.
+          const groups = await privateClient.getAll('groups/', false);
           return groups || {};
         },
 

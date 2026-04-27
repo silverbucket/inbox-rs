@@ -1,6 +1,12 @@
 import RemoteStorage from 'remotestoragejs';
-import InboxModule from '@inbox-rs/rs-module';
-import type { RSConfig } from './storage';
+import InboxModule, {
+  connectViaOAuth as sharedConnectViaOAuth,
+  DirectRS,
+  type RSConfig,
+} from '@inbox-rs/rs-module';
+
+export { DirectRS };
+export type { RSConfig };
 
 export function createRS(): RemoteStorage {
   const rs = new RemoteStorage({
@@ -13,75 +19,28 @@ export function createRS(): RemoteStorage {
   return rs;
 }
 
+/** Resolve to whichever identity API is available in this browser. */
+function getIdentityApi() {
+  if (typeof chrome !== 'undefined' && chrome.identity) return chrome.identity;
+  return browser.identity;
+}
+
 /**
- * Discover storage info via WebFinger, then do OAuth via
- * chrome.identity.launchWebAuthFlow so it works in extension context.
+ * WebFinger discovery + OAuth via the WebExtension identity API.
+ *
+ * Discovery, OAuth params, and token extraction all live in the shared
+ * `@inbox-rs/rs-module` runtime — this wrapper supplies the platform glue
+ * (the identity API, the redirect URL the browser whitelists for this
+ * extension, and a client id derived from that redirect's origin).
  */
 export async function connectViaOAuth(userAddress: string): Promise<RSConfig> {
-  // 1. WebFinger discovery
-  const parts = userAddress.split('@');
-  if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    throw new Error('Invalid remoteStorage address. Expected format: user@host');
-  }
-  const host = parts[1];
-  const scheme = (host === 'localhost' || host.startsWith('localhost:')) ? 'http' : 'https';
-  const webfingerUrl = `${scheme}://${host}/.well-known/webfinger?resource=acct:${encodeURIComponent(userAddress)}`;
-  const wfResp = await fetch(webfingerUrl);
-  if (!wfResp.ok) throw new Error(`WebFinger failed: ${wfResp.status}`);
-  const wfData = await wfResp.json();
-
-  // Find remoteStorage link
-  const rsLink = wfData.links?.find((l: any) =>
-    l.rel === 'http://tools.ietf.org/id/draft-dejong-remotestorage' ||
-    l.rel === 'remotestorage'
-  );
-  if (!rsLink) throw new Error('No remoteStorage link found in WebFinger');
-
-  const href = rsLink.href;
-  const storageApi = rsLink.type || rsLink.properties?.['http://remotestorage.io/spec/version'];
-  const props = rsLink.properties || {};
-  const authUrl = props['http://tools.ietf.org/html/rfc6749#section-4.2']
-    || props['http://tools.ietf.org/html/rfc6749#section-4.2.1']
-    || props['auth-endpoint']
-    || props['auth-url'];
-  if (!authUrl) throw new Error('No OAuth endpoint found');
-
-  // 2. Build OAuth URL
-  const redirectUrl = typeof chrome !== 'undefined' && chrome.identity
-    ? chrome.identity.getRedirectURL()
-    : browser.identity.getRedirectURL();
-
-  const oauthParams = new URLSearchParams({
-    client_id: new URL(redirectUrl).origin,
-    redirect_uri: redirectUrl,
-    response_type: 'token',
-    scope: 'inbox:rw'
+  const identity = getIdentityApi();
+  const redirectUrl = identity.getRedirectURL();
+  return sharedConnectViaOAuth(userAddress, {
+    clientId: new URL(redirectUrl).origin,
+    redirectUrl,
+    launchAuthFlow: (url) => identity.launchWebAuthFlow({ url, interactive: true }) as Promise<string>,
   });
-  const fullAuthUrl = `${authUrl}?${oauthParams}`;
-
-  // 3. Launch OAuth flow in a browser window
-  const api = (typeof chrome !== 'undefined' && chrome.identity) ? chrome.identity : browser.identity;
-  const resultUrl = await api.launchWebAuthFlow({
-    url: fullAuthUrl,
-    interactive: true
-  });
-
-  // 4. Extract token from redirect URL
-  const redirectParsed = new URL(resultUrl);
-  const hashParams = new URLSearchParams(redirectParsed.hash.substring(1));
-  const queryParams = redirectParsed.searchParams;
-
-  // Check for OAuth error first
-  const oauthError = hashParams.get('error') || queryParams.get('error');
-  if (oauthError) {
-    const desc = hashParams.get('error_description') || queryParams.get('error_description') || '';
-    throw new Error(`OAuth error: ${oauthError}${desc ? ` — ${desc}` : ''}`);
-  }
-
-  const token = hashParams.get('access_token') || queryParams.get('access_token');
-  if (!token) throw new Error('No access token in OAuth response');
-
-  return { userAddress, token, href, storageApi };
 }
 
 /**
@@ -95,45 +54,4 @@ export function configureRS(rs: RemoteStorage, config: RSConfig): void {
     token: config.token!,
     properties: undefined
   });
-}
-
-/**
- * Direct HTTP client for RS storage operations.
- * More reliable than the full RS stack in service worker context.
- */
-export class DirectRS {
-  constructor(private config: RSConfig) {}
-
-  private get headers() {
-    return { 'Authorization': `Bearer ${this.config.token}` };
-  }
-
-  private url(path: string): string {
-    return `${this.config.href}/inbox/${path}`;
-  }
-
-  async storeObject(path: string, obj: object): Promise<void> {
-    const resp = await fetch(this.url(path), {
-      method: 'PUT',
-      headers: { ...this.headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify(obj)
-    });
-    if (!resp.ok) throw new Error(`Store failed: ${resp.status}`);
-  }
-
-  async storeFile(path: string, data: ArrayBuffer, mimeType: string): Promise<void> {
-    const resp = await fetch(this.url(path), {
-      method: 'PUT',
-      headers: { ...this.headers, 'Content-Type': mimeType },
-      body: data
-    });
-    if (!resp.ok) throw new Error(`Store file failed: ${resp.status}`);
-  }
-
-  async store(item: any, fileData?: ArrayBuffer): Promise<void> {
-    if (fileData && item.filePath) {
-      await this.storeFile(item.filePath, fileData, item.mimeType);
-    }
-    await this.storeObject(`items/${item.id}`, item);
-  }
 }

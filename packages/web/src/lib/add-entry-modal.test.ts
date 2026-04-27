@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { loadMarkdownEditorComponent, shouldLoadMarkdownEditor, shouldSubmitAddEntryForm } from './add-entry-modal';
+import {
+  canCaptureTodo,
+  loadMarkdownEditorComponent,
+  makeUnfiledTodo,
+  shouldLoadMarkdownEditor,
+  shouldShowCollectionPicker,
+  shouldSubmitAddEntryForm,
+} from './add-entry-modal';
 
 describe('shouldSubmitAddEntryForm', () => {
   it('submits from text-like inputs including bookmark url fields', () => {
@@ -53,5 +60,41 @@ describe('shouldLoadMarkdownEditor', () => {
   it('does not reload after success or failure', () => {
     expect(shouldLoadMarkdownEditor('note', 'visual', true, false)).toBe(false);
     expect(shouldLoadMarkdownEditor('note', 'visual', false, true)).toBe(false);
+  });
+});
+
+describe('todo capture helpers', () => {
+  it('allows todo capture with a title only', () => {
+    expect(canCaptureTodo('Buy milk')).toBe(true);
+    expect(canCaptureTodo('  Buy milk  ')).toBe(true);
+    expect(canCaptureTodo('   ')).toBe(false);
+  });
+
+  it('creates an unfiled todo without a collection id', () => {
+    const todo = makeUnfiledTodo('  Write draft  ', new Date('2026-04-25T12:00:00.000Z'), 'todo-1');
+
+    expect(todo).toEqual({
+      id: 'todo-1',
+      type: 'todo',
+      title: 'Write draft',
+      createdAt: '2026-04-25T12:00:00.000Z',
+      completed: false,
+      isTodo: true,
+    });
+    expect('collectionId' in todo).toBe(false);
+  });
+});
+
+describe('collection picker todo capture rules', () => {
+  it('hides the optional file picker for new todos when no real collections exist', () => {
+    expect(shouldShowCollectionPicker(false, 'todo', false)).toBe(false);
+  });
+
+  it('shows the optional file picker for new todos when real collections exist', () => {
+    expect(shouldShowCollectionPicker(false, 'todo', true)).toBe(true);
+  });
+
+  it('keeps the collection picker visible for non-todo refs', () => {
+    expect(shouldShowCollectionPicker(false, 'note', false)).toBe(true);
   });
 });

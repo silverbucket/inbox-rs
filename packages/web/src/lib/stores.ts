@@ -120,10 +120,13 @@ async function loadEntities<T extends { id: string }>(
         }
       }
     }
-    store.set(valid);
+    // Merge into the store rather than replacing — the change handler may
+    // have already inserted entries during the await window, and a .set()
+    // would silently drop them.
+    store.update(current => ({ ...current, ...valid }));
     return true;
-  } catch {
-    // RS sync/fetch error — keep existing data
+  } catch (e) {
+    console.error('[inbox] loadEntities failed:', e);
     return false;
   }
 }
@@ -165,7 +168,10 @@ function normalizeLoadedItem(item: object): InboxItem {
 
 async function loadItems() {
   const inbox = getInbox();
-  if (!inbox) return;
+  if (!inbox) {
+    console.warn('[inbox] loadItems: inbox module not available');
+    return;
+  }
   try {
     const all = await inbox.getAll();
     const valid: Record<string, InboxItem> = {};
@@ -179,10 +185,15 @@ async function loadItems() {
         valid[key] = normalizeLoadedItem(item);
       }
     }
-    rawItems.set(rawValid);
-    items.set(valid);
-  } catch {
-    // RS sync/fetch error — keep existing items
+    // Merge rather than overwrite. The RS change handler can populate `items`
+    // optimistically (via 'local' cache-replay events) before getAll() resolves;
+    // calling .set() with the getAll result would clobber any items that were
+    // added by storeItem() while we were awaiting. We trust getAll's snapshot
+    // for entries it returned, but preserve any keys it didn't.
+    rawItems.update(current => ({ ...current, ...rawValid }));
+    items.update(current => ({ ...current, ...valid }));
+  } catch (e) {
+    console.error('[inbox] loadItems failed:', e);
   }
 }
 
@@ -194,8 +205,8 @@ async function loadConfig() {
     if (config && typeof config === 'object') {
       appConfig.set(config);
     }
-  } catch {
-    // ignore
+  } catch (e) {
+    console.error('[inbox] loadConfig failed:', e);
   }
 }
 
@@ -207,8 +218,8 @@ async function loadUserSettings() {
     if (settings && typeof settings === 'object') {
       userSettings.set(settings);
     }
-  } catch {
-    // ignore
+  } catch (e) {
+    console.error('[inbox] loadUserSettings failed:', e);
   }
 }
 
@@ -222,14 +233,52 @@ async function loadGroups() {
   return loadEntities<CollectionGroup>(() => inbox.getAllGroups(), groups, 'collectionIds');
 }
 
-async function repairCollectionsWithoutValidGroup() {
-  const allGroups = get(groups);
-  const needsRepair = Object.values(get(collections)).filter(col => !col.groupId || !allGroups[col.groupId]);
-  if (needsRepair.length === 0) return;
+// Single in-flight load promise so the cached preload (queueMicrotask at
+// module init) and the post-connect reload don't run concurrent loaders
+// against the same five stores. Each entry-point waits for any pending load
+// to settle before kicking off its own.
+let inFlightLoad: Promise<void> | null = null;
 
-  const targetGroupId = await findOrCreateUncategorizedGroup();
-  for (const col of needsRepair) {
-    await moveCollectionToGroup(col.id, targetGroupId);
+function runLoaders(): Promise<void> {
+  return Promise.all([
+    loadItems(),
+    loadConfig(),
+    loadUserSettings(),
+    loadCollections(),
+    loadGroups(),
+  ]).then(() => undefined);
+}
+
+async function loadCachedData() {
+  // Skip if the connect handler has already taken over — its load is
+  // authoritative once we're online.
+  if (get(connected)) return;
+  if (inFlightLoad) {
+    await inFlightLoad;
+    return;
+  }
+  inFlightLoad = runLoaders();
+  try {
+    await inFlightLoad;
+    markMigrationAlertReady();
+  } finally {
+    inFlightLoad = null;
+  }
+}
+
+async function loadConnectedData() {
+  resetMigrationAlertReadiness();
+  if (inFlightLoad) {
+    // Let the cached load settle before starting a fresh one so we don't
+    // double-read the same stores in parallel.
+    try { await inFlightLoad; } catch { /* errors handled inside loaders */ }
+  }
+  inFlightLoad = runLoaders();
+  try {
+    await inFlightLoad;
+    scheduleMigrationAlertFallback();
+  } finally {
+    inFlightLoad = null;
   }
 }
 
@@ -268,35 +317,16 @@ rs.on('sync-done', () => {
   markMigrationAlertReady();
 });
 
-// Debug: log sync activity
-rs.on('sync-req-done', (e: any) => {
-  console.log('[inbox] sync-req-done, tasks remaining:', e?.tasksRemaining);
-});
-rs.on('sync-done', (e: any) => {
-  console.log('[inbox] sync-done:', e);
-});
-rs.on('wire-busy', () => console.log('[inbox] wire-busy'));
-rs.on('wire-done', () => console.log('[inbox] wire-done'));
+rs.on('error', (e: any) => console.warn('[inbox] rs:error', e));
 
 rs.on('connected', async () => {
   connected.set(true);
-  resetMigrationAlertReadiness();
   const addr =
     (rs as any).remote?.userAddress ||
     localStorage.getItem('inbox-rs:userAddress') ||
     '';
   userAddress.set(addr);
-  const [, , , collectionsLoaded, groupsLoaded] = await Promise.all([
-    loadItems(),
-    loadConfig(),
-    loadUserSettings(),
-    loadCollections(),
-    loadGroups(),
-  ]);
-  if (collectionsLoaded && groupsLoaded) {
-    await repairCollectionsWithoutValidGroup();
-  }
-  scheduleMigrationAlertFallback();
+  await loadConnectedData();
 });
 
 rs.on('disconnected', () => {
@@ -312,6 +342,12 @@ rs.on('disconnected', () => {
   collections.set({});
   groups.set({});
 });
+
+// Wait for `ready` before getAll() — earlier calls sit in `_pendingGPD`
+// until features finish loading, which means a stalled IDB init drags the
+// preload into its 10s timeout even with `maxAge: false`. RS replays `ready`
+// for late listeners, so HMR still triggers this on module re-run.
+rs.on('ready', () => { void loadCachedData(); });
 
 export async function runAllMigrations() {
   const inbox = getInbox();
@@ -471,41 +507,30 @@ function sortWithConfiguredOrder<T extends { id: string }>(
 
 // ---- Derived stores ----
 
-// Bucket semantics:
-//   - **Collection**: item has `collectionId` set → lives in that collection.
-//   - **Inbox** (references only): non-todo item with no `collectionId` and no
-//     `uncategorized` flag. Inbox never holds todos by design — see
-//     AddEntryModal: the todo type's collection picker skips the "Inbox"
-//     option.
-//   - **Uncategorized**: anything with no `collectionId` that's either a todo
-//     (implicit — todos can't live in the Inbox, so a todo without a
-//     collection is always uncategorized) or a ref with `uncategorized: true`
-//     (explicit opt-in from the picker, or orphaned by a collection deletion).
-//
-// The three surfaces are mutually exclusive for any given item.
+// Placement semantics:
+//   - item.collectionId set: item is filed in that real collection.
+//   - reference item without collectionId: item lives in Inbox.
+//   - todo without collectionId: item is unfiled and appears on the Todos page.
+// There is no automatic collection/group bucket for unfiled items.
 
-/** Inbox reference items: non-todos with no collectionId and no `uncategorized` flag. */
+/** Inbox reference items: non-todos with no collectionId. */
 export const sortedItems = derived(items, ($items) => {
   return Object.values($items)
-    .filter(i => !i.isTodo && i.type !== 'todo' && !i.collectionId && !i.uncategorized)
+    .filter(i => !i.isTodo && i.type !== 'todo' && !i.collectionId)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 });
 
 /**
- * Uncategorized todos — every todo without a `collectionId` qualifies, since
- * todos never live in the Inbox. Sorted open-first (respecting
+ * Unfiled todos — every todo without a `collectionId`. Sorted open-first (respecting
  * `todosGlobalOrder`) then completed (by `completedAt` desc).
  *
  * `todosGlobalOrder` is the single source of truth for todo ordering across
- * every surface — the flat `/todos` page reads it directly (see
- * `visibleTodos`), and the virtual Uncategorized collection funnels through
- * here. Reordering uncategorized todos from either surface goes through
- * `reorderUncategorizedTodos`, which splices only uncategorized slots so the
- * categorized todos keep their global positions.
+ * the flat `/todos` page. Reordering unfiled todos from a focused surface goes
+ * through `reorderUnfiledTodos`, which splices only unfiled slots so the filed
+ * todos keep their global positions.
  *
- * Named `todoItems` rather than `uncategorizedTodoItems` for backwards
- * compatibility with callers (CollectionItemPicker, test suite) that used this
- * name when the Inbox vs Uncategorized distinction didn't exist for todos.
+ * Named `todoItems` for backwards compatibility with callers
+ * (CollectionItemPicker, test suite) that use this store for unfiled todos.
  */
 export const todoItems = derived([items, appConfig], ([$items, $config]) => {
   const all = Object.values($items)
@@ -525,17 +550,9 @@ export const todoItems = derived([items, appConfig], ([$items, $config]) => {
   return [...open, ...completed];
 });
 
-/** Uncategorized reference items: non-todos with no collectionId that opted into
- *  the Uncategorized bucket via the `uncategorized: true` flag. */
-export const uncategorizedReferenceItems = derived(items, ($items) => {
-  return Object.values($items)
-    .filter(i => !i.isTodo && i.type !== 'todo' && !i.collectionId && i.uncategorized === true)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-});
-
 export const collectionItems = derived(
-  [items, collections, todoItems, uncategorizedReferenceItems],
-  ([$items, $collections, $todoItems, $uncatRefs]) => {
+  [items, collections],
+  ([$items, $collections]) => {
     const result: Record<string, InboxItem[]> = {};
     const itemMap = new Map(Object.values($items).map(i => [i.id, i]));
     for (const [cid, col] of Object.entries($collections)) {
@@ -543,18 +560,6 @@ export const collectionItems = derived(
         .map(id => itemMap.get(id))
         .filter((i): i is InboxItem => i !== undefined && i.collectionId === cid);
     }
-    // Virtual Uncategorized collection — surfaces every uncategorized item
-    // under a sentinel id so CollectionView's existing
-    // `$collectionItems[collection.id]` lookup Just Works for the virtual bucket.
-    //
-    // Inbox refs (no `collectionId`, no `uncategorized` flag) deliberately do
-    // NOT surface here — they belong to the Inbox view only. Todos, however,
-    // all surface here when they have no `collectionId` because todos can't
-    // live in the Inbox (AddEntryModal enforces this — see its picker).
-    //
-    // Order: open todos first (respecting `todosGlobalOrder`), then completed
-    // todos, then reference items newest-first.
-    result[UNCATEGORIZED_COLLECTION_ID] = [...$todoItems, ...$uncatRefs];
     return result;
   }
 );
@@ -643,8 +648,8 @@ export async function storeCollection(collection: Collection) {
  * Delete a collection. Refuses if the collection still contains items — the
  * caller is expected to either move items out (drag/drop, picker) or delete
  * them first. This mirrors `deleteGroup`'s "must be empty" rule and avoids
- * silently orphaning user-filed items into the Uncategorized bucket on a
- * delete tap. Returns `true` on success, `false` when the delete was refused.
+ * silently unfiling user-filed items on a delete tap. Returns `true` on
+ * success, `false` when the delete was refused.
  *
  * Items are matched by the live `collectionId` on each item rather than the
  * collection's `itemIds` array — that array can drift out of sync if a write
@@ -704,18 +709,8 @@ export async function moveItemToCollection(itemId: string, collectionId: string 
         const updated = { ...next[key] };
         if (collectionId) {
           updated.collectionId = collectionId;
-          // Moving into a real collection wipes the Uncategorized marker —
-          // the collection placement wins, and the flag would be meaningless
-          // noise if it lingered.
-          delete (updated as any).uncategorized;
         } else {
           delete (updated as any).collectionId;
-          // Removing a collection placement without another explicit bucket
-          // routes the item to the Uncategorized bucket, mirroring what
-          // happens when a collection is deleted. Inbox is reserved for items
-          // the user has never filed, so we shouldn't silently return
-          // previously-filed items there.
-          updated.uncategorized = true;
         }
         next[key] = updated as InboxItem;
         item = updated as InboxItem;
@@ -945,37 +940,7 @@ export async function moveCollectionToGroup(collectionId: string, groupId: strin
 }
 
 /**
- * Find an existing "Uncategorized<N>" group, or create a fresh one and return
- * its id. This is only for load-time repair of legacy/homeless collections.
- * Normal collection creation must pick a real group before it reaches the
- * store.
- */
-async function findOrCreateUncategorizedGroup(): Promise<string> {
-  const allGroups = get(groups);
-  const matches = Object.values(allGroups)
-    .map(g => {
-      const m = g.name.match(/^Uncategorized(\d+)$/);
-      return m ? { id: g.id, n: Number(m[1]) } : null;
-    })
-    .filter((x): x is { id: string; n: number } => x !== null)
-    .sort((a, b) => a.n - b.n);
-  if (matches.length > 0) return matches[0].id;
-
-  const group: CollectionGroup = {
-    id: crypto.randomUUID(),
-    name: 'Uncategorized1',
-    collectionIds: [],
-    createdAt: new Date().toISOString(),
-  };
-  await storeGroup(group);
-  return group.id;
-}
-
-/**
- * Create a collection in an explicit real group. Legacy/homeless collection
- * repair is handled separately during app load by
- * `repairCollectionsWithoutValidGroup`; this path should never invent a
- * background "no group" destination for a new collection.
+ * Create a collection in an explicit real group.
  */
 export async function createCollection(col: Collection): Promise<Collection> {
   if (!col.groupId || !get(groups)[col.groupId]) {
@@ -1013,34 +978,28 @@ export async function reorderGroups(newOrder: string[]) {
 }
 
 /**
- * Persist a new order for the uncategorized-todo slice of `todosGlobalOrder`.
+ * Persist a new order for the unfiled-todo slice of `todosGlobalOrder`.
  *
- * Two surfaces let the user drag uncategorized todos: the flat `/todos` page
- * (where every todo — categorized and uncategorized — is visible together)
- * and the virtual Uncategorized collection (which only sees the uncategorized
- * subset). Both must agree on a single order, otherwise a reorder on one
- * surface gets clobbered by the next drag on the other.
- *
- * We solve that by keeping a single source of truth — `todosGlobalOrder` —
- * and splicing the new uncategorized order back into their existing slots.
- * Categorized todos' positions in the global order are preserved exactly; only
+ * This keeps a single source of truth — `todosGlobalOrder` — and splices the
+ * new unfiled order back into their existing slots. Filed todos' positions in
+ * the global order are preserved exactly; only
  * the ids that match the new set are replaced, in the order given.
  *
- * The caller passes the full new order of the uncategorized subset (not a
+ * The caller passes the full new order of the unfiled subset (not a
  * delta). Ids not currently in `todosGlobalOrder` are appended at the end.
  */
-export async function reorderUncategorizedTodos(newUncategorizedOrder: string[]) {
+export async function reorderUnfiledTodos(newUnfiledOrder: string[]) {
   const current = get(appConfig).todosGlobalOrder ?? [];
   const allItems = get(items);
-  const isUncategorized = (id: string) => {
+  const isUnfiled = (id: string) => {
     const item = allItems[id];
     return !!item && (item.isTodo || item.type === 'todo') && !item.collectionId;
   };
-  const newSet = new Set(newUncategorizedOrder);
-  const queue = [...newUncategorizedOrder];
+  const newSet = new Set(newUnfiledOrder);
+  const queue = [...newUnfiledOrder];
   const result: string[] = [];
   for (const id of current) {
-    if (isUncategorized(id) || newSet.has(id)) {
+    if (isUnfiled(id) || newSet.has(id)) {
       // Pop the next id from `queue` that's actually in the new set — skip any
       // queue entries that dropped out (shouldn't happen in practice, but
       // keeps the splice resilient to stale callers).
@@ -1062,85 +1021,32 @@ export async function reorderUncategorizedTodos(newUncategorizedOrder: string[])
 // ---- Group filter (toggle row) ----
 
 /**
- * Sentinel id for the Uncategorized entry in the group filter bar and the
- * Collections page. Both surfaces treat Uncategorized as a peer of real groups
- * (same drag-sort list, same pill styling, same grouped section layout), so we
- * use a reserved id that cannot collide with a real group id and persist it
- * inside `groupsOrder` to record its position.
- *
- * Downstream consumers of `groupsOrder` — `sortedGroups`, `reorderGroups`,
- * `activeGroupIds` — only inspect ids that correspond to real stored groups,
- * so the sentinel is naturally ignored outside the filter bar and the
- * Collections page's `visibleGroupedCollections` derivation.
- */
-export const UNCATEGORIZED_FILTER_ID = '__uncategorized';
-
-/**
- * Sentinel id for the virtual "Uncategorized" collection rendered inside the
- * Uncategorized group section on the Collections page. It surfaces todos and
- * reference items that have no `collectionId` in the same visual shape as a
- * real collection (CollectionView), so users can see and interact with their
- * uncategorized items without the Collections page quietly hiding them.
- *
- * There is no backing Collection record — the virtual collection is computed
- * from the `items` store on the fly. CollectionView renders it in a restricted
- * mode (no edit button, no move-to-group menu, items saved with
- * `collectionId: undefined`) because editing/deleting the virtual bucket has
- * no meaning.
- */
-export const UNCATEGORIZED_COLLECTION_ID = '__uncategorized_collection';
-
-/**
- * Virtual Collection object that backs the Uncategorized bucket's CollectionView.
- * `itemIds` lists every straggler: todos without a `collectionId` (todos can't
- * live in the Inbox, so they all end up here) followed by reference items
- * explicitly marked `uncategorized: true` (typically orphaned by a collection
- * deletion). Inbox refs (no `collectionId`, no flag) never surface here.
- *
- * When there are no stragglers this collection is empty — consumers should
- * check `hasUncategorizedItems` and hide the Uncategorized surface entirely
- * rather than rendering an empty bucket, since Uncategorized is a dynamic
- * artifact of leftover items rather than a first-class collection.
- */
-export const uncategorizedVirtualCollection = derived(
-  [todoItems, uncategorizedReferenceItems],
-  ([$todos, $refs]): Collection => ({
-    id: UNCATEGORIZED_COLLECTION_ID,
-    name: 'Uncategorized',
-    // Muted accent — this bucket is a fallback rather than a user-created
-    // collection, so it shouldn't compete visually with real collections.
-    color: '#9ca3af',
-    itemIds: [...$todos.map(t => t.id), ...$refs.map(r => r.id)],
-    createdAt: new Date(0).toISOString(),
-  })
-);
-
-/**
- * True iff there are any items that belong in the Uncategorized bucket. The
- * Uncategorized pill (GroupFilterBar) and section (CollectionsPage) use this
- * to decide whether to render at all — Uncategorized isn't a persistent
- * category, it only exists when the system has stragglers to surface. A fresh
- * user with no orphaned refs and no uncollected todos sees no Uncategorized
- * surface anywhere.
- */
-export const hasUncategorizedItems = derived(
-  uncategorizedVirtualCollection,
-  ($virtual) => $virtual.itemIds.length > 0
-);
-
-/**
- * Is the "Uncategorized" filter pill currently ON?
- * Defaults to true — when the config flag is unset, uncategorized todos and
- * collections are visible (matches the previous behaviour where the
- * Uncategorized tile was always rendered on the Todos page).
- */
-export const uncategorizedFilterActive = derived(appConfig, ($config) =>
-  $config.uncategorizedFilterActive !== false
-);
-
-/**
  * Set of group IDs currently active (visible) in the filter row.
  * When `activeGroupFilters` is undefined in config, all groups default to active.
+ *
+ * Stale-filter recovery: if `activeGroupFilters` is non-empty but every id in
+ * it is stale (no matching real group), we fall back to "all active" instead
+ * of returning an empty set. This is the offline-create-then-login recovery
+ * path. Concrete sequence:
+ *   1. The user has stale ids in `activeGroupFilters` from a previous session
+ *      (e.g. a group they deleted long ago, whose id `setActiveGroupFilters`
+ *      intentionally retains because the URL→config sync runs before groups
+ *      load — see that function's note).
+ *   2. While offline they create a new group `Zg`. `storeGroup` only appends
+ *      to `activeGroupFilters` when it's already defined; if it was undefined
+ *      ("default-all") locally, no append happens — so `Zg.id` may not be in
+ *      filters.
+ *   3. They log in. Sync pulls down the server's older `config/app` document
+ *      (with just the stale ids, no `Zg`), which replaces the local copy.
+ *   4. Without this fallback, `activeGroupIds` returns `∅`, and
+ *      `visibleGroupedCollections` hides every group — the new `Zg` "remains"
+ *      as a pill (pills render from `sortedGroups` directly) but nothing
+ *      shows up on the page, making the offline-created collection appear
+ *      "gone" even though it's intact in storage.
+ *
+ * An explicit empty array (`activeGroupFilters: []`, set by toggling every
+ * pill off) keeps its meaning: "show nothing" — `length === 0` so the
+ * fallback doesn't trigger.
  */
 export const activeGroupIds = derived(
   [sortedGroups, appConfig],
@@ -1151,6 +1057,9 @@ export const activeGroupIds = derived(
     for (const id of $config.activeGroupFilters) {
       if (all.has(id)) filtered.add(id);
     }
+    if (filtered.size === 0 && $config.activeGroupFilters.length > 0) {
+      return all;
+    }
     return filtered;
   }
 );
@@ -1160,84 +1069,39 @@ export const activeGroupIds = derived(
  * activeGroupIds. Within each group, collections preserve the configured
  * order from groupCollections.
  *
- * A synthetic "Uncategorized" section is folded into this list only when
- * there are straggler items AND the uncategorized filter pill is on —
- * identified by `group.id === UNCATEGORIZED_FILTER_ID`. It is not a group
- * destination and never hosts real collections.
  */
 export interface VisibleGroupSection {
   group: CollectionGroup;
   collections: Collection[];
-  /**
-   * Optional virtual collection rendered above the draggable list of real
-   * collections in this section. Currently only populated for the Uncategorized
-   * section, where it surfaces items with no `collectionId` as a pseudo-
-   * collection (read-only, not draggable, cannot be edited or deleted). Consumer
-   * components should render it outside the real-collection drag zone.
-   */
-  virtualCollection?: Collection;
 }
 
 export const visibleGroupedCollections = derived(
-  [sortedGroups, groupCollections, activeGroupIds, uncategorizedFilterActive, uncategorizedVirtualCollection, hasUncategorizedItems, appConfig],
-  ([$sortedGroups, $groupCollections, $activeGroupIds, $uncatActive, $uncatVirtual, $hasUncat, $config]): VisibleGroupSection[] => {
+  [sortedGroups, groupCollections, activeGroupIds],
+  ([$sortedGroups, $groupCollections, $activeGroupIds]): VisibleGroupSection[] => {
     const sections: VisibleGroupSection[] = [];
-    const realById = new Map($sortedGroups.map(g => [g.id, g]));
-    const order = $config.groupsOrder ?? [];
-    const seen = new Set<string>();
-
-    // Synthetic section for item stragglers only. It uses the same sentinel
-    // id as the filter pill so ordering/placement flows through groupsOrder
-    // without any special-casing at consumer sites, but it never owns real
-    // collections.
-    const uncatSection: VisibleGroupSection = {
-      group: {
-        id: UNCATEGORIZED_FILTER_ID,
-        name: 'Uncategorized',
-        collectionIds: [],
-        createdAt: new Date(0).toISOString(),
-      },
-      collections: [],
-      virtualCollection: $uncatVirtual,
-    };
-
-    const pushReal = (g: CollectionGroup) => {
-      if (!$activeGroupIds.has(g.id)) return;
-      sections.push({ group: g, collections: $groupCollections[g.id] ?? [] });
-    };
-
-    const pushUncat = () => {
-      if (!$hasUncat) return;
-      if ($uncatActive) sections.push(uncatSection);
-    };
-
-    // Walk the persisted filter-bar order so the Uncategorized section lines
-    // up with its pill. Real groups not yet in the order (newly created) are
-    // appended afterwards.
-    for (const id of order) {
-      if (seen.has(id)) continue;
-      if (id === UNCATEGORIZED_FILTER_ID) {
-        pushUncat();
-        seen.add(id);
-      } else {
-        const g = realById.get(id);
-        if (g) {
-          pushReal(g);
-          seen.add(id);
-        }
-      }
-    }
     for (const g of $sortedGroups) {
-      if (!seen.has(g.id)) {
-        pushReal(g);
-        seen.add(g.id);
-      }
+      if (!$activeGroupIds.has(g.id)) continue;
+      sections.push({ group: g, collections: $groupCollections[g.id] ?? [] });
     }
-    // Default the Uncategorized slot to the end when the sentinel has never
-    // been persisted — same fallback the filter bar uses for new users.
-    if (!seen.has(UNCATEGORIZED_FILTER_ID)) pushUncat();
-
     return sections;
+  }
+);
+
+/**
+ * Collections whose `groupId` is unset or refers to a group that no longer
+ * exists. Surfaced read-only on the Collections page as an advisory section
+ * so users can edit each one back into a real group (or delete it). We do
+ * NOT auto-rewrite these on load — see the v2.0.4 regression note in the
+ * connect handler — and we do NOT create a synthetic group/collection for
+ * them. The list is empty in the normal case; the UI only renders a section
+ * when this is non-empty. Sorted by createdAt for a stable order.
+ */
+export const orphanCollections = derived(
+  [collections, groups],
+  ([$collections, $groups]): Collection[] => {
+    return Object.values($collections)
+      .filter(col => !col.groupId || !$groups[col.groupId])
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }
 );
 
@@ -1256,11 +1120,16 @@ export async function toggleGroupFilter(groupId: string): Promise<void> {
   await updateConfig({ activeGroupFilters: next });
 }
 
-/** Set the active group filter list to exactly these IDs. Persists to config. */
+/** Set the active group filter list to exactly these IDs. Persists to config.
+ *
+ * Does not filter against known groups — the URL→config sync runs before
+ * `groups` finishes loading on cold refresh, and dropping ids whose group
+ * hasn't loaded yet would wipe valid filters and immediately rewrite the URL
+ * to `?g=` empty. Stale ids (groups that were deleted) are filtered out at
+ * read time by `activeGroupIds`, so persisting them is harmless.
+ */
 export async function setActiveGroupFilters(ids: string[]): Promise<void> {
-  // Dedupe and only keep ids that correspond to real groups.
-  const allGroupIds = new Set(get(sortedGroups).map(g => g.id));
-  const filtered = Array.from(new Set(ids)).filter(id => allGroupIds.has(id));
+  const filtered = Array.from(new Set(ids));
   const current = get(appConfig).activeGroupFilters;
   // Skip if equal to current (avoids URL ↔ config write loops)
   if (current && current.length === filtered.length && current.every((v, i) => v === filtered[i])) {
@@ -1269,18 +1138,11 @@ export async function setActiveGroupFilters(ids: string[]): Promise<void> {
   await updateConfig({ activeGroupFilters: filtered });
 }
 
-/** Flip the Uncategorized filter pill. */
-export async function toggleUncategorizedFilter(): Promise<void> {
-  const current = get(appConfig).uncategorizedFilterActive !== false;
-  await updateConfig({ uncategorizedFilterActive: !current });
-}
-
 // ---- Flat Todos page: all todos across all collections ----
 
 /**
- * Every item that represents a todo — across collections and "uncategorized"
- * (no collectionId). Not sorted or filtered; callers should derive from
- * `visibleTodos` instead when rendering the Todos page.
+ * Every item that represents a todo. Todos without `collectionId` are unfiled
+ * and remain valid todos; they are not routed through a collection/group.
  */
 export const allTodos = derived(items, ($items) => {
   return Object.values($items).filter(i => i.isTodo || i.type === 'todo');
@@ -1292,21 +1154,18 @@ export const openTodos = derived(allTodos, ($allTodos) =>
 );
 
 /**
- * Todos visible on the flat Todos page, honouring both the group-filter row
- * and the uncategorized filter pill. Sorted by `todosGlobalOrder`; ids missing
- * from that order fall back to newest-first on `createdAt`. Completed and open
- * todos are mixed — the page splits them at render time.
+ * Todos visible on the flat Todos page. Unfiled todos are always visible;
+ * filed todos honour the group-filter row. Sorted by `todosGlobalOrder`; ids
+ * missing from that order fall back to newest-first on `createdAt`. Completed
+ * and open todos are mixed — the page splits them at render time.
  */
 export const visibleTodos = derived(
-  [allTodos, collections, activeGroupIds, uncategorizedFilterActive, appConfig],
-  ([$allTodos, $collections, $activeGroupIds, $uncatActive, $config]) => {
-    // A todo is visible iff:
-    //  - it has no collectionId and the uncategorized pill is on, OR
-    //  - it's in a collection whose real group is active.
+  [allTodos, collections, activeGroupIds, appConfig],
+  ([$allTodos, $collections, $activeGroupIds, $config]) => {
     const filtered = $allTodos.filter(todo => {
-      if (!todo.collectionId) return $uncatActive;
+      if (!todo.collectionId) return true;
       const col = $collections[todo.collectionId];
-      if (!col) return $uncatActive; // orphan: the collection was deleted — treat as uncategorized
+      if (!col) return true;
       if (!col.groupId) return false;
       return $activeGroupIds.has(col.groupId);
     });
