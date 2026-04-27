@@ -2,18 +2,70 @@ import RemoteStorage from 'remotestoragejs';
 import InboxModule, { recoverLegacyBinaryStringEncoding } from '@inbox-rs/rs-module';
 import SharesModule from 'remotestorage-module-shares';
 
-// remotestoragejs' `Authorize._rs_init` unconditionally clears
-// `location.hash` during construction — its `extractParams()` helper returns
-// an empty object (truthy) even when the URL has no OAuth params, and the
-// init code's `if (params) { location.hash = '' }` then wipes our route hash
-// (e.g. `#/todos` → `#`). That breaks our hash-based router on page refresh.
+// Re-enable WebFinger lookups against localhost / private-IP RS servers.
 //
-// Snapshot the hash immediately before construction and replaceState it back
-// if RS cleared it. replaceState avoids firing a spurious hashchange event,
-// and we only restore when the hash actually looks like one of our routes
-// (leading `/`) to stay clear of any legitimate OAuth-callback flow the RS
-// init is trying to handle.
-const savedHash = typeof window !== 'undefined' ? window.location.hash : '';
+// webfinger.js v3 (a transitive dep of remotestoragejs >=2.0.0-beta.9) added an
+// `allow_private_addresses` config flag that defaults to `false`. With it off,
+// `WebFinger#resolveAndValidateHost` throws `private or internal addresses are
+// not allowed` *before* any HTTP request fires for any host that matches its
+// private/localhost regex. rs.js's `Discover` constructs WebFinger without the
+// flag, so `rs.connect("user@localhost:8000")` (and any private-LAN address)
+// fails synchronously with a `DiscoveryError` and the app sits on
+// "Connecting…" forever.
+//
+// We can't fix this by monkey-patching `webfinger.js` from our app: rs.js's
+// published bundle inlines its own copy, so the `WebFinger` class we'd patch
+// from `import WebFinger from 'webfinger.js'` is a different class than the
+// one rs.js's `Discover` instantiates. Instead we replace `RemoteStorage.Discover`
+// outright — `connect()` calls `RemoteStorage.Discover(userAddress)` (see
+// `src/remotestorage.ts` in rs.js), so swapping the static gets us in front of
+// every lookup. Our replacement does the same WebFinger lookup with raw `fetch`,
+// which is gated by browser CORS already — the v3 SSRF protection is server-side
+// concern that doesn't apply here.
+//
+// Track removal at remotestorage/remotestorage.js#1384 — once rs.js sets
+// `allow_private_addresses: true` (or exposes it as a constructor option), the
+// hack goes away.
+{
+  type Discovered = { href: string; storageApi?: string; authURL?: string; properties?: Record<string, unknown> };
+  const RS_LINK_RELS = new Set(['remotestorage', 'http://tools.ietf.org/id/draft-dejong-remotestorage']);
+  const AUTH_URL_PROPS = ['http://tools.ietf.org/html/rfc6749#section-4.2', 'auth-endpoint'];
+
+  const customDiscover = (userAddress: string): Promise<Discovered> => {
+    const at = userAddress.lastIndexOf('@');
+    if (at < 0) return Promise.reject(new Error('Invalid user address'));
+    const host = userAddress.slice(at + 1);
+    const scheme = host === 'localhost' || host.startsWith('localhost:') ? 'http' : 'https';
+    const url = `${scheme}://${host}/.well-known/webfinger?resource=acct:${encodeURIComponent(userAddress)}`;
+
+    return fetch(url).then(async (resp) => {
+      if (!resp.ok) throw new Error(`WebFinger failed: ${resp.status}`);
+      const data = await resp.json();
+      const link = Array.isArray(data?.links)
+        ? data.links.find((l: { rel?: string }) => l?.rel && RS_LINK_RELS.has(l.rel))
+        : undefined;
+      if (!link?.href) throw new Error('No remoteStorage link in WebFinger response');
+      const properties = (link.properties ?? {}) as Record<string, unknown>;
+      const storageApi = (typeof link.type === 'string' ? link.type : undefined) ??
+        (typeof properties['http://remotestorage.io/spec/version'] === 'string'
+          ? properties['http://remotestorage.io/spec/version'] as string
+          : undefined);
+      let authURL: string | undefined;
+      for (const key of AUTH_URL_PROPS) {
+        const v = properties[key];
+        if (typeof v === 'string') { authURL = v; break; }
+      }
+      return { href: link.href, storageApi, authURL, properties };
+    });
+  };
+
+  // Preserve `RemoteStorage.Discover.DiscoveryError` — rs.js's connect path
+  // throws `new RemoteStorage.DiscoveryError(...)`, and the static type also
+  // surfaces it as `Discover.DiscoveryError`.
+  const original = (RemoteStorage as unknown as { Discover: { DiscoveryError: unknown } }).Discover;
+  (customDiscover as unknown as { DiscoveryError: unknown }).DiscoveryError = original?.DiscoveryError;
+  (RemoteStorage as unknown as { Discover: typeof customDiscover }).Discover = customDiscover;
+}
 
 // Detect and auto-recover a corrupt `remotestorage` IndexedDB before RS opens it.
 //
@@ -174,13 +226,6 @@ const rs = new RemoteStorage({
   modules: [InboxModule, SharesModule],
   changeEvents: { local: true, window: false, remote: true, conflict: true },
 });
-if (
-  typeof window !== 'undefined'
-  && savedHash.startsWith('#/')
-  && window.location.hash !== savedHash
-) {
-  window.history.replaceState(null, '', savedHash);
-}
 
 rs.access.claim('inbox', 'rw');
 rs.access.claim('shares', 'rw');

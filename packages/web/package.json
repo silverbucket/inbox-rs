@@ -26,7 +26,7 @@
     "marked": "^17.0.5",
     "onnxruntime-web": "^1.14.0",
     "remotestorage-module-shares": "^2.1.4",
-    "remotestoragejs": "^2.0.0-beta.8",
+    "remotestoragejs": "^2.0.0-beta.9",
     "svelte-dnd-action": "^0.9.69",
     "tiptap-markdown": "^0.9.0"
   },
