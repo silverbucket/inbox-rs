@@ -154,46 +154,10 @@ const InboxModule = {
             item._migrateVersion = migrator.getLatestVersion('items');
           }
           if (fileData && 'filePath' in item && item.filePath && 'mimeType' in item && item.mimeType) {
-            // Store file locally as the original ArrayBuffer (not a binary
-            // string). Two reasons this matters:
-            //
-            //   1. The local IndexedDB cache stays exact — `getFile` returns
-            //      the same bytes we wrote, with no string/byte round-trip.
-            //   2. `remotestoragejs`'s sync layer guards remote PUT with
-            //      `needsRemotePut(node) { return typeof node.local.body === 'string' }`
-            //      (see release/remotestorage.js). Passing an ArrayBuffer
-            //      makes that check return false, so the sync **does not**
-            //      try to push the body. That's what we want, because when
-            //      the sync did push, it sent the binary-string body via
-            //      `fetch(..., { body: string })` which UTF-8 encodes bytes
-            //      > 127 and corrupts JPEGs (the file came back as zeros on
-            //      5apps). Our direct `remote.put` below handles the upload
-            //      with the original bytes; we just need sync to keep its
-            //      hands off.
+            // Pass the original ArrayBuffer (not a binary string): the local
+            // IndexedDB cache stores it exactly, and the sync layer pushes it
+            // to the server intact on the next cycle.
             await privateClient.storeFile(item.mimeType, item.filePath, fileData);
-
-            // Push the file to the server ourselves, since the sync layer
-            // intentionally skips ArrayBuffer bodies (see above).
-            const remote = privateClient.storage.remote;
-            if (remote?.connected) {
-              const fullPath = '/inbox/' + item.filePath;
-              try {
-                // `remote.put` resolves with `{ statusCode }` for non-2xx
-                // responses too (it only rejects on network errors), so
-                // inspect the status explicitly — otherwise a 401/412/500
-                // silently looks like success and the file is never uploaded.
-                const resp = await remote.put(fullPath, fileData, item.mimeType);
-                const status = resp?.statusCode;
-                const success = typeof status === 'number' && status >= 200 && status < 300;
-                if (success) {
-                  console.log('[rs-module] direct PUT succeeded:', fullPath, status);
-                } else {
-                  console.warn('[rs-module] direct PUT returned non-success status:', fullPath, status);
-                }
-              } catch (e) {
-                console.warn('[rs-module] direct PUT failed:', fullPath, e);
-              }
-            }
           }
           await privateClient.storeObject(schemaAlias(item.type), `items/${item.id}`, item);
         },
