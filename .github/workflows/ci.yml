@@ -49,6 +49,12 @@ jobs:
 
       - run: npm ci
 
+      # Same npm-optional-deps workaround as the build job: rollup's
+      # native binary isn't installed by `npm ci` on Linux due to
+      # https://github.com/npm/cli/issues/4828, and `vite preview`
+      # loads rollup at runtime to serve the prebuilt dist.
+      - run: npm install @rollup/rollup-linux-x64-gnu --no-save
+
       # Pull the prebuilt dist from the build job — `vite preview` will
       # serve straight out of it.
       - name: Download web dist
