@@ -1,23 +1,18 @@
 import browser from 'webextension-polyfill';
+import { createConfigStore, type RSConfig } from '@inbox-rs/rs-module';
 
-const STORAGE_KEY = 'inbox-rs-config';
+export type { RSConfig };
 
-export interface RSConfig {
-  userAddress: string;
-  token?: string;
-  href?: string;
-  storageApi?: string;
-}
+const store = createConfigStore(browser.storage.local);
 
 export async function getConfig(): Promise<RSConfig | null> {
-  const result = await browser.storage.local.get(STORAGE_KEY);
-  return result[STORAGE_KEY] || null;
+  return store.get();
 }
 
 export async function saveConfig(config: RSConfig): Promise<void> {
-  await browser.storage.local.set({ [STORAGE_KEY]: config });
+  await store.save(config);
 }
 
 export async function clearConfig(): Promise<void> {
-  await browser.storage.local.remove(STORAGE_KEY);
+  await store.clear();
 }

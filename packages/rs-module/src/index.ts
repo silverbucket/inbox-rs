@@ -4,6 +4,23 @@ import type { MigrateResult } from 'rs-migrate';
 import { migrator, legacySchemas } from './migrations.js';
 export { migrator } from './migrations.js';
 export { wrapCodeBlock } from './migrations.js';
+export {
+  DirectRS,
+  connectViaOAuth,
+  createConfigStore,
+  discoverStorage,
+  extractTokenFromRedirect,
+  parseUserAddress,
+  schemeForHost,
+  DEFAULT_CONFIG_STORAGE_KEY,
+} from './runtime.js';
+export type {
+  BrowserStorageArea,
+  ConfigStore,
+  ConnectViaOAuthOptions,
+  RSConfig,
+  RSDiscovery,
+} from './runtime.js';
 
 /** Current item types — legacy types like 'voice-memo' are excluded */
 const CURRENT_TYPES: Set<string> = new Set<string>([
