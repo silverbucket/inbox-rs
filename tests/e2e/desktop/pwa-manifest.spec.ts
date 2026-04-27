@@ -103,6 +103,11 @@ test.describe('PWA manifest & install requirements', () => {
     await page.goto(webOrigin);
     await page.waitForLoadState('networkidle');
 
-    await expect(page.getByRole('heading', { name: 'Connect your storage' })).toBeVisible();
+    // The disconnected empty-state CTA in InboxGrid is the standalone-mode
+    // first-paint smoke check — proves the shell renders under the
+    // installed-app media query.
+    await expect(
+      page.getByRole('button', { name: 'Connect to your remoteStorage' })
+    ).toBeVisible();
   });
 });

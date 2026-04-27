@@ -41,16 +41,19 @@ test('full connect round-trip via OAuth', async ({ page, webOrigin, rsUser }) =>
   await page.waitForURL(`${webOrigin}/**`, { timeout: 10_000 });
   await page.waitForLoadState('networkidle');
 
-  // The empty-state heading is gone, the user menu's connected aria-label
-  // is in place. Use the aria-label as the assertion target since the
-  // avatar text is the user's initials and not stable across runs.
-  await expect(page.getByRole('heading', { name: 'Connect your storage' })).toHaveCount(0);
+  // The disconnected empty-state CTA is gone, the user menu's connected
+  // aria-label is in place. Use the aria-label as the assertion target since
+  // the avatar text is the user's initials and not stable across runs.
+  await expect(
+    page.getByRole('button', { name: 'Connect to your remoteStorage' })
+  ).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'User menu — connected' })).toBeVisible();
 });
 
 test('disconnect returns to empty state', async ({ connectedPage, webOrigin }) => {
   // Once connected, the menu shows a Disconnect entry. Clicking it must
-  // reset the UI to the empty 'Connect your storage' state.
+  // reset the UI to the disconnected empty state — InboxGrid's
+  // "Connect to your remoteStorage" CTA is the marker.
   await connectedPage.goto(webOrigin);
   await connectedPage.waitForLoadState('networkidle');
 
@@ -59,5 +62,7 @@ test('disconnect returns to empty state', async ({ connectedPage, webOrigin }) =
   await connectedPage.getByRole('button', { name: 'User menu — connected' }).click();
   await connectedPage.getByRole('menuitem', { name: 'Disconnect' }).click();
 
-  await expect(connectedPage.getByRole('heading', { name: 'Connect your storage' })).toBeVisible();
+  await expect(
+    connectedPage.getByRole('button', { name: 'Connect to your remoteStorage' })
+  ).toBeVisible();
 });

@@ -31,13 +31,19 @@ test('offline → online → connect with a brand-new account', async ({ page, f
   await page.goto(webOrigin);
   await page.waitForLoadState('networkidle');
 
-  // Disconnected at first paint, then we yank the network.
-  await expect(page.getByRole('heading', { name: 'Connect your storage' })).toBeVisible();
+  // Disconnected at first paint, then we yank the network. The
+  // "Connect to your remoteStorage" CTA in InboxGrid is the unambiguous
+  // disconnected-empty-state marker.
+  await expect(
+    page.getByRole('button', { name: 'Connect to your remoteStorage' })
+  ).toBeVisible();
   await page.context().setOffline(true);
 
   // Disconnected UI must keep working with no network — the empty state
   // is fully static and hash routing doesn't hit the wire.
-  await expect(page.getByRole('heading', { name: 'Connect your storage' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Connect to your remoteStorage' })
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Collections' }).first().click();
   await expect(
     page.getByRole('button', { name: 'Collections' }).first()
@@ -58,9 +64,11 @@ test('offline → online → connect with a brand-new account', async ({ page, f
   await page.waitForURL(`${webOrigin}/**`, { timeout: 10_000 });
   await page.waitForLoadState('networkidle');
 
-  // Connected state: aria-label flips, empty-state heading is gone.
+  // Connected state: aria-label flips, disconnected CTA is gone.
   await expect(page.getByRole('button', { name: 'User menu — connected' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Connect your storage' })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Connect to your remoteStorage' })
+  ).toHaveCount(0);
 });
 
 test('offline → online → connect with an existing account that has data', async ({
@@ -89,7 +97,9 @@ test('offline → online → connect with an existing account that has data', as
   await page.waitForLoadState('networkidle');
 
   // Disconnected first, then drop the network.
-  await expect(page.getByRole('heading', { name: 'Connect your storage' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Connect to your remoteStorage' })
+  ).toBeVisible();
   await context.setOffline(true);
 
   // Hash navigation must keep working offline.

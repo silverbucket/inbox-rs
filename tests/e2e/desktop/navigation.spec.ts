@@ -16,7 +16,12 @@ test('default route renders inbox empty state', async ({ page, webOrigin }) => {
   // Disconnected → empty state, but the header nav must still be present.
   await expect(page.getByRole('button', { name: 'Inbox' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Collections' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Connect your storage' })).toBeVisible();
+  // The disconnected empty state lives in InboxGrid: the heading is "Inbox
+  // zero" with a "Connect to your remoteStorage" CTA below. The CTA only
+  // renders when not connected, so it's the unambiguous disconnected marker.
+  await expect(
+    page.getByRole('button', { name: 'Connect to your remoteStorage' })
+  ).toBeVisible();
   assertNoConsoleErrors(log);
 });
 
@@ -41,8 +46,10 @@ test('nav buttons swap routes when connected', async ({ connectedPage, webOrigin
   await connectedPage.waitForLoadState('networkidle');
 
   // Wait for the connected UI to be present — the nav exists in both
-  // states but the empty-state heading is gone only after RS attaches.
-  await expect(connectedPage.getByRole('heading', { name: 'Connect your storage' })).toHaveCount(0);
+  // states but the disconnected CTA is gone only after RS attaches.
+  await expect(
+    connectedPage.getByRole('button', { name: 'Connect to your remoteStorage' })
+  ).toHaveCount(0);
 
   // Each (label, hash-suffix) pair: hash-suffix is what `parseHash`
   // writes back. `?g=...` filter params can follow on todos/collections,
