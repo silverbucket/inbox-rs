@@ -1,6 +1,35 @@
 import RemoteStorage from 'remotestoragejs';
+import WebFinger from 'webfinger.js';
 import InboxModule, { recoverLegacyBinaryStringEncoding } from '@inbox-rs/rs-module';
 import SharesModule from 'remotestorage-module-shares';
+
+// Re-enable WebFinger lookups against localhost / private-IP RS servers.
+//
+// webfinger.js v3 (a transitive dep of remotestoragejs >=2.0.0-beta.9) added an
+// `allow_private_addresses` config flag that defaults to `false`. With it off,
+// `WebFinger#resolveAndValidateHost` throws `private or internal addresses are
+// not allowed` *before* any HTTP request fires for any host that matches its
+// private/localhost regex. rs.js's `Discover` constructs WebFinger without the
+// flag, so `rs.connect("user@localhost:8000")` (and any private-LAN address)
+// fails synchronously with a `DiscoveryError` and the app sits on
+// "Connecting…" forever.
+//
+// The flag's threat model is server-side SSRF — it has no security value in a
+// browser, where same-origin / CORS already gates cross-origin requests. We
+// patch the prototype so every `lookup()` call from inside rs.js sees
+// `allow_private_addresses: true`. This unblocks local dev against Armadietto
+// and our e2e suite.
+//
+// Track removal at remotestorage/remotestorage.js#1384 — once rs.js sets the
+// flag itself (or exposes it as a constructor option), this hack goes away.
+{
+  const proto = WebFinger.prototype as { lookup: (address: string) => Promise<unknown>; config: { allow_private_addresses: boolean } };
+  const origLookup = proto.lookup;
+  proto.lookup = function (address: string) {
+    this.config.allow_private_addresses = true;
+    return origLookup.call(this, address);
+  };
+}
 
 // Detect and auto-recover a corrupt `remotestorage` IndexedDB before RS opens it.
 //
