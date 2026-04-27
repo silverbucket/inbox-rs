@@ -3,6 +3,10 @@ name: CI
 on:
   pull_request:
     branches: [master]
+  # Also run on pushes to master so the release workflow can require a
+  # green CI commit before publishing (see release.yml gating).
+  push:
+    branches: [master]
 
 jobs:
   build:
@@ -20,3 +24,63 @@ jobs:
 
       - run: npm run build
       - run: npm test
+
+      # Stash the built web app so the e2e job doesn't pay for a second
+      # cold build — Vite + plugin packaging is the slow step here.
+      - name: Upload web dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: packages/web/dist
+          retention-days: 1
+          if-no-files-found: error
+
+  e2e:
+    name: End-to-end (PWA)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # Same npm-optional-deps workaround as the build job: rollup's
+      # native binary isn't installed by `npm ci` on Linux due to
+      # https://github.com/npm/cli/issues/4828, and `vite preview`
+      # loads rollup at runtime to serve the prebuilt dist.
+      - run: npm install @rollup/rollup-linux-x64-gnu --no-save
+
+      # Pull the prebuilt dist from the build job — `vite preview` will
+      # serve straight out of it.
+      - name: Download web dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: packages/web/dist
+
+      - name: Install Playwright browser
+        run: npm run test:e2e:install
+
+      # Pre-pull the Armadietto image so Playwright's webServer wait
+      # doesn't double-count the container build.
+      - name: Build Armadietto image
+        run: docker compose build armadietto
+
+      - name: Run end-to-end tests
+        run: npm run test:e2e
+
+      - name: Upload failure artefacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts
+          path: |
+            tests/e2e/playwright-report
+            tests/e2e/test-results
+          retention-days: 7
+          if-no-files-found: ignore
