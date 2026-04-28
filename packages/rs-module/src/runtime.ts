@@ -194,7 +194,15 @@ export class DirectRS {
   constructor(private readonly config: RSConfig, fetchImpl: FetchLike = fetch) {
     if (!config.href) throw new Error('DirectRS requires config.href');
     if (!config.token) throw new Error('DirectRS requires config.token');
-    this.fetchImpl = fetchImpl;
+    // Bind to globalThis so member-access calls (`this.fetchImpl(...)`) don't
+    // trip the browser's "Illegal invocation" check, which requires `this`
+    // on the global `fetch` to be the Window. Without this, calling
+    // `this.fetchImpl(...)` resolves `this` to the DirectRS instance and
+    // browsers throw `TypeError: Failed to execute 'fetch' on 'Window':
+    // Illegal invocation`. Bind is a no-op for already-bound impls (the
+    // first bind wins) and for test mocks, whose call records still update
+    // through the bound delegate.
+    this.fetchImpl = fetchImpl.bind(globalThis);
   }
 
   private get headers(): Record<string, string> {

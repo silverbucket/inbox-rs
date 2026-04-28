@@ -312,6 +312,70 @@ describe('connectViaOAuth', () => {
       }),
     ).rejects.toThrow('OAuth error: access_denied');
   });
+
+  /**
+   * REGRESSION: this is the failure mode the user just hit on Thunderbird.
+   * If the wrapper passes a `client_id` the server doesn't recognise, the
+   * server replies with `error=invalid_client` in the redirect — and the
+   * shared helper must surface it (not swallow it as a generic error).
+   */
+  it('propagates invalid_client from the OAuth redirect (the bug class that bit Thunderbird)', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(webfingerBody()));
+    const launchAuthFlow = vi
+      .fn()
+      .mockResolvedValue(
+        'https://callback.example/#error=invalid_client&error_description=client%20not%20registered',
+      );
+
+    await expect(
+      connectViaOAuth('alice@example.com', {
+        clientId: 'inbox-rs-thunderbird', // the kind of bare identifier that triggers it
+        redirectUrl: 'https://callback.example/',
+        launchAuthFlow,
+        fetchImpl,
+      }),
+    ).rejects.toThrow(/invalid_client/);
+  });
+
+  it('honours a custom scope override and includes it in the auth URL', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(webfingerBody()));
+    const launchAuthFlow = vi
+      .fn()
+      .mockResolvedValue('https://callback.example/#access_token=t');
+
+    await connectViaOAuth('alice@example.com', {
+      clientId: 'c',
+      redirectUrl: 'https://callback.example/',
+      scope: 'inbox:r contacts:rw',
+      launchAuthFlow,
+      fetchImpl,
+    });
+
+    const params = new URL(launchAuthFlow.mock.calls[0]![0] as string).searchParams;
+    expect(params.get('scope')).toBe('inbox:r contacts:rw');
+  });
+
+  it('does not append params to the discovered authUrl twice', async () => {
+    // Sanity check that the URL is well-formed and parseable.
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(webfingerBody()));
+    const launchAuthFlow = vi
+      .fn()
+      .mockResolvedValue('https://callback.example/#access_token=t');
+
+    await connectViaOAuth('alice@example.com', {
+      clientId: 'c',
+      redirectUrl: 'https://callback.example/',
+      launchAuthFlow,
+      fetchImpl,
+    });
+
+    const launchedUrl = new URL(launchAuthFlow.mock.calls[0]![0] as string);
+    // We expect exactly four query params (client_id, redirect_uri,
+    // response_type, scope). Anything else means the helper is appending
+    // more than it should.
+    const keys = Array.from(launchedUrl.searchParams.keys()).sort();
+    expect(keys).toEqual(['client_id', 'redirect_uri', 'response_type', 'scope']);
+  });
 });
 
 describe('DirectRS', () => {
@@ -435,6 +499,224 @@ describe('DirectRS', () => {
       await rs.store({ id: 'img-2', filePath: 'files/img-2.jpg', mimeType: 'image/jpeg' });
 
       expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Authorization header format', () => {
+    /**
+     * Servers parse the `Authorization` header strictly. Some reject
+     * anything that isn't exactly `Bearer <token>` with a single space.
+     * Pin the format down so a future refactor can't subtly break OAuth.
+     */
+    it('uses the exact "Bearer <token>" format on storeObject', async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(emptyResponse());
+      const rs = new DirectRS(config, fetchImpl);
+
+      await rs.storeObject('items/x', {});
+
+      const auth = (fetchImpl.mock.calls[0]![1] as RequestInit).headers as Record<string, string>;
+      expect(auth.Authorization).toBe('Bearer tok');
+      expect(auth.Authorization).toMatch(/^Bearer [^ ]+$/);
+    });
+
+    it('uses the exact "Bearer <token>" format on storeFile', async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(emptyResponse());
+      const rs = new DirectRS(config, fetchImpl);
+
+      await rs.storeFile('files/x.png', new ArrayBuffer(0), 'image/png');
+
+      const headers = (fetchImpl.mock.calls[0]![1] as RequestInit).headers as Record<string, string>;
+      expect(headers.Authorization).toBe('Bearer tok');
+    });
+
+    it('passes tokens with special URL characters through unmodified', async () => {
+      const weirdToken = 'a.b-c_d/e+f=g';
+      const fetchImpl = vi.fn().mockResolvedValue(emptyResponse());
+      const rs = new DirectRS({ ...config, token: weirdToken }, fetchImpl);
+
+      await rs.storeObject('items/x', {});
+
+      const headers = (fetchImpl.mock.calls[0]![1] as RequestInit).headers as Record<string, string>;
+      expect(headers.Authorization).toBe(`Bearer ${weirdToken}`);
+    });
+  });
+
+  describe('URL construction', () => {
+    it('includes the inbox/ namespace prefix on every PUT', async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(emptyResponse());
+      const rs = new DirectRS(config, fetchImpl);
+
+      await rs.storeObject('items/abc', {});
+      await rs.storeFile('files/x.png', new ArrayBuffer(0), 'image/png');
+
+      expect(fetchImpl.mock.calls[0]![0]).toBe(
+        'https://storage.example.com/storage/alice/inbox/items/abc',
+      );
+      expect(fetchImpl.mock.calls[1]![0]).toBe(
+        'https://storage.example.com/storage/alice/inbox/files/x.png',
+      );
+    });
+
+    it('passes path segments verbatim (does not encode slashes / dots)', async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(emptyResponse());
+      const rs = new DirectRS(config, fetchImpl);
+
+      await rs.storeObject('items/with-dashes_and.dots', {});
+
+      expect(fetchImpl.mock.calls[0]![0]).toContain('/inbox/items/with-dashes_and.dots');
+    });
+  });
+
+  describe('error messages', () => {
+    it.each([
+      ['401 expired token', 401, 'Store failed: 401'],
+      ['403 forbidden', 403, 'Store failed: 403'],
+      ['413 payload too large', 413, 'Store failed: 413'],
+      ['500 server error', 500, 'Store failed: 500'],
+      ['502 bad gateway', 502, 'Store failed: 502'],
+    ])('storeObject error includes the numeric status: %s', async (_label, status, msg) => {
+      const fetchImpl = vi.fn().mockResolvedValue(emptyResponse({ ok: false, status }));
+      const rs = new DirectRS(config, fetchImpl);
+
+      await expect(rs.storeObject('items/x', {})).rejects.toThrow(msg);
+    });
+
+    it.each([
+      [413, 'Store file failed: 413'],
+      [500, 'Store file failed: 500'],
+    ])('storeFile error includes the numeric status: %i', async (status, msg) => {
+      const fetchImpl = vi.fn().mockResolvedValue(emptyResponse({ ok: false, status }));
+      const rs = new DirectRS(config, fetchImpl);
+
+      await expect(rs.storeFile('files/x', new ArrayBuffer(0), 'image/png')).rejects.toThrow(msg);
+    });
+
+    it('store() short-circuits on file PUT failure (does not attempt metadata)', async () => {
+      const fetchImpl = vi
+        .fn()
+        // First call: storeFile, fails.
+        .mockResolvedValueOnce(emptyResponse({ ok: false, status: 413 }))
+        // Subsequent calls would be the metadata PUT — must NOT happen.
+        .mockResolvedValueOnce(emptyResponse());
+
+      const rs = new DirectRS(config, fetchImpl);
+      await expect(
+        rs.store(
+          { id: 'x', filePath: 'files/x.jpg', mimeType: 'image/jpeg' },
+          new ArrayBuffer(8),
+        ),
+      ).rejects.toThrow('Store file failed: 413');
+
+      // Critical: the metadata PUT must not have run, otherwise we'd
+      // leave orphan items pointing at a missing file.
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('binary payload', () => {
+    /**
+     * REGRESSION: previous remoteStorage layers tried to convert
+     * ArrayBuffers to "binary strings" before upload, which corrupted
+     * non-ASCII bytes. DirectRS must pass the buffer through untouched.
+     */
+    it('passes the ArrayBuffer through to fetch unchanged', async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(emptyResponse());
+      const rs = new DirectRS(config, fetchImpl);
+      const data = new Uint8Array([0xff, 0x00, 0xfe, 0x01, 0xde, 0xad, 0xbe, 0xef]).buffer;
+
+      await rs.storeFile('files/x.bin', data, 'application/octet-stream');
+
+      const init = fetchImpl.mock.calls[0]![1] as RequestInit;
+      expect(init.body).toBe(data);
+      expect(init.body).toBeInstanceOf(ArrayBuffer);
+    });
+
+    it('store() uploads file before metadata so readers never see a metadata-without-file state', async () => {
+      const calls: string[] = [];
+      const fetchImpl = vi.fn(async (url: string) => {
+        calls.push(url);
+        return emptyResponse();
+      });
+      const rs = new DirectRS(config, fetchImpl);
+
+      await rs.store(
+        { id: 'img-1', filePath: 'files/img-1.jpg', mimeType: 'image/jpeg' },
+        new ArrayBuffer(4),
+      );
+
+      expect(calls[0]).toContain('/inbox/files/img-1.jpg');
+      expect(calls[1]).toContain('/inbox/items/img-1');
+    });
+  });
+
+  describe('fetch this-binding (browser "Illegal invocation" regression)', () => {
+    /**
+     * REGRESSION: in browsers, the global `fetch` validates that `this` is
+     * the Window object and throws
+     *   "TypeError: Failed to execute 'fetch' on 'Window': Illegal invocation"
+     * when called with any other `this`. Calling `this.fetchImpl(...)` on a
+     * class instance resolves `this` to that instance, tripping the check.
+     * The DirectRS constructor binds `fetchImpl` to `globalThis` to prevent
+     * this. These tests simulate the browser's strict check so unit tests
+     * (which normally use `vi.fn()` mocks that ignore `this`) catch a
+     * regression of the bind.
+     */
+    function makeStrictBrowserFetch() {
+      // Mimic the WebIDL [[ThisValue]] check: anything that isn't the global
+      // (or the conventional null/undefined for free-function calls) throws.
+      return vi.fn(function (this: unknown) {
+        const isGlobalLike = this === globalThis || this === undefined || this === null;
+        if (!isGlobalLike) {
+          throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation");
+        }
+        return Promise.resolve(emptyResponse());
+      });
+    }
+
+    it('storeObject does not throw "Illegal invocation"', async () => {
+      const strictFetch = makeStrictBrowserFetch();
+      const rs = new DirectRS(config, strictFetch as unknown as typeof fetch);
+
+      await expect(rs.storeObject('items/x', { id: 'x' })).resolves.toBeUndefined();
+      expect(strictFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('storeFile does not throw "Illegal invocation"', async () => {
+      const strictFetch = makeStrictBrowserFetch();
+      const rs = new DirectRS(config, strictFetch as unknown as typeof fetch);
+
+      await expect(
+        rs.storeFile('files/x.png', new ArrayBuffer(8), 'image/png'),
+      ).resolves.toBeUndefined();
+      expect(strictFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('store (full path with file + metadata) does not throw "Illegal invocation"', async () => {
+      const strictFetch = makeStrictBrowserFetch();
+      const rs = new DirectRS(config, strictFetch as unknown as typeof fetch);
+
+      await expect(
+        rs.store(
+          { id: 'img-1', filePath: 'files/img-1.jpg', mimeType: 'image/jpeg' },
+          new ArrayBuffer(16),
+        ),
+      ).resolves.toBeUndefined();
+      expect(strictFetch).toHaveBeenCalledTimes(2); // file + metadata
+    });
+
+    it('preserves call records on already-bound or pre-wrapped impls', async () => {
+      // If a caller passes their own bound or wrapped fetch, our extra bind
+      // must not break call tracking — the inner impl still sees every call.
+      const inner = vi.fn().mockResolvedValue(emptyResponse());
+      const preBound = inner.bind({ marker: 'caller-bound' });
+      const rs = new DirectRS(config, preBound as unknown as typeof fetch);
+
+      await rs.storeObject('items/x', {});
+      expect(inner).toHaveBeenCalledTimes(1);
+      expect(inner).toHaveBeenCalledWith(
+        expect.stringContaining('/inbox/items/x'),
+        expect.objectContaining({ method: 'PUT' }),
+      );
     });
   });
 });
