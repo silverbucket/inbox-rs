@@ -2,11 +2,12 @@
   import { DirectRS } from '../lib/rs';
   import { getConfig } from '../lib/storage';
   import { extractTextBody } from '../lib/mime';
-  import type { EmailItem } from '@inbox-rs/rs-module';
+  import { runSaveEmail } from './save-orchestrator';
 
   let connected = $state(false);
   let saving = $state(false);
   let saved = $state(false);
+  let saveError = $state('');
   let rs: DirectRS | null = null;
 
   let subject = $state('');
@@ -56,23 +57,18 @@
   async function saveEmail() {
     if (!rs || saving) return;
     saving = true;
-
-    const id = crypto.randomUUID();
-    const item: EmailItem = {
-      id,
-      type: 'email',
-      title: subject || 'Untitled email',
-      body: bodyText,
-      from: author || undefined,
-      notes: notes.trim() || undefined,
-      messageUrl: messageUrl || undefined,
-      createdAt: new Date().toISOString()
-    };
-    await rs.store(item);
-
-    saving = false;
-    saved = true;
-    setTimeout(() => window.close(), 800);
+    saveError = '';
+    try {
+      const result = await runSaveEmail({ rs, subject, author, bodyText, notes, messageUrl });
+      if (result.ok) {
+        saved = true;
+        setTimeout(() => window.close(), 800);
+      } else {
+        saveError = result.error;
+      }
+    } finally {
+      saving = false;
+    }
   }
 </script>
 
@@ -108,6 +104,9 @@
       <button type="submit" class="btn-primary" disabled={saving || !subject.trim()}>
         {saving ? 'Saving...' : 'Save to Inbox'}
       </button>
+      {#if saveError}
+        <p class="error" role="alert">{saveError}</p>
+      {/if}
     </form>
   {/if}
 </div>
@@ -228,6 +227,12 @@
     color: var(--success);
     font-size: 1.1rem;
     font-weight: 500;
+  }
+
+  .error {
+    color: var(--danger);
+    font-size: 0.8rem;
+    margin: 0.25rem 0 0;
   }
 
   .check {

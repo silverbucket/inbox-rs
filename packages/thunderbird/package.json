@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite build --watch",
     "build": "vite build",
-    "package": "vite build && cd dist && zip -r ../inbox-rs.xpi ."
+    "package": "vite build && cd dist && zip -r ../inbox-rs.xpi .",
+    "test": "vitest run"
   },
   "dependencies": {
     "@inbox-rs/rs-module": "*"
@@ -15,6 +16,7 @@
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "svelte": "^5.0.0",
     "typescript": "^5.4.0",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vitest": "^4.1.2"
   }
 }

@@ -2,14 +2,15 @@
   import browser from 'webextension-polyfill';
   import { DirectRS } from '../lib/rs';
   import { getConfig } from '../lib/storage';
-  import { isImageUrl, saveAsImage, saveAsBookmark } from './save-logic';
-  import type { NoteItem } from '@inbox-rs/rs-module';
+  import { isImageUrl } from './save-logic';
+  import { runSavePage, runSaveNote } from './save-orchestrator';
 
   type Mode = 'page' | 'note';
 
   let connected = $state(false);
   let saving = $state(false);
   let saved = $state(false);
+  let saveError = $state('');
   let rs: DirectRS | null = null;
   let tabId: number | null = null;
   let mode = $state<Mode>('page');
@@ -80,53 +81,38 @@
   async function savePage() {
     if (!rs || saving || !pageUrl) return;
     saving = true;
-
-    const id = crypto.randomUUID();
-    const createdAt = new Date().toISOString();
-
-    // Direct image page: save as ImageItem instead of BookmarkItem
-    if (isDirectImage) {
-      try {
-        const result = await saveAsImage({ rs, id, pageUrl, pageTitle, pageNote, createdAt });
-        if (result) {
-          saving = false;
-          saved = true;
-          setTimeout(() => window.close(), 800);
-          return;
-        }
-      } catch {
-        // Fall through to bookmark save as fallback
+    saveError = '';
+    try {
+      const result = await runSavePage({
+        rs, pageUrl, pageTitle, pageNote, pageDescription,
+        embeddedContent, tweetImages, ogImage, favicon, siteName, isDirectImage,
+      });
+      if (result.ok) {
+        saved = true;
+        setTimeout(() => window.close(), 800);
+      } else {
+        saveError = result.error;
       }
+    } finally {
+      saving = false;
     }
-
-    await saveAsBookmark({
-      rs, id, pageUrl, pageTitle, pageNote, pageDescription,
-      embeddedContent, tweetImages, ogImage, favicon, siteName, createdAt
-    });
-
-    saving = false;
-    saved = true;
-    setTimeout(() => window.close(), 800);
   }
 
   async function saveNote() {
     if (!rs || saving || !noteBody.trim()) return;
     saving = true;
-
-    const id = crypto.randomUUID();
-    const createdAt = new Date().toISOString();
-
-    const item: NoteItem = {
-      id, type: 'note',
-      title: noteTitle.trim() || noteBody.trim().slice(0, 50),
-      body: noteBody.trim(),
-      createdAt
-    };
-    await rs.store(item);
-
-    saving = false;
-    saved = true;
-    setTimeout(() => window.close(), 800);
+    saveError = '';
+    try {
+      const result = await runSaveNote({ rs, noteTitle, noteBody });
+      if (result.ok) {
+        saved = true;
+        setTimeout(() => window.close(), 800);
+      } else {
+        saveError = result.error;
+      }
+    } finally {
+      saving = false;
+    }
   }
 </script>
 
@@ -180,6 +166,9 @@
         <button type="submit" class="btn-primary" disabled={saving || !pageUrl}>
           {saving ? 'Saving...' : isDirectImage ? 'Save Image' : 'Save Page'}
         </button>
+        {#if saveError}
+          <p class="error" role="alert">{saveError}</p>
+        {/if}
       </form>
     {:else}
       <form class="save-form" onsubmit={(e) => { e.preventDefault(); saveNote(); }}>
@@ -188,6 +177,9 @@
         <button type="submit" class="btn-primary" disabled={saving || !noteBody.trim()}>
           {saving ? 'Saving...' : 'Save Note'}
         </button>
+        {#if saveError}
+          <p class="error" role="alert">{saveError}</p>
+        {/if}
       </form>
     {/if}
   {/if}
@@ -352,6 +344,12 @@
     color: var(--success);
     font-size: 1.1rem;
     font-weight: 500;
+  }
+
+  .error {
+    color: var(--danger);
+    font-size: 0.8rem;
+    margin: 0.25rem 0 0;
   }
 
   .check {
