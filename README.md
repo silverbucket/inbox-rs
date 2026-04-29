@@ -77,20 +77,14 @@ That makes the built `dist/` folder self-contained for static hosting.
 
 ## Releasing
 
-Releases are cut via the `release.yml` workflow_dispatch — see
-[`docs/RELEASING.md`](docs/RELEASING.md) for the full runbook. tl;dr:
-
 ```bash
-gh workflow run release.yml -f bump=patch  # or minor / major
+gh workflow run release.yml -f bump=patch    # or minor / major
 ```
 
-The web app version always tracks the root `package.json`; the browser
-and Thunderbird extensions have their own version namespaces and only
-move when their effective bundle has changed since the previous tag
-(this avoids burning extension-store version numbers on web-only
-releases). The bump policy lives in
-[`scripts/release-bump.mjs`](scripts/release-bump.mjs) and is unit-tested
-in `scripts/release-bump.test.mjs`.
+The web app version tracks the root `package.json`. The browser and
+Thunderbird extensions have their own version namespaces and only move
+when their bundle changed since the previous tag — see
+[`docs/RELEASING.md`](docs/RELEASING.md) for the runbook.
 
 ## Tech stack
 
