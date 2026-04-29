@@ -9,7 +9,24 @@ on:
     branches: [master]
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Biome (lint, format, organize imports)
+        run: npx biome ci
+
   build:
+    name: Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,11 +39,7 @@ jobs:
       - run: npm ci
       - run: npm install @rollup/rollup-linux-x64-gnu --no-save
 
-      - name: Lint & format check (Biome)
-        run: npx biome ci
-
       - run: npm run build
-      - run: npm test
 
       # Stash the built web app so the e2e job doesn't pay for a second
       # cold build — Vite + plugin packaging is the slow step here.
@@ -37,6 +50,29 @@ jobs:
           path: packages/web/dist
           retention-days: 1
           if-no-files-found: error
+
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm install @rollup/rollup-linux-x64-gnu --no-save
+
+      # Other workspaces resolve @inbox-rs/rs-module via its `main:
+      # dist/index.js`, so the dist must exist before vitest can import it.
+      # Build only rs-module (not the full web app) to keep this job fast
+      # and parallel with the build job.
+      - name: Build rs-module
+        run: npm run build --workspace=packages/rs-module
+
+      - run: npm test
 
   e2e:
     name: End-to-end (PWA)
