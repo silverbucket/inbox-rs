@@ -34,7 +34,14 @@ const rootDir = resolve(scriptDir, '..');
  * changed since the previous release tag.
  *
  * - rs-module changes propagate to BOTH extensions (they bundle it).
- * - Pure web-only or root-only changes (docs, scripts, .github/, etc.)
+ * - Lockfile changes propagate to BOTH extensions: `npm ci` runs before
+ *   the extension build, so a lockfile-only update (`npm audit fix`,
+ *   transitive resolution refresh, etc.) can bump bundled libs like
+ *   `webextension-polyfill`/`remotestoragejs` and produce a different
+ *   ZIP/XPI under an unchanged manifest version. Stores reject that;
+ *   conservatively treating any lockfile change as extension-affecting
+ *   is far cheaper than a failed publish.
+ * - Pure web-only or root-only changes (docs, .github/, scripts/, etc.)
  *   bump nothing extension-wise.
  *
  * Pure function — no I/O — so tests can call it with synthetic file lists.
@@ -43,10 +50,12 @@ export function classifyChanges(changedFiles) {
   const inRsModule = changedFiles.some((f) => f.startsWith('packages/rs-module/'));
   const inExtension = changedFiles.some((f) => f.startsWith('packages/extension/'));
   const inThunderbird = changedFiles.some((f) => f.startsWith('packages/thunderbird/'));
+  const inLockfile = changedFiles.some((f) => f === 'package-lock.json');
   return {
     rsModuleChanged: inRsModule,
-    extensionNeedsBump: inRsModule || inExtension,
-    thunderbirdNeedsBump: inRsModule || inThunderbird,
+    lockfileChanged: inLockfile,
+    extensionNeedsBump: inRsModule || inExtension || inLockfile,
+    thunderbirdNeedsBump: inRsModule || inThunderbird || inLockfile,
   };
 }
 
@@ -130,6 +139,7 @@ export function main(argv = process.argv) {
     console.log('[release-bump] no previous tag found — initial release, bumping everything');
     classification = {
       rsModuleChanged: true,
+      lockfileChanged: true,
       extensionNeedsBump: true,
       thunderbirdNeedsBump: true,
     };
@@ -137,18 +147,19 @@ export function main(argv = process.argv) {
     classification = classifyChanges(changedFiles);
     console.log(`[release-bump] previous tag: ${prevTag}`);
     console.log(`[release-bump] rs-module changed: ${classification.rsModuleChanged}`);
+    console.log(`[release-bump] lockfile changed:  ${classification.lockfileChanged}`);
     console.log(`[release-bump] extension bump:    ${classification.extensionNeedsBump}`);
     console.log(`[release-bump] thunderbird bump:  ${classification.thunderbirdNeedsBump}`);
   }
 
   if (!classification.extensionNeedsBump) {
     console.log(
-      '[release-bump] extension version pinned — no changes to packages/extension/ or packages/rs-module/',
+      '[release-bump] extension version pinned — no changes to packages/extension/, packages/rs-module/, or package-lock.json',
     );
   }
   if (!classification.thunderbirdNeedsBump) {
     console.log(
-      '[release-bump] thunderbird version pinned — no changes to packages/thunderbird/ or packages/rs-module/',
+      '[release-bump] thunderbird version pinned — no changes to packages/thunderbird/, packages/rs-module/, or package-lock.json',
     );
   }
 

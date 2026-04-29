@@ -23,6 +23,7 @@ describe('classifyChanges', () => {
       ]),
     ).toEqual({
       rsModuleChanged: false,
+      lockfileChanged: false,
       extensionNeedsBump: false,
       thunderbirdNeedsBump: false,
     });
@@ -33,6 +34,7 @@ describe('classifyChanges', () => {
       classifyChanges(['packages/rs-module/src/runtime.ts']),
     ).toEqual({
       rsModuleChanged: true,
+      lockfileChanged: false,
       extensionNeedsBump: true,
       thunderbirdNeedsBump: true,
     });
@@ -43,6 +45,7 @@ describe('classifyChanges', () => {
       classifyChanges(['packages/extension/src/popup/Popup.svelte']),
     ).toEqual({
       rsModuleChanged: false,
+      lockfileChanged: false,
       extensionNeedsBump: true,
       thunderbirdNeedsBump: false,
     });
@@ -53,24 +56,45 @@ describe('classifyChanges', () => {
       classifyChanges(['packages/thunderbird/manifest.json']),
     ).toEqual({
       rsModuleChanged: false,
+      lockfileChanged: false,
       extensionNeedsBump: false,
       thunderbirdNeedsBump: true,
     });
   });
 
-  it('treats root config / docs / scripts / .github as web-only (no extension bump)', () => {
+  /**
+   * REGRESSION (from PR #108 review): an earlier version of this function
+   * treated `package-lock.json` as web-only. But `npm ci` runs before the
+   * extension build, so a lockfile-only update (e.g. `npm audit fix`,
+   * transitive resolution refresh) can change bundled libs like
+   * `webextension-polyfill`/`remotestoragejs` and produce a different
+   * .zip/.xpi with the same manifest version. Stores reject that. We
+   * conservatively treat any lockfile change as extension-affecting.
+   */
+  it('flags both extensions when only the lockfile changes', () => {
+    expect(
+      classifyChanges(['package-lock.json']),
+    ).toEqual({
+      rsModuleChanged: false,
+      lockfileChanged: true,
+      extensionNeedsBump: true,
+      thunderbirdNeedsBump: true,
+    });
+  });
+
+  it('treats root config / docs / .github as web-only (no extension bump)', () => {
     expect(
       classifyChanges([
         'README.md',
         'CLAUDE.md',
         'package.json',
-        'package-lock.json',
         'scripts/release-bump.mjs',
         '.github/workflows/release.yml',
         'docker-compose.yml',
       ]),
     ).toEqual({
       rsModuleChanged: false,
+      lockfileChanged: false,
       extensionNeedsBump: false,
       thunderbirdNeedsBump: false,
     });
@@ -84,6 +108,7 @@ describe('classifyChanges', () => {
       ]),
     ).toEqual({
       rsModuleChanged: false,
+      lockfileChanged: false,
       extensionNeedsBump: true,
       thunderbirdNeedsBump: false,
     });
@@ -92,6 +117,7 @@ describe('classifyChanges', () => {
   it('handles empty input', () => {
     expect(classifyChanges([])).toEqual({
       rsModuleChanged: false,
+      lockfileChanged: false,
       extensionNeedsBump: false,
       thunderbirdNeedsBump: false,
     });
@@ -104,6 +130,20 @@ describe('classifyChanges', () => {
       classifyChanges(['packages/extension-foo/manifest.json']),
     ).toEqual({
       rsModuleChanged: false,
+      lockfileChanged: false,
+      extensionNeedsBump: false,
+      thunderbirdNeedsBump: false,
+    });
+  });
+
+  it('does not match nested lockfiles inside packages (only root package-lock.json counts)', () => {
+    // Workspaces only ever produce one root lockfile, but defend against
+    // future tools dropping nested lockfiles into a package.
+    expect(
+      classifyChanges(['packages/web/package-lock.json']),
+    ).toEqual({
+      rsModuleChanged: false,
+      lockfileChanged: false,
       extensionNeedsBump: false,
       thunderbirdNeedsBump: false,
     });
@@ -218,6 +258,24 @@ describe('end-to-end policy (web-only release scenario)', () => {
 
   it('an rs-module diff produces a plan that bumps everything', () => {
     const changedFiles = ['packages/rs-module/src/runtime.ts'];
+    const plan = planBumps('2.2.0', classifyChanges(changedFiles));
+    const files = plan.map((p) => p.file);
+
+    expect(files).toContain('packages/extension/manifest.json');
+    expect(files).toContain('packages/extension/manifest.firefox.json');
+    expect(files).toContain('packages/thunderbird/manifest.json');
+  });
+
+  /**
+   * REGRESSION: `npm audit fix` / `npm update` / a routine lockfile refresh
+   * can change bundled extension libs (caret-pinned webextension-polyfill,
+   * remotestoragejs, rs-migrate) without touching any source file. The
+   * extension build runs after `npm ci`, so the resulting .zip/.xpi differs
+   * from the previous release. Stores reject re-uploading a different
+   * artifact under an existing version, so the bump must follow.
+   */
+  it('a lockfile-only diff produces a plan that bumps both extension manifests', () => {
+    const changedFiles = ['package-lock.json'];
     const plan = planBumps('2.2.0', classifyChanges(changedFiles));
     const files = plan.map((p) => p.file);
 
