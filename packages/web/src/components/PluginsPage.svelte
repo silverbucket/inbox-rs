@@ -10,6 +10,7 @@
     compatibility: string;
     downloadLabel: string;
     downloadHref: string;
+    artifactVersion: string;
     format: string;
     note: string;
     steps: string[];
@@ -22,7 +23,8 @@
       name: 'Chromium',
       compatibility: 'Chrome, Brave, Edge, and other Chromium browsers',
       downloadLabel: 'Download Chromium Bundle',
-      downloadHref: pluginArtifacts.chromium,
+      downloadHref: pluginArtifacts.chromium.url,
+      artifactVersion: pluginArtifacts.chromium.version,
       format: 'ZIP',
       note: 'Chromium browsers require loading this as an unpacked extension.',
       steps: [
@@ -37,7 +39,8 @@
       name: 'Firefox',
       compatibility: 'Firefox 109+',
       downloadLabel: 'Download Firefox Add-on',
-      downloadHref: pluginArtifacts.firefox,
+      downloadHref: pluginArtifacts.firefox.url,
+      artifactVersion: pluginArtifacts.firefox.version,
       format: 'XPI',
       note: 'Unsigned builds require temporary installation via the debugging page.',
       steps: [
@@ -70,7 +73,8 @@
     name: 'Thunderbird',
     compatibility: 'Thunderbird 128+',
     downloadLabel: 'Download Thunderbird Add-on',
-    downloadHref: pluginArtifacts.thunderbird,
+    downloadHref: pluginArtifacts.thunderbird.url,
+    artifactVersion: pluginArtifacts.thunderbird.version,
     format: 'XPI',
     note: 'Thunderbird installs the add-on directly from the downloaded file.',
     steps: [
@@ -128,7 +132,7 @@
                 <span class="compatibility">{dl.compatibility}</span>
               </div>
             </div>
-            <span class="file-pill">{dl.format}</span>
+            <span class="file-pill">{dl.format} · v{dl.artifactVersion}</span>
           </div>
 
           <a class="download-button" href={dl.downloadHref} download>
@@ -186,7 +190,7 @@
               <span class="compatibility">{thunderbirdDownload.compatibility}</span>
             </div>
           </div>
-          <span class="file-pill">{thunderbirdDownload.format}</span>
+          <span class="file-pill">{thunderbirdDownload.format} · v{thunderbirdDownload.artifactVersion}</span>
         </div>
 
         <a class="download-button" href={thunderbirdDownload.downloadHref} download>

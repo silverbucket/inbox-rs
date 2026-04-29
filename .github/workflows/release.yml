@@ -67,39 +67,32 @@ jobs:
 
       - name: Bump version
         id: version
+        # `npm version` updates the root package.json. Per-package + manifest
+        # bumps are delegated to scripts/release-bump.mjs, which only bumps
+        # the browser extensions when their effective bundle (their own
+        # package directory + rs-module) changed since the previous tag.
+        # This avoids burning store-version numbers on web-only releases.
+        env:
+          BUMP: ${{ inputs.bump }}
         run: |
-          npm version ${{ inputs.bump }} --no-git-tag-version
+          npm version "$BUMP" --no-git-tag-version
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Sync version to all packages and manifests
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          for pkg in packages/*/package.json; do
-            node -e "
-              const fs = require('fs');
-              const p = JSON.parse(fs.readFileSync('$pkg','utf8'));
-              p.version = '$VERSION';
-              fs.writeFileSync('$pkg', JSON.stringify(p, null, 2) + '\n');
-            "
-          done
-          for manifest in packages/extension/manifest.json packages/extension/manifest.firefox.json packages/thunderbird/manifest.json; do
-            node -e "
-              const fs = require('fs');
-              const m = JSON.parse(fs.readFileSync('$manifest','utf8'));
-              m.version = '$VERSION';
-              fs.writeFileSync('$manifest', JSON.stringify(m, null, 2) + '\n');
-            "
-          done
+      - name: Bump per-package versions (conditional on what changed)
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: node scripts/release-bump.mjs "$VERSION"
 
       - name: Commit version bump and tag
         # This clean commit (no build artifacts) is what gets pushed to origin/master.
+        # `git add -u` picks up exactly what release-bump.mjs touched — which
+        # may or may not include the extension manifests depending on what
+        # changed since the previous tag.
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          git add package.json packages/*/package.json \
-            packages/extension/manifest.json \
-            packages/extension/manifest.firefox.json \
-            packages/thunderbird/manifest.json
+          git add -u
           git commit -m "release v${VERSION}"
           git tag "v${VERSION}"
           git push origin HEAD:master --tags

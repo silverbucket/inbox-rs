@@ -5,17 +5,26 @@ import { dirname, join, resolve } from 'node:path';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(scriptDir, '..');
-const packageJsonPath = join(rootDir, 'package.json');
-const { version } = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
 
 const extensionDir = join(rootDir, 'packages', 'extension');
 const thunderbirdDir = join(rootDir, 'packages', 'thunderbird');
 const downloadsDir = join(rootDir, 'packages', 'web', 'public', 'downloads');
 
+// Each extension's artifact filename uses its OWN version (from its own
+// package.json), not the root web-app version. This is what lets the
+// release workflow ship a new web release without re-versioning unchanged
+// extensions — see scripts/release-bump.mjs.
+function readVersion(pkgJson) {
+  return JSON.parse(readFileSync(pkgJson, 'utf8')).version;
+}
+
+const extensionVersion = readVersion(join(extensionDir, 'package.json'));
+const thunderbirdVersion = readVersion(join(thunderbirdDir, 'package.json'));
+
 const artifactNames = {
-  chromium: `inbox-rs-chromium-${version}.zip`,
-  firefox: `inbox-rs-firefox-${version}.xpi`,
-  thunderbird: `inbox-rs-thunderbird-${version}.xpi`,
+  chromium: `inbox-rs-chromium-${extensionVersion}.zip`,
+  firefox: `inbox-rs-firefox-${extensionVersion}.xpi`,
+  thunderbird: `inbox-rs-thunderbird-${thunderbirdVersion}.xpi`,
 };
 
 function runNpm(args, env = {}) {
