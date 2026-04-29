@@ -1,24 +1,34 @@
-import { bookmarkSchema, noteSchema, imageMetaSchema, audioMetaSchema, videoMetaSchema, documentMetaSchema, todoSchema, emailSchema, appConfigSchema, userSettingsSchema, collectionSchema, collectionGroupSchema } from './schemas.js';
-import type { InboxItem, InboxItemType, AppConfig, UserSettings, Collection, CollectionGroup } from './types.js';
 import type { MigrateResult } from 'rs-migrate';
-import { migrator, legacySchemas } from './migrations.js';
 import {
   legacyBinaryStringToArrayBuffer,
   recoverLegacyBinaryStringEncoding,
 } from './legacy/binary-recovery.js';
-export { migrator } from './migrations.js';
-export { wrapCodeBlock } from './migrations.js';
+import { legacySchemas, migrator } from './migrations.js';
+import {
+  appConfigSchema,
+  audioMetaSchema,
+  bookmarkSchema,
+  collectionGroupSchema,
+  collectionSchema,
+  documentMetaSchema,
+  emailSchema,
+  imageMetaSchema,
+  noteSchema,
+  todoSchema,
+  userSettingsSchema,
+  videoMetaSchema,
+} from './schemas.js';
+import type {
+  AppConfig,
+  Collection,
+  CollectionGroup,
+  InboxItem,
+  InboxItemType,
+  UserSettings,
+} from './types.js';
+
 export { recoverLegacyBinaryStringEncoding } from './legacy/binary-recovery.js';
-export {
-  DirectRS,
-  connectViaOAuth,
-  createConfigStore,
-  discoverStorage,
-  extractTokenFromRedirect,
-  parseUserAddress,
-  schemeForHost,
-  DEFAULT_CONFIG_STORAGE_KEY,
-} from './runtime.js';
+export { migrator, wrapCodeBlock } from './migrations.js';
 export type {
   BrowserStorageArea,
   ConfigStore,
@@ -26,21 +36,55 @@ export type {
   RSConfig,
   RSDiscovery,
 } from './runtime.js';
+export {
+  connectViaOAuth,
+  createConfigStore,
+  DEFAULT_CONFIG_STORAGE_KEY,
+  DirectRS,
+  discoverStorage,
+  extractTokenFromRedirect,
+  parseUserAddress,
+  schemeForHost,
+} from './runtime.js';
 
 /** Current item types — legacy types like 'voice-memo' are excluded */
 const CURRENT_TYPES: Set<string> = new Set<string>([
-  'bookmark', 'note', 'image', 'audio', 'video',
-  'document', 'todo', 'email',
+  'bookmark',
+  'note',
+  'image',
+  'audio',
+  'video',
+  'document',
+  'todo',
+  'email',
 ] satisfies InboxItemType[]);
 
-export type { InboxItem, InboxItemBase, InboxItemType, BookmarkItem, NoteItem, ImageItem, AudioItem, VideoItem, DocumentItem, TodoItem, EmailItem, AppConfig, UserSettings, Collection, CollectionGroup } from './types.js';
+export type {
+  AppConfig,
+  AudioItem,
+  BookmarkItem,
+  Collection,
+  CollectionGroup,
+  DocumentItem,
+  EmailItem,
+  ImageItem,
+  InboxItem,
+  InboxItemBase,
+  InboxItemType,
+  NoteItem,
+  TodoItem,
+  UserSettings,
+  VideoItem,
+} from './types.js';
 
 export interface InboxModuleExports {
   getAll(): Promise<Record<string, InboxItem>>;
   getById(id: string): Promise<InboxItem | undefined>;
   store(item: InboxItem, fileData?: ArrayBuffer): Promise<void>;
   remove(id: string, item?: InboxItem): Promise<void>;
-  getFile(path: string): Promise<{ data: ArrayBuffer; mimeType: string } | undefined>;
+  getFile(
+    path: string,
+  ): Promise<{ data: ArrayBuffer; mimeType: string } | undefined>;
   getConfig(): Promise<AppConfig>;
   setConfig(config: AppConfig): Promise<void>;
   getUserSettings(): Promise<UserSettings>;
@@ -60,11 +104,16 @@ export interface InboxModuleExports {
 /** Maps item type to remoteStorage schema alias */
 function schemaAlias(type: string): string {
   switch (type) {
-    case 'audio': return 'audio-meta';
-    case 'image': return 'image-meta';
-    case 'video': return 'video-meta';
-    case 'document': return 'document-meta';
-    default: return type;
+    case 'audio':
+      return 'audio-meta';
+    case 'image':
+      return 'image-meta';
+    case 'video':
+      return 'video-meta';
+    case 'document':
+      return 'document-meta';
+    default:
+      return type;
   }
 }
 
@@ -115,9 +164,12 @@ const InboxModule = {
           // remain unstamped so their migrations still run.
           const latestVersion = migrator.getLatestVersion('items');
           for (const item of Object.values(items) as InboxItem[]) {
-            if (item && typeof item === 'object'
-                && item._migrateVersion === undefined
-                && CURRENT_TYPES.has(item.type)) {
+            if (
+              item &&
+              typeof item === 'object' &&
+              item._migrateVersion === undefined &&
+              CURRENT_TYPES.has(item.type)
+            ) {
               item._migrateVersion = latestVersion;
             }
           }
@@ -126,7 +178,11 @@ const InboxModule = {
 
         async getById(id: string): Promise<InboxItem | undefined> {
           const item = await privateClient.getObject(`items/${id}`);
-          if (item && item._migrateVersion === undefined && CURRENT_TYPES.has(item.type)) {
+          if (
+            item &&
+            item._migrateVersion === undefined &&
+            CURRENT_TYPES.has(item.type)
+          ) {
             item._migrateVersion = migrator.getLatestVersion('items');
           }
           return item;
@@ -138,13 +194,27 @@ const InboxModule = {
           if (item._migrateVersion === undefined) {
             item._migrateVersion = migrator.getLatestVersion('items');
           }
-          if (fileData && 'filePath' in item && item.filePath && 'mimeType' in item && item.mimeType) {
+          if (
+            fileData &&
+            'filePath' in item &&
+            item.filePath &&
+            'mimeType' in item &&
+            item.mimeType
+          ) {
             // Pass the original ArrayBuffer (not a binary string): the local
             // IndexedDB cache stores it exactly, and the sync layer pushes it
             // to the server intact on the next cycle.
-            await privateClient.storeFile(item.mimeType, item.filePath, fileData);
+            await privateClient.storeFile(
+              item.mimeType,
+              item.filePath,
+              fileData,
+            );
           }
-          await privateClient.storeObject(schemaAlias(item.type), `items/${item.id}`, item);
+          await privateClient.storeObject(
+            schemaAlias(item.type),
+            `items/${item.id}`,
+            item,
+          );
         },
 
         async remove(id: string, item?: InboxItem): Promise<void> {
@@ -154,16 +224,19 @@ const InboxModule = {
           await privateClient.remove(`items/${id}`);
         },
 
-        async getFile(path: string): Promise<{ data: ArrayBuffer; mimeType: string } | undefined> {
+        async getFile(
+          path: string,
+        ): Promise<{ data: ArrayBuffer; mimeType: string } | undefined> {
           const file = await privateClient.getFile(path);
           if (!file?.data) return undefined;
           const mimeType = file.mimeType || file.contentType;
           // Both branches are no-ops for correctly-uploaded files; they
           // recover bytes from the v1.8-and-earlier store path. See
           // `legacy/binary-recovery.ts` for the detection invariant.
-          const data = typeof file.data === 'string'
-            ? legacyBinaryStringToArrayBuffer(file.data)
-            : recoverLegacyBinaryStringEncoding(file.data);
+          const data =
+            typeof file.data === 'string'
+              ? legacyBinaryStringToArrayBuffer(file.data)
+              : recoverLegacyBinaryStringEncoding(file.data);
           return { data, mimeType };
         },
 
@@ -180,7 +253,11 @@ const InboxModule = {
         },
 
         async setUserSettings(settings: UserSettings): Promise<void> {
-          await privateClient.storeObject('user-settings', 'config/user', settings);
+          await privateClient.storeObject(
+            'user-settings',
+            'config/user',
+            settings,
+          );
         },
 
         async getAllCollections(): Promise<Record<string, Collection>> {
@@ -194,7 +271,11 @@ const InboxModule = {
         },
 
         async storeCollection(collection: Collection): Promise<void> {
-          await privateClient.storeObject('collection', `collections/${collection.id}`, collection);
+          await privateClient.storeObject(
+            'collection',
+            `collections/${collection.id}`,
+            collection,
+          );
         },
 
         async removeCollection(id: string): Promise<void> {
@@ -212,7 +293,11 @@ const InboxModule = {
         },
 
         async storeGroup(group: CollectionGroup): Promise<void> {
-          await privateClient.storeObject('collection-group', `groups/${group.id}`, group);
+          await privateClient.storeObject(
+            'collection-group',
+            `groups/${group.id}`,
+            group,
+          );
         },
 
         async removeGroup(id: string): Promise<void> {
@@ -225,15 +310,20 @@ const InboxModule = {
 
         async runAllMigrations(): Promise<MigrateResult[]> {
           return migrator.migrateAll('items', {
-            getAll: () => privateClient.getAll('items/').then((r: any) => r || {}),
+            getAll: () =>
+              privateClient.getAll('items/').then((r: any) => r || {}),
             save: async (key: string, doc: any) => {
-              await privateClient.storeObject(schemaAlias(doc.type), `items/${key}`, doc);
+              await privateClient.storeObject(
+                schemaAlias(doc.type),
+                `items/${key}`,
+                doc,
+              );
             },
           });
-        }
-      } satisfies InboxModuleExports
+        },
+      } satisfies InboxModuleExports,
     };
-  }
+  },
 };
 
 export default InboxModule;

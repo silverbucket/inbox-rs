@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { extractTextBody } from './mime';
 
 /**
@@ -47,13 +47,18 @@ describe('extractTextBody', () => {
   });
 
   it('decodes common HTML entities', () => {
-    const html = '<p>5 &lt; 10 &amp; 20 &gt; 5 &quot;quoted&quot;&nbsp;text</p>';
-    expect(extractTextBody(part('text/html', html))).toBe('5 < 10 & 20 > 5 "quoted" text');
+    const html =
+      '<p>5 &lt; 10 &amp; 20 &gt; 5 &quot;quoted&quot;&nbsp;text</p>';
+    expect(extractTextBody(part('text/html', html))).toBe(
+      '5 < 10 & 20 > 5 "quoted" text',
+    );
   });
 
   it('converts <br> and </p> to newlines', () => {
     const html = '<p>line1</p><p>line2</p>line3<br>line4';
-    expect(extractTextBody(part('text/html', html))).toBe('line1\n\nline2\n\nline3\nline4');
+    expect(extractTextBody(part('text/html', html))).toBe(
+      'line1\n\nline2\n\nline3\nline4',
+    );
   });
 
   it('collapses runs of 3+ newlines to a single blank-line separator', () => {

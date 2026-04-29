@@ -1,8 +1,14 @@
-import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
-import type { InboxItem, AppConfig, UserSettings, Collection, CollectionGroup } from '@inbox-rs/rs-module';
-import rs from './rs';
-import { items, collections, groups, appConfig, userSettings } from './stores';
+import type {
+  AppConfig,
+  Collection,
+  CollectionGroup,
+  InboxItem,
+  UserSettings,
+} from '@inbox-rs/rs-module';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { get } from 'svelte/store';
+import rs from './rs';
+import { appConfig, collections, groups, items, userSettings } from './stores';
 
 export interface ExportManifest {
   version: 1;
@@ -39,20 +45,26 @@ export async function exportToZipBytes(
 
   onProgress?.({ phase: 'metadata', current: 0, total: 1 });
 
-  const [allItems, allCollections, allGroups, config, settings] = await Promise.all([
-    inbox.getAll() as Promise<Record<string, InboxItem>>,
-    inbox.getAllCollections() as Promise<Record<string, Collection>>,
-    inbox.getAllGroups() as Promise<Record<string, CollectionGroup>>,
-    inbox.getConfig() as Promise<AppConfig>,
-    inbox.getUserSettings() as Promise<UserSettings>,
-  ]);
+  const [allItems, allCollections, allGroups, config, settings] =
+    await Promise.all([
+      inbox.getAll() as Promise<Record<string, InboxItem>>,
+      inbox.getAllCollections() as Promise<Record<string, Collection>>,
+      inbox.getAllGroups() as Promise<Record<string, CollectionGroup>>,
+      inbox.getConfig() as Promise<AppConfig>,
+      inbox.getUserSettings() as Promise<UserSettings>,
+    ]);
 
   onProgress?.({ phase: 'metadata', current: 1, total: 1 });
 
   // Collect items that have binary files
   const fileItems: { filePath: string; mimeType: string }[] = [];
   for (const item of Object.values(allItems)) {
-    if ('filePath' in item && item.filePath && 'mimeType' in item && item.mimeType) {
+    if (
+      'filePath' in item &&
+      item.filePath &&
+      'mimeType' in item &&
+      item.mimeType
+    ) {
       fileItems.push({ filePath: item.filePath, mimeType: item.mimeType });
     }
   }
@@ -84,7 +96,11 @@ export async function exportToZipBytes(
     );
   }
 
-  onProgress?.({ phase: 'files', current: fileItems.length, total: fileItems.length });
+  onProgress?.({
+    phase: 'files',
+    current: fileItems.length,
+    total: fileItems.length,
+  });
 
   const manifest: ExportManifest = {
     version: 1,
@@ -141,9 +157,10 @@ export async function importFromZipBytes(
   const existingItems = get(items);
   const existingCollections = get(collections);
   const existingGroups = get(groups);
-  const totalToRemove = Object.keys(existingItems).length
-    + Object.keys(existingCollections).length
-    + Object.keys(existingGroups).length;
+  const totalToRemove =
+    Object.keys(existingItems).length +
+    Object.keys(existingCollections).length +
+    Object.keys(existingGroups).length;
   let removed = 0;
 
   onProgress?.({ phase: 'clearing', current: 0, total: totalToRemove });
@@ -165,9 +182,10 @@ export async function importFromZipBytes(
   }
 
   // Restore data: groups -> collections -> items
-  const totalToRestore = Object.keys(manifest.groups).length
-    + Object.keys(manifest.collections).length
-    + Object.keys(manifest.items).length;
+  const totalToRestore =
+    Object.keys(manifest.groups).length +
+    Object.keys(manifest.collections).length +
+    Object.keys(manifest.items).length;
   let restored = 0;
 
   onProgress?.({ phase: 'restoring', current: 0, total: totalToRestore });
@@ -175,13 +193,21 @@ export async function importFromZipBytes(
   for (const group of Object.values(manifest.groups)) {
     await inbox.storeGroup(group);
     restored++;
-    onProgress?.({ phase: 'restoring', current: restored, total: totalToRestore });
+    onProgress?.({
+      phase: 'restoring',
+      current: restored,
+      total: totalToRestore,
+    });
   }
 
   for (const collection of Object.values(manifest.collections)) {
     await inbox.storeCollection(collection);
     restored++;
-    onProgress?.({ phase: 'restoring', current: restored, total: totalToRestore });
+    onProgress?.({
+      phase: 'restoring',
+      current: restored,
+      total: totalToRestore,
+    });
   }
 
   for (const item of Object.values(manifest.items)) {
@@ -190,12 +216,19 @@ export async function importFromZipBytes(
       const zipPath = `files/${item.filePath}`;
       const bytes = unzipped[zipPath];
       if (bytes) {
-        fileData = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+        fileData = bytes.buffer.slice(
+          bytes.byteOffset,
+          bytes.byteOffset + bytes.byteLength,
+        ) as ArrayBuffer;
       }
     }
     await inbox.store(item, fileData);
     restored++;
-    onProgress?.({ phase: 'restoring', current: restored, total: totalToRestore });
+    onProgress?.({
+      phase: 'restoring',
+      current: restored,
+      total: totalToRestore,
+    });
   }
 
   // Restore config and settings (always write, even if empty, to clear old values)
@@ -203,13 +236,14 @@ export async function importFromZipBytes(
   await inbox.setUserSettings(manifest.userSettings ?? {});
 
   // Reload all stores
-  const [allItems, allCollections, allGroups, config, settings] = await Promise.all([
-    inbox.getAll() as Promise<Record<string, InboxItem>>,
-    inbox.getAllCollections() as Promise<Record<string, Collection>>,
-    inbox.getAllGroups() as Promise<Record<string, CollectionGroup>>,
-    inbox.getConfig() as Promise<AppConfig>,
-    inbox.getUserSettings() as Promise<UserSettings>,
-  ]);
+  const [allItems, allCollections, allGroups, config, settings] =
+    await Promise.all([
+      inbox.getAll() as Promise<Record<string, InboxItem>>,
+      inbox.getAllCollections() as Promise<Record<string, Collection>>,
+      inbox.getAllGroups() as Promise<Record<string, CollectionGroup>>,
+      inbox.getConfig() as Promise<AppConfig>,
+      inbox.getUserSettings() as Promise<UserSettings>,
+    ]);
   items.set(allItems);
   collections.set(allCollections);
   groups.set(allGroups);

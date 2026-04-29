@@ -4,7 +4,7 @@
  * row 1, nav buttons centered on row 2).
  */
 
-import { test, expect } from '../helpers/fixtures';
+import { expect, test } from '../helpers/fixtures';
 
 test('header uses grid layout on mobile', async ({ page, webOrigin }) => {
   // On phones, App.svelte's media query promotes `.header-inner` to
@@ -17,7 +17,10 @@ test('header uses grid layout on mobile', async ({ page, webOrigin }) => {
     const el = document.querySelector('.header-inner');
     return el ? getComputedStyle(el).display : null;
   });
-  expect(display, `.header-inner should be 'grid' on mobile, got ${display}`).toBe('grid');
+  expect(
+    display,
+    `.header-inner should be 'grid' on mobile, got ${display}`,
+  ).toBe('grid');
 });
 
 test('brand logo shrinks on mobile', async ({ page, webOrigin }) => {
@@ -31,10 +34,15 @@ test('brand logo shrinks on mobile', async ({ page, webOrigin }) => {
     const el = document.querySelector('.brand-logo');
     return el ? getComputedStyle(el).height : null;
   });
-  expect(height, `.brand-logo should be 30px on mobile, got ${height}`).toBe('30px');
+  expect(height, `.brand-logo should be 30px on mobile, got ${height}`).toBe(
+    '30px',
+  );
 });
 
-test('nav buttons remain visible at touch-target size', async ({ page, webOrigin }) => {
+test('nav buttons remain visible at touch-target size', async ({
+  page,
+  webOrigin,
+}) => {
   // Tab bars are notorious for getting clipped under the iOS home
   // indicator. Confirm the three primary nav buttons each occupy
   // non-zero box sizes inside the visible viewport.
@@ -46,7 +54,13 @@ test('nav buttons remain visible at touch-target size', async ({ page, webOrigin
     await expect(btn).toBeVisible();
     const box = await btn.boundingBox();
     expect(box, `${label} bounding box missing`).not.toBeNull();
-    expect(box!.width, `${label} too narrow for a touch target: ${JSON.stringify(box)}`).toBeGreaterThan(40);
-    expect(box!.height, `${label} too short for a touch target: ${JSON.stringify(box)}`).toBeGreaterThan(24);
+    expect(
+      box!.width,
+      `${label} too narrow for a touch target: ${JSON.stringify(box)}`,
+    ).toBeGreaterThan(40);
+    expect(
+      box!.height,
+      `${label} too short for a touch target: ${JSON.stringify(box)}`,
+    ).toBeGreaterThan(24);
   }
 });

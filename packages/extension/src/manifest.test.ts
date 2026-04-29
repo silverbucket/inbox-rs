@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
 
 /**
  * Manifest invariants for the Chrome (MV3) and Firefox (MV3) WebExtensions.
@@ -91,6 +91,8 @@ describe.each(variants)('extension manifest — %s', (_label, manifest) => {
 
 describe('firefox-specific manifest invariants', () => {
   it('declares browser_specific_settings.gecko.id (required by AMO)', () => {
-    expect(firefoxManifest.browser_specific_settings?.gecko?.id).toMatch(/^[\w.+-]+@[\w.-]+$/);
+    expect(firefoxManifest.browser_specific_settings?.gecko?.id).toMatch(
+      /^[\w.+-]+@[\w.-]+$/,
+    );
   });
 });

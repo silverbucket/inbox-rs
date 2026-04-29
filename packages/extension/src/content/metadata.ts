@@ -2,14 +2,14 @@
 function getMetadata() {
   const getMeta = (name: string): string | undefined => {
     const el = document.querySelector(
-      `meta[property="${name}"], meta[name="${name}"]`
+      `meta[property="${name}"], meta[name="${name}"]`,
     ) as HTMLMetaElement | null;
     return el?.content || undefined;
   };
 
   const favicon = (() => {
     const link = document.querySelector(
-      'link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]'
+      'link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]',
     ) as HTMLLinkElement | null;
     if (link?.href) return link.href;
     try {
@@ -24,9 +24,8 @@ function getMetadata() {
 
   // Extract tweet images if on Twitter/X
   const host = location.hostname.replace(/^www\./, '');
-  const tweetImages = (host === 'twitter.com' || host === 'x.com')
-    ? extractTweetImages()
-    : [];
+  const tweetImages =
+    host === 'twitter.com' || host === 'x.com' ? extractTweetImages() : [];
 
   return {
     title: getMeta('og:title') || document.title || '',
@@ -36,7 +35,7 @@ function getMetadata() {
     contentType: document.contentType,
     favicon,
     embeddedContent,
-    tweetImages
+    tweetImages,
   };
 }
 
@@ -50,14 +49,18 @@ function getEmbeddedContent(): string | undefined {
   }
 
   // Mastodon / Fediverse (common pattern)
-  const mastodonContent = document.querySelector('.e-content, .status__content');
+  const mastodonContent = document.querySelector(
+    '.e-content, .status__content',
+  );
   if (mastodonContent) {
     return mastodonContent.textContent?.trim() || undefined;
   }
 
   // Reddit
   if (host === 'reddit.com' || host.endsWith('.reddit.com')) {
-    const postBody = document.querySelector('[data-click-id="text"] .md, .RichTextJSON-root, shreddit-post');
+    const postBody = document.querySelector(
+      '[data-click-id="text"] .md, .RichTextJSON-root, shreddit-post',
+    );
     if (postBody) return postBody.textContent?.trim() || undefined;
   }
 
@@ -158,7 +161,10 @@ function extractTweetImages(): string[] {
  * Wait for a DOM element to appear (for SPAs like Twitter that render async).
  * Returns null if the element doesn't appear within the timeout.
  */
-function waitForElement(selector: string, timeout = 3000): Promise<Element | null> {
+function waitForElement(
+  selector: string,
+  timeout = 3000,
+): Promise<Element | null> {
   const existing = document.querySelector(selector);
   if (existing) return Promise.resolve(existing);
 
@@ -185,7 +191,7 @@ function waitForElement(selector: string, timeout = 3000): Promise<Element | nul
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'get-metadata') {
     const host = location.hostname.replace(/^www\./, '');
-    const isSPA = (host === 'twitter.com' || host === 'x.com');
+    const isSPA = host === 'twitter.com' || host === 'x.com';
 
     if (isSPA) {
       // Wait for tweet text to render before extracting (article appears first, text loads after)

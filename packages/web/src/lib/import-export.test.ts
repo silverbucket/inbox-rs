@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { get } from 'svelte/store';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockInbox = vi.hoisted(() => ({
   getAll: vi.fn().mockResolvedValue({}),
@@ -59,21 +60,36 @@ vi.mock('./clean-for-storage', () => ({
   cleanForStorage: (x: any) => x,
 }));
 
-import { exportToZipBytes, importFromZipBytes } from './import-export';
+import type {
+  Collection,
+  CollectionGroup,
+  InboxItem,
+} from '@inbox-rs/rs-module';
 import type { ExportManifest } from './import-export';
-import { items, collections, groups, appConfig, userSettings } from './stores';
-import type { InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
+import { exportToZipBytes, importFromZipBytes } from './import-export';
+import { appConfig, collections, groups, items, userSettings } from './stores';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 function makeNote(id: string, title: string): InboxItem {
-  return { id, type: 'note', title, body: 'test', createdAt: '2026-01-01T00:00:00Z' } as InboxItem;
+  return {
+    id,
+    type: 'note',
+    title,
+    body: 'test',
+    createdAt: '2026-01-01T00:00:00Z',
+  } as InboxItem;
 }
 
 function makeImage(id: string, title: string): InboxItem {
   return {
-    id, type: 'image', title, filePath: `images/${id}.jpg`, mimeType: 'image/jpeg', createdAt: '2026-01-01T00:00:00Z',
+    id,
+    type: 'image',
+    title,
+    filePath: `images/${id}.jpg`,
+    mimeType: 'image/jpeg',
+    createdAt: '2026-01-01T00:00:00Z',
   } as InboxItem;
 }
 
@@ -85,7 +101,10 @@ function makeGroup(id: string, name: string): CollectionGroup {
   return { id, name, collectionIds: [], createdAt: '2026-01-01T00:00:00Z' };
 }
 
-function makeUnzipResult(manifest: ExportManifest, binaryFiles?: Record<string, Uint8Array>): Record<string, Uint8Array> {
+function makeUnzipResult(
+  manifest: ExportManifest,
+  binaryFiles?: Record<string, Uint8Array>,
+): Record<string, Uint8Array> {
   const result: Record<string, Uint8Array> = {};
   result['manifest.json'] = encoder.encode(JSON.stringify(manifest));
   if (binaryFiles) {
@@ -126,7 +145,9 @@ describe('exportToZipBytes', () => {
     const zipInput = mockZipSync.mock.calls[0][0];
 
     // Parse the manifest that was passed to zipSync
-    const manifest: ExportManifest = JSON.parse(decoder.decode(zipInput['manifest.json']));
+    const manifest: ExportManifest = JSON.parse(
+      decoder.decode(zipInput['manifest.json']),
+    );
     expect(manifest.version).toBe(1);
     expect(manifest.exportedAt).toBeTruthy();
     expect(manifest.items).toEqual(testItems);
@@ -144,17 +165,26 @@ describe('exportToZipBytes', () => {
     mockInbox.getConfig.mockResolvedValue({});
     mockInbox.getUserSettings.mockResolvedValue({});
 
-    const fileData = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0]);
-    mockInbox.getFile.mockResolvedValue({ data: fileData.buffer, mimeType: 'image/jpeg' });
+    const fileData = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
+    mockInbox.getFile.mockResolvedValue({
+      data: fileData.buffer,
+      mimeType: 'image/jpeg',
+    });
 
     await exportToZipBytes();
 
     const zipInput = mockZipSync.mock.calls[0][0];
     expect(zipInput['files/images/img1.jpg']).toBeDefined();
-    expect(Array.from(zipInput['files/images/img1.jpg'])).toEqual([0xFF, 0xD8, 0xFF, 0xE0]);
+    expect(Array.from(zipInput['files/images/img1.jpg'])).toEqual([
+      0xff, 0xd8, 0xff, 0xe0,
+    ]);
 
-    const manifest: ExportManifest = JSON.parse(decoder.decode(zipInput['manifest.json']));
-    expect(manifest.files['images/img1.jpg']).toEqual({ mimeType: 'image/jpeg' });
+    const manifest: ExportManifest = JSON.parse(
+      decoder.decode(zipInput['manifest.json']),
+    );
+    expect(manifest.files['images/img1.jpg']).toEqual({
+      mimeType: 'image/jpeg',
+    });
   });
 
   it('fails when a file cannot be retrieved', async () => {
@@ -191,8 +221,12 @@ describe('exportToZipBytes', () => {
     const progress = vi.fn();
     await exportToZipBytes(progress);
 
-    expect(progress).toHaveBeenCalledWith(expect.objectContaining({ phase: 'metadata' }));
-    expect(progress).toHaveBeenCalledWith(expect.objectContaining({ phase: 'zipping' }));
+    expect(progress).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: 'metadata' }),
+    );
+    expect(progress).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: 'zipping' }),
+    );
   });
 });
 
@@ -237,10 +271,14 @@ describe('importFromZipBytes', () => {
     await importFromZipBytes(new Uint8Array([1, 2, 3]));
 
     expect(mockInbox.storeGroup).toHaveBeenCalledWith(manifest.groups.g1);
-    expect(mockInbox.storeCollection).toHaveBeenCalledWith(manifest.collections.c1);
+    expect(mockInbox.storeCollection).toHaveBeenCalledWith(
+      manifest.collections.c1,
+    );
     expect(mockInbox.store).toHaveBeenCalledWith(manifest.items.n1, undefined);
     expect(mockInbox.setConfig).toHaveBeenCalledWith(manifest.appConfig);
-    expect(mockInbox.setUserSettings).toHaveBeenCalledWith(manifest.userSettings);
+    expect(mockInbox.setUserSettings).toHaveBeenCalledWith(
+      manifest.userSettings,
+    );
 
     expect(get(items)).toEqual(manifest.items);
     expect(get(collections)).toEqual(manifest.collections);
@@ -249,7 +287,7 @@ describe('importFromZipBytes', () => {
 
   it('restores binary files via store(item, fileData)', async () => {
     const img = makeImage('img1', 'Photo');
-    const fileBytes = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0]);
+    const fileBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
     const manifest: ExportManifest = {
       version: 1,
       exportedAt: '2026-01-01T00:00:00Z',
@@ -261,7 +299,9 @@ describe('importFromZipBytes', () => {
       files: { 'images/img1.jpg': { mimeType: 'image/jpeg' } },
     };
 
-    mockUnzipSync.mockReturnValue(makeUnzipResult(manifest, { 'files/images/img1.jpg': fileBytes }));
+    mockUnzipSync.mockReturnValue(
+      makeUnzipResult(manifest, { 'files/images/img1.jpg': fileBytes }),
+    );
 
     await importFromZipBytes(new Uint8Array([1, 2, 3]));
 
@@ -269,7 +309,9 @@ describe('importFromZipBytes', () => {
     const [storedItem, storedFileData] = mockInbox.store.mock.calls[0];
     expect(storedItem.id).toBe('img1');
     expect(storedFileData).toBeInstanceOf(ArrayBuffer);
-    expect(Array.from(new Uint8Array(storedFileData))).toEqual([0xFF, 0xD8, 0xFF, 0xE0]);
+    expect(Array.from(new Uint8Array(storedFileData))).toEqual([
+      0xff, 0xd8, 0xff, 0xe0,
+    ]);
   });
 
   it('clears existing data before restoring', async () => {
@@ -292,7 +334,10 @@ describe('importFromZipBytes', () => {
 
     await importFromZipBytes(new Uint8Array([1, 2, 3]));
 
-    expect(mockInbox.remove).toHaveBeenCalledWith('old1', expect.objectContaining({ id: 'old1' }));
+    expect(mockInbox.remove).toHaveBeenCalledWith(
+      'old1',
+      expect.objectContaining({ id: 'old1' }),
+    );
     expect(mockInbox.removeCollection).toHaveBeenCalledWith('oldc');
     expect(mockInbox.removeGroup).toHaveBeenCalledWith('oldg');
   });
@@ -300,7 +345,9 @@ describe('importFromZipBytes', () => {
   it('rejects ZIP without manifest.json', async () => {
     mockUnzipSync.mockReturnValue({ 'other.txt': encoder.encode('hello') });
 
-    await expect(importFromZipBytes(new Uint8Array([1, 2, 3]))).rejects.toThrow('missing manifest.json');
+    await expect(importFromZipBytes(new Uint8Array([1, 2, 3]))).rejects.toThrow(
+      'missing manifest.json',
+    );
   });
 
   it('rejects manifest with wrong version', async () => {
@@ -317,7 +364,9 @@ describe('importFromZipBytes', () => {
 
     mockUnzipSync.mockReturnValue(makeUnzipResult(manifest as any));
 
-    await expect(importFromZipBytes(new Uint8Array([1, 2, 3]))).rejects.toThrow('Unsupported export version');
+    await expect(importFromZipBytes(new Uint8Array([1, 2, 3]))).rejects.toThrow(
+      'Unsupported export version',
+    );
   });
 
   it('calls onProgress callback during restore', async () => {
@@ -337,8 +386,12 @@ describe('importFromZipBytes', () => {
     const progress = vi.fn();
     await importFromZipBytes(new Uint8Array([1, 2, 3]), progress);
 
-    expect(progress).toHaveBeenCalledWith(expect.objectContaining({ phase: 'reading' }));
-    expect(progress).toHaveBeenCalledWith(expect.objectContaining({ phase: 'restoring' }));
+    expect(progress).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: 'reading' }),
+    );
+    expect(progress).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: 'restoring' }),
+    );
   });
 
   it('clears config and settings when archive has empty objects', async () => {
@@ -377,8 +430,12 @@ describe('round-trip', () => {
       n1: makeNote('n1', 'My Note'),
       img1: makeImage('img1', 'My Photo'),
     };
-    const testCollections = { c1: { ...makeCollection('c1', 'Work'), itemIds: ['n1'] } };
-    const testGroups = { g1: { ...makeGroup('g1', 'Projects'), collectionIds: ['c1'] } };
+    const testCollections = {
+      c1: { ...makeCollection('c1', 'Work'), itemIds: ['n1'] },
+    };
+    const testGroups = {
+      g1: { ...makeGroup('g1', 'Projects'), collectionIds: ['c1'] },
+    };
     const testConfig = { todosCollapsed: true, collectionsOrder: ['c1'] };
     const testSettings = { theme: 'dark' as const, abbreviation: 'NJ' };
     const fileBytes = new Uint8Array([1, 2, 3, 4, 5]);
@@ -388,7 +445,10 @@ describe('round-trip', () => {
     mockInbox.getAllGroups.mockResolvedValue(testGroups);
     mockInbox.getConfig.mockResolvedValue(testConfig);
     mockInbox.getUserSettings.mockResolvedValue(testSettings);
-    mockInbox.getFile.mockResolvedValue({ data: fileBytes.buffer, mimeType: 'image/jpeg' });
+    mockInbox.getFile.mockResolvedValue({
+      data: fileBytes.buffer,
+      mimeType: 'image/jpeg',
+    });
 
     // Capture what gets zipped during export
     let capturedZipInput: Record<string, Uint8Array> = {};
@@ -400,14 +460,18 @@ describe('round-trip', () => {
     await exportToZipBytes();
 
     // Verify export captured the right data
-    const exportedManifest: ExportManifest = JSON.parse(decoder.decode(capturedZipInput['manifest.json']));
+    const exportedManifest: ExportManifest = JSON.parse(
+      decoder.decode(capturedZipInput['manifest.json']),
+    );
     expect(exportedManifest.items).toEqual(testItems);
     expect(exportedManifest.collections).toEqual(testCollections);
     expect(exportedManifest.groups).toEqual(testGroups);
     expect(exportedManifest.appConfig).toEqual(testConfig);
     expect(exportedManifest.userSettings).toEqual(testSettings);
     expect(capturedZipInput['files/images/img1.jpg']).toBeDefined();
-    expect(Array.from(capturedZipInput['files/images/img1.jpg'])).toEqual([1, 2, 3, 4, 5]);
+    expect(Array.from(capturedZipInput['files/images/img1.jpg'])).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
 
     // Now simulate import with the same manifest
     vi.clearAllMocks();

@@ -1,17 +1,22 @@
-import RemoteStorage from 'remotestoragejs';
 import InboxModule, {
-  connectViaOAuth as sharedConnectViaOAuth,
   DirectRS,
   type RSConfig,
+  connectViaOAuth as sharedConnectViaOAuth,
 } from '@inbox-rs/rs-module';
+import RemoteStorage from 'remotestoragejs';
 
-export { DirectRS };
 export type { RSConfig };
+export { DirectRS };
 
 export function createRS(): RemoteStorage {
   const rs = new RemoteStorage({
     modules: [InboxModule],
-    changeEvents: { local: false, window: false, remote: false, conflict: false }
+    changeEvents: {
+      local: false,
+      window: false,
+      remote: false,
+      conflict: false,
+    },
   });
 
   rs.access.claim('inbox', 'rw');
@@ -39,7 +44,8 @@ export async function connectViaOAuth(userAddress: string): Promise<RSConfig> {
   return sharedConnectViaOAuth(userAddress, {
     clientId: new URL(redirectUrl).origin,
     redirectUrl,
-    launchAuthFlow: (url) => identity.launchWebAuthFlow({ url, interactive: true }) as Promise<string>,
+    launchAuthFlow: (url) =>
+      identity.launchWebAuthFlow({ url, interactive: true }) as Promise<string>,
   });
 }
 
@@ -52,6 +58,6 @@ export function configureRS(rs: RemoteStorage, config: RSConfig): void {
     href: config.href!,
     storageApi: config.storageApi!,
     token: config.token!,
-    properties: undefined
+    properties: undefined,
   });
 }

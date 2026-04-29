@@ -23,8 +23,8 @@
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(scriptDir, '..');
@@ -47,9 +47,15 @@ const rootDir = resolve(scriptDir, '..');
  * Pure function — no I/O — so tests can call it with synthetic file lists.
  */
 export function classifyChanges(changedFiles) {
-  const inRsModule = changedFiles.some((f) => f.startsWith('packages/rs-module/'));
-  const inExtension = changedFiles.some((f) => f.startsWith('packages/extension/'));
-  const inThunderbird = changedFiles.some((f) => f.startsWith('packages/thunderbird/'));
+  const inRsModule = changedFiles.some((f) =>
+    f.startsWith('packages/rs-module/'),
+  );
+  const inExtension = changedFiles.some((f) =>
+    f.startsWith('packages/extension/'),
+  );
+  const inThunderbird = changedFiles.some((f) =>
+    f.startsWith('packages/thunderbird/'),
+  );
   const inLockfile = changedFiles.some((f) => f === 'package-lock.json');
   return {
     rsModuleChanged: inRsModule,
@@ -99,7 +105,10 @@ export function changedFilesSince(prevTag, gitCwd = rootDir) {
     cwd: gitCwd,
     encoding: 'utf8',
   });
-  return out.split('\n').map((s) => s.trim()).filter(Boolean);
+  return out
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 /** Look up the most recent tag reachable from HEAD's first parent. */
@@ -136,7 +145,9 @@ export function main(argv = process.argv) {
   let classification;
   if (!prevTag) {
     // Initial release: bump everything.
-    console.log('[release-bump] no previous tag found — initial release, bumping everything');
+    console.log(
+      '[release-bump] no previous tag found — initial release, bumping everything',
+    );
     classification = {
       rsModuleChanged: true,
       lockfileChanged: true,
@@ -146,10 +157,18 @@ export function main(argv = process.argv) {
   } else {
     classification = classifyChanges(changedFiles);
     console.log(`[release-bump] previous tag: ${prevTag}`);
-    console.log(`[release-bump] rs-module changed: ${classification.rsModuleChanged}`);
-    console.log(`[release-bump] lockfile changed:  ${classification.lockfileChanged}`);
-    console.log(`[release-bump] extension bump:    ${classification.extensionNeedsBump}`);
-    console.log(`[release-bump] thunderbird bump:  ${classification.thunderbirdNeedsBump}`);
+    console.log(
+      `[release-bump] rs-module changed: ${classification.rsModuleChanged}`,
+    );
+    console.log(
+      `[release-bump] lockfile changed:  ${classification.lockfileChanged}`,
+    );
+    console.log(
+      `[release-bump] extension bump:    ${classification.extensionNeedsBump}`,
+    );
+    console.log(
+      `[release-bump] thunderbird bump:  ${classification.thunderbirdNeedsBump}`,
+    );
   }
 
   if (!classification.extensionNeedsBump) {

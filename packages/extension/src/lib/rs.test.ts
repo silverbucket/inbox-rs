@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * `lib/rs.ts` is a thin glue layer that:
@@ -26,9 +26,11 @@ const {
   mockFetch,
 } = vi.hoisted(() => ({
   mockChromeGetRedirectURL: vi.fn<() => string>(),
-  mockChromeLaunchWebAuthFlow: vi.fn<(args: { url: string; interactive: boolean }) => Promise<string>>(),
+  mockChromeLaunchWebAuthFlow:
+    vi.fn<(args: { url: string; interactive: boolean }) => Promise<string>>(),
   mockBrowserGetRedirectURL: vi.fn<() => string>(),
-  mockBrowserLaunchWebAuthFlow: vi.fn<(args: { url: string; interactive: boolean }) => Promise<string>>(),
+  mockBrowserLaunchWebAuthFlow:
+    vi.fn<(args: { url: string; interactive: boolean }) => Promise<string>>(),
   mockFetch: vi.fn(),
 }));
 
@@ -163,7 +165,9 @@ describe('connectViaOAuth (chrome/firefox)', () => {
           launchWebAuthFlow: mockChromeLaunchWebAuthFlow,
         },
       });
-      mockChromeGetRedirectURL.mockReturnValue('https://abcdef.chromiumapp.org/');
+      mockChromeGetRedirectURL.mockReturnValue(
+        'https://abcdef.chromiumapp.org/',
+      );
       mockChromeLaunchWebAuthFlow.mockResolvedValue(
         'https://abcdef.chromiumapp.org/#access_token=t',
       );
@@ -190,7 +194,9 @@ describe('connectViaOAuth (chrome/firefox)', () => {
     });
 
     it('uses a different client_id when the redirect URL changes', async () => {
-      mockChromeGetRedirectURL.mockReturnValueOnce('https://other.chromiumapp.org/cb');
+      mockChromeGetRedirectURL.mockReturnValueOnce(
+        'https://other.chromiumapp.org/cb',
+      );
       mockChromeLaunchWebAuthFlow.mockResolvedValueOnce(
         'https://other.chromiumapp.org/cb#access_token=t',
       );
@@ -200,7 +206,9 @@ describe('connectViaOAuth (chrome/firefox)', () => {
       const launchedUrl = mockChromeLaunchWebAuthFlow.mock.calls[0]![0].url;
       const params = new URL(launchedUrl).searchParams;
       expect(params.get('client_id')).toBe('https://other.chromiumapp.org');
-      expect(params.get('redirect_uri')).toBe('https://other.chromiumapp.org/cb');
+      expect(params.get('redirect_uri')).toBe(
+        'https://other.chromiumapp.org/cb',
+      );
     });
 
     it('uses inbox:rw as the OAuth scope', async () => {
@@ -214,7 +222,9 @@ describe('connectViaOAuth (chrome/firefox)', () => {
       await connectViaOAuth('alice@example.com');
 
       const launchedUrl = mockChromeLaunchWebAuthFlow.mock.calls[0]![0].url;
-      expect(new URL(launchedUrl).searchParams.get('response_type')).toBe('token');
+      expect(new URL(launchedUrl).searchParams.get('response_type')).toBe(
+        'token',
+      );
     });
 
     it('passes interactive:true to launchWebAuthFlow', async () => {
@@ -279,7 +289,9 @@ describe('connectViaOAuth (chrome/firefox)', () => {
     it('propagates a WebFinger failure (does not silently succeed)', async () => {
       mockFetch.mockResolvedValueOnce({ ok: false, status: 0 } as Response);
 
-      await expect(connectViaOAuth('alice@example.com')).rejects.toThrow(/WebFinger failed/);
+      await expect(connectViaOAuth('alice@example.com')).rejects.toThrow(
+        /WebFinger failed/,
+      );
     });
 
     it('propagates an OAuth error in the redirect URL', async () => {
@@ -287,7 +299,9 @@ describe('connectViaOAuth (chrome/firefox)', () => {
         'https://abc.chromiumapp.org/#error=access_denied',
       );
 
-      await expect(connectViaOAuth('alice@example.com')).rejects.toThrow(/access_denied/);
+      await expect(connectViaOAuth('alice@example.com')).rejects.toThrow(
+        /access_denied/,
+      );
     });
 
     it('propagates an invalid_client OAuth error (the bug class that just bit Thunderbird)', async () => {
@@ -295,7 +309,9 @@ describe('connectViaOAuth (chrome/firefox)', () => {
         'https://abc.chromiumapp.org/#error=invalid_client&error_description=client%20not%20registered',
       );
 
-      await expect(connectViaOAuth('alice@example.com')).rejects.toThrow(/invalid_client/);
+      await expect(connectViaOAuth('alice@example.com')).rejects.toThrow(
+        /invalid_client/,
+      );
     });
 
     it('rejects on a malformed user address before any network or OAuth call', async () => {

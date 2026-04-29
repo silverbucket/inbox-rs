@@ -21,8 +21,8 @@
  * would mostly test Armadietto's HTML, not our PWA.
  */
 
-import type { InboxItem } from '@inbox-rs/rs-module';
 import { setTimeout as delay } from 'node:timers/promises';
+import type { InboxItem } from '@inbox-rs/rs-module';
 
 // These constants match docker-compose.yml + armadietto.conf.json. Keeping
 // them in one place so a future server-port move is a single-line change.
@@ -37,7 +37,11 @@ export type RsUser = {
   readonly address: string;
 };
 
-export function makeRsUser(username: string, password: string, host = 'localhost:8000'): RsUser {
+export function makeRsUser(
+  username: string,
+  password: string,
+  host = 'localhost:8000',
+): RsUser {
   return { username, password, host, address: `${username}@${host}` };
 }
 
@@ -63,7 +67,7 @@ export async function waitForArmadietto(timeoutMs = 30_000): Promise<void> {
     await delay(250);
   }
   throw new Error(
-    `Armadietto never became ready at ${ARMADIETTO_ORIGIN}: ${String(lastErr)}`
+    `Armadietto never became ready at ${ARMADIETTO_ORIGIN}: ${String(lastErr)}`,
   );
 }
 
@@ -75,7 +79,10 @@ export async function waitForArmadietto(timeoutMs = 30_000): Promise<void> {
  * failure so misconfigured tests fail loudly instead of silently sharing a
  * stale account.
  */
-export async function ensureUser(user: RsUser, email?: string): Promise<RsUser> {
+export async function ensureUser(
+  user: RsUser,
+  email?: string,
+): Promise<RsUser> {
   const body = new URLSearchParams({
     username: user.username,
     email: email ?? `${user.username}@e2e.local`,
@@ -91,7 +98,7 @@ export async function ensureUser(user: RsUser, email?: string): Promise<RsUser> 
   if (r.status === 200 || r.status === 201 || r.status === 409) return user;
   const text = await r.text().catch(() => '');
   throw new Error(
-    `Armadietto signup for ${user.username} failed: HTTP ${r.status} — ${text.slice(0, 200)}`
+    `Armadietto signup for ${user.username} failed: HTTP ${r.status} — ${text.slice(0, 200)}`,
   );
 }
 
@@ -108,7 +115,7 @@ export async function ensureUser(user: RsUser, email?: string): Promise<RsUser> 
  */
 export async function oauthToken(
   user: RsUser,
-  options: { clientOrigin: string; scopes?: string }
+  options: { clientOrigin: string; scopes?: string },
 ): Promise<string> {
   const { clientOrigin, scopes = 'inbox:rw shares:rw' } = options;
   const body = new URLSearchParams({
@@ -130,7 +137,7 @@ export async function oauthToken(
   if (r.status !== 302) {
     const text = await r.text().catch(() => '');
     throw new Error(
-      `OAuth Allow for ${user.username} returned HTTP ${r.status}, expected 302. Body: ${text.slice(0, 200)}`
+      `OAuth Allow for ${user.username} returned HTTP ${r.status}, expected 302. Body: ${text.slice(0, 200)}`,
     );
   }
   const location = r.headers.get('Location') ?? '';
@@ -159,7 +166,7 @@ export async function oauthToken(
 export async function putInboxItem(
   user: RsUser,
   token: string,
-  options: { item: InboxItem }
+  options: { item: InboxItem },
 ): Promise<void> {
   const { item } = options;
   if (!item.id) throw new Error('inbox item must have a string `id`');
@@ -173,12 +180,12 @@ export async function putInboxItem(
       },
       body: JSON.stringify(item),
       signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
-    }
+    },
   );
   if (r.status !== 200 && r.status !== 201) {
     const text = await r.text().catch(() => '');
     throw new Error(
-      `PUT /inbox/items/${item.id} for ${user.username} failed: HTTP ${r.status} — ${text.slice(0, 200)}`
+      `PUT /inbox/items/${item.id} for ${user.username} failed: HTTP ${r.status} — ${text.slice(0, 200)}`,
     );
   }
 }

@@ -1,5 +1,5 @@
-import browser from 'webextension-polyfill';
 import { createConfigStore, type RSConfig } from '@inbox-rs/rs-module';
+import browser from 'webextension-polyfill';
 
 export type { RSConfig };
 

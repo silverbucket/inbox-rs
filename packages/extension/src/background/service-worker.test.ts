@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // --- Mock browser APIs (vi.hoisted ensures availability during vi.mock factory) ---
 const {
@@ -27,7 +27,9 @@ const {
 vi.mock('webextension-polyfill', () => ({
   default: {
     runtime: {
-      onInstalled: { addListener: (fn: Function) => onInstalledListeners.push(fn) },
+      onInstalled: {
+        addListener: (fn: Function) => onInstalledListeners.push(fn),
+      },
       onMessage: { addListener: (fn: Function) => onMessageListeners.push(fn) },
     },
     contextMenus: {
@@ -71,13 +73,16 @@ describe('service-worker', () => {
 
       expect(mockContextMenusCreate).toHaveBeenCalledTimes(3);
       expect(mockContextMenusCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'save-link', contexts: ['link'] })
+        expect.objectContaining({ id: 'save-link', contexts: ['link'] }),
       );
       expect(mockContextMenusCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'save-image', contexts: ['image'] })
+        expect.objectContaining({ id: 'save-image', contexts: ['image'] }),
       );
       expect(mockContextMenusCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'save-selection', contexts: ['selection'] })
+        expect.objectContaining({
+          id: 'save-selection',
+          contexts: ['selection'],
+        }),
       );
     });
   });
@@ -96,15 +101,19 @@ describe('service-worker', () => {
 
       const handler = onClickedListeners[0];
       await handler(
-        { menuItemId: 'save-image', srcUrl: 'https://example.com/photo.jpg', pageUrl: 'https://example.com/page' },
-        { id: 1, title: 'Test Page' }
+        {
+          menuItemId: 'save-image',
+          srcUrl: 'https://example.com/photo.jpg',
+          pageUrl: 'https://example.com/page',
+        },
+        { id: 1, title: 'Test Page' },
       );
 
       expect(mockFetch).toHaveBeenCalledWith('https://example.com/photo.jpg');
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/inbox/files/test-uuid-1234.jpg'),
-        expect.objectContaining({ method: 'PUT' })
+        expect.objectContaining({ method: 'PUT' }),
       );
 
       const metadataCall = mockFetch.mock.calls[2];
@@ -126,7 +135,7 @@ describe('service-worker', () => {
       const handler = onClickedListeners[0];
       await handler(
         { menuItemId: 'save-image', srcUrl: 'https://example.com/broken.jpg' },
-        { id: 1 }
+        { id: 1 },
       );
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -139,13 +148,17 @@ describe('service-worker', () => {
 
       const handler = onClickedListeners[0];
       await handler(
-        { menuItemId: 'save-link', linkUrl: 'https://example.com/article', linkText: 'Great Article' },
-        { id: 1 }
+        {
+          menuItemId: 'save-link',
+          linkUrl: 'https://example.com/article',
+          linkText: 'Great Article',
+        },
+        { id: 1 },
       );
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/inbox/items/test-uuid-1234'),
-        expect.objectContaining({ method: 'PUT' })
+        expect.objectContaining({ method: 'PUT' }),
       );
 
       const storedItem = JSON.parse(mockFetch.mock.calls[0][1].body);
@@ -165,8 +178,11 @@ describe('service-worker', () => {
 
       const handler = onClickedListeners[0];
       await handler(
-        { menuItemId: 'save-selection', selectionText: 'Selected paragraph of text' },
-        { id: 1, title: 'Tab Title', url: 'https://example.com' }
+        {
+          menuItemId: 'save-selection',
+          selectionText: 'Selected paragraph of text',
+        },
+        { id: 1, title: 'Tab Title', url: 'https://example.com' },
       );
 
       const storedItem = JSON.parse(mockFetch.mock.calls[0][1].body);
@@ -191,16 +207,19 @@ describe('service-worker', () => {
         .mockResolvedValueOnce({ ok: true });
 
       const handler = onMessageListeners[0];
-      const result = await handler({
-        type: 'download-and-store-image',
-        url: 'https://example.com/icon.png',
-        filePath: 'files/abc.png',
-      }, {});
+      const result = await handler(
+        {
+          type: 'download-and-store-image',
+          url: 'https://example.com/icon.png',
+          filePath: 'files/abc.png',
+        },
+        {},
+      );
 
       expect(result).toEqual({ ok: true, mimeType: 'image/png' });
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/inbox/files/abc.png'),
-        expect.objectContaining({ method: 'PUT' })
+        expect.objectContaining({ method: 'PUT' }),
       );
     });
 
@@ -208,11 +227,14 @@ describe('service-worker', () => {
       mockFetch.mockResolvedValueOnce({ ok: false });
 
       const handler = onMessageListeners[0];
-      const result = await handler({
-        type: 'download-and-store-image',
-        url: 'https://example.com/missing.png',
-        filePath: 'files/abc.png',
-      }, {});
+      const result = await handler(
+        {
+          type: 'download-and-store-image',
+          url: 'https://example.com/missing.png',
+          filePath: 'files/abc.png',
+        },
+        {},
+      );
 
       expect(result).toEqual({ ok: false });
     });
@@ -221,11 +243,14 @@ describe('service-worker', () => {
       mockStorageGet.mockResolvedValue({});
 
       const handler = onMessageListeners[0];
-      const result = await handler({
-        type: 'download-and-store-image',
-        url: 'https://example.com/img.png',
-        filePath: 'files/abc.png',
-      }, {});
+      const result = await handler(
+        {
+          type: 'download-and-store-image',
+          url: 'https://example.com/img.png',
+          filePath: 'files/abc.png',
+        },
+        {},
+      );
 
       expect(result).toEqual({ ok: false });
     });
@@ -239,7 +264,9 @@ describe('service-worker', () => {
       const handler = onMessageListeners[0];
       const result = await handler({ type: 'fetch-metadata', tabId: 42 }, {});
 
-      expect(mockTabsSendMessage).toHaveBeenCalledWith(42, { type: 'get-metadata' });
+      expect(mockTabsSendMessage).toHaveBeenCalledWith(42, {
+        type: 'get-metadata',
+      });
       expect(result).toEqual(metadata);
     });
   });

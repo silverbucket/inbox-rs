@@ -23,9 +23,15 @@ export const CodeBlockAutoIndent = Extension.create({
 
         // Compute the current line's leading whitespace
         const codeBlockStart = $from.start();
-        const textBefore = state.doc.textBetween(codeBlockStart, $from.pos, '\n', '\n');
+        const textBefore = state.doc.textBetween(
+          codeBlockStart,
+          $from.pos,
+          '\n',
+          '\n',
+        );
         const lastNewline = textBefore.lastIndexOf('\n');
-        const currentLine = lastNewline >= 0 ? textBefore.slice(lastNewline + 1) : textBefore;
+        const currentLine =
+          lastNewline >= 0 ? textBefore.slice(lastNewline + 1) : textBefore;
         const match = currentLine.match(/^(\s*)/);
         const leadingWhitespace = match ? match[1] : '';
 

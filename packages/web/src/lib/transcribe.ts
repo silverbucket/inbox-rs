@@ -8,9 +8,13 @@ async function getTranscriber() {
     try {
       const { pipeline, env } = await import('@xenova/transformers');
       env.allowLocalModels = false;
-      transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
-        quantized: true,
-      });
+      transcriber = await pipeline(
+        'automatic-speech-recognition',
+        'Xenova/whisper-tiny',
+        {
+          quantized: true,
+        },
+      );
       return transcriber;
     } catch (e) {
       console.error('[transcribe] Failed to load pipeline:', e);

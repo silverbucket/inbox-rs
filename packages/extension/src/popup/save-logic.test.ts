@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // --- Mock browser APIs (vi.hoisted ensures these are available when vi.mock factory runs) ---
 const { mockSendMessage, mockFetch } = vi.hoisted(() => {
@@ -16,8 +16,13 @@ vi.mock('webextension-polyfill', () => ({
 
 vi.stubGlobal('fetch', mockFetch);
 
-import { isImageUrl, isDirectImagePage, saveAsImage, saveAsBookmark } from './save-logic';
 import { DirectRS } from '../lib/rs';
+import {
+  isDirectImagePage,
+  isImageUrl,
+  saveAsBookmark,
+  saveAsImage,
+} from './save-logic';
 
 function makeRS() {
   return new DirectRS({
@@ -65,18 +70,26 @@ describe('isImageUrl', () => {
 
 describe('isDirectImagePage', () => {
   it('returns true when contentType is an image MIME type', () => {
-    expect(isDirectImagePage('image/jpeg', 'https://example.com/page')).toBe(true);
+    expect(isDirectImagePage('image/jpeg', 'https://example.com/page')).toBe(
+      true,
+    );
     expect(isDirectImagePage('image/png', 'https://example.com/')).toBe(true);
     expect(isDirectImagePage('image/webp', 'https://example.com/')).toBe(true);
   });
 
   it('returns true when URL has image extension (fallback)', () => {
-    expect(isDirectImagePage(undefined, 'https://example.com/photo.jpg')).toBe(true);
-    expect(isDirectImagePage('text/html', 'https://example.com/photo.png')).toBe(true);
+    expect(isDirectImagePage(undefined, 'https://example.com/photo.jpg')).toBe(
+      true,
+    );
+    expect(
+      isDirectImagePage('text/html', 'https://example.com/photo.png'),
+    ).toBe(true);
   });
 
   it('returns false for non-image pages', () => {
-    expect(isDirectImagePage('text/html', 'https://example.com/article')).toBe(false);
+    expect(isDirectImagePage('text/html', 'https://example.com/article')).toBe(
+      false,
+    );
     expect(isDirectImagePage(undefined, 'https://example.com/')).toBe(false);
   });
 });
@@ -204,20 +217,32 @@ describe('saveAsImage', () => {
     const rs = makeRS();
 
     const svgResult = await saveAsImage({
-      rs, id: 'img-svg', pageUrl: 'https://cdn.example.com/logo.svg',
-      pageTitle: '', pageNote: '', createdAt: '2026-01-01T00:00:00.000Z',
+      rs,
+      id: 'img-svg',
+      pageUrl: 'https://cdn.example.com/logo.svg',
+      pageTitle: '',
+      pageNote: '',
+      createdAt: '2026-01-01T00:00:00.000Z',
     });
     expect(svgResult!.mimeType).toBe('image/svg+xml');
 
     const icoResult = await saveAsImage({
-      rs, id: 'img-ico', pageUrl: 'https://cdn.example.com/favicon.ico',
-      pageTitle: '', pageNote: '', createdAt: '2026-01-01T00:00:00.000Z',
+      rs,
+      id: 'img-ico',
+      pageUrl: 'https://cdn.example.com/favicon.ico',
+      pageTitle: '',
+      pageNote: '',
+      createdAt: '2026-01-01T00:00:00.000Z',
     });
     expect(icoResult!.mimeType).toBe('image/x-icon');
 
     const jpgResult = await saveAsImage({
-      rs, id: 'img-jpg', pageUrl: 'https://cdn.example.com/photo.jpg',
-      pageTitle: '', pageNote: '', createdAt: '2026-01-01T00:00:00.000Z',
+      rs,
+      id: 'img-jpg',
+      pageUrl: 'https://cdn.example.com/photo.jpg',
+      pageTitle: '',
+      pageNote: '',
+      createdAt: '2026-01-01T00:00:00.000Z',
     });
     expect(jpgResult!.mimeType).toBe('image/jpeg');
   });
@@ -271,7 +296,7 @@ describe('saveAsBookmark', () => {
       expect.objectContaining({
         type: 'download-and-store-image',
         url: 'https://example.com/og-image.jpg',
-      })
+      }),
     );
     expect(result.filePath).toBeDefined();
     expect(result.ogImage).toBe('https://example.com/og-image.jpg');
@@ -293,7 +318,7 @@ describe('saveAsBookmark', () => {
     expect(mockSendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         url: 'https://pbs.twimg.com/media/abc.jpg',
-      })
+      }),
     );
   });
 

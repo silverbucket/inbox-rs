@@ -21,11 +21,15 @@
  * account. See `helpers/fixtures.ts` for the fixture rationale.
  */
 
-import { test, expect } from '../helpers/fixtures';
 import { putInboxItem } from '../helpers/armadietto';
+import { expect, test } from '../helpers/fixtures';
 import { seedRsSession } from '../helpers/pwa';
 
-test('offline → online → connect with a brand-new account', async ({ page, freshRsUser, webOrigin }) => {
+test('offline → online → connect with a brand-new account', async ({
+  page,
+  freshRsUser,
+  webOrigin,
+}) => {
   // User opens the app on a flaky connection, drops offline, comes back,
   // and connects for the first time. End state: connected, empty inbox.
   await page.goto(webOrigin);
@@ -35,18 +39,18 @@ test('offline → online → connect with a brand-new account', async ({ page, f
   // "Connect to your remoteStorage" CTA in InboxGrid is the unambiguous
   // disconnected-empty-state marker.
   await expect(
-    page.getByRole('button', { name: 'Connect to your remoteStorage' })
+    page.getByRole('button', { name: 'Connect to your remoteStorage' }),
   ).toBeVisible();
   await page.context().setOffline(true);
 
   // Disconnected UI must keep working with no network — the empty state
   // is fully static and hash routing doesn't hit the wire.
   await expect(
-    page.getByRole('button', { name: 'Connect to your remoteStorage' })
+    page.getByRole('button', { name: 'Connect to your remoteStorage' }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Collections' }).first().click();
   await expect(
-    page.getByRole('button', { name: 'Collections' }).first()
+    page.getByRole('button', { name: 'Collections' }).first(),
   ).toHaveAttribute('aria-current', 'page');
   await page.getByRole('button', { name: 'Inbox' }).first().click();
 
@@ -57,7 +61,9 @@ test('offline → online → connect with a brand-new account', async ({ page, f
   await page.getByPlaceholder('user@storage.example').fill(freshRsUser.address);
   await page.getByRole('button', { name: 'Connect', exact: true }).click();
 
-  await page.waitForURL(/^http:\/\/localhost:8000\/oauth\//, { timeout: 10_000 });
+  await page.waitForURL(/^http:\/\/localhost:8000\/oauth\//, {
+    timeout: 10_000,
+  });
   await page.locator('input[name="password"]').fill(freshRsUser.password);
   await page.locator('button[name="allow"]').click();
 
@@ -65,9 +71,11 @@ test('offline → online → connect with a brand-new account', async ({ page, f
   await page.waitForLoadState('networkidle');
 
   // Connected state: aria-label flips, disconnected CTA is gone.
-  await expect(page.getByRole('button', { name: 'User menu — connected' })).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Connect to your remoteStorage' })
+    page.getByRole('button', { name: 'User menu — connected' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Connect to your remoteStorage' }),
   ).toHaveCount(0);
 });
 
@@ -98,14 +106,14 @@ test('offline → online → connect with an existing account that has data', as
 
   // Disconnected first, then drop the network.
   await expect(
-    page.getByRole('button', { name: 'Connect to your remoteStorage' })
+    page.getByRole('button', { name: 'Connect to your remoteStorage' }),
   ).toBeVisible();
   await context.setOffline(true);
 
   // Hash navigation must keep working offline.
   await page.getByRole('button', { name: 'Collections' }).first().click();
   await expect(
-    page.getByRole('button', { name: 'Collections' }).first()
+    page.getByRole('button', { name: 'Collections' }).first(),
   ).toHaveAttribute('aria-current', 'page');
   await page.getByRole('button', { name: 'Inbox' }).first().click();
 
@@ -114,14 +122,18 @@ test('offline → online → connect with an existing account that has data', as
   // before page scripts; a simple in-place setItem wouldn't survive
   // the reload that triggers RS's connection handshake.
   await context.setOffline(false);
-  await seedRsSession(context, freshRsUser, freshRsToken, { clientOrigin: webOrigin });
+  await seedRsSession(context, freshRsUser, freshRsToken, {
+    clientOrigin: webOrigin,
+  });
   await page.reload();
   await page.waitForLoadState('networkidle');
 
   // Connected, and the pre-seeded note must surface after RS finishes
   // its initial sync. Sync timing varies on a cold connection so we
   // give it a generous deadline.
-  await expect(page.getByRole('button', { name: 'User menu — connected' })).toBeVisible({
+  await expect(
+    page.getByRole('button', { name: 'User menu — connected' }),
+  ).toBeVisible({
     timeout: 15_000,
   });
   await expect(page.getByText(sentinel)).toBeVisible({ timeout: 15_000 });

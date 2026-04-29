@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
 import { get } from 'svelte/store';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the RS module to prevent RemoteStorage initialization side effects
 const { mockFetchFileBlobUrl } = vi.hoisted(() => {
@@ -48,20 +49,44 @@ vi.mock('./clean-for-storage', () => ({
   cleanForStorage: (x: any) => x,
 }));
 
+import type {
+  Collection,
+  CollectionGroup,
+  InboxItem,
+} from '@inbox-rs/rs-module';
 import {
-  blobUrls, connected, loadFileBlobUrl,
-  collections, groups, groupCollections, moveCollectionToGroup,
-  deleteGroup, appConfig,
-  storeCollection, createCollection, deleteCollection,
-  storeItem,
-  reorderGroupCollections, items, todoItems, reorderUnfiledTodos, pendingMigrationCount,
+  activeGroupIds,
+  allTodos,
+  appConfig,
+  blobUrls,
+  collectionItems,
+  collections,
+  connected,
+  createCollection,
+  deleteCollection,
+  deleteGroup,
+  groupCollections,
+  groups,
+  items,
+  loadFileBlobUrl,
+  moveCollectionToGroup,
   moveItemToCollection,
-  collectionItems, userSettings,
-  activeGroupIds, visibleGroupedCollections, orphanCollections,
-  toggleGroupFilter, setActiveGroupFilters, storeGroup,
-  allTodos, openTodos, visibleTodos, reorderTodosGlobal,
+  openTodos,
+  orphanCollections,
+  pendingMigrationCount,
+  reorderGroupCollections,
+  reorderTodosGlobal,
+  reorderUnfiledTodos,
+  setActiveGroupFilters,
+  storeCollection,
+  storeGroup,
+  storeItem,
+  todoItems,
+  toggleGroupFilter,
+  userSettings,
+  visibleGroupedCollections,
+  visibleTodos,
 } from './stores';
-import type { Collection, CollectionGroup, InboxItem } from '@inbox-rs/rs-module';
 
 /**
  * rs.on() handlers are registered at module load time.
@@ -72,7 +97,10 @@ import type { Collection, CollectionGroup, InboxItem } from '@inbox-rs/rs-module
 const rsHandlerMap: Record<string, Array<(...args: any[]) => any>> = {};
 function captureRsHandlers() {
   if (Object.keys(rsHandlerMap).length > 0) return;
-  for (const [event, handler] of mockRs.on.mock.calls as [string, (...args: any[]) => any][]) {
+  for (const [event, handler] of mockRs.on.mock.calls as [
+    string,
+    (...args: any[]) => any,
+  ][]) {
     (rsHandlerMap[event] ??= []).push(handler);
   }
 }
@@ -86,10 +114,17 @@ function emitRsEvent(event: string, ...args: any[]) {
 }
 
 /** Capture the onChange handler registered at module load time (before mocks are cleared) */
-const onChangeHandler = mockInbox.onChange.mock.calls[0]?.[0] as ((event: any) => void) | undefined;
+const onChangeHandler = mockInbox.onChange.mock.calls[0]?.[0] as
+  | ((event: any) => void)
+  | undefined;
 
 /** Simulate a remoteStorage module change event with per-item data */
-function emitModuleChange(event: { relativePath: string; origin?: string; newValue?: any; oldValue?: any }) {
+function emitModuleChange(event: {
+  relativePath: string;
+  origin?: string;
+  newValue?: any;
+  oldValue?: any;
+}) {
   if (onChangeHandler) onChangeHandler({ origin: 'remote', ...event });
 }
 
@@ -118,7 +153,10 @@ describe('loadFileBlobUrl', () => {
       expect(get(blobUrls)['files/photo.jpg']).toBe('blob:test/123');
     });
 
-    expect(mockFetchFileBlobUrl).toHaveBeenCalledWith('files/photo.jpg', undefined);
+    expect(mockFetchFileBlobUrl).toHaveBeenCalledWith(
+      'files/photo.jpg',
+      undefined,
+    );
   });
 
   it('forwards mimeType through to fetchFileBlobUrl', async () => {
@@ -134,7 +172,10 @@ describe('loadFileBlobUrl', () => {
       expect(get(blobUrls)['files/photo.jpg']).toBe('blob:test/typed');
     });
 
-    expect(mockFetchFileBlobUrl).toHaveBeenCalledWith('files/photo.jpg', 'image/jpeg');
+    expect(mockFetchFileBlobUrl).toHaveBeenCalledWith(
+      'files/photo.jpg',
+      'image/jpeg',
+    );
   });
 
   it('does not fetch if blob URL already exists', () => {
@@ -170,14 +211,16 @@ describe('loadFileBlobUrl', () => {
     });
 
     // Small delay to ensure the .then() callback has run
-    await new Promise(r => setTimeout(r, 10));
+    await new Promise((r) => setTimeout(r, 10));
     expect(get(blobUrls)['files/missing.jpg']).toBeUndefined();
   });
 
   it('deduplicates concurrent requests for the same path', async () => {
     let resolveFirst!: (url: string) => void;
     mockFetchFileBlobUrl.mockReturnValue(
-      new Promise<string>(r => { resolveFirst = r; })
+      new Promise<string>((r) => {
+        resolveFirst = r;
+      }),
     );
 
     loadFileBlobUrl('files/photo.jpg');
@@ -201,7 +244,7 @@ describe('loadFileBlobUrl', () => {
     await vi.waitFor(() => {
       expect(mockFetchFileBlobUrl).toHaveBeenCalledTimes(1);
     });
-    await new Promise(r => setTimeout(r, 10));
+    await new Promise((r) => setTimeout(r, 10));
 
     // Second attempt should be allowed since first failed (no blob URL stored)
     mockFetchFileBlobUrl.mockResolvedValueOnce('blob:test/retry-ok');
@@ -331,7 +374,7 @@ describe('groupCollections', () => {
     groups.set({ g1: group });
 
     const result = get(groupCollections);
-    expect(result['g1'].map(c => c.id)).toEqual(['c2', 'c1', 'c3']);
+    expect(result['g1'].map((c) => c.id)).toEqual(['c2', 'c1', 'c3']);
   });
 
   it('filters out stale collectionIds entries', () => {
@@ -400,7 +443,7 @@ describe('todoItems ordering', () => {
       isTodo: true,
     });
     expect(get(items).quick.collectionId).toBeUndefined();
-    expect(get(todoItems).map(t => t.id)).toEqual(['quick']);
+    expect(get(todoItems).map((t) => t.id)).toEqual(['quick']);
   });
 
   it('keeps configured open todo order and falls back to newest-first for new todos', () => {
@@ -411,7 +454,7 @@ describe('todoItems ordering', () => {
     });
     appConfig.set({ todosGlobalOrder: ['t2'] });
 
-    expect(get(todoItems).map(todo => todo.id)).toEqual(['t2', 't3', 't1']);
+    expect(get(todoItems).map((todo) => todo.id)).toEqual(['t2', 't3', 't1']);
   });
 
   it('keeps completed todos after open todos and sorts them by completion time', () => {
@@ -429,7 +472,11 @@ describe('todoItems ordering', () => {
       }),
     });
 
-    expect(get(todoItems).map(todo => todo.id)).toEqual(['open', 'done-newer', 'done-older']);
+    expect(get(todoItems).map((todo) => todo.id)).toEqual([
+      'open',
+      'done-newer',
+      'done-older',
+    ]);
   });
 
   it('persists reordered unfiled todo ids into todosGlobalOrder', async () => {
@@ -443,7 +490,9 @@ describe('todoItems ordering', () => {
     await reorderUnfiledTodos(['t3', 't1', 't2']);
 
     expect(get(appConfig).todosGlobalOrder).toEqual(['t3', 't1', 't2']);
-    expect(mockInbox.setConfig).toHaveBeenCalledWith({ todosGlobalOrder: ['t3', 't1', 't2'] });
+    expect(mockInbox.setConfig).toHaveBeenCalledWith({
+      todosGlobalOrder: ['t3', 't1', 't2'],
+    });
   });
 
   it('splices unfiled reorders into todosGlobalOrder without moving filed todos', async () => {
@@ -464,7 +513,13 @@ describe('todoItems ordering', () => {
 
     // u1/u2/u3 occupy the same global slots they did before; only their
     // relative order has changed. c1 and c2 stay exactly where they were.
-    expect(get(appConfig).todosGlobalOrder).toEqual(['u3', 'c1', 'u1', 'c2', 'u2']);
+    expect(get(appConfig).todosGlobalOrder).toEqual([
+      'u3',
+      'c1',
+      'u1',
+      'c2',
+      'u2',
+    ]);
   });
 });
 
@@ -507,7 +562,7 @@ describe('collection todo consistency', () => {
     collections.set({ c1: collection });
 
     expect(get(collectionItems)['c1']).toEqual([]);
-    expect(get(todoItems).map(todo => todo.id)).toEqual(['t1']);
+    expect(get(todoItems).map((todo) => todo.id)).toEqual(['t1']);
   });
 });
 
@@ -640,7 +695,9 @@ describe('pendingMigrationCount visibility timing', () => {
   });
 
   it('keeps migration count hidden until initial sync settles', async () => {
-    mockInbox.getAll.mockResolvedValue({ legacy: makeLegacyVoiceMemo('legacy') });
+    mockInbox.getAll.mockResolvedValue({
+      legacy: makeLegacyVoiceMemo('legacy'),
+    });
 
     await rsHandlers['connected']();
 
@@ -652,7 +709,9 @@ describe('pendingMigrationCount visibility timing', () => {
   });
 
   it('shows migration count after the fallback timeout when no sync signal arrives', async () => {
-    mockInbox.getAll.mockResolvedValue({ legacy: makeLegacyVoiceMemo('legacy') });
+    mockInbox.getAll.mockResolvedValue({
+      legacy: makeLegacyVoiceMemo('legacy'),
+    });
 
     await rsHandlers['connected']();
 
@@ -664,7 +723,9 @@ describe('pendingMigrationCount visibility timing', () => {
   });
 
   it('does not count docs that only need a version bump with no content change', async () => {
-    mockInbox.getAll.mockResolvedValue({ note1: makeVersionedNote('note1', 1) });
+    mockInbox.getAll.mockResolvedValue({
+      note1: makeVersionedNote('note1', 1),
+    });
 
     await rsHandlers['connected']();
     emitRsEvent('sync-done');
@@ -696,7 +757,12 @@ describe('no group recreation after deletion', () => {
     // An unrelated item change should not recreate the deleted group
     emitModuleChange({
       relativePath: 'items/i1',
-      newValue: { id: 'i1', type: 'note', title: 'X', createdAt: '2026-01-01T00:00:00.000Z' },
+      newValue: {
+        id: 'i1',
+        type: 'note',
+        title: 'X',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
     });
 
     expect(Object.keys(get(groups))).toHaveLength(0);
@@ -714,7 +780,12 @@ describe('per-item change handling', () => {
   });
 
   it('adds an incoming item to the store', () => {
-    const item = { id: 'i1', type: 'note', title: 'Test', createdAt: '2026-01-01T00:00:00.000Z' };
+    const item = {
+      id: 'i1',
+      type: 'note',
+      title: 'Test',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
     emitModuleChange({ relativePath: 'items/i1', newValue: item });
 
     expect(get(items)['i1']).toBeDefined();
@@ -722,15 +793,30 @@ describe('per-item change handling', () => {
   });
 
   it('removes a deleted item from the store', () => {
-    items.set({ i1: { id: 'i1', type: 'note', title: 'Old', createdAt: '2026-01-01T00:00:00.000Z' } as InboxItem });
+    items.set({
+      i1: {
+        id: 'i1',
+        type: 'note',
+        title: 'Old',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      } as InboxItem,
+    });
 
-    emitModuleChange({ relativePath: 'items/i1', newValue: undefined, oldValue: { id: 'i1' } });
+    emitModuleChange({
+      relativePath: 'items/i1',
+      newValue: undefined,
+      oldValue: { id: 'i1' },
+    });
 
     expect(get(items)['i1']).toBeUndefined();
   });
 
   it('adds an incoming collection with itemIds normalization', () => {
-    const col = { id: 'c1', name: 'Test', createdAt: '2026-01-01T00:00:00.000Z' };
+    const col = {
+      id: 'c1',
+      name: 'Test',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
     emitModuleChange({ relativePath: 'collections/c1', newValue: col });
 
     expect(get(collections)['c1']).toBeDefined();
@@ -738,7 +824,11 @@ describe('per-item change handling', () => {
   });
 
   it('adds an incoming group with collectionIds normalization', () => {
-    const grp = { id: 'g1', name: 'Test Group', createdAt: '2026-01-01T00:00:00.000Z' };
+    const grp = {
+      id: 'g1',
+      name: 'Test Group',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
     emitModuleChange({ relativePath: 'groups/g1', newValue: grp });
 
     expect(get(groups)['g1']).toBeDefined();
@@ -746,19 +836,29 @@ describe('per-item change handling', () => {
   });
 
   it('updates appConfig on config/app change', () => {
-    emitModuleChange({ relativePath: 'config/app', newValue: { todosGlobalOrder: ['t1', 't2'] } });
+    emitModuleChange({
+      relativePath: 'config/app',
+      newValue: { todosGlobalOrder: ['t1', 't2'] },
+    });
 
     expect(get(appConfig).todosGlobalOrder).toEqual(['t1', 't2']);
   });
 
   it('updates userSettings on config/user change', () => {
-    emitModuleChange({ relativePath: 'config/user', newValue: { theme: 'dark' } });
+    emitModuleChange({
+      relativePath: 'config/user',
+      newValue: { theme: 'dark' },
+    });
 
     expect((get(userSettings) as any).theme).toBe('dark');
   });
 
   it('ignores window-origin events (local writes already update stores)', () => {
-    emitModuleChange({ relativePath: 'items/i1', origin: 'window', newValue: { id: 'i1', type: 'note', title: 'X', createdAt: '' } });
+    emitModuleChange({
+      relativePath: 'items/i1',
+      origin: 'window',
+      newValue: { id: 'i1', type: 'note', title: 'X', createdAt: '' },
+    });
 
     expect(get(items)['i1']).toBeUndefined();
   });
@@ -767,7 +867,12 @@ describe('per-item change handling', () => {
     for (let i = 0; i < 5; i++) {
       emitModuleChange({
         relativePath: `items/i${i}`,
-        newValue: { id: `i${i}`, type: 'note', title: `Note ${i}`, createdAt: '2026-01-01T00:00:00.000Z' },
+        newValue: {
+          id: `i${i}`,
+          type: 'note',
+          title: `Note ${i}`,
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
       });
     }
 
@@ -778,7 +883,11 @@ describe('per-item change handling', () => {
   it('removes a deleted collection from the store', () => {
     collections.set({ c1: makeCollection('c1') });
 
-    emitModuleChange({ relativePath: 'collections/c1', newValue: undefined, oldValue: { id: 'c1' } });
+    emitModuleChange({
+      relativePath: 'collections/c1',
+      newValue: undefined,
+      oldValue: { id: 'c1' },
+    });
 
     expect(get(collections)['c1']).toBeUndefined();
   });
@@ -786,7 +895,11 @@ describe('per-item change handling', () => {
   it('removes a deleted group from the store', () => {
     groups.set({ g1: makeGroup('g1') });
 
-    emitModuleChange({ relativePath: 'groups/g1', newValue: undefined, oldValue: { id: 'g1' } });
+    emitModuleChange({
+      relativePath: 'groups/g1',
+      newValue: undefined,
+      oldValue: { id: 'g1' },
+    });
 
     expect(get(groups)['g1']).toBeUndefined();
   });
@@ -994,7 +1107,7 @@ describe('visibleGroupedCollections', () => {
     const sections = get(visibleGroupedCollections);
     expect(sections).toHaveLength(1);
     expect(sections[0].group.id).toBe('g1');
-    expect(sections[0].collections.map(c => c.id)).toEqual(['c2', 'c1']);
+    expect(sections[0].collections.map((c) => c.id)).toEqual(['c2', 'c1']);
   });
 
   it('omits groups that are filtered out', () => {
@@ -1006,7 +1119,7 @@ describe('visibleGroupedCollections', () => {
     appConfig.set({ activeGroupFilters: ['g2'] });
 
     const sections = get(visibleGroupedCollections);
-    expect(sections.map(s => s.group.id)).toEqual(['g2']);
+    expect(sections.map((s) => s.group.id)).toEqual(['g2']);
   });
 
   it('returns empty when all groups are filtered out', () => {
@@ -1038,7 +1151,7 @@ describe('orphanCollections', () => {
     delete (c1 as any).groupId;
     collections.set({ c1 });
 
-    expect(get(orphanCollections).map(c => c.id)).toEqual(['c1']);
+    expect(get(orphanCollections).map((c) => c.id)).toEqual(['c1']);
   });
 
   it('surfaces collections whose groupId points at a deleted group', () => {
@@ -1048,7 +1161,7 @@ describe('orphanCollections', () => {
     });
     groups.set({ g1: makeGroup('g1', ['c1']) });
 
-    expect(get(orphanCollections).map(c => c.id)).toEqual(['stale']);
+    expect(get(orphanCollections).map((c) => c.id)).toEqual(['stale']);
   });
 
   it('orders orphans by createdAt for a stable display order', () => {
@@ -1060,7 +1173,7 @@ describe('orphanCollections', () => {
     older.createdAt = '2026-01-01T00:00:00.000Z';
     collections.set({ newer, older });
 
-    expect(get(orphanCollections).map(c => c.id)).toEqual(['older', 'newer']);
+    expect(get(orphanCollections).map((c) => c.id)).toEqual(['older', 'newer']);
   });
 });
 
@@ -1256,9 +1369,15 @@ describe('offline-create-then-login: group association is preserved', () => {
     appConfig.set({ activeGroupFilters: ['stale-deleted-group-id'] });
 
     expect(get(activeGroupIds)).toEqual(new Set(['A', 'Zg']));
-    expect(get(visibleGroupedCollections).map(s => s.group.id)).toEqual(['A', 'Zg']);
-    expect(get(visibleGroupedCollections).find(s => s.group.id === 'Zg')?.collections.map(c => c.id))
-      .toEqual(['Zc']);
+    expect(get(visibleGroupedCollections).map((s) => s.group.id)).toEqual([
+      'A',
+      'Zg',
+    ]);
+    expect(
+      get(visibleGroupedCollections)
+        .find((s) => s.group.id === 'Zg')
+        ?.collections.map((c) => c.id),
+    ).toEqual(['Zc']);
   });
 
   it('keeps the explicit "show nothing" state distinct from the stale-only state', async () => {
@@ -1438,7 +1557,9 @@ describe('moveCollectionToGroup', () => {
     collections.set({ c1: col });
     groups.set({ g1: group });
 
-    await expect(moveCollectionToGroup('c1', 'missing')).rejects.toThrow('Cannot move collection to missing group');
+    await expect(moveCollectionToGroup('c1', 'missing')).rejects.toThrow(
+      'Cannot move collection to missing group',
+    );
 
     expect(get(collections)['c1'].groupId).toBe('g1');
     expect(get(groups)['g1'].collectionIds).toEqual(['c1']);
@@ -1475,17 +1596,22 @@ describe('allTodos / openTodos', () => {
       } as InboxItem,
     });
 
-    const all = get(allTodos).map(t => t.id).sort();
+    const all = get(allTodos)
+      .map((t) => t.id)
+      .sort();
     expect(all).toEqual(['a', 'b', 'c']);
   });
 
   it('openTodos excludes completed todos', () => {
     items.set({
       open: makeTodo('open'),
-      done: makeTodo('done', { completed: true, completedAt: '2026-01-02T00:00:00.000Z' }),
+      done: makeTodo('done', {
+        completed: true,
+        completedAt: '2026-01-02T00:00:00.000Z',
+      }),
     });
 
-    expect(get(openTodos).map(t => t.id)).toEqual(['open']);
+    expect(get(openTodos).map((t) => t.id)).toEqual(['open']);
   });
 });
 
@@ -1504,7 +1630,7 @@ describe('visibleTodos', () => {
     });
 
     // Newest first as the fallback sort
-    expect(get(visibleTodos).map(t => t.id)).toEqual(['u2', 'u1']);
+    expect(get(visibleTodos).map((t) => t.id)).toEqual(['u2', 'u1']);
   });
 
   it('hides collection todos whose group is filtered out', () => {
@@ -1524,7 +1650,7 @@ describe('visibleTodos', () => {
       activeGroupFilters: ['g-active'],
     });
 
-    expect(get(visibleTodos).map(t => t.id)).toEqual(['c1']);
+    expect(get(visibleTodos).map((t) => t.id)).toEqual(['c1']);
   });
 
   it('hides todos from collections without a real group', () => {
@@ -1548,7 +1674,7 @@ describe('visibleTodos', () => {
     });
     collections.set({});
 
-    expect(get(visibleTodos).map(t => t.id)).toEqual(['stale']);
+    expect(get(visibleTodos).map((t) => t.id)).toEqual(['stale']);
   });
 
   it('respects persisted todosGlobalOrder and falls back to newest-first for missing ids', () => {
@@ -1560,7 +1686,7 @@ describe('visibleTodos', () => {
     // Only t2 is in the persisted order; t1/t3 fall back to createdAt desc
     appConfig.set({ todosGlobalOrder: ['t2'] });
 
-    expect(get(visibleTodos).map(t => t.id)).toEqual(['t2', 't3', 't1']);
+    expect(get(visibleTodos).map((t) => t.id)).toEqual(['t2', 't3', 't1']);
   });
 });
 
@@ -1575,7 +1701,7 @@ describe('reorderTodosGlobal', () => {
 
     expect(get(appConfig).todosGlobalOrder).toEqual(['t2', 't1', 't3']);
     expect(mockInbox.setConfig).toHaveBeenCalledWith(
-      expect.objectContaining({ todosGlobalOrder: ['t2', 't1', 't3'] })
+      expect.objectContaining({ todosGlobalOrder: ['t2', 't1', 't3'] }),
     );
   });
 
@@ -1607,7 +1733,14 @@ describe('deleteCollection: empty-only guard', () => {
   it('refuses to delete a collection that still has items', async () => {
     collections.set({ c1: makeCollection('c1') });
     items.set({
-      i1: { id: 'i1', type: 'note', title: 'kept', body: '', createdAt: '2026-01-01T00:00:00.000Z', collectionId: 'c1' } as InboxItem,
+      i1: {
+        id: 'i1',
+        type: 'note',
+        title: 'kept',
+        body: '',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        collectionId: 'c1',
+      } as InboxItem,
     });
 
     const ok = await deleteCollection('c1');
@@ -1645,7 +1778,14 @@ describe('deleteCollection: empty-only guard', () => {
     col.itemIds = ['i1'];
     collections.set({ c1: col, c2: makeCollection('c2') });
     items.set({
-      i1: { id: 'i1', type: 'note', title: 'moved away', body: '', createdAt: '2026-01-01T00:00:00.000Z', collectionId: 'c2' } as InboxItem,
+      i1: {
+        id: 'i1',
+        type: 'note',
+        title: 'moved away',
+        body: '',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        collectionId: 'c2',
+      } as InboxItem,
     });
 
     const ok = await deleteCollection('c1');
@@ -1673,19 +1813,23 @@ describe('createCollection: group assignment', () => {
     expect(stored.groupId).toBe('g1');
     expect(get(collections)['c1'].groupId).toBe('g1');
     expect(get(groups)['g1'].collectionIds).toContain('c1');
-    expect(get(groupCollections)['g1'].map(c => c.id)).toEqual(['c1']);
+    expect(get(groupCollections)['g1'].map((c) => c.id)).toEqual(['c1']);
     // No new group was auto-created
     expect(Object.keys(get(groups))).toEqual(['g1']);
   });
 
   it('rejects collection creation without a real group', async () => {
-    await expect(createCollection(makeCollection('c1'))).rejects.toThrow('Cannot create collection without a real group');
+    await expect(createCollection(makeCollection('c1'))).rejects.toThrow(
+      'Cannot create collection without a real group',
+    );
     expect(get(collections)['c1']).toBeUndefined();
     expect(mockInbox.storeGroup).not.toHaveBeenCalled();
   });
 
   it('rejects collection creation with a missing group', async () => {
-    await expect(createCollection(makeCollection('c1', 'missing'))).rejects.toThrow('Cannot create collection without a real group');
+    await expect(
+      createCollection(makeCollection('c1', 'missing')),
+    ).rejects.toThrow('Cannot create collection without a real group');
     expect(get(collections)['c1']).toBeUndefined();
   });
 });
@@ -1716,7 +1860,9 @@ describe('load-time collection/group loading', () => {
 
   it('loads collections with a missing groupId without rewriting them', async () => {
     const g1 = makeGroup('g1');
-    mockInbox.getAllCollections.mockResolvedValue({ c1: makeCollection('c1', 'deleted-group') });
+    mockInbox.getAllCollections.mockResolvedValue({
+      c1: makeCollection('c1', 'deleted-group'),
+    });
     mockInbox.getAllGroups.mockResolvedValue({ g1 });
 
     await rsHandlers['connected']();
@@ -1731,8 +1877,12 @@ describe('load-time collection/group loading', () => {
     const existing = makeGroup('g1', ['c1']);
     groups.set({ g1: existing });
     collections.set({ c1: makeCollection('c1', 'g1') });
-    mockInbox.getAllCollections.mockResolvedValue({ c1: makeCollection('c1', 'g1') });
-    mockInbox.getAllGroups.mockRejectedValue(new Error('temporary groups read failure'));
+    mockInbox.getAllCollections.mockResolvedValue({
+      c1: makeCollection('c1', 'g1'),
+    });
+    mockInbox.getAllGroups.mockRejectedValue(
+      new Error('temporary groups read failure'),
+    );
 
     await rsHandlers['connected']();
 

@@ -4,13 +4,15 @@ import { renderMarkdown } from './markdown';
 
 describe('renderMarkdown', () => {
   it('sanitizes raw html, inline handlers, and javascript urls', async () => {
-    const html = await renderMarkdown([
-      '# Title',
-      '<script>alert(1)</script>',
-      '<img src="x" onerror="alert(1)">',
-      '<a href="javascript:alert(1)">bad</a>',
-      '**safe**',
-    ].join('\n\n'));
+    const html = await renderMarkdown(
+      [
+        '# Title',
+        '<script>alert(1)</script>',
+        '<img src="x" onerror="alert(1)">',
+        '<a href="javascript:alert(1)">bad</a>',
+        '**safe**',
+      ].join('\n\n'),
+    );
 
     expect(html).toContain('<h1>Title</h1>');
     expect(html).toContain('<strong>safe</strong>');
@@ -20,13 +22,15 @@ describe('renderMarkdown', () => {
   });
 
   it('strips external-resource and active html from markdown output', async () => {
-    const html = await renderMarkdown([
-      '<img src="https://attacker.example/pixel.png" alt="pixel">',
-      '<audio controls src="https://attacker.example/audio.mp3"></audio>',
-      '<form><input value="spoof"></form>',
-      '<p style="position:fixed;inset:0">overlay</p>',
-      '[safe](https://example.com)',
-    ].join('\n\n'));
+    const html = await renderMarkdown(
+      [
+        '<img src="https://attacker.example/pixel.png" alt="pixel">',
+        '<audio controls src="https://attacker.example/audio.mp3"></audio>',
+        '<form><input value="spoof"></form>',
+        '<p style="position:fixed;inset:0">overlay</p>',
+        '[safe](https://example.com)',
+      ].join('\n\n'),
+    );
 
     expect(html).not.toContain('<img');
     expect(html).not.toContain('<audio');
@@ -46,11 +50,13 @@ describe('renderMarkdown', () => {
   });
 
   it('fully escapes fallback code blocks for unknown languages', async () => {
-    const html = await renderMarkdown('```unknown\nconst s = "<tag> & \'quote\'";\n```');
+    const html = await renderMarkdown(
+      '```unknown\nconst s = "<tag> & \'quote\'";\n```',
+    );
 
     expect(html).toContain('&lt;tag&gt;');
     expect(html).toContain('&amp;');
     expect(html).not.toContain('<tag>');
-    expect(html).toContain('\'quote\'');
+    expect(html).toContain("'quote'");
   });
 });

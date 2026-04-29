@@ -55,10 +55,15 @@ const AUTH_URL_PROPS = [
  * Validate and split a remoteStorage user address into its `[user, host]`
  * components. Throws if the address isn't of the form `user@host`.
  */
-export function parseUserAddress(userAddress: string): { user: string; host: string } {
+export function parseUserAddress(userAddress: string): {
+  user: string;
+  host: string;
+} {
   const parts = userAddress.split('@');
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    throw new Error('Invalid remoteStorage address. Expected format: user@host');
+    throw new Error(
+      'Invalid remoteStorage address. Expected format: user@host',
+    );
   }
   return { user: parts[0], host: parts[1] };
 }
@@ -68,7 +73,9 @@ export function parseUserAddress(userAddress: string): { user: string; host: str
  * so we fall back to plain HTTP for them — every other host gets HTTPS.
  */
 export function schemeForHost(host: string): 'http' | 'https' {
-  return host === 'localhost' || host.startsWith('localhost:') ? 'http' : 'https';
+  return host === 'localhost' || host.startsWith('localhost:')
+    ? 'http'
+    : 'https';
 }
 
 /**
@@ -98,7 +105,8 @@ export async function discoverStorage(
   if (!href) throw new Error('remoteStorage link missing href');
 
   const props = rsLink.properties ?? {};
-  const storageApi: string | undefined = rsLink.type ?? props['http://remotestorage.io/spec/version'];
+  const storageApi: string | undefined =
+    rsLink.type ?? props['http://remotestorage.io/spec/version'];
 
   let authUrl: string | undefined;
   for (const key of AUTH_URL_PROPS) {
@@ -121,16 +129,22 @@ export async function discoverStorage(
  */
 export function extractTokenFromRedirect(resultUrl: string): string {
   const parsed = new URL(resultUrl);
-  const hashParams = new URLSearchParams(parsed.hash.startsWith('#') ? parsed.hash.substring(1) : parsed.hash);
+  const hashParams = new URLSearchParams(
+    parsed.hash.startsWith('#') ? parsed.hash.substring(1) : parsed.hash,
+  );
   const queryParams = parsed.searchParams;
 
   const oauthError = hashParams.get('error') || queryParams.get('error');
   if (oauthError) {
-    const desc = hashParams.get('error_description') || queryParams.get('error_description') || '';
+    const desc =
+      hashParams.get('error_description') ||
+      queryParams.get('error_description') ||
+      '';
     throw new Error(`OAuth error: ${oauthError}${desc ? ` — ${desc}` : ''}`);
   }
 
-  const token = hashParams.get('access_token') || queryParams.get('access_token');
+  const token =
+    hashParams.get('access_token') || queryParams.get('access_token');
   if (!token) throw new Error('No access token in OAuth response');
   return token;
 }
@@ -191,7 +205,10 @@ export async function connectViaOAuth(
 export class DirectRS {
   private readonly fetchImpl: FetchLike;
 
-  constructor(private readonly config: RSConfig, fetchImpl: FetchLike = fetch) {
+  constructor(
+    private readonly config: RSConfig,
+    fetchImpl: FetchLike = fetch,
+  ) {
     if (!config.href) throw new Error('DirectRS requires config.href');
     if (!config.token) throw new Error('DirectRS requires config.token');
     // Bind to globalThis so member-access calls (`this.fetchImpl(...)`) don't
@@ -224,7 +241,11 @@ export class DirectRS {
   }
 
   /** PUT raw bytes to `inbox/<path>`. Throws on non-2xx. */
-  async storeFile(path: string, data: ArrayBuffer, mimeType: string): Promise<void> {
+  async storeFile(
+    path: string,
+    data: ArrayBuffer,
+    mimeType: string,
+  ): Promise<void> {
     const response = await this.fetchImpl(this.url(path), {
       method: 'PUT',
       headers: { ...this.headers, 'Content-Type': mimeType },
@@ -237,7 +258,10 @@ export class DirectRS {
    * Store an inbox item. If `fileData` is provided and the item declares a
    * `filePath`/`mimeType`, the file is uploaded first, then the item metadata.
    */
-  async store(item: { id: string; filePath?: string; mimeType?: string }, fileData?: ArrayBuffer): Promise<void> {
+  async store(
+    item: { id: string; filePath?: string; mimeType?: string },
+    fileData?: ArrayBuffer,
+  ): Promise<void> {
     if (fileData && item.filePath && item.mimeType) {
       await this.storeFile(item.filePath, fileData, item.mimeType);
     }

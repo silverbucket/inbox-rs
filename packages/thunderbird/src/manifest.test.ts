@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
 
 /**
  * Manifest invariants for the Thunderbird extension.
@@ -51,13 +51,17 @@ describe('thunderbird manifest', () => {
     it('declares <all_urls> (or equivalent host patterns) so fetch can reach any RS host', () => {
       const perms: string[] = manifest.permissions;
       const hasAllUrls = perms.includes('<all_urls>');
-      const hasWildcardHttps = perms.some((p) => p.startsWith('https://') || p.startsWith('http://'));
+      const hasWildcardHttps = perms.some(
+        (p) => p.startsWith('https://') || p.startsWith('http://'),
+      );
       expect(hasAllUrls || hasWildcardHttps).toBe(true);
     });
   });
 
   it('declares a message_display_action with a popup', () => {
-    expect(manifest.message_display_action?.default_popup).toBe('src/popup/index.html');
+    expect(manifest.message_display_action?.default_popup).toBe(
+      'src/popup/index.html',
+    );
   });
 
   it('declares an options page (so the user can set up RS auth)', () => {

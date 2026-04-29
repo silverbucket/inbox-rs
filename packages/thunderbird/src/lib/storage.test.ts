@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * Thunderbird's `lib/storage.ts` mirrors the Chrome extension wrapper but
@@ -23,8 +23,8 @@ const { mockGet, mockSet, mockRemove } = vi.hoisted(() => {
   return { mockGet, mockSet, mockRemove };
 });
 
-import { getConfig, saveConfig, clearConfig } from './storage';
 import type { RSConfig } from '@inbox-rs/rs-module';
+import { clearConfig, getConfig, saveConfig } from './storage';
 
 const sampleConfig: RSConfig = {
   userAddress: 'alice@example.com',

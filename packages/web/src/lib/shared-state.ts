@@ -1,8 +1,11 @@
 const STORAGE_KEY = 'inbox-rs-shared';
 
 export function getSharedMap(): Record<string, string> {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
-  catch { return {}; }
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+  } catch {
+    return {};
+  }
 }
 
 export function getSharedUrl(key: string): string | undefined {
