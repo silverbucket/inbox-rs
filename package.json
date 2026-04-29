@@ -15,6 +15,12 @@
     "build:thunderbird": "npm run build --workspace=packages/thunderbird",
     "test": "npm run test --workspace=packages/rs-module && npm run test --workspace=packages/extension && npm run test --workspace=packages/thunderbird && npm run test --workspace=packages/web && npm run test --workspace=scripts",
     "test:e2e": "npm run test --workspace=@inbox-rs/e2e",
-    "test:e2e:install": "npm run test:install --workspace=@inbox-rs/e2e"
+    "test:e2e:install": "npm run test:install --workspace=@inbox-rs/e2e",
+    "lint": "biome lint",
+    "format": "biome format --write",
+    "check": "biome check"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.13"
   }
 }
