@@ -1,5 +1,5 @@
-import hljs from 'highlight.js/lib/core';
 import DOMPurify from 'dompurify';
+import hljs from 'highlight.js/lib/core';
 import { Marked } from 'marked';
 
 const MARKDOWN_SANITIZE_OPTIONS = {
@@ -59,9 +59,17 @@ export const langModules: Record<string, () => Promise<any>> = {
 };
 
 export const langAliases: Record<string, string> = {
-  js: 'javascript', ts: 'typescript', py: 'python', rb: 'ruby',
-  sh: 'bash', zsh: 'bash', yml: 'yaml', 'c++': 'cpp', 'c#': 'csharp',
-  htm: 'html', md: 'markdown',
+  js: 'javascript',
+  ts: 'typescript',
+  py: 'python',
+  rb: 'ruby',
+  sh: 'bash',
+  zsh: 'bash',
+  yml: 'yaml',
+  'c++': 'cpp',
+  'c#': 'csharp',
+  htm: 'html',
+  md: 'markdown',
 };
 
 async function ensureLanguage(lang: string): Promise<string | null> {
@@ -90,14 +98,14 @@ export async function renderMarkdown(source: string): Promise<string> {
     [...langsToLoad].map(async (lang) => {
       const resolved = await ensureLanguage(lang);
       if (resolved) loaded.set(lang, resolved);
-    })
+    }),
   );
 
   // Configure renderer with highlight support
   const renderer = {
     code({ text, lang }: { text: string; lang?: string }) {
       const rawLang = (lang || '').toLowerCase();
-      const resolved = loaded.get(rawLang) || (langAliases[rawLang] || rawLang);
+      const resolved = loaded.get(rawLang) || langAliases[rawLang] || rawLang;
       if (resolved && hljs.getLanguage(resolved)) {
         const highlighted = hljs.highlight(text, { language: resolved }).value;
         return `<pre><code class="hljs language-${resolved}">${highlighted}</code></pre>`;

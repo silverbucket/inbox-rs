@@ -1,7 +1,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(scriptDir, '..');
@@ -57,7 +57,7 @@ function ensureZipAvailable() {
   }
 
   throw new Error(
-    'The `zip` CLI is required to package plugin downloads. Install `zip` and rerun the build.'
+    'The `zip` CLI is required to package plugin downloads. Install `zip` and rerun the build.',
   );
 }
 
@@ -74,12 +74,23 @@ mkdirSync(downloadsDir, { recursive: true });
 runNpm(['run', 'build', '--workspace=packages/rs-module']);
 
 runNpm(['run', 'build', '--workspace=packages/extension']);
-archiveDirectory(join(extensionDir, 'dist'), join(downloadsDir, artifactNames.chromium));
+archiveDirectory(
+  join(extensionDir, 'dist'),
+  join(downloadsDir, artifactNames.chromium),
+);
 
-runNpm(['run', 'build', '--workspace=packages/extension'], { BROWSER: 'firefox' });
-archiveDirectory(join(extensionDir, 'dist'), join(downloadsDir, artifactNames.firefox));
+runNpm(['run', 'build', '--workspace=packages/extension'], {
+  BROWSER: 'firefox',
+});
+archiveDirectory(
+  join(extensionDir, 'dist'),
+  join(downloadsDir, artifactNames.firefox),
+);
 
 runNpm(['run', 'build', '--workspace=packages/thunderbird']);
-archiveDirectory(join(thunderbirdDir, 'dist'), join(downloadsDir, artifactNames.thunderbird));
+archiveDirectory(
+  join(thunderbirdDir, 'dist'),
+  join(downloadsDir, artifactNames.thunderbird),
+);
 
 runGenPluginMetadata();

@@ -20,7 +20,7 @@ export const legacySchemas: Array<{ type: string; schema: object }> = [
         completed: { type: 'boolean' },
         completedAt: { type: 'string' },
       },
-      required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt']
+      required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt'],
     },
   },
   {
@@ -41,7 +41,7 @@ export const legacySchemas: Array<{ type: string; schema: object }> = [
         collectionId: { type: 'string' },
         _migrateVersion: { type: 'number' },
       },
-      required: ['id', 'type', 'title', 'body', 'createdAt']
+      required: ['id', 'type', 'title', 'body', 'createdAt'],
     },
   },
 ];
@@ -59,7 +59,8 @@ migrator.register({
   version: 1,
   collection: 'items',
   description: 'Rename voice memos to audio',
-  transform: (doc) => (doc.type === 'voice-memo' ? { ...doc, type: 'audio' } : doc),
+  transform: (doc) =>
+    doc.type === 'voice-memo' ? { ...doc, type: 'audio' } : doc,
 });
 
 migrator.register({

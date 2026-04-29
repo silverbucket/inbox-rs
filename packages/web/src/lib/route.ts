@@ -62,7 +62,10 @@ function parseQueryGroups(query: string): string[] | undefined {
   const raw = params.get('g');
   if (raw === null) return undefined;
   if (raw === '') return [];
-  return raw.split(',').map(s => s.trim()).filter(Boolean);
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 /**

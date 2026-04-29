@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * `lib/storage.ts` is a thin wrapper around `createConfigStore()` from
@@ -26,8 +26,8 @@ vi.mock('webextension-polyfill', () => ({
   default: { storage: mockStorage },
 }));
 
-import { getConfig, saveConfig, clearConfig } from './storage';
 import type { RSConfig } from '@inbox-rs/rs-module';
+import { clearConfig, getConfig, saveConfig } from './storage';
 
 const sampleConfig: RSConfig = {
   userAddress: 'alice@example.com',

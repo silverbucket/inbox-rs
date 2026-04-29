@@ -30,7 +30,9 @@ export interface SaveEmailOrchestratorParams {
  * Save the currently-displayed email as an `EmailItem`. Always resolves —
  * any error from `rs.store` is converted to `{ ok: false, error }`.
  */
-export async function runSaveEmail(params: SaveEmailOrchestratorParams): Promise<SaveResult> {
+export async function runSaveEmail(
+  params: SaveEmailOrchestratorParams,
+): Promise<SaveResult> {
   const id = params.generateId?.() ?? crypto.randomUUID();
   const createdAt = params.now?.() ?? new Date().toISOString();
 

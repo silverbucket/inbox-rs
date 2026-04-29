@@ -53,7 +53,9 @@ export function legacyBinaryStringToArrayBuffer(str: string): ArrayBuffer {
  * because of the throw on the first invalid byte. Returns the original
  * `ArrayBuffer` reference (not a copy) in that case.
  */
-export function recoverLegacyBinaryStringEncoding(buffer: ArrayBuffer): ArrayBuffer {
+export function recoverLegacyBinaryStringEncoding(
+  buffer: ArrayBuffer,
+): ArrayBuffer {
   if (buffer.byteLength === 0) return buffer;
   try {
     const decoded = new TextDecoder('utf-8', { fatal: true }).decode(buffer);

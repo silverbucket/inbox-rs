@@ -44,11 +44,12 @@ export function dedentSelection(state: TextState): TextState {
   const { value, selectionStart: start, selectionEnd: end } = state;
   const lineStart = value.lastIndexOf('\n', start - 1) + 1;
   const block = value.slice(lineStart, end);
-  const dedented = block.replace(/^  /gm, '');
+  const dedented = block.replace(/^ {2}/gm, '');
 
   // How many chars were removed before the original selectionStart?
   const prefixBefore = block.slice(0, start - lineStart);
-  const prefixRemoved = prefixBefore.length - prefixBefore.replace(/^  /gm, '').length;
+  const prefixRemoved =
+    prefixBefore.length - prefixBefore.replace(/^ {2}/gm, '').length;
   const totalRemoved = block.length - dedented.length;
 
   return {
@@ -74,7 +75,10 @@ export function insertNewlineWithIndent(state: TextState): TextState {
 }
 
 /** Whether the cursor is on a closing fence line (``` with optional whitespace). */
-export function isOnClosingFence(value: string, selectionStart: number): boolean {
+export function isOnClosingFence(
+  value: string,
+  selectionStart: number,
+): boolean {
   const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
   const line = value.slice(lineStart, selectionStart);
   return /^\s*```\s*$/.test(line);

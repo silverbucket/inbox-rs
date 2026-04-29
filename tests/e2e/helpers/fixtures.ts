@@ -19,15 +19,15 @@
  * assertions flakier and emits non-error console noise.
  */
 
-import { test as base, type BrowserContext, type Page } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
+import { type BrowserContext, test as base, type Page } from '@playwright/test';
 
 import {
   ensureUser,
   makeRsUser,
   oauthToken,
-  waitForArmadietto,
   type RsUser,
+  waitForArmadietto,
 } from './armadietto';
 import { seedRsSession } from './pwa';
 

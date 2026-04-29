@@ -1,35 +1,38 @@
+import type { BookmarkItem, ImageItem, NoteItem } from '@inbox-rs/rs-module';
 import browser from 'webextension-polyfill';
 import { DirectRS } from '../lib/rs';
 import { getConfig } from '../lib/storage';
-import type { BookmarkItem, NoteItem, ImageItem } from '@inbox-rs/rs-module';
 
 // Register context menus on install
 browser.runtime.onInstalled.addListener(() => {
   browser.contextMenus.create({
     id: 'save-link',
     title: 'Save link to Inbox',
-    contexts: ['link']
+    contexts: ['link'],
   });
 
   browser.contextMenus.create({
     id: 'save-image',
     title: 'Save image to Inbox',
-    contexts: ['image']
+    contexts: ['image'],
   });
 
   browser.contextMenus.create({
     id: 'save-selection',
     title: 'Save to Inbox',
-    contexts: ['selection']
+    contexts: ['selection'],
   });
 });
 
 /** Download an image and return the binary data + detected mime type */
-async function fetchImageData(url: string): Promise<{ data: ArrayBuffer; mimeType: string } | null> {
+async function fetchImageData(
+  url: string,
+): Promise<{ data: ArrayBuffer; mimeType: string } | null> {
   try {
     const resp = await fetch(url);
     if (!resp.ok) return null;
-    const mimeType = resp.headers.get('content-type')?.split(';')[0] || 'image/png';
+    const mimeType =
+      resp.headers.get('content-type')?.split(';')[0] || 'image/png';
     const data = await resp.arrayBuffer();
     return { data, mimeType };
   } catch {
@@ -45,7 +48,7 @@ function extFromMime(mime: string): string {
     'image/gif': 'gif',
     'image/webp': 'webp',
     'image/svg+xml': 'svg',
-    'image/avif': 'avif'
+    'image/avif': 'avif',
   };
   return map[mime] || 'png';
 }
@@ -75,10 +78,9 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
       type: 'bookmark',
       title: info.linkText || info.linkUrl,
       url: info.linkUrl,
-      createdAt
+      createdAt,
     };
     await rs.store(item);
-
   } else if (info.menuItemId === 'save-image' && info.srcUrl) {
     const imageData = await fetchImageData(info.srcUrl);
     if (imageData) {
@@ -91,14 +93,13 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
         filePath,
         mimeType: imageData.mimeType,
         sourceUrl: info.srcUrl,
-        createdAt
+        createdAt,
       };
       if (info.pageUrl) {
         item.description = `Source page: ${info.pageUrl}`;
       }
       await rs.store(item, imageData.data);
     }
-
   } else if (info.menuItemId === 'save-selection' && info.selectionText) {
     // Get page metadata for context
     let pageTitle = '';
@@ -116,7 +117,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
       title: pageTitle ? `From: ${pageTitle}` : 'Selection',
       body: info.selectionText,
       createdAt,
-      ...(pageUrl ? { description: `Source: ${pageUrl}` } : {})
+      ...(pageUrl ? { description: `Source: ${pageUrl}` } : {}),
     };
     await rs.store(item);
   }

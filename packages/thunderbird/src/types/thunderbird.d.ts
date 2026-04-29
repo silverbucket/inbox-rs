@@ -1,6 +1,8 @@
 declare namespace messenger {
   namespace messageDisplay {
-    function getDisplayedMessage(tabId: number): Promise<messages.MessageHeader | null>;
+    function getDisplayedMessage(
+      tabId: number,
+    ): Promise<messages.MessageHeader | null>;
   }
 
   namespace messages {
@@ -26,7 +28,10 @@ declare namespace messenger {
     interface Tab {
       id?: number;
     }
-    function query(queryInfo: { active?: boolean; currentWindow?: boolean }): Promise<Tab[]>;
+    function query(queryInfo: {
+      active?: boolean;
+      currentWindow?: boolean;
+    }): Promise<Tab[]>;
   }
 }
 
@@ -40,7 +45,10 @@ declare namespace browser {
   }
   namespace identity {
     function getRedirectURL(): string;
-    function launchWebAuthFlow(details: { url: string; interactive: boolean }): Promise<string>;
+    function launchWebAuthFlow(details: {
+      url: string;
+      interactive: boolean;
+    }): Promise<string>;
   }
   namespace runtime {
     function openOptionsPage(): Promise<void>;

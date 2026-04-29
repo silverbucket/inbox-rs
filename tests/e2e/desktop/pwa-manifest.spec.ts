@@ -5,7 +5,7 @@
  * page exposes every PWA-shell concern we care about.
  */
 
-import { test, expect } from '../helpers/fixtures';
+import { expect, test } from '../helpers/fixtures';
 
 test.describe('PWA manifest & install requirements', () => {
   test('manifest is served and valid', async ({ webOrigin, request }) => {
@@ -31,16 +31,26 @@ test.describe('PWA manifest & install requirements', () => {
     };
     expect(manifest.name, 'manifest missing `name`').toBeTruthy();
     expect(manifest.start_url, 'manifest missing `start_url`').toBeTruthy();
-    expect(['standalone', 'fullscreen', 'minimal-ui']).toContain(manifest.display);
+    expect(['standalone', 'fullscreen', 'minimal-ui']).toContain(
+      manifest.display,
+    );
 
     const icons = manifest.icons ?? [];
     const bigIcons = icons.filter((i) =>
-      (i.sizes ?? '').split(/\s+/).some((s) => parseInt(s.split('x')[0] ?? '0', 10) >= 192)
+      (i.sizes ?? '')
+        .split(/\s+/)
+        .some((s) => parseInt(s.split('x')[0] ?? '0', 10) >= 192),
     );
-    expect(bigIcons.length, `no icon ≥ 192px in manifest icons: ${JSON.stringify(icons)}`).toBeGreaterThan(0);
+    expect(
+      bigIcons.length,
+      `no icon ≥ 192px in manifest icons: ${JSON.stringify(icons)}`,
+    ).toBeGreaterThan(0);
   });
 
-  test('index.html links manifest, theme-color, apple-touch-icon, viewport-fit', async ({ page, webOrigin }) => {
+  test('index.html links manifest, theme-color, apple-touch-icon, viewport-fit', async ({
+    page,
+    webOrigin,
+  }) => {
     await page.goto(webOrigin);
     await page.waitForLoadState('networkidle');
 
@@ -48,31 +58,53 @@ test.describe('PWA manifest & install requirements', () => {
     await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveCount(1);
 
     // We declare three theme-color metas: a default plus light/dark variants.
-    const themeMetaCount = await page.locator('meta[name="theme-color"]').count();
-    expect(themeMetaCount, 'no theme-color metas — install/theme broken').toBeGreaterThanOrEqual(1);
+    const themeMetaCount = await page
+      .locator('meta[name="theme-color"]')
+      .count();
+    expect(
+      themeMetaCount,
+      'no theme-color metas — install/theme broken',
+    ).toBeGreaterThanOrEqual(1);
 
     // viewport-fit=cover is required for iOS to inset under the notch
     // without breaking layout. App.svelte assumes safe-area insets work.
-    const viewport = (await page.locator('meta[name="viewport"]').getAttribute('content')) ?? '';
-    expect(viewport, `viewport meta missing viewport-fit=cover: ${viewport}`).toContain('viewport-fit=cover');
+    const viewport =
+      (await page.locator('meta[name="viewport"]').getAttribute('content')) ??
+      '';
+    expect(
+      viewport,
+      `viewport meta missing viewport-fit=cover: ${viewport}`,
+    ).toContain('viewport-fit=cover');
   });
 
-  test('every icon URL in the manifest actually resolves to an image', async ({ webOrigin, request }) => {
+  test('every icon URL in the manifest actually resolves to an image', async ({
+    webOrigin,
+    request,
+  }) => {
     // A 404 here is the usual cause of `chrome://flags Install` showing
     // `(no icons)` after a deploy.
-    const manifest = (await (await request.get(`${webOrigin}/manifest.webmanifest`)).json()) as {
+    const manifest = (await (
+      await request.get(`${webOrigin}/manifest.webmanifest`)
+    ).json()) as {
       icons?: Array<{ src: string }>;
     };
     for (const icon of manifest.icons ?? []) {
-      const url = icon.src.startsWith('http') ? icon.src : `${webOrigin}${icon.src}`;
+      const url = icon.src.startsWith('http')
+        ? icon.src
+        : `${webOrigin}${icon.src}`;
       const r = await request.get(url);
       expect(r.status(), `icon ${icon.src} → HTTP ${r.status()}`).toBe(200);
       const ctype = r.headers()['content-type'] ?? '';
-      expect(ctype, `icon ${icon.src} not served as image/*: ${ctype}`).toMatch(/^image\//);
+      expect(ctype, `icon ${icon.src} not served as image/*: ${ctype}`).toMatch(
+        /^image\//,
+      );
     }
   });
 
-  test('app renders in standalone display mode', async ({ page, webOrigin }) => {
+  test('app renders in standalone display mode', async ({
+    page,
+    webOrigin,
+  }) => {
     // Once installed, the PWA runs in display-mode: standalone. Make sure
     // the app's empty-state shell renders correctly under that media
     // query — a regression here means a broken first-run for installed
@@ -107,7 +139,7 @@ test.describe('PWA manifest & install requirements', () => {
     // first-paint smoke check — proves the shell renders under the
     // installed-app media query.
     await expect(
-      page.getByRole('button', { name: 'Connect to your remoteStorage' })
+      page.getByRole('button', { name: 'Connect to your remoteStorage' }),
     ).toBeVisible();
   });
 });

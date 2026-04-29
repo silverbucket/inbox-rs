@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * `lib/rs.ts` is a thin glue layer that:
@@ -13,7 +13,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { mockGetRedirectURL, mockLaunchWebAuthFlow } = vi.hoisted(() => ({
   mockGetRedirectURL: vi.fn<() => string>(),
-  mockLaunchWebAuthFlow: vi.fn<(args: { url: string; interactive: boolean }) => Promise<string>>(),
+  mockLaunchWebAuthFlow:
+    vi.fn<(args: { url: string; interactive: boolean }) => Promise<string>>(),
 }));
 
 // Stub the ambient `browser` global before importing the module under test.
@@ -54,7 +55,9 @@ function webfingerResponse() {
 describe('connectViaOAuth (thunderbird)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetRedirectURL.mockReturnValue('https://thunderbird.example/oauth-redirect');
+    mockGetRedirectURL.mockReturnValue(
+      'https://thunderbird.example/oauth-redirect',
+    );
     mockFetch.mockResolvedValue(webfingerResponse());
     mockLaunchWebAuthFlow.mockResolvedValue(
       'https://thunderbird.example/oauth-redirect#access_token=tok-xyz',
@@ -113,7 +116,9 @@ describe('connectViaOAuth (thunderbird)', () => {
     const launchedUrl = mockLaunchWebAuthFlow.mock.calls[0]![0].url;
     const params = new URL(launchedUrl).searchParams;
     expect(params.get('client_id')).toBe('https://other-host.allizom.org');
-    expect(params.get('redirect_uri')).toBe('https://other-host.allizom.org/cb');
+    expect(params.get('redirect_uri')).toBe(
+      'https://other-host.allizom.org/cb',
+    );
   });
 
   it('issues the WebFinger request to the user-supplied host', async () => {
@@ -139,7 +144,9 @@ describe('connectViaOAuth (thunderbird)', () => {
       status: 0, // What MV2 CORS rejection looks like in practice.
     } as Response);
 
-    await expect(connectViaOAuth('alice@example.com')).rejects.toThrow(/WebFinger failed/);
+    await expect(connectViaOAuth('alice@example.com')).rejects.toThrow(
+      /WebFinger failed/,
+    );
   });
 
   it('propagates an OAuth error in the redirect URL', async () => {
@@ -147,7 +154,9 @@ describe('connectViaOAuth (thunderbird)', () => {
       'https://thunderbird.example/oauth-redirect#error=access_denied',
     );
 
-    await expect(connectViaOAuth('alice@example.com')).rejects.toThrow(/access_denied/);
+    await expect(connectViaOAuth('alice@example.com')).rejects.toThrow(
+      /access_denied/,
+    );
   });
 
   it('propagates a malformed user address before any network call', async () => {

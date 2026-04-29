@@ -1,6 +1,8 @@
-import RemoteStorage from 'remotestoragejs';
-import InboxModule, { recoverLegacyBinaryStringEncoding } from '@inbox-rs/rs-module';
+import InboxModule, {
+  recoverLegacyBinaryStringEncoding,
+} from '@inbox-rs/rs-module';
 import SharesModule from 'remotestorage-module-shares';
+import RemoteStorage from 'remotestoragejs';
 
 // Re-enable WebFinger lookups against localhost / private-IP RS servers.
 //
@@ -27,33 +29,52 @@ import SharesModule from 'remotestorage-module-shares';
 // `allow_private_addresses: true` (or exposes it as a constructor option), the
 // hack goes away.
 {
-  type Discovered = { href: string; storageApi?: string; authURL?: string; properties?: Record<string, unknown> };
-  const RS_LINK_RELS = new Set(['remotestorage', 'http://tools.ietf.org/id/draft-dejong-remotestorage']);
-  const AUTH_URL_PROPS = ['http://tools.ietf.org/html/rfc6749#section-4.2', 'auth-endpoint'];
+  type Discovered = {
+    href: string;
+    storageApi?: string;
+    authURL?: string;
+    properties?: Record<string, unknown>;
+  };
+  const RS_LINK_RELS = new Set([
+    'remotestorage',
+    'http://tools.ietf.org/id/draft-dejong-remotestorage',
+  ]);
+  const AUTH_URL_PROPS = [
+    'http://tools.ietf.org/html/rfc6749#section-4.2',
+    'auth-endpoint',
+  ];
 
   const customDiscover = (userAddress: string): Promise<Discovered> => {
     const at = userAddress.lastIndexOf('@');
     if (at < 0) return Promise.reject(new Error('Invalid user address'));
     const host = userAddress.slice(at + 1);
-    const scheme = host === 'localhost' || host.startsWith('localhost:') ? 'http' : 'https';
+    const scheme =
+      host === 'localhost' || host.startsWith('localhost:') ? 'http' : 'https';
     const url = `${scheme}://${host}/.well-known/webfinger?resource=acct:${encodeURIComponent(userAddress)}`;
 
     return fetch(url).then(async (resp) => {
       if (!resp.ok) throw new Error(`WebFinger failed: ${resp.status}`);
       const data = await resp.json();
       const link = Array.isArray(data?.links)
-        ? data.links.find((l: { rel?: string }) => l?.rel && RS_LINK_RELS.has(l.rel))
+        ? data.links.find(
+            (l: { rel?: string }) => l?.rel && RS_LINK_RELS.has(l.rel),
+          )
         : undefined;
-      if (!link?.href) throw new Error('No remoteStorage link in WebFinger response');
+      if (!link?.href)
+        throw new Error('No remoteStorage link in WebFinger response');
       const properties = (link.properties ?? {}) as Record<string, unknown>;
-      const storageApi = (typeof link.type === 'string' ? link.type : undefined) ??
+      const storageApi =
+        (typeof link.type === 'string' ? link.type : undefined) ??
         (typeof properties['http://remotestorage.io/spec/version'] === 'string'
-          ? properties['http://remotestorage.io/spec/version'] as string
+          ? (properties['http://remotestorage.io/spec/version'] as string)
           : undefined);
       let authURL: string | undefined;
       for (const key of AUTH_URL_PROPS) {
         const v = properties[key];
-        if (typeof v === 'string') { authURL = v; break; }
+        if (typeof v === 'string') {
+          authURL = v;
+          break;
+        }
       }
       return { href: link.href, storageApi, authURL, properties };
     });
@@ -62,9 +83,13 @@ import SharesModule from 'remotestorage-module-shares';
   // Preserve `RemoteStorage.Discover.DiscoveryError` — rs.js's connect path
   // throws `new RemoteStorage.DiscoveryError(...)`, and the static type also
   // surfaces it as `Discover.DiscoveryError`.
-  const original = (RemoteStorage as unknown as { Discover: { DiscoveryError: unknown } }).Discover;
-  (customDiscover as unknown as { DiscoveryError: unknown }).DiscoveryError = original?.DiscoveryError;
-  (RemoteStorage as unknown as { Discover: typeof customDiscover }).Discover = customDiscover;
+  const original = (
+    RemoteStorage as unknown as { Discover: { DiscoveryError: unknown } }
+  ).Discover;
+  (customDiscover as unknown as { DiscoveryError: unknown }).DiscoveryError =
+    original?.DiscoveryError;
+  (RemoteStorage as unknown as { Discover: typeof customDiscover }).Discover =
+    customDiscover;
 }
 
 // Detect and auto-recover a corrupt `remotestorage` IndexedDB before RS opens it.
@@ -103,15 +128,23 @@ async function detectAndRecoverCorruptDb(): Promise<void> {
 
   if (typeof (indexedDB as any).databases === 'function') {
     try {
-      const dbs = await (indexedDB as any).databases() as Array<{ name?: string; version?: number }>;
+      const dbs = (await (indexedDB as any).databases()) as Array<{
+        name?: string;
+        version?: number;
+      }>;
       if (!dbs.find((db) => db.name === 'remotestorage')) {
-        console.log(`[idb-probe] no existing 'remotestorage' DB — RS will create one fresh`);
+        console.log(
+          `[idb-probe] no existing 'remotestorage' DB — RS will create one fresh`,
+        );
         return;
       }
     } catch (e) {
       // Fall through to the open-probe; on ancient browsers without
       // databases() we accept the empty-v1 risk for the rare no-DB case.
-      console.warn(`[idb-probe] databases() threw — falling back to open-probe`, e);
+      console.warn(
+        `[idb-probe] databases() threw — falling back to open-probe`,
+        e,
+      );
     }
   }
 
@@ -132,16 +165,23 @@ async function detectAndRecoverCorruptDb(): Promise<void> {
       settle({ version: db.version, stores });
     };
     probe.onerror = () => {
-      console.warn(`[idb-probe] T+${Date.now() - probeStart}ms onerror`, probe.error);
+      console.warn(
+        `[idb-probe] T+${Date.now() - probeStart}ms onerror`,
+        probe.error,
+      );
       settle('failed');
     };
     probe.onblocked = (event: any) => {
-      console.warn(`[idb-probe] T+${Date.now() - probeStart}ms ONBLOCKED — old=${event?.oldVersion} new=${event?.newVersion}`);
+      console.warn(
+        `[idb-probe] T+${Date.now() - probeStart}ms ONBLOCKED — old=${event?.oldVersion} new=${event?.newVersion}`,
+      );
       settle('failed');
     };
     setTimeout(() => {
       if (!settled) {
-        console.warn(`[idb-probe] T+${Date.now() - probeStart}ms still pending after 2s — proceeding without cleanup. readyState=${probe.readyState}`);
+        console.warn(
+          `[idb-probe] T+${Date.now() - probeStart}ms still pending after 2s — proceeding without cleanup. readyState=${probe.readyState}`,
+        );
         settle('failed');
       }
     }, 2000);
@@ -154,10 +194,14 @@ async function detectAndRecoverCorruptDb(): Promise<void> {
   const required = result.version >= 2 ? ['nodes', 'changes'] : ['nodes'];
   const missing = required.filter((s) => !result.stores.includes(s));
   if (missing.length === 0) {
-    console.log(`[idb-probe] 'remotestorage' v${result.version} stores=[${result.stores.join(',')}] — healthy, RS can open it directly`);
+    console.log(
+      `[idb-probe] 'remotestorage' v${result.version} stores=[${result.stores.join(',')}] — healthy, RS can open it directly`,
+    );
     return;
   }
-  console.warn(`[idb-probe] 'remotestorage' v${result.version} stores=[${result.stores.join(',')}] missing [${missing.join(',')}] — auto-cleaning before RS init`);
+  console.warn(
+    `[idb-probe] 'remotestorage' v${result.version} stores=[${result.stores.join(',')}] missing [${missing.join(',')}] — auto-cleaning before RS init`,
+  );
   await deleteRsDb();
 }
 
@@ -172,20 +216,29 @@ async function deleteRsDb(): Promise<void> {
     };
     const req = indexedDB.deleteDatabase('remotestorage');
     req.onsuccess = () => {
-      console.log(`[idb-cleanup] T+${Date.now() - start}ms deleted — RS will create a clean v2 DB`);
+      console.log(
+        `[idb-cleanup] T+${Date.now() - start}ms deleted — RS will create a clean v2 DB`,
+      );
       settle();
     };
     req.onerror = () => {
-      console.error(`[idb-cleanup] T+${Date.now() - start}ms error — proceeding anyway, RS may fall back to LocalStorage`, req.error);
+      console.error(
+        `[idb-cleanup] T+${Date.now() - start}ms error — proceeding anyway, RS may fall back to LocalStorage`,
+        req.error,
+      );
       settle();
     };
     req.onblocked = () => {
-      console.warn(`[idb-cleanup] T+${Date.now() - start}ms BLOCKED — proceeding anyway`);
+      console.warn(
+        `[idb-cleanup] T+${Date.now() - start}ms BLOCKED — proceeding anyway`,
+      );
       settle();
     };
     setTimeout(() => {
       if (!settled) {
-        console.warn(`[idb-cleanup] T+${Date.now() - start}ms timeout after 3s — proceeding anyway`);
+        console.warn(
+          `[idb-cleanup] T+${Date.now() - start}ms timeout after 3s — proceeding anyway`,
+        );
         settle();
       }
     }, 3000);
@@ -199,22 +252,25 @@ async function deleteRsDb(): Promise<void> {
 // completes, or rejects with `'blocked'` if a stuck connection prevents it
 // — at which point the user needs to close other tabs or quit Chrome.
 if (typeof window !== 'undefined' && typeof indexedDB !== 'undefined') {
-  (window as any).__cleanupRSDb = () => new Promise<void>((resolve, reject) => {
-    console.log(`[idb-cleanup] manual: deleteDatabase('remotestorage')`);
-    const req = indexedDB.deleteDatabase('remotestorage');
-    req.onsuccess = () => {
-      console.log(`[idb-cleanup] deleted — reload the page now`);
-      resolve();
-    };
-    req.onerror = () => {
-      console.error(`[idb-cleanup] error`, req.error);
-      reject(req.error);
-    };
-    req.onblocked = () => {
-      console.warn(`[idb-cleanup] BLOCKED — close other tabs of this app, or quit Chrome and reopen`);
-      reject(new Error('blocked'));
-    };
-  });
+  (window as any).__cleanupRSDb = () =>
+    new Promise<void>((resolve, reject) => {
+      console.log(`[idb-cleanup] manual: deleteDatabase('remotestorage')`);
+      const req = indexedDB.deleteDatabase('remotestorage');
+      req.onsuccess = () => {
+        console.log(`[idb-cleanup] deleted — reload the page now`);
+        resolve();
+      };
+      req.onerror = () => {
+        console.error(`[idb-cleanup] error`, req.error);
+        reject(req.error);
+      };
+      req.onblocked = () => {
+        console.warn(
+          `[idb-cleanup] BLOCKED — close other tabs of this app, or quit Chrome and reopen`,
+        );
+        reject(new Error('blocked'));
+      };
+    });
 }
 
 // Block module exports until the corrupt-DB recovery has run. Importers
@@ -259,7 +315,7 @@ export async function fetchFileWithAuth(
   try {
     const url = `${href}/inbox/${path}`;
     const resp = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
     });
     if (!resp.ok) return null;
     const serverType = resp.headers.get('Content-Type') ?? '';
@@ -279,7 +335,10 @@ export async function fetchFileWithAuth(
  * Works with all RS servers (5apps requires Bearer header, not query params).
  * Returns null if not connected or fetch fails.
  */
-export async function fetchFileBlobUrl(path: string, expectedMimeType?: string): Promise<string | null> {
+export async function fetchFileBlobUrl(
+  path: string,
+  expectedMimeType?: string,
+): Promise<string | null> {
   const remote = (rs as any).remote;
   if (!remote?.href || !remote?.token) return null;
   return fetchFileWithAuth(remote.href, remote.token, path, expectedMimeType);

@@ -1,7 +1,13 @@
-import { writable, derived, get } from 'svelte/store';
-import type { Writable, Readable } from 'svelte/store';
-import type { InboxItem, AppConfig, UserSettings, Collection, CollectionGroup } from '@inbox-rs/rs-module';
+import type {
+  AppConfig,
+  Collection,
+  CollectionGroup,
+  InboxItem,
+  UserSettings,
+} from '@inbox-rs/rs-module';
 import { migrator, wrapCodeBlock } from '@inbox-rs/rs-module';
+import type { Readable, Writable } from 'svelte/store';
+import { derived, get, writable } from 'svelte/store';
 import { cleanForStorage } from './clean-for-storage';
 import rs, { fetchFileBlobUrl } from './rs';
 
@@ -18,8 +24,14 @@ export const syncing = writable(false);
 function readStoredUserAddress(): string {
   try {
     // remoteStorage.js persists the user address in this key
-    const settings = JSON.parse(localStorage.getItem('remotestorage:wireclient') ?? '{}');
-    return settings?.userAddress ?? localStorage.getItem('inbox-rs:userAddress') ?? '';
+    const settings = JSON.parse(
+      localStorage.getItem('remotestorage:wireclient') ?? '{}',
+    );
+    return (
+      settings?.userAddress ??
+      localStorage.getItem('inbox-rs:userAddress') ??
+      ''
+    );
   } catch {
     return '';
   }
@@ -48,7 +60,10 @@ function stripMigrationVersion<T>(doc: T): T {
 function requiresContentMigration(doc: object): boolean {
   const migrated = migrator.migrateDocument('items', doc as InboxItem);
   if (migrated === doc) return false;
-  return JSON.stringify(stripMigrationVersion(migrated)) !== JSON.stringify(stripMigrationVersion(doc));
+  return (
+    JSON.stringify(stripMigrationVersion(migrated)) !==
+    JSON.stringify(stripMigrationVersion(doc))
+  );
 }
 
 /** Count only docs whose non-version content would actually change under migration */
@@ -92,9 +107,8 @@ function markMigrationAlertReady() {
 /** Visible count for the app after the initial connect/sync state settles */
 export const pendingMigrationCount = derived(
   [rawPendingMigrationCount, migrationAlertReady],
-  ([$rawPendingMigrationCount, $migrationAlertReady]) => (
-    $migrationAlertReady ? $rawPendingMigrationCount : 0
-  ),
+  ([$rawPendingMigrationCount, $migrationAlertReady]) =>
+    $migrationAlertReady ? $rawPendingMigrationCount : 0,
 );
 
 // ---- Generic helpers ----
@@ -114,7 +128,12 @@ async function loadEntities<T extends { id: string }>(
         const entity = raw as T;
         if (key !== entity.id) continue;
         if (arrayField) {
-          valid[key] = { ...entity, [arrayField]: Array.isArray(entity[arrayField]) ? entity[arrayField] : [] };
+          valid[key] = {
+            ...entity,
+            [arrayField]: Array.isArray(entity[arrayField])
+              ? entity[arrayField]
+              : [],
+          };
         } else {
           valid[key] = entity;
         }
@@ -123,7 +142,7 @@ async function loadEntities<T extends { id: string }>(
     // Merge into the store rather than replacing — the change handler may
     // have already inserted entries during the await window, and a .set()
     // would silently drop them.
-    store.update(current => ({ ...current, ...valid }));
+    store.update((current) => ({ ...current, ...valid }));
     return true;
   } catch (e) {
     console.error('[inbox] loadEntities failed:', e);
@@ -139,12 +158,16 @@ function orderedDerived<T extends { id: string; createdAt: string }>(
     return sortWithConfiguredOrder(
       Object.values($entities),
       $config[configOrderKey],
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     );
   });
 }
 
-async function removeFromOrderConfig(id: string, key: 'collectionsOrder' | 'groupsOrder') {
+async function removeFromOrderConfig(
+  id: string,
+  key: 'collectionsOrder' | 'groupsOrder',
+) {
   const currentOrder = get(appConfig)[key] ?? [];
   if (currentOrder.includes(id)) {
     await updateConfig({ [key]: currentOrder.filter((x: string) => x !== id) });
@@ -177,7 +200,12 @@ async function loadItems() {
     const valid: Record<string, InboxItem> = {};
     const rawValid: Record<string, object> = {};
     for (const [key, item] of Object.entries(all)) {
-      if (item && typeof item === 'object' && 'id' in item && typeof (item as { id?: unknown }).id === 'string') {
+      if (
+        item &&
+        typeof item === 'object' &&
+        'id' in item &&
+        typeof (item as { id?: unknown }).id === 'string'
+      ) {
         // Only trust canonically-addressed item records. This avoids rendering
         // duplicate/stale documents that may still exist under malformed keys.
         if (key !== (item as { id: string }).id) continue;
@@ -190,8 +218,8 @@ async function loadItems() {
     // calling .set() with the getAll result would clobber any items that were
     // added by storeItem() while we were awaiting. We trust getAll's snapshot
     // for entries it returned, but preserve any keys it didn't.
-    rawItems.update(current => ({ ...current, ...rawValid }));
-    items.update(current => ({ ...current, ...valid }));
+    rawItems.update((current) => ({ ...current, ...rawValid }));
+    items.update((current) => ({ ...current, ...valid }));
   } catch (e) {
     console.error('[inbox] loadItems failed:', e);
   }
@@ -225,12 +253,20 @@ async function loadUserSettings() {
 
 async function loadCollections() {
   const inbox = getInbox();
-  return loadEntities<Collection>(() => inbox.getAllCollections(), collections, 'itemIds');
+  return loadEntities<Collection>(
+    () => inbox.getAllCollections(),
+    collections,
+    'itemIds',
+  );
 }
 
 async function loadGroups() {
   const inbox = getInbox();
-  return loadEntities<CollectionGroup>(() => inbox.getAllGroups(), groups, 'collectionIds');
+  return loadEntities<CollectionGroup>(
+    () => inbox.getAllGroups(),
+    groups,
+    'collectionIds',
+  );
 }
 
 // Single in-flight load promise so the cached preload (queueMicrotask at
@@ -271,7 +307,11 @@ async function loadConnectedData() {
   if (inFlightLoad) {
     // Let the cached load settle before starting a fresh one so we don't
     // double-read the same stores in parallel.
-    try { await inFlightLoad; } catch { /* errors handled inside loaders */ }
+    try {
+      await inFlightLoad;
+    } catch {
+      /* errors handled inside loaders */
+    }
   }
   inFlightLoad = runLoaders();
   try {
@@ -347,7 +387,9 @@ rs.on('disconnected', () => {
 // until features finish loading, which means a stalled IDB init drags the
 // preload into its 10s timeout even with `maxAge: false`. RS replays `ready`
 // for late listeners, so HMR still triggers this on module re-run.
-rs.on('ready', () => { void loadCachedData(); });
+rs.on('ready', () => {
+  void loadCachedData();
+});
 
 export async function runAllMigrations() {
   const inbox = getInbox();
@@ -377,7 +419,8 @@ export async function updateConfig(patch: Partial<AppConfig>) {
 
 export async function updateUserSettings(patch: Partial<UserSettings>) {
   const inbox = getInbox();
-  if (!inbox) throw new Error('Cannot update user settings: storage not connected');
+  if (!inbox)
+    throw new Error('Cannot update user settings: storage not connected');
   const current = get(userSettings);
   const updated = { ...current, ...patch };
   userSettings.set(updated);
@@ -412,15 +455,18 @@ if (inboxRef) {
       const key = path.slice('items/'.length);
       if (value && typeof value === 'object' && value.id) {
         if (key !== (value as { id: string }).id) return;
-        rawItems.update(current => ({ ...current, [key]: value as object }));
-        items.update(current => ({ ...current, [key]: normalizeLoadedItem(value as object) }));
+        rawItems.update((current) => ({ ...current, [key]: value as object }));
+        items.update((current) => ({
+          ...current,
+          [key]: normalizeLoadedItem(value as object),
+        }));
       } else if (!value) {
-        rawItems.update(current => {
+        rawItems.update((current) => {
           const next = { ...current };
           delete next[key];
           return next;
         });
-        items.update(current => {
+        items.update((current) => {
           const next = { ...current };
           delete next[key];
           return next;
@@ -431,12 +477,15 @@ if (inboxRef) {
       if (value && typeof value === 'object' && value.id) {
         const col = value as Collection;
         // Normalize itemIds — may be missing if written by another client
-        collections.update(current => ({
+        collections.update((current) => ({
           ...current,
-          [key]: { ...col, itemIds: Array.isArray(col.itemIds) ? col.itemIds : [] },
+          [key]: {
+            ...col,
+            itemIds: Array.isArray(col.itemIds) ? col.itemIds : [],
+          },
         }));
       } else if (!value) {
-        collections.update(current => {
+        collections.update((current) => {
           const next = { ...current };
           delete next[key];
           return next;
@@ -447,12 +496,17 @@ if (inboxRef) {
       if (value && typeof value === 'object' && value.id) {
         const grp = value as CollectionGroup;
         // Normalize collectionIds — may be missing if written by another client
-        groups.update(current => ({
+        groups.update((current) => ({
           ...current,
-          [key]: { ...grp, collectionIds: Array.isArray(grp.collectionIds) ? grp.collectionIds : [] },
+          [key]: {
+            ...grp,
+            collectionIds: Array.isArray(grp.collectionIds)
+              ? grp.collectionIds
+              : [],
+          },
         }));
       } else if (!value) {
-        groups.update(current => {
+        groups.update((current) => {
           const next = { ...current };
           delete next[key];
           return next;
@@ -516,8 +570,11 @@ function sortWithConfiguredOrder<T extends { id: string }>(
 /** Inbox reference items: non-todos with no collectionId. */
 export const sortedItems = derived(items, ($items) => {
   return Object.values($items)
-    .filter(i => !i.isTodo && i.type !== 'todo' && !i.collectionId)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    .filter((i) => !i.isTodo && i.type !== 'todo' && !i.collectionId)
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
 });
 
 /**
@@ -533,10 +590,11 @@ export const sortedItems = derived(items, ($items) => {
  * (CollectionItemPicker, test suite) that use this store for unfiled todos.
  */
 export const todoItems = derived([items, appConfig], ([$items, $config]) => {
-  const all = Object.values($items)
-    .filter(i => (i.isTodo || i.type === 'todo') && !i.collectionId);
-  const open = all.filter(i => !i.completed);
-  const completed = all.filter(i => i.completed);
+  const all = Object.values($items).filter(
+    (i) => (i.isTodo || i.type === 'todo') && !i.collectionId,
+  );
+  const open = all.filter((i) => !i.completed);
+  const completed = all.filter((i) => i.completed);
 
   sortWithConfiguredOrder(
     open,
@@ -545,7 +603,11 @@ export const todoItems = derived([items, appConfig], ([$items, $config]) => {
   );
 
   // Completed sorted by completedAt desc
-  completed.sort((a, b) => new Date(b.completedAt ?? b.createdAt).getTime() - new Date(a.completedAt ?? a.createdAt).getTime());
+  completed.sort(
+    (a, b) =>
+      new Date(b.completedAt ?? b.createdAt).getTime() -
+      new Date(a.completedAt ?? a.createdAt).getTime(),
+  );
 
   return [...open, ...completed];
 });
@@ -554,14 +616,16 @@ export const collectionItems = derived(
   [items, collections],
   ([$items, $collections]) => {
     const result: Record<string, InboxItem[]> = {};
-    const itemMap = new Map(Object.values($items).map(i => [i.id, i]));
+    const itemMap = new Map(Object.values($items).map((i) => [i.id, i]));
     for (const [cid, col] of Object.entries($collections)) {
       result[cid] = col.itemIds
-        .map(id => itemMap.get(id))
-        .filter((i): i is InboxItem => i !== undefined && i.collectionId === cid);
+        .map((id) => itemMap.get(id))
+        .filter(
+          (i): i is InboxItem => i !== undefined && i.collectionId === cid,
+        );
     }
     return result;
-  }
+  },
 );
 
 // ---- File blob URL loading ----
@@ -587,7 +651,7 @@ export function loadFileBlobUrl(filePath: string, mimeType?: string): void {
       if (url) {
         const old = get(blobUrls)[filePath];
         if (old) URL.revokeObjectURL(old);
-        blobUrls.update(current => ({ ...current, [filePath]: url }));
+        blobUrls.update((current) => ({ ...current, [filePath]: url }));
       }
     })
     .finally(() => {
@@ -604,16 +668,22 @@ export async function storeItem(item: InboxItem, fileData?: ArrayBuffer) {
   if (fileData && 'filePath' in item && item.filePath && 'mimeType' in item) {
     const blob = new Blob([fileData], { type: (item as any).mimeType });
     const url = URL.createObjectURL(blob);
-    blobUrls.update(current => ({ ...current, [item.filePath as string]: url }));
+    blobUrls.update((current) => ({
+      ...current,
+      [item.filePath as string]: url,
+    }));
   }
-  rawItems.update(current => ({ ...current, [cleanItem.id]: cleanItem as object }));
-  items.update(current => ({ ...current, [cleanItem.id]: cleanItem }));
+  rawItems.update((current) => ({
+    ...current,
+    [cleanItem.id]: cleanItem as object,
+  }));
+  items.update((current) => ({ ...current, [cleanItem.id]: cleanItem }));
 }
 
 export async function deleteItem(id: string, item?: InboxItem) {
   const inbox = getInbox();
   await inbox.remove(id, item);
-  rawItems.update(current => {
+  rawItems.update((current) => {
     const next = { ...current };
     for (const key of Object.keys(next)) {
       if ((next[key] as { id?: string }).id === id) {
@@ -623,7 +693,7 @@ export async function deleteItem(id: string, item?: InboxItem) {
     }
     return next;
   });
-  items.update(current => {
+  items.update((current) => {
     const next = { ...current };
     for (const key of Object.keys(next)) {
       if (next[key].id === id) {
@@ -641,7 +711,7 @@ export async function storeCollection(collection: Collection) {
   const inbox = getInbox();
   const clean = cleanForStorage(collection);
   await inbox.storeCollection(clean);
-  collections.update(current => ({ ...current, [clean.id]: clean }));
+  collections.update((current) => ({ ...current, [clean.id]: clean }));
 }
 
 /**
@@ -662,16 +732,18 @@ export async function deleteCollection(id: string): Promise<boolean> {
   if (!collection) return false;
 
   const allItems = get(items);
-  const hasItems = Object.values(allItems).some(i => i.collectionId === id);
+  const hasItems = Object.values(allItems).some((i) => i.collectionId === id);
   if (hasItems) {
-    console.warn('[inbox] cannot delete collection with items — remove them first');
+    console.warn(
+      '[inbox] cannot delete collection with items — remove them first',
+    );
     return false;
   }
 
   const prevCollections = get(collections);
   try {
     await inbox.removeCollection(id);
-    collections.update(current => {
+    collections.update((current) => {
       const next = { ...current };
       delete next[id];
       return next;
@@ -685,12 +757,18 @@ export async function deleteCollection(id: string): Promise<boolean> {
   }
 }
 
-export async function moveItemToCollection(itemId: string, collectionId: string | undefined) {
+export async function moveItemToCollection(
+  itemId: string,
+  collectionId: string | undefined,
+) {
   const inbox = getInbox();
 
   // Validate target collection exists
   if (collectionId && !get(collections)[collectionId]) {
-    console.error('[inbox] moveItemToCollection: target collection does not exist:', collectionId);
+    console.error(
+      '[inbox] moveItemToCollection: target collection does not exist:',
+      collectionId,
+    );
     return;
   }
 
@@ -701,7 +779,7 @@ export async function moveItemToCollection(itemId: string, collectionId: string 
   let item: InboxItem | undefined;
   let oldCollectionId: string | undefined;
 
-  items.update(current => {
+  items.update((current) => {
     const next = { ...current };
     for (const key of Object.keys(next)) {
       if (next[key].id === itemId) {
@@ -729,10 +807,16 @@ export async function moveItemToCollection(itemId: string, collectionId: string 
 
     // Update source collection's itemIds
     if (oldCollectionId && !isSameCollection) {
-      collections.update(current => {
+      collections.update((current) => {
         const col = current[oldCollectionId!];
         if (col) {
-          return { ...current, [oldCollectionId!]: { ...col, itemIds: col.itemIds.filter(id => id !== itemId) } };
+          return {
+            ...current,
+            [oldCollectionId!]: {
+              ...col,
+              itemIds: col.itemIds.filter((id) => id !== itemId),
+            },
+          };
         }
         return current;
       });
@@ -744,10 +828,13 @@ export async function moveItemToCollection(itemId: string, collectionId: string 
 
     // Update target collection's itemIds
     if (collectionId) {
-      collections.update(current => {
+      collections.update((current) => {
         const col = current[collectionId];
         if (col && !col.itemIds.includes(itemId)) {
-          return { ...current, [collectionId]: { ...col, itemIds: [...col.itemIds, itemId] } };
+          return {
+            ...current,
+            [collectionId]: { ...col, itemIds: [...col.itemIds, itemId] },
+          };
         }
         return current;
       });
@@ -768,10 +855,13 @@ export async function removeItemFromCollection(itemId: string) {
   return moveItemToCollection(itemId, undefined);
 }
 
-export async function reorderCollectionItems(collectionId: string, newItemIds: string[]) {
+export async function reorderCollectionItems(
+  collectionId: string,
+  newItemIds: string[],
+) {
   const inbox = getInbox();
   const prevCollections = get(collections);
-  collections.update(current => {
+  collections.update((current) => {
     const col = current[collectionId];
     if (col) {
       return { ...current, [collectionId]: { ...col, itemIds: newItemIds } };
@@ -801,35 +891,41 @@ export async function setExpandedCollections(ids: string[]) {
 
 // ---- Group operations ----
 
-export const sortedGroups = orderedDerived<CollectionGroup>(groups, 'groupsOrder');
+export const sortedGroups = orderedDerived<CollectionGroup>(
+  groups,
+  'groupsOrder',
+);
 
-export const groupCollections = derived([collections, groups, appConfig], ([$collections, $groups]) => {
-  const result: Record<string, Collection[]> = {};
-  for (const [gid, group] of Object.entries($groups)) {
-    const orderedIds = group.collectionIds.filter(cid => {
-      const col = $collections[cid];
-      return col !== undefined && col.groupId === gid;
-    });
-    const orderedSet = new Set(orderedIds);
-    // Start with ordered collections whose groupId matches
-    const cols: Collection[] = orderedIds.map(cid => $collections[cid]);
-    // Append any collections whose groupId points here but missing from collectionIds
-    for (const col of Object.values($collections)) {
-      if (col.groupId === gid && !orderedSet.has(col.id)) {
-        cols.push(col);
+export const groupCollections = derived(
+  [collections, groups, appConfig],
+  ([$collections, $groups]) => {
+    const result: Record<string, Collection[]> = {};
+    for (const [gid, group] of Object.entries($groups)) {
+      const orderedIds = group.collectionIds.filter((cid) => {
+        const col = $collections[cid];
+        return col !== undefined && col.groupId === gid;
+      });
+      const orderedSet = new Set(orderedIds);
+      // Start with ordered collections whose groupId matches
+      const cols: Collection[] = orderedIds.map((cid) => $collections[cid]);
+      // Append any collections whose groupId points here but missing from collectionIds
+      for (const col of Object.values($collections)) {
+        if (col.groupId === gid && !orderedSet.has(col.id)) {
+          cols.push(col);
+        }
       }
+      result[gid] = cols;
     }
-    result[gid] = cols;
-  }
-  return result;
-});
+    return result;
+  },
+);
 
 export async function storeGroup(group: CollectionGroup) {
   const inbox = getInbox();
   const clean = cleanForStorage(group);
   const isNew = !get(groups)[clean.id];
   await inbox.storeGroup(clean);
-  groups.update(current => ({ ...current, [clean.id]: clean }));
+  groups.update((current) => ({ ...current, [clean.id]: clean }));
 
   // New groups should appear active in the filter row so the user can see
   // them immediately. Only touch filters when they're explicitly set — an
@@ -851,16 +947,20 @@ export async function deleteGroup(id: string): Promise<boolean> {
 
   // Refuse to delete a group that still has collections (check groupId, not stale collectionIds)
   const allCollections = get(collections);
-  const hasCollections = Object.values(allCollections).some(col => col.groupId === id);
+  const hasCollections = Object.values(allCollections).some(
+    (col) => col.groupId === id,
+  );
   if (hasCollections) {
-    console.warn('[inbox] cannot delete group with collections — remove them first');
+    console.warn(
+      '[inbox] cannot delete group with collections — remove them first',
+    );
     return false;
   }
 
   const prevGroups = get(groups);
   try {
     await inbox.removeGroup(id);
-    groups.update(current => {
+    groups.update((current) => {
       const next = { ...current };
       delete next[id];
       return next;
@@ -874,7 +974,10 @@ export async function deleteGroup(id: string): Promise<boolean> {
   }
 }
 
-export async function moveCollectionToGroup(collectionId: string, groupId: string) {
+export async function moveCollectionToGroup(
+  collectionId: string,
+  groupId: string,
+) {
   const inbox = getInbox();
   if (!groupId || !get(groups)[groupId]) {
     throw new Error(`Cannot move collection to missing group: ${groupId}`);
@@ -887,7 +990,7 @@ export async function moveCollectionToGroup(collectionId: string, groupId: strin
   let col: Collection | undefined;
   let oldGroupId: string | undefined;
 
-  collections.update(current => {
+  collections.update((current) => {
     const next = { ...current };
     if (next[collectionId]) {
       oldGroupId = next[collectionId].groupId;
@@ -906,10 +1009,18 @@ export async function moveCollectionToGroup(collectionId: string, groupId: strin
 
     // Remove from old group
     if (oldGroupId) {
-      groups.update(current => {
+      groups.update((current) => {
         const grp = current[oldGroupId!];
         if (grp) {
-          return { ...current, [oldGroupId!]: { ...grp, collectionIds: grp.collectionIds.filter(id => id !== collectionId) } };
+          return {
+            ...current,
+            [oldGroupId!]: {
+              ...grp,
+              collectionIds: grp.collectionIds.filter(
+                (id) => id !== collectionId,
+              ),
+            },
+          };
         }
         return current;
       });
@@ -920,10 +1031,16 @@ export async function moveCollectionToGroup(collectionId: string, groupId: strin
     }
 
     // Add to new group
-    groups.update(current => {
+    groups.update((current) => {
       const grp = current[groupId];
       if (grp && !grp.collectionIds.includes(collectionId)) {
-        return { ...current, [groupId]: { ...grp, collectionIds: [...grp.collectionIds, collectionId] } };
+        return {
+          ...current,
+          [groupId]: {
+            ...grp,
+            collectionIds: [...grp.collectionIds, collectionId],
+          },
+        };
       }
       return current;
     });
@@ -951,13 +1068,19 @@ export async function createCollection(col: Collection): Promise<Collection> {
   return col;
 }
 
-export async function reorderGroupCollections(groupId: string, newCollectionIds: string[]) {
+export async function reorderGroupCollections(
+  groupId: string,
+  newCollectionIds: string[],
+) {
   const inbox = getInbox();
   const prevGroups = get(groups);
-  groups.update(current => {
+  groups.update((current) => {
     const grp = current[groupId];
     if (grp) {
-      return { ...current, [groupId]: { ...grp, collectionIds: newCollectionIds } };
+      return {
+        ...current,
+        [groupId]: { ...grp, collectionIds: newCollectionIds },
+      };
     }
     return current;
   });
@@ -993,7 +1116,9 @@ export async function reorderUnfiledTodos(newUnfiledOrder: string[]) {
   const allItems = get(items);
   const isUnfiled = (id: string) => {
     const item = allItems[id];
-    return !!item && (item.isTodo || item.type === 'todo') && !item.collectionId;
+    return (
+      !!item && (item.isTodo || item.type === 'todo') && !item.collectionId
+    );
   };
   const newSet = new Set(newUnfiledOrder);
   const queue = [...newUnfiledOrder];
@@ -1051,7 +1176,7 @@ export async function reorderUnfiledTodos(newUnfiledOrder: string[]) {
 export const activeGroupIds = derived(
   [sortedGroups, appConfig],
   ([$sortedGroups, $config]) => {
-    const all = new Set($sortedGroups.map(g => g.id));
+    const all = new Set($sortedGroups.map((g) => g.id));
     if ($config.activeGroupFilters === undefined) return all;
     const filtered = new Set<string>();
     for (const id of $config.activeGroupFilters) {
@@ -1061,7 +1186,7 @@ export const activeGroupIds = derived(
       return all;
     }
     return filtered;
-  }
+  },
 );
 
 /**
@@ -1077,14 +1202,18 @@ export interface VisibleGroupSection {
 
 export const visibleGroupedCollections = derived(
   [sortedGroups, groupCollections, activeGroupIds],
-  ([$sortedGroups, $groupCollections, $activeGroupIds]): VisibleGroupSection[] => {
+  ([
+    $sortedGroups,
+    $groupCollections,
+    $activeGroupIds,
+  ]): VisibleGroupSection[] => {
     const sections: VisibleGroupSection[] = [];
     for (const g of $sortedGroups) {
       if (!$activeGroupIds.has(g.id)) continue;
       sections.push({ group: g, collections: $groupCollections[g.id] ?? [] });
     }
     return sections;
-  }
+  },
 );
 
 /**
@@ -1100,9 +1229,12 @@ export const orphanCollections = derived(
   [collections, groups],
   ([$collections, $groups]): Collection[] => {
     return Object.values($collections)
-      .filter(col => !col.groupId || !$groups[col.groupId])
-      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-  }
+      .filter((col) => !col.groupId || !$groups[col.groupId])
+      .sort(
+        (a, b) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      );
+  },
 );
 
 /**
@@ -1112,10 +1244,10 @@ export const orphanCollections = derived(
  */
 export async function toggleGroupFilter(groupId: string): Promise<void> {
   const config = get(appConfig);
-  const allGroupIds = get(sortedGroups).map(g => g.id);
+  const allGroupIds = get(sortedGroups).map((g) => g.id);
   const current = config.activeGroupFilters ?? allGroupIds;
   const next = current.includes(groupId)
-    ? current.filter(id => id !== groupId)
+    ? current.filter((id) => id !== groupId)
     : [...current, groupId];
   await updateConfig({ activeGroupFilters: next });
 }
@@ -1132,7 +1264,11 @@ export async function setActiveGroupFilters(ids: string[]): Promise<void> {
   const filtered = Array.from(new Set(ids));
   const current = get(appConfig).activeGroupFilters;
   // Skip if equal to current (avoids URL ↔ config write loops)
-  if (current && current.length === filtered.length && current.every((v, i) => v === filtered[i])) {
+  if (
+    current &&
+    current.length === filtered.length &&
+    current.every((v, i) => v === filtered[i])
+  ) {
     return;
   }
   await updateConfig({ activeGroupFilters: filtered });
@@ -1145,12 +1281,12 @@ export async function setActiveGroupFilters(ids: string[]): Promise<void> {
  * and remain valid todos; they are not routed through a collection/group.
  */
 export const allTodos = derived(items, ($items) => {
-  return Object.values($items).filter(i => i.isTodo || i.type === 'todo');
+  return Object.values($items).filter((i) => i.isTodo || i.type === 'todo');
 });
 
 /** Convenience: open todos across all collections, for badges/counts. */
 export const openTodos = derived(allTodos, ($allTodos) =>
-  $allTodos.filter(t => !t.completed)
+  $allTodos.filter((t) => !t.completed),
 );
 
 /**
@@ -1162,7 +1298,7 @@ export const openTodos = derived(allTodos, ($allTodos) =>
 export const visibleTodos = derived(
   [allTodos, collections, activeGroupIds, appConfig],
   ([$allTodos, $collections, $activeGroupIds, $config]) => {
-    const filtered = $allTodos.filter(todo => {
+    const filtered = $allTodos.filter((todo) => {
       if (!todo.collectionId) return true;
       const col = $collections[todo.collectionId];
       if (!col) return true;
@@ -1173,9 +1309,10 @@ export const visibleTodos = derived(
     return sortWithConfiguredOrder(
       filtered,
       $config.todosGlobalOrder,
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
-  }
+  },
 );
 
 /**

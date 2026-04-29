@@ -26,7 +26,10 @@ import { ARMADIETTO_ORIGIN, type RsUser } from './armadietto';
 // We also seed the web app's own keys (`inbox-rs:userAddress`,
 // `inbox-rs:theme`) so the UI shows the connected state on first paint
 // without flashing the disconnected one.
-function rsLocalStoragePayload(user: RsUser, token: string): Record<string, string> {
+function rsLocalStoragePayload(
+  user: RsUser,
+  token: string,
+): Record<string, string> {
   const storageHref = `${ARMADIETTO_ORIGIN}/storage/${user.username}`;
   const wireclientSettings = {
     userAddress: user.address,
@@ -67,7 +70,7 @@ export async function seedRsSession(
   // grant Armadietto issued for that origin. Keeping it on the signature
   // means a future RS-server flavour that needs the client_id distinct from
   // the web origin can wire it through without a breaking API change.
-  _options: { clientOrigin: string }
+  _options: { clientOrigin: string },
 ): Promise<void> {
   const payload = rsLocalStoragePayload(user, token);
   await context.addInitScript((entries) => {
@@ -109,7 +112,8 @@ export function assertNoConsoleErrors(messages: readonly string[]): void {
     'Failed to load resource: the server responded with a status of 404',
   ];
   const realErrors = messages.filter(
-    (m) => m.startsWith('[error]') && !noiseSubstrings.some((s) => m.includes(s))
+    (m) =>
+      m.startsWith('[error]') && !noiseSubstrings.some((s) => m.includes(s)),
   );
   if (realErrors.length > 0) {
     throw new Error(`Unexpected console errors:\n${realErrors.join('\n')}`);

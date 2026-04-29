@@ -1,7 +1,13 @@
-import type { Component } from 'svelte';
 import type { InboxItemType, TodoItem } from '@inbox-rs/rs-module';
+import type { Component } from 'svelte';
 
-const SUBMITTABLE_INPUT_TYPES = new Set(['text', 'url', 'email', 'search', 'tel']);
+const SUBMITTABLE_INPUT_TYPES = new Set([
+  'text',
+  'url',
+  'email',
+  'search',
+  'tel',
+]);
 
 export function shouldSubmitAddEntryForm(
   key: string,
@@ -12,11 +18,17 @@ export function shouldSubmitAddEntryForm(
     return false;
   }
 
-  if (target.closest('.tiptap-editor') || target instanceof HTMLTextAreaElement) {
+  if (
+    target.closest('.tiptap-editor') ||
+    target instanceof HTMLTextAreaElement
+  ) {
     return false;
   }
 
-  return target instanceof HTMLInputElement && SUBMITTABLE_INPUT_TYPES.has(target.type);
+  return (
+    target instanceof HTMLInputElement &&
+    SUBMITTABLE_INPUT_TYPES.has(target.type)
+  );
 }
 
 export async function loadMarkdownEditorComponent(): Promise<Component<any>> {

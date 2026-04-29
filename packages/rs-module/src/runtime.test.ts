@@ -1,19 +1,22 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  DirectRS,
+  type BrowserStorageArea,
   connectViaOAuth,
   createConfigStore,
+  DEFAULT_CONFIG_STORAGE_KEY,
+  DirectRS,
   discoverStorage,
   extractTokenFromRedirect,
   parseUserAddress,
-  schemeForHost,
-  DEFAULT_CONFIG_STORAGE_KEY,
-  type BrowserStorageArea,
   type RSConfig,
+  schemeForHost,
 } from './runtime.js';
 
 /** Build a minimal `Response`-like stub for fetch mocks. */
-function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {}) {
+function jsonResponse(
+  body: unknown,
+  init: { ok?: boolean; status?: number } = {},
+) {
   return {
     ok: init.ok ?? true,
     status: init.status ?? 200,
@@ -32,7 +35,12 @@ const REMOTESTORAGE_REL = 'http://tools.ietf.org/id/draft-dejong-remotestorage';
 const AUTH_PROP_KEY = 'http://tools.ietf.org/html/rfc6749#section-4.2';
 const SPEC_VERSION_KEY = 'http://remotestorage.io/spec/version';
 
-function webfingerBody(overrides?: { authProp?: string; href?: string; rel?: string; type?: string }) {
+function webfingerBody(overrides?: {
+  authProp?: string;
+  href?: string;
+  rel?: string;
+  type?: string;
+}) {
   const props: Record<string, string> = {};
   const authKey = overrides?.authProp ?? AUTH_PROP_KEY;
   props[authKey] = 'https://storage.example.com/oauth';
@@ -50,11 +58,17 @@ function webfingerBody(overrides?: { authProp?: string; href?: string; rel?: str
 
 describe('parseUserAddress', () => {
   it('splits a valid address into user and host', () => {
-    expect(parseUserAddress('alice@example.com')).toEqual({ user: 'alice', host: 'example.com' });
+    expect(parseUserAddress('alice@example.com')).toEqual({
+      user: 'alice',
+      host: 'example.com',
+    });
   });
 
   it('preserves a port in the host', () => {
-    expect(parseUserAddress('alice@localhost:8000')).toEqual({ user: 'alice', host: 'localhost:8000' });
+    expect(parseUserAddress('alice@localhost:8000')).toEqual({
+      user: 'alice',
+      host: 'localhost:8000',
+    });
   });
 
   it.each([
@@ -63,7 +77,9 @@ describe('parseUserAddress', () => {
     ['empty host', 'alice@'],
     ['empty string', ''],
   ])('throws on %s', (_label, address) => {
-    expect(() => parseUserAddress(address)).toThrow(/Invalid remoteStorage address/);
+    expect(() => parseUserAddress(address)).toThrow(
+      /Invalid remoteStorage address/,
+    );
   });
 });
 
@@ -116,7 +132,8 @@ describe('discoverStorage', () => {
   it('falls back to spec-version property when type is missing', async () => {
     const body = webfingerBody();
     delete (body.links[0] as any).type;
-    body.links[0].properties[SPEC_VERSION_KEY] = 'draft-dejong-remotestorage-05';
+    body.links[0].properties[SPEC_VERSION_KEY] =
+      'draft-dejong-remotestorage-05';
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(body));
 
     const result = await discoverStorage('alice@example.com', fetchImpl);
@@ -125,7 +142,9 @@ describe('discoverStorage', () => {
   });
 
   it('accepts the legacy `remotestorage` rel', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(webfingerBody({ rel: 'remotestorage' })));
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(webfingerBody({ rel: 'remotestorage' })));
 
     const result = await discoverStorage('alice@example.com', fetchImpl);
 
@@ -133,7 +152,11 @@ describe('discoverStorage', () => {
   });
 
   it('accepts auth URL via auth-endpoint property as fallback', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(webfingerBody({ authProp: 'auth-endpoint' })));
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(webfingerBody({ authProp: 'auth-endpoint' })),
+      );
 
     const result = await discoverStorage('alice@example.com', fetchImpl);
 
@@ -141,17 +164,23 @@ describe('discoverStorage', () => {
   });
 
   it('throws when WebFinger returns a non-2xx', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({}, { ok: false, status: 404 }));
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({}, { ok: false, status: 404 }));
 
-    await expect(discoverStorage('alice@example.com', fetchImpl)).rejects.toThrow('WebFinger failed: 404');
+    await expect(
+      discoverStorage('alice@example.com', fetchImpl),
+    ).rejects.toThrow('WebFinger failed: 404');
   });
 
   it('throws when no remoteStorage link is present', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ links: [{ rel: 'http://other' }] }));
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ links: [{ rel: 'http://other' }] }));
 
-    await expect(discoverStorage('alice@example.com', fetchImpl)).rejects.toThrow(
-      /No remoteStorage link found/,
-    );
+    await expect(
+      discoverStorage('alice@example.com', fetchImpl),
+    ).rejects.toThrow(/No remoteStorage link found/);
   });
 
   it('throws when remoteStorage link has no auth URL', async () => {
@@ -159,9 +188,9 @@ describe('discoverStorage', () => {
     body.links[0].properties = {};
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(body));
 
-    await expect(discoverStorage('alice@example.com', fetchImpl)).rejects.toThrow(
-      /No OAuth endpoint found/,
-    );
+    await expect(
+      discoverStorage('alice@example.com', fetchImpl),
+    ).rejects.toThrow(/No OAuth endpoint found/);
   });
 
   it('throws when remoteStorage link has no href', async () => {
@@ -169,27 +198,33 @@ describe('discoverStorage', () => {
     delete (body.links[0] as any).href;
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(body));
 
-    await expect(discoverStorage('alice@example.com', fetchImpl)).rejects.toThrow(
-      /remoteStorage link missing href/,
-    );
+    await expect(
+      discoverStorage('alice@example.com', fetchImpl),
+    ).rejects.toThrow(/remoteStorage link missing href/);
   });
 
   it('throws on a malformed user address before fetching', async () => {
     const fetchImpl = vi.fn();
 
-    await expect(discoverStorage('bogus', fetchImpl)).rejects.toThrow(/Invalid remoteStorage address/);
+    await expect(discoverStorage('bogus', fetchImpl)).rejects.toThrow(
+      /Invalid remoteStorage address/,
+    );
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 });
 
 describe('extractTokenFromRedirect', () => {
   it('reads access_token from the URL fragment', () => {
-    const token = extractTokenFromRedirect('https://callback.example/#access_token=abc123&token_type=bearer');
+    const token = extractTokenFromRedirect(
+      'https://callback.example/#access_token=abc123&token_type=bearer',
+    );
     expect(token).toBe('abc123');
   });
 
   it('reads access_token from the query string', () => {
-    const token = extractTokenFromRedirect('https://callback.example/?access_token=xyz789');
+    const token = extractTokenFromRedirect(
+      'https://callback.example/?access_token=xyz789',
+    );
     expect(token).toBe('xyz789');
   });
 
@@ -259,9 +294,13 @@ describe('connectViaOAuth', () => {
 
     const calledUrl = launchAuthFlow.mock.calls[0]![0] as string;
     const parsed = new URL(calledUrl);
-    expect(parsed.origin + parsed.pathname).toBe('https://storage.example.com/oauth');
+    expect(parsed.origin + parsed.pathname).toBe(
+      'https://storage.example.com/oauth',
+    );
     expect(parsed.searchParams.get('client_id')).toBe('my-client');
-    expect(parsed.searchParams.get('redirect_uri')).toBe('https://callback.example/');
+    expect(parsed.searchParams.get('redirect_uri')).toBe(
+      'https://callback.example/',
+    );
     expect(parsed.searchParams.get('response_type')).toBe('token');
     expect(parsed.searchParams.get('scope')).toBe('inbox:rw shares:rw');
   });
@@ -285,7 +324,9 @@ describe('connectViaOAuth', () => {
 
   it('propagates errors from the launcher', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(webfingerBody()));
-    const launchAuthFlow = vi.fn().mockRejectedValue(new Error('user cancelled'));
+    const launchAuthFlow = vi
+      .fn()
+      .mockRejectedValue(new Error('user cancelled'));
 
     await expect(
       connectViaOAuth('alice@example.com', {
@@ -351,7 +392,8 @@ describe('connectViaOAuth', () => {
       fetchImpl,
     });
 
-    const params = new URL(launchAuthFlow.mock.calls[0]![0] as string).searchParams;
+    const params = new URL(launchAuthFlow.mock.calls[0]![0] as string)
+      .searchParams;
     expect(params.get('scope')).toBe('inbox:r contacts:rw');
   });
 
@@ -374,7 +416,12 @@ describe('connectViaOAuth', () => {
     // response_type, scope). Anything else means the helper is appending
     // more than it should.
     const keys = Array.from(launchedUrl.searchParams.keys()).sort();
-    expect(keys).toEqual(['client_id', 'redirect_uri', 'response_type', 'scope']);
+    expect(keys).toEqual([
+      'client_id',
+      'redirect_uri',
+      'response_type',
+      'scope',
+    ]);
   });
 });
 
@@ -387,7 +434,9 @@ describe('DirectRS', () => {
   };
 
   it('throws when constructed without href', () => {
-    expect(() => new DirectRS({ userAddress: 'a@b', token: 't' })).toThrow(/href/);
+    expect(() => new DirectRS({ userAddress: 'a@b', token: 't' })).toThrow(
+      /href/,
+    );
   });
 
   it('throws when constructed without token', () => {
@@ -417,10 +466,14 @@ describe('DirectRS', () => {
     });
 
     it('throws on non-2xx', async () => {
-      const fetchImpl = vi.fn().mockResolvedValue(emptyResponse({ ok: false, status: 401 }));
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(emptyResponse({ ok: false, status: 401 }));
       const rs = new DirectRS(config, fetchImpl);
 
-      await expect(rs.storeObject('items/x', {})).rejects.toThrow('Store failed: 401');
+      await expect(rs.storeObject('items/x', {})).rejects.toThrow(
+        'Store failed: 401',
+      );
     });
   });
 
@@ -446,12 +499,14 @@ describe('DirectRS', () => {
     });
 
     it('throws on non-2xx', async () => {
-      const fetchImpl = vi.fn().mockResolvedValue(emptyResponse({ ok: false, status: 500 }));
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(emptyResponse({ ok: false, status: 500 }));
       const rs = new DirectRS(config, fetchImpl);
 
-      await expect(rs.storeFile('files/x.png', new ArrayBuffer(0), 'image/png')).rejects.toThrow(
-        'Store file failed: 500',
-      );
+      await expect(
+        rs.storeFile('files/x.png', new ArrayBuffer(0), 'image/png'),
+      ).rejects.toThrow('Store file failed: 500');
     });
   });
 
@@ -471,7 +526,11 @@ describe('DirectRS', () => {
       const fetchImpl = vi.fn().mockResolvedValue(emptyResponse());
       const rs = new DirectRS(config, fetchImpl);
 
-      const item = { id: 'img-1', filePath: 'files/img-1.jpg', mimeType: 'image/jpeg' };
+      const item = {
+        id: 'img-1',
+        filePath: 'files/img-1.jpg',
+        mimeType: 'image/jpeg',
+      };
       await rs.store(item, new ArrayBuffer(16));
 
       expect(fetchImpl).toHaveBeenCalledTimes(2);
@@ -496,7 +555,11 @@ describe('DirectRS', () => {
       const fetchImpl = vi.fn().mockResolvedValue(emptyResponse());
       const rs = new DirectRS(config, fetchImpl);
 
-      await rs.store({ id: 'img-2', filePath: 'files/img-2.jpg', mimeType: 'image/jpeg' });
+      await rs.store({
+        id: 'img-2',
+        filePath: 'files/img-2.jpg',
+        mimeType: 'image/jpeg',
+      });
 
       expect(fetchImpl).toHaveBeenCalledTimes(1);
     });
@@ -514,7 +577,8 @@ describe('DirectRS', () => {
 
       await rs.storeObject('items/x', {});
 
-      const auth = (fetchImpl.mock.calls[0]![1] as RequestInit).headers as Record<string, string>;
+      const auth = (fetchImpl.mock.calls[0]![1] as RequestInit)
+        .headers as Record<string, string>;
       expect(auth.Authorization).toBe('Bearer tok');
       expect(auth.Authorization).toMatch(/^Bearer [^ ]+$/);
     });
@@ -525,7 +589,8 @@ describe('DirectRS', () => {
 
       await rs.storeFile('files/x.png', new ArrayBuffer(0), 'image/png');
 
-      const headers = (fetchImpl.mock.calls[0]![1] as RequestInit).headers as Record<string, string>;
+      const headers = (fetchImpl.mock.calls[0]![1] as RequestInit)
+        .headers as Record<string, string>;
       expect(headers.Authorization).toBe('Bearer tok');
     });
 
@@ -536,7 +601,8 @@ describe('DirectRS', () => {
 
       await rs.storeObject('items/x', {});
 
-      const headers = (fetchImpl.mock.calls[0]![1] as RequestInit).headers as Record<string, string>;
+      const headers = (fetchImpl.mock.calls[0]![1] as RequestInit)
+        .headers as Record<string, string>;
       expect(headers.Authorization).toBe(`Bearer ${weirdToken}`);
     });
   });
@@ -563,7 +629,9 @@ describe('DirectRS', () => {
 
       await rs.storeObject('items/with-dashes_and.dots', {});
 
-      expect(fetchImpl.mock.calls[0]![0]).toContain('/inbox/items/with-dashes_and.dots');
+      expect(fetchImpl.mock.calls[0]![0]).toContain(
+        '/inbox/items/with-dashes_and.dots',
+      );
     });
   });
 
@@ -575,7 +643,9 @@ describe('DirectRS', () => {
       ['500 server error', 500, 'Store failed: 500'],
       ['502 bad gateway', 502, 'Store failed: 502'],
     ])('storeObject error includes the numeric status: %s', async (_label, status, msg) => {
-      const fetchImpl = vi.fn().mockResolvedValue(emptyResponse({ ok: false, status }));
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(emptyResponse({ ok: false, status }));
       const rs = new DirectRS(config, fetchImpl);
 
       await expect(rs.storeObject('items/x', {})).rejects.toThrow(msg);
@@ -585,10 +655,14 @@ describe('DirectRS', () => {
       [413, 'Store file failed: 413'],
       [500, 'Store file failed: 500'],
     ])('storeFile error includes the numeric status: %i', async (status, msg) => {
-      const fetchImpl = vi.fn().mockResolvedValue(emptyResponse({ ok: false, status }));
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(emptyResponse({ ok: false, status }));
       const rs = new DirectRS(config, fetchImpl);
 
-      await expect(rs.storeFile('files/x', new ArrayBuffer(0), 'image/png')).rejects.toThrow(msg);
+      await expect(
+        rs.storeFile('files/x', new ArrayBuffer(0), 'image/png'),
+      ).rejects.toThrow(msg);
     });
 
     it('store() short-circuits on file PUT failure (does not attempt metadata)', async () => {
@@ -622,7 +696,9 @@ describe('DirectRS', () => {
     it('passes the ArrayBuffer through to fetch unchanged', async () => {
       const fetchImpl = vi.fn().mockResolvedValue(emptyResponse());
       const rs = new DirectRS(config, fetchImpl);
-      const data = new Uint8Array([0xff, 0x00, 0xfe, 0x01, 0xde, 0xad, 0xbe, 0xef]).buffer;
+      const data = new Uint8Array([
+        0xff, 0x00, 0xfe, 0x01, 0xde, 0xad, 0xbe, 0xef,
+      ]).buffer;
 
       await rs.storeFile('files/x.bin', data, 'application/octet-stream');
 
@@ -665,9 +741,12 @@ describe('DirectRS', () => {
       // Mimic the WebIDL [[ThisValue]] check: anything that isn't the global
       // (or the conventional null/undefined for free-function calls) throws.
       return vi.fn(function (this: unknown) {
-        const isGlobalLike = this === globalThis || this === undefined || this === null;
+        const isGlobalLike =
+          this === globalThis || this === undefined || this === null;
         if (!isGlobalLike) {
-          throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation");
+          throw new TypeError(
+            "Failed to execute 'fetch' on 'Window': Illegal invocation",
+          );
         }
         return Promise.resolve(emptyResponse());
       });
@@ -677,7 +756,9 @@ describe('DirectRS', () => {
       const strictFetch = makeStrictBrowserFetch();
       const rs = new DirectRS(config, strictFetch as unknown as typeof fetch);
 
-      await expect(rs.storeObject('items/x', { id: 'x' })).resolves.toBeUndefined();
+      await expect(
+        rs.storeObject('items/x', { id: 'x' }),
+      ).resolves.toBeUndefined();
       expect(strictFetch).toHaveBeenCalledTimes(1);
     });
 

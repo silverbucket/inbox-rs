@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
-import { runSaveEmail } from './save-orchestrator';
 import { DirectRS } from '@inbox-rs/rs-module';
+import { describe, expect, it, vi } from 'vitest';
+import { runSaveEmail } from './save-orchestrator';
 
 /**
  * Build a `DirectRS` whose underlying fetch can be controlled per-test.
@@ -30,7 +30,9 @@ const baseParams = {
 
 describe('runSaveEmail', () => {
   it('returns ok:true and PUTs the item when rs.store succeeds', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200 } as any);
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue({ ok: true, status: 200 } as any);
     const rs = makeRS(fetchImpl);
 
     const result = await runSaveEmail({ rs, ...baseParams });
@@ -52,7 +54,9 @@ describe('runSaveEmail', () => {
   });
 
   it('falls back to "Untitled email" when subject is empty', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200 } as any);
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue({ ok: true, status: 200 } as any);
     const rs = makeRS(fetchImpl);
 
     await runSaveEmail({ rs, ...baseParams, subject: '' });
@@ -62,7 +66,9 @@ describe('runSaveEmail', () => {
   });
 
   it('omits optional fields when blank/whitespace', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200 } as any);
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue({ ok: true, status: 200 } as any);
     const rs = makeRS(fetchImpl);
 
     await runSaveEmail({
@@ -80,7 +86,9 @@ describe('runSaveEmail', () => {
   });
 
   it('trims notes when present', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200 } as any);
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue({ ok: true, status: 200 } as any);
     const rs = makeRS(fetchImpl);
 
     await runSaveEmail({ rs, ...baseParams, notes: '  important context  ' });
@@ -98,7 +106,9 @@ describe('runSaveEmail', () => {
    * tagged failure so the popup can reset its state in `finally`.
    */
   it('returns ok:false with the error message when rs.store rejects (401 expired token)', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 401 } as any);
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue({ ok: false, status: 401 } as any);
     const rs = makeRS(fetchImpl);
 
     const result = await runSaveEmail({ rs, ...baseParams });
@@ -108,7 +118,11 @@ describe('runSaveEmail', () => {
   });
 
   it('returns ok:false when fetch itself rejects (network failure / CORS block)', async () => {
-    const fetchImpl = vi.fn().mockRejectedValue(new TypeError('NetworkError when attempting to fetch resource.'));
+    const fetchImpl = vi
+      .fn()
+      .mockRejectedValue(
+        new TypeError('NetworkError when attempting to fetch resource.'),
+      );
     const rs = makeRS(fetchImpl);
 
     const result = await runSaveEmail({ rs, ...baseParams });
@@ -134,7 +148,9 @@ describe('runSaveEmail', () => {
       const fetchImpl = vi.fn().mockRejectedValue(reason);
       const rs = makeRS(fetchImpl);
       // Must resolve, never throw.
-      await expect(runSaveEmail({ rs, ...baseParams })).resolves.toMatchObject({ ok: false });
+      await expect(runSaveEmail({ rs, ...baseParams })).resolves.toMatchObject({
+        ok: false,
+      });
     }
   });
 });

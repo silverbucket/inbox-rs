@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { classifyChanges, planBumps } from './release-bump.mjs';
 
 /**
@@ -30,9 +30,7 @@ describe('classifyChanges', () => {
   });
 
   it('flags both extensions when rs-module changes (shared dep)', () => {
-    expect(
-      classifyChanges(['packages/rs-module/src/runtime.ts']),
-    ).toEqual({
+    expect(classifyChanges(['packages/rs-module/src/runtime.ts'])).toEqual({
       rsModuleChanged: true,
       lockfileChanged: false,
       extensionNeedsBump: true,
@@ -52,9 +50,7 @@ describe('classifyChanges', () => {
   });
 
   it('flags only thunderbird when thunderbird code changes', () => {
-    expect(
-      classifyChanges(['packages/thunderbird/manifest.json']),
-    ).toEqual({
+    expect(classifyChanges(['packages/thunderbird/manifest.json'])).toEqual({
       rsModuleChanged: false,
       lockfileChanged: false,
       extensionNeedsBump: false,
@@ -72,9 +68,7 @@ describe('classifyChanges', () => {
    * conservatively treat any lockfile change as extension-affecting.
    */
   it('flags both extensions when only the lockfile changes', () => {
-    expect(
-      classifyChanges(['package-lock.json']),
-    ).toEqual({
+    expect(classifyChanges(['package-lock.json'])).toEqual({
       rsModuleChanged: false,
       lockfileChanged: true,
       extensionNeedsBump: true,
@@ -126,9 +120,7 @@ describe('classifyChanges', () => {
   it('does not match prefix-only false positives', () => {
     // `packages/extension-foo/...` should NOT trip `packages/extension/`.
     // We rely on the trailing slash in the prefix.
-    expect(
-      classifyChanges(['packages/extension-foo/manifest.json']),
-    ).toEqual({
+    expect(classifyChanges(['packages/extension-foo/manifest.json'])).toEqual({
       rsModuleChanged: false,
       lockfileChanged: false,
       extensionNeedsBump: false,
@@ -139,9 +131,7 @@ describe('classifyChanges', () => {
   it('does not match nested lockfiles inside packages (only root package-lock.json counts)', () => {
     // Workspaces only ever produce one root lockfile, but defend against
     // future tools dropping nested lockfiles into a package.
-    expect(
-      classifyChanges(['packages/web/package-lock.json']),
-    ).toEqual({
+    expect(classifyChanges(['packages/web/package-lock.json'])).toEqual({
       rsModuleChanged: false,
       lockfileChanged: false,
       extensionNeedsBump: false,

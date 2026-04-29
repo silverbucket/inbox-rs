@@ -14,8 +14,8 @@
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(scriptDir, '..');
@@ -31,7 +31,11 @@ export function readPackageVersion(pkgJsonPath) {
  * Pure function — no filesystem access — so it can be unit-tested directly
  * with fixture inputs.
  */
-export function buildMetadataContents({ webVersion, extensionVersion, thunderbirdVersion }) {
+export function buildMetadataContents({
+  webVersion,
+  extensionVersion,
+  thunderbirdVersion,
+}) {
   const chromiumPath = `/downloads/inbox-rs-chromium-${extensionVersion}.zip`;
   const firefoxPath = `/downloads/inbox-rs-firefox-${extensionVersion}.xpi`;
   const thunderbirdPath = `/downloads/inbox-rs-thunderbird-${thunderbirdVersion}.xpi`;
@@ -76,8 +80,12 @@ export function main() {
 
   const contents = buildMetadataContents({
     webVersion: readPackageVersion(join(rootDir, 'package.json')),
-    extensionVersion: readPackageVersion(join(rootDir, 'packages', 'extension', 'package.json')),
-    thunderbirdVersion: readPackageVersion(join(rootDir, 'packages', 'thunderbird', 'package.json')),
+    extensionVersion: readPackageVersion(
+      join(rootDir, 'packages', 'extension', 'package.json'),
+    ),
+    thunderbirdVersion: readPackageVersion(
+      join(rootDir, 'packages', 'thunderbird', 'package.json'),
+    ),
   });
 
   let existingContents = null;

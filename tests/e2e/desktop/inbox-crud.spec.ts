@@ -8,10 +8,13 @@
  * which is the same plumbing every other type rides on.
  */
 
-import { test, expect } from '../helpers/fixtures';
-import { attachConsoleCapture, assertNoConsoleErrors } from '../helpers/pwa';
+import { expect, test } from '../helpers/fixtures';
+import { assertNoConsoleErrors, attachConsoleCapture } from '../helpers/pwa';
 
-test('adding a note via the UI surfaces it in the inbox grid', async ({ connectedPage, webOrigin }) => {
+test('adding a note via the UI surfaces it in the inbox grid', async ({
+  connectedPage,
+  webOrigin,
+}) => {
   const log = attachConsoleCapture(connectedPage);
   await connectedPage.goto(webOrigin);
   await connectedPage.waitForLoadState('networkidle');
@@ -35,11 +38,16 @@ test('adding a note via the UI surfaces it in the inbox grid', async ({ connecte
 
   // The modal's primary action is labelled "Save" or "Add" depending on
   // whether we're editing — for a new note it's "Add".
-  await connectedPage.getByRole('button', { name: /^(Add|Save)$/ }).first().click();
+  await connectedPage
+    .getByRole('button', { name: /^(Add|Save)$/ })
+    .first()
+    .click();
 
   // Wait for the modal to close (sentinel is no longer inside an aria
   // dialog) and the new card to render in the grid.
-  await expect(connectedPage.getByText(sentinel)).toBeVisible({ timeout: 10_000 });
+  await expect(connectedPage.getByText(sentinel)).toBeVisible({
+    timeout: 10_000,
+  });
 
   assertNoConsoleErrors(log);
 });

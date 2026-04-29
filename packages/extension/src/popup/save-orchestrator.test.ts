@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * `runSavePage` / `runSaveNote` orchestrate calls into `save-logic.ts`
@@ -24,8 +24,8 @@ vi.mock('webextension-polyfill', () => ({
 
 vi.stubGlobal('fetch', mockFetch);
 
-import { runSavePage, runSaveNote } from './save-orchestrator';
 import { DirectRS } from '../lib/rs';
+import { runSaveNote, runSavePage } from './save-orchestrator';
 
 function makeRS(): DirectRS {
   return new DirectRS({
@@ -123,7 +123,11 @@ describe('runSavePage', () => {
   });
 
   it('falls back to bookmark when image save throws (SW round-trip rejected)', async () => {
-    mockSendMessage.mockRejectedValue(new Error('Could not establish connection. Receiving end does not exist.'));
+    mockSendMessage.mockRejectedValue(
+      new Error(
+        'Could not establish connection. Receiving end does not exist.',
+      ),
+    );
     mockFetch.mockResolvedValue({ ok: true });
     const rs = makeRS();
 
@@ -208,7 +212,9 @@ describe('runSavePage', () => {
 
     // The SW received the same id-derived path as the bookmark would have.
     expect(mockSendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: expect.stringContaining('shared-id') }),
+      expect.objectContaining({
+        filePath: expect.stringContaining('shared-id'),
+      }),
     );
     // And the bookmark stored under the same id.
     const bookmark = JSON.parse(mockFetch.mock.calls[0]![1].body);
@@ -281,7 +287,12 @@ describe('runSaveNote', () => {
     const longBody =
       'This is a long note body that should get truncated for the title at fifty characters exactly.';
 
-    await runSaveNote({ rs, ...baseNoteParams, noteTitle: '', noteBody: longBody });
+    await runSaveNote({
+      rs,
+      ...baseNoteParams,
+      noteTitle: '',
+      noteBody: longBody,
+    });
 
     const stored = JSON.parse(mockFetch.mock.calls[0]![1].body);
     expect(stored.title).toBe(longBody.slice(0, 50));
@@ -292,7 +303,12 @@ describe('runSaveNote', () => {
     mockFetch.mockResolvedValue({ ok: true });
     const rs = makeRS();
 
-    await runSaveNote({ rs, ...baseNoteParams, noteTitle: '   ', noteBody: '  hello  ' });
+    await runSaveNote({
+      rs,
+      ...baseNoteParams,
+      noteTitle: '   ',
+      noteBody: '  hello  ',
+    });
 
     const stored = JSON.parse(mockFetch.mock.calls[0]![1].body);
     expect(stored.title).toBe('hello');
@@ -311,7 +327,11 @@ describe('runSaveNote', () => {
   it('returns ok:false (without calling fetch) when body is whitespace only', async () => {
     const rs = makeRS();
 
-    const result = await runSaveNote({ rs, ...baseNoteParams, noteBody: '   \n\t  ' });
+    const result = await runSaveNote({
+      rs,
+      ...baseNoteParams,
+      noteBody: '   \n\t  ',
+    });
 
     expect(result.ok).toBe(false);
     expect(mockFetch).not.toHaveBeenCalled();
@@ -335,7 +355,9 @@ describe('runSaveNote', () => {
     for (const reason of [undefined, null, { weird: 'shape' }, 42]) {
       mockFetch.mockRejectedValue(reason);
       const rs = makeRS();
-      await expect(runSaveNote({ rs, ...baseNoteParams })).resolves.toMatchObject({ ok: false });
+      await expect(
+        runSaveNote({ rs, ...baseNoteParams }),
+      ).resolves.toMatchObject({ ok: false });
     }
   });
 });

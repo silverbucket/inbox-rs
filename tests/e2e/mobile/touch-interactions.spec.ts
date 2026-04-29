@@ -8,7 +8,7 @@
  * bug in PWAs.
  */
 
-import { test, expect } from '../helpers/fixtures';
+import { expect, test } from '../helpers/fixtures';
 
 test('tap opens the user menu', async ({ page, webOrigin }) => {
   // The user menu trigger must respond to a tap. If it only listens for

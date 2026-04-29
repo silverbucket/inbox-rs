@@ -1,4 +1,12 @@
-export type InboxItemType = 'bookmark' | 'note' | 'image' | 'audio' | 'video' | 'document' | 'todo' | 'email';
+export type InboxItemType =
+  | 'bookmark'
+  | 'note'
+  | 'image'
+  | 'audio'
+  | 'video'
+  | 'document'
+  | 'todo'
+  | 'email';
 
 export interface InboxItemBase {
   id: string;
@@ -19,9 +27,9 @@ export interface BookmarkItem extends InboxItemBase {
   favicon?: string;
   ogImage?: string;
   siteName?: string;
-  body?: string;           // embedded content (tweet text, article excerpt, etc.)
-  filePath?: string;       // locally stored image (downloaded og:image, tweet photo, etc.)
-  mimeType?: string;       // mime type for filePath
+  body?: string; // embedded content (tweet text, article excerpt, etc.)
+  filePath?: string; // locally stored image (downloaded og:image, tweet photo, etc.)
+  mimeType?: string; // mime type for filePath
 }
 
 export interface NoteItem extends InboxItemBase {
@@ -76,7 +84,15 @@ export interface EmailItem extends InboxItemBase {
   messageUrl?: string; // mid: URI to open in mail client
 }
 
-export type InboxItem = BookmarkItem | NoteItem | ImageItem | AudioItem | VideoItem | DocumentItem | TodoItem | EmailItem;
+export type InboxItem =
+  | BookmarkItem
+  | NoteItem
+  | ImageItem
+  | AudioItem
+  | VideoItem
+  | DocumentItem
+  | TodoItem
+  | EmailItem;
 
 export interface UserSettings {
   abbreviation?: string;
@@ -86,8 +102,8 @@ export interface UserSettings {
 export interface AppConfig {
   todosCollapsed?: boolean;
   collectionsOrder?: string[]; // ordered list of collection IDs for nav display
-  groupsOrder?: string[];      // ordered list of group IDs for nav display
-  todosOrder?: string[];       // ordered list of inbox todo IDs for manual sorting (within-inbox)
+  groupsOrder?: string[]; // ordered list of group IDs for nav display
+  todosOrder?: string[]; // ordered list of inbox todo IDs for manual sorting (within-inbox)
   expandedCollections?: string[]; // IDs of collections currently expanded
   /**
    * Group IDs that are toggled ON in the filter row.
@@ -119,16 +135,16 @@ export interface Collection {
   id: string;
   name: string;
   description?: string;
-  itemIds: string[];       // ordered array — controls sort order within collection
-  createdAt: string;       // ISO 8601
-  color?: string;          // optional accent color
-  groupId?: string;        // optional group membership
+  itemIds: string[]; // ordered array — controls sort order within collection
+  createdAt: string; // ISO 8601
+  color?: string; // optional accent color
+  groupId?: string; // optional group membership
 }
 
 export interface CollectionGroup {
   id: string;
   name: string;
   collectionIds: string[]; // ordered list of collection IDs in this group
-  createdAt: string;       // ISO 8601
-  color?: string;          // optional accent color
+  createdAt: string; // ISO 8601
+  color?: string; // optional accent color
 }

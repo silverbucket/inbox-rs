@@ -53,8 +53,12 @@ describe('shouldLoadMarkdownEditor', () => {
   it('loads only for note visual mode', () => {
     expect(shouldLoadMarkdownEditor('note', 'visual', false, false)).toBe(true);
     expect(shouldLoadMarkdownEditor('note', 'write', false, false)).toBe(false);
-    expect(shouldLoadMarkdownEditor('note', 'preview', false, false)).toBe(false);
-    expect(shouldLoadMarkdownEditor('bookmark', 'visual', false, false)).toBe(false);
+    expect(shouldLoadMarkdownEditor('note', 'preview', false, false)).toBe(
+      false,
+    );
+    expect(shouldLoadMarkdownEditor('bookmark', 'visual', false, false)).toBe(
+      false,
+    );
   });
 
   it('does not reload after success or failure', () => {
@@ -71,7 +75,11 @@ describe('todo capture helpers', () => {
   });
 
   it('creates an unfiled todo without a collection id', () => {
-    const todo = makeUnfiledTodo('  Write draft  ', new Date('2026-04-25T12:00:00.000Z'), 'todo-1');
+    const todo = makeUnfiledTodo(
+      '  Write draft  ',
+      new Date('2026-04-25T12:00:00.000Z'),
+      'todo-1',
+    );
 
     expect(todo).toEqual({
       id: 'todo-1',

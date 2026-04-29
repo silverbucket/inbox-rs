@@ -14,9 +14,10 @@
  * failure becomes `{ ok: false, error }`, leaving the popup free to reset its
  * spinner in `finally` regardless of outcome.
  */
-import type { DirectRS } from '../lib/rs';
-import { saveAsImage, saveAsBookmark } from './save-logic';
+
 import type { NoteItem } from '@inbox-rs/rs-module';
+import type { DirectRS } from '../lib/rs';
+import { saveAsBookmark, saveAsImage } from './save-logic';
 
 /** Tagged outcome for a save attempt. Errors never throw — they become `{ ok: false }`. */
 export type SaveResult = { ok: true } | { ok: false; error: string };
@@ -44,7 +45,9 @@ export interface SavePageOrchestratorParams {
  * first and falls back to `BookmarkItem` if that fails (matching legacy
  * behaviour). Always resolves — never throws.
  */
-export async function runSavePage(params: SavePageOrchestratorParams): Promise<SaveResult> {
+export async function runSavePage(
+  params: SavePageOrchestratorParams,
+): Promise<SaveResult> {
   const id = params.generateId?.() ?? crypto.randomUUID();
   const createdAt = params.now?.() ?? new Date().toISOString();
 
@@ -98,7 +101,9 @@ export interface SaveNoteOrchestratorParams {
  * Save a quick note. Returns `{ ok: false }` if the body is empty or if
  * `rs.store` rejects. Always resolves.
  */
-export async function runSaveNote(params: SaveNoteOrchestratorParams): Promise<SaveResult> {
+export async function runSaveNote(
+  params: SaveNoteOrchestratorParams,
+): Promise<SaveResult> {
   const body = params.noteBody.trim();
   if (!body) return { ok: false, error: 'Note body is empty' };
 

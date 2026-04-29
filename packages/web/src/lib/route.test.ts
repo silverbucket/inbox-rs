@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { parseHash, formatRoute, pageUsesFilters } from './route';
+import { describe, expect, it } from 'vitest';
+import { formatRoute, pageUsesFilters, parseHash } from './route';
 
 describe('parseHash', () => {
   it('returns inbox for empty/root hash', () => {
@@ -75,12 +75,18 @@ describe('formatRoute', () => {
 
   it('omits filter param on pages that do not use filters', () => {
     expect(formatRoute({ page: 'inbox', groupFilters: ['g1'] })).toBe('#/');
-    expect(formatRoute({ page: 'plugins', groupFilters: ['g1'] })).toBe('#/plugins');
+    expect(formatRoute({ page: 'plugins', groupFilters: ['g1'] })).toBe(
+      '#/plugins',
+    );
   });
 
   it('emits comma-separated filters on filter pages', () => {
-    expect(formatRoute({ page: 'todos', groupFilters: ['g1', 'g2'] })).toBe('#/todos?g=g1,g2');
-    expect(formatRoute({ page: 'collections', groupFilters: ['x'] })).toBe('#/collections?g=x');
+    expect(formatRoute({ page: 'todos', groupFilters: ['g1', 'g2'] })).toBe(
+      '#/todos?g=g1,g2',
+    );
+    expect(formatRoute({ page: 'collections', groupFilters: ['x'] })).toBe(
+      '#/collections?g=x',
+    );
   });
 
   it('emits g= for an explicit empty filter list', () => {

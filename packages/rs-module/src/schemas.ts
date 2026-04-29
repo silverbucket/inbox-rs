@@ -34,7 +34,7 @@ export const bookmarkSchema = {
     ...collectionFields,
     ...migrateFields,
   },
-  required: ['id', 'type', 'title', 'url', 'createdAt']
+  required: ['id', 'type', 'title', 'url', 'createdAt'],
 };
 
 export const noteSchema = {
@@ -50,7 +50,7 @@ export const noteSchema = {
     ...collectionFields,
     ...migrateFields,
   },
-  required: ['id', 'type', 'title', 'body', 'createdAt']
+  required: ['id', 'type', 'title', 'body', 'createdAt'],
 };
 
 export const imageMetaSchema = {
@@ -68,7 +68,7 @@ export const imageMetaSchema = {
     ...collectionFields,
     ...migrateFields,
   },
-  required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt']
+  required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt'],
 };
 
 export const audioMetaSchema = {
@@ -88,7 +88,7 @@ export const audioMetaSchema = {
     ...collectionFields,
     ...migrateFields,
   },
-  required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt']
+  required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt'],
 };
 
 export const videoMetaSchema = {
@@ -107,7 +107,7 @@ export const videoMetaSchema = {
     ...collectionFields,
     ...migrateFields,
   },
-  required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt']
+  required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt'],
 };
 
 export const documentMetaSchema = {
@@ -126,7 +126,7 @@ export const documentMetaSchema = {
     ...collectionFields,
     ...migrateFields,
   },
-  required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt']
+  required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt'],
 };
 
 export const emailSchema = {
@@ -145,7 +145,7 @@ export const emailSchema = {
     ...collectionFields,
     ...migrateFields,
   },
-  required: ['id', 'type', 'title', 'body', 'createdAt']
+  required: ['id', 'type', 'title', 'body', 'createdAt'],
 };
 
 export const userSettingsSchema = {
@@ -153,7 +153,7 @@ export const userSettingsSchema = {
   properties: {
     abbreviation: { type: 'string' },
     theme: { type: 'string', enum: ['system', 'light', 'dark'] },
-  }
+  },
 };
 
 export const appConfigSchema = {
@@ -167,7 +167,7 @@ export const appConfigSchema = {
     activeGroupFilters: { type: 'array', items: { type: 'string' } },
     todosGlobalOrder: { type: 'array', items: { type: 'string' } },
     completedTodosExpanded: { type: 'boolean' },
-  }
+  },
 };
 
 export const todoSchema = {
@@ -184,7 +184,7 @@ export const todoSchema = {
     ...collectionFields,
     ...migrateFields,
   },
-  required: ['id', 'type', 'title', 'completed', 'createdAt']
+  required: ['id', 'type', 'title', 'completed', 'createdAt'],
 };
 
 export const collectionSchema = {
@@ -198,7 +198,7 @@ export const collectionSchema = {
     color: { type: 'string' },
     groupId: { type: 'string' },
   },
-  required: ['id', 'name', 'itemIds', 'createdAt']
+  required: ['id', 'name', 'itemIds', 'createdAt'],
 };
 
 export const collectionGroupSchema = {
@@ -210,5 +210,5 @@ export const collectionGroupSchema = {
     createdAt: { type: 'string' },
     color: { type: 'string' },
   },
-  required: ['id', 'name', 'collectionIds', 'createdAt']
+  required: ['id', 'name', 'collectionIds', 'createdAt'],
 };

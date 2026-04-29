@@ -1,11 +1,11 @@
 import {
-  connectViaOAuth as sharedConnectViaOAuth,
   DirectRS,
   type RSConfig,
+  connectViaOAuth as sharedConnectViaOAuth,
 } from '@inbox-rs/rs-module';
 
-export { DirectRS };
 export type { RSConfig };
+export { DirectRS };
 
 /**
  * WebFinger discovery + OAuth via Thunderbird's identity API.
@@ -28,6 +28,9 @@ export async function connectViaOAuth(userAddress: string): Promise<RSConfig> {
     clientId: new URL(redirectUrl).origin,
     redirectUrl,
     launchAuthFlow: (url) =>
-      browser.identity.launchWebAuthFlow({ url, interactive: true }) as Promise<string>,
+      browser.identity.launchWebAuthFlow({
+        url,
+        interactive: true,
+      }) as Promise<string>,
   });
 }

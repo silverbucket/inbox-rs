@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -17,8 +17,8 @@ vi.stubGlobal('URL', {
   revokeObjectURL: vi.fn(),
 });
 
-import { fetchFileWithAuth } from './rs';
 import { recoverLegacyBinaryStringEncoding } from '@inbox-rs/rs-module';
+import { fetchFileWithAuth } from './rs';
 
 /**
  * Encode bytes the way the v1.8-and-earlier upload path did:
@@ -34,18 +34,22 @@ function legacyEncodeBytes(bytes: Uint8Array): Uint8Array {
 }
 
 /** Build a fake fetch Response matching what fetchFileWithAuth reads. */
-function makeResponse(opts: {
-  ok?: boolean;
-  status?: number;
-  contentType?: string | null;
-  body?: ArrayBuffer;
-} = {}) {
+function makeResponse(
+  opts: {
+    ok?: boolean;
+    status?: number;
+    contentType?: string | null;
+    body?: ArrayBuffer;
+  } = {},
+) {
   return {
     ok: opts.ok ?? true,
     status: opts.status ?? 200,
     headers: {
       get: (name: string) =>
-        name.toLowerCase() === 'content-type' ? (opts.contentType ?? null) : null,
+        name.toLowerCase() === 'content-type'
+          ? (opts.contentType ?? null)
+          : null,
     },
     arrayBuffer: () => Promise.resolve(opts.body ?? new ArrayBuffer(0)),
   };
@@ -64,12 +68,12 @@ describe('fetchFileWithAuth', () => {
     const result = await fetchFileWithAuth(
       'https://storage.5apps.com/user',
       'my-token',
-      'files/abc.jpg'
+      'files/abc.jpg',
     );
 
     expect(mockFetch).toHaveBeenCalledWith(
       'https://storage.5apps.com/user/inbox/files/abc.jpg',
-      { headers: { 'Authorization': 'Bearer my-token' } }
+      { headers: { Authorization: 'Bearer my-token' } },
     );
     expect(result).toBe('blob:test/0');
   });
@@ -80,7 +84,7 @@ describe('fetchFileWithAuth', () => {
     const result = await fetchFileWithAuth(
       'https://storage.5apps.com/user',
       'bad-token',
-      'files/abc.jpg'
+      'files/abc.jpg',
     );
 
     expect(result).toBeNull();
@@ -92,7 +96,7 @@ describe('fetchFileWithAuth', () => {
     const result = await fetchFileWithAuth(
       'https://storage.5apps.com/user',
       'my-token',
-      'files/nonexistent.jpg'
+      'files/nonexistent.jpg',
     );
 
     expect(result).toBeNull();
@@ -104,7 +108,7 @@ describe('fetchFileWithAuth', () => {
     const result = await fetchFileWithAuth(
       'https://storage.5apps.com/user',
       'my-token',
-      'files/abc.jpg'
+      'files/abc.jpg',
     );
 
     expect(result).toBeNull();
@@ -116,20 +120,28 @@ describe('fetchFileWithAuth', () => {
     await fetchFileWithAuth(
       'https://storage.example.com/storage/nick',
       'token123',
-      'files/deep/nested/photo.png'
+      'files/deep/nested/photo.png',
     );
 
     expect(mockFetch).toHaveBeenCalledWith(
       'https://storage.example.com/storage/nick/inbox/files/deep/nested/photo.png',
-      expect.any(Object)
+      expect.any(Object),
     );
   });
 
   it('returns unique blob URLs for different files', async () => {
     mockFetch.mockResolvedValue(makeResponse({ contentType: 'image/jpeg' }));
 
-    const url1 = await fetchFileWithAuth('https://s.example.com/u', 'tok', 'files/a.jpg');
-    const url2 = await fetchFileWithAuth('https://s.example.com/u', 'tok', 'files/b.jpg');
+    const url1 = await fetchFileWithAuth(
+      'https://s.example.com/u',
+      'tok',
+      'files/a.jpg',
+    );
+    const url2 = await fetchFileWithAuth(
+      'https://s.example.com/u',
+      'tok',
+      'files/b.jpg',
+    );
 
     expect(url1).not.toBe(url2);
   });
@@ -138,9 +150,11 @@ describe('fetchFileWithAuth', () => {
     // 5apps appends `; charset=binary` to binary Content-Types — the
     // resulting Blob type would otherwise be `image/jpeg; charset=binary`,
     // which Chrome refuses to render as an <img> source.
-    mockFetch.mockResolvedValue(makeResponse({
-      contentType: 'image/jpeg; charset=binary',
-    }));
+    mockFetch.mockResolvedValue(
+      makeResponse({
+        contentType: 'image/jpeg; charset=binary',
+      }),
+    );
 
     await fetchFileWithAuth(
       'https://storage.5apps.com/user',
@@ -153,9 +167,11 @@ describe('fetchFileWithAuth', () => {
   });
 
   it('strips charset parameter from server Content-Type when no expectedMimeType is given', async () => {
-    mockFetch.mockResolvedValue(makeResponse({
-      contentType: 'image/jpeg; charset=binary',
-    }));
+    mockFetch.mockResolvedValue(
+      makeResponse({
+        contentType: 'image/jpeg; charset=binary',
+      }),
+    );
 
     await fetchFileWithAuth(
       'https://storage.5apps.com/user',
@@ -181,14 +197,21 @@ describe('fetchFileWithAuth', () => {
   it('recovers original bytes for files uploaded by the legacy binary-string path', async () => {
     // A JPEG header byte sequence — the legacy path UTF-8-encoded each byte,
     // turning 0xFF into 0xC3 0xBF and 0xD8 into 0xC3 0x98.
-    const original = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46]);
+    const original = new Uint8Array([
+      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46,
+    ]);
     const corrupted = legacyEncodeBytes(original);
     expect(corrupted.length).toBeGreaterThan(original.length); // sanity: encoding inflated the size
 
-    mockFetch.mockResolvedValue(makeResponse({
-      contentType: 'image/jpeg',
-      body: corrupted.buffer.slice(corrupted.byteOffset, corrupted.byteOffset + corrupted.byteLength),
-    }));
+    mockFetch.mockResolvedValue(
+      makeResponse({
+        contentType: 'image/jpeg',
+        body: corrupted.buffer.slice(
+          corrupted.byteOffset,
+          corrupted.byteOffset + corrupted.byteLength,
+        ),
+      }),
+    );
 
     await fetchFileWithAuth(
       'https://storage.5apps.com/user',
@@ -204,12 +227,14 @@ describe('fetchFileWithAuth', () => {
   });
 
   it('passes through correctly-uploaded binary files unchanged', async () => {
-    const raw = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]); // raw JPEG header
+    const raw = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]); // raw JPEG header
 
-    mockFetch.mockResolvedValue(makeResponse({
-      contentType: 'image/jpeg',
-      body: raw.buffer.slice(0),
-    }));
+    mockFetch.mockResolvedValue(
+      makeResponse({
+        contentType: 'image/jpeg',
+        body: raw.buffer.slice(0),
+      }),
+    );
 
     await fetchFileWithAuth(
       'https://storage.5apps.com/user',
@@ -227,26 +252,38 @@ describe('fetchFileWithAuth', () => {
 describe('recoverLegacyBinaryStringEncoding', () => {
   it('returns raw binary unchanged when the bytes are not valid UTF-8', () => {
     // Lone 0xFF is never a valid UTF-8 lead byte → TextDecoder({fatal}) throws.
-    const raw = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46]);
+    const raw = new Uint8Array([
+      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46,
+    ]);
     const result = recoverLegacyBinaryStringEncoding(raw.buffer.slice(0));
     expect(new Uint8Array(result)).toEqual(raw);
   });
 
   it('recovers the original JPEG bytes from the legacy UTF-8-encoded form', () => {
-    const original = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46]);
+    const original = new Uint8Array([
+      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46,
+    ]);
     const corrupted = legacyEncodeBytes(original);
     const result = recoverLegacyBinaryStringEncoding(
-      corrupted.buffer.slice(corrupted.byteOffset, corrupted.byteOffset + corrupted.byteLength)
+      corrupted.buffer.slice(
+        corrupted.byteOffset,
+        corrupted.byteOffset + corrupted.byteLength,
+      ),
     );
     expect(new Uint8Array(result)).toEqual(original);
   });
 
   it('recovers the original PNG bytes from the legacy UTF-8-encoded form', () => {
     // PNG signature: 89 50 4E 47 0D 0A 1A 0A
-    const original = new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D]);
+    const original = new Uint8Array([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+    ]);
     const corrupted = legacyEncodeBytes(original);
     const result = recoverLegacyBinaryStringEncoding(
-      corrupted.buffer.slice(corrupted.byteOffset, corrupted.byteOffset + corrupted.byteLength)
+      corrupted.buffer.slice(
+        corrupted.byteOffset,
+        corrupted.byteOffset + corrupted.byteLength,
+      ),
     );
     expect(new Uint8Array(result)).toEqual(original);
   });
@@ -262,7 +299,7 @@ describe('recoverLegacyBinaryStringEncoding', () => {
     // because each ASCII byte UTF-8-encodes to itself.
     const ascii = new TextEncoder().encode('Hello, world!');
     const result = recoverLegacyBinaryStringEncoding(
-      ascii.buffer.slice(ascii.byteOffset, ascii.byteOffset + ascii.byteLength)
+      ascii.buffer.slice(ascii.byteOffset, ascii.byteOffset + ascii.byteLength),
     );
     expect(new Uint8Array(result)).toEqual(ascii);
   });
@@ -272,7 +309,7 @@ describe('recoverLegacyBinaryStringEncoding', () => {
     // recovery bails out and returns the bytes untouched.
     const text = new TextEncoder().encode('héllo 世界');
     const result = recoverLegacyBinaryStringEncoding(
-      text.buffer.slice(text.byteOffset, text.byteOffset + text.byteLength)
+      text.buffer.slice(text.byteOffset, text.byteOffset + text.byteLength),
     );
     expect(new Uint8Array(result)).toEqual(text);
   });
@@ -284,7 +321,10 @@ describe('recoverLegacyBinaryStringEncoding', () => {
     for (let i = 0; i < 256; i++) original[i] = i;
     const corrupted = legacyEncodeBytes(original);
     const result = recoverLegacyBinaryStringEncoding(
-      corrupted.buffer.slice(corrupted.byteOffset, corrupted.byteOffset + corrupted.byteLength)
+      corrupted.buffer.slice(
+        corrupted.byteOffset,
+        corrupted.byteOffset + corrupted.byteLength,
+      ),
     );
     expect(new Uint8Array(result)).toEqual(original);
   });
