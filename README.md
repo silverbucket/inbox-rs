@@ -75,15 +75,22 @@ After `npm run build`, the web app output in `packages/web/dist/` includes:
 
 That makes the built `dist/` folder self-contained for static hosting.
 
-## Versioning
+## Releasing
 
-The project currently uses the root `package.json` version as the release version for downloadable plugin artifacts. The packaging script reads that value and emits filenames like:
+Releases are cut via the `release.yml` workflow_dispatch — see
+[`docs/RELEASING.md`](docs/RELEASING.md) for the full runbook. tl;dr:
 
-- `inbox-rs-chromium-0.1.0.zip`
-- `inbox-rs-firefox-0.1.0.xpi`
-- `inbox-rs-thunderbird-0.1.0.xpi`
+```bash
+gh workflow run release.yml -f bump=patch  # or minor / major
+```
 
-In practice, that means a release bump should start by updating the root `version` field, then rebuilding so the generated downloads and metadata pick up the new versioned filenames.
+The web app version always tracks the root `package.json`; the browser
+and Thunderbird extensions have their own version namespaces and only
+move when their effective bundle has changed since the previous tag
+(this avoids burning extension-store version numbers on web-only
+releases). The bump policy lives in
+[`scripts/release-bump.mjs`](scripts/release-bump.mjs) and is unit-tested
+in `scripts/release-bump.test.mjs`.
 
 ## Tech stack
 
