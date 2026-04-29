@@ -191,7 +191,9 @@
         if (e.data.size > 0) chunks.push(e.data);
       };
       mediaRecorder.onstop = () => {
-        stream.getTracks().forEach(t => t.stop());
+        stream.getTracks().forEach((t) => {
+          t.stop();
+        });
         if (recordedUrl) URL.revokeObjectURL(recordedUrl);
         const mimeType = mediaRecorder?.mimeType || 'audio/webm';
         const blob = new Blob(chunks, { type: mimeType });
