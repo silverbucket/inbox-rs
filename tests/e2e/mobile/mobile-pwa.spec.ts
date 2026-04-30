@@ -39,7 +39,7 @@ test('dark color scheme picks the dark theme color', async ({
     'no theme-color meta resolved for dark scheme',
   ).toBeTruthy();
   expect(
-    activeColor!.toLowerCase(),
+    activeColor?.toLowerCase(),
     `Dark theme-color should be #0f1117 (matches the dark bg), got ${activeColor}`,
   ).toBe('#0f1117');
 });
@@ -58,7 +58,7 @@ test('light color scheme picks the light theme color', async ({
     'no theme-color meta resolved for light scheme',
   ).toBeTruthy();
   expect(
-    activeColor!.toLowerCase(),
+    activeColor?.toLowerCase(),
     `Light theme-color should be #f8f9fb, got ${activeColor}`,
   ).toBe('#f8f9fb');
 });

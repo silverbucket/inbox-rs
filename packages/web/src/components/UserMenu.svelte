@@ -162,7 +162,7 @@
 </script>
 
 <div class="user-menu">
-  <button
+  <button type="button"
     class="trigger"
     class:open
     onclick={toggle}
@@ -203,17 +203,17 @@
                 onkeydown={(e) => { if (e.key === 'Escape') cancelEditAbbrev(); }}
               />
               <button type="submit" class="abbrev-btn save" aria-label="Save">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
               </button>
               <button type="button" class="abbrev-btn cancel" onclick={cancelEditAbbrev} aria-label="Cancel">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
             </form>
           {:else}
-            <button class="avatar-edit-wrapper" onclick={startEditAbbrev} title="Edit abbreviation" aria-label="Edit abbreviation">
+            <button type="button" class="avatar-edit-wrapper" onclick={startEditAbbrev} title="Edit abbreviation" aria-label="Edit abbreviation">
               <span class="avatar avatar-lg">{initials}</span>
               <span class="avatar-edit-badge" aria-hidden="true">
-                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                <svg aria-hidden="true" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
               </span>
             </button>
           {/if}
@@ -222,7 +222,8 @@
             <span class="user-host">{hostPart}</span>
           </div>
           {#if $syncing}
-            <svg class="sync-icon spinning" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-label="Syncing">
+            <svg class="sync-icon spinning" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Syncing">
+              <title>Syncing</title>
               <polyline points="23 4 23 10 17 10"></polyline>
               <polyline points="1 20 1 14 7 14"></polyline>
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
@@ -235,8 +236,8 @@
           {/if}
         </div>
 
-        <button class="menu-item danger" role="menuitem" onclick={handleDisconnect}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button type="button" class="menu-item danger" role="menuitem" onclick={handleDisconnect}>
+          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
             <polyline points="16 17 21 12 16 7"></polyline>
             <line x1="21" y1="12" x2="9" y2="12"></line>
@@ -268,16 +269,16 @@
 
         <!-- Data -->
         <div class="section-label">Data</div>
-        <button class="menu-item" role="menuitem" onclick={handleExport}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button type="button" class="menu-item" role="menuitem" onclick={handleExport}>
+          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="7 10 12 15 17 10"></polyline>
             <line x1="12" y1="15" x2="12" y2="3"></line>
           </svg>
           Export Data
         </button>
-        <button class="menu-item" role="menuitem" onclick={handleImportClick}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button type="button" class="menu-item" role="menuitem" onclick={handleImportClick}>
+          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="17 8 12 3 7 8"></polyline>
             <line x1="12" y1="3" x2="12" y2="15"></line>
@@ -299,28 +300,28 @@
       <!-- Theme -->
       <div class="section-label">Theme</div>
       <div class="theme-switcher" role="radiogroup" aria-label="Theme">
-        <button
+        <button type="button"
           class="theme-option"
           class:active={theme === 'system'}
           role="radio"
           aria-checked={theme === 'system'}
           onclick={() => setTheme('system')}
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
             <line x1="8" y1="21" x2="16" y2="21"></line>
             <line x1="12" y1="17" x2="12" y2="21"></line>
           </svg>
           System
         </button>
-        <button
+        <button type="button"
           class="theme-option"
           class:active={theme === 'light'}
           role="radio"
           aria-checked={theme === 'light'}
           onclick={() => setTheme('light')}
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="5"></circle>
             <line x1="12" y1="1" x2="12" y2="3"></line>
             <line x1="12" y1="21" x2="12" y2="23"></line>
@@ -333,14 +334,14 @@
           </svg>
           Light
         </button>
-        <button
+        <button type="button"
           class="theme-option"
           class:active={theme === 'dark'}
           role="radio"
           aria-checked={theme === 'dark'}
           onclick={() => setTheme('dark')}
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
           </svg>
           Dark
@@ -502,6 +503,23 @@
     flex-shrink: 0;
   }
 
+  /* Base dot styles (used both inside .status-indicator and standalone in
+     the dropdown's status row). Defined before more-specific selectors so
+     the cascade order matches specificity. */
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    opacity: 0.35;
+    flex-shrink: 0;
+  }
+
+  .status-dot.connected {
+    background: #22c55e;
+    opacity: 1;
+  }
+
   .status-indicator .status-dot {
     width: 6px;
     height: 6px;
@@ -585,20 +603,6 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.35rem 0.5rem;
-  }
-
-  .status-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--text-muted);
-    opacity: 0.35;
-    flex-shrink: 0;
-  }
-
-  .status-dot.connected {
-    background: #22c55e;
-    opacity: 1;
   }
 
   .status-label {

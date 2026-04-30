@@ -84,7 +84,7 @@ export async function runSavePage(
       createdAt,
     });
     return { ok: true };
-  } catch (e: any) {
+  } catch (e) {
     return { ok: false, error: errorMessage(e) };
   }
 }
@@ -121,7 +121,7 @@ export async function runSaveNote(
   try {
     await params.rs.store(item);
     return { ok: true };
-  } catch (e: any) {
+  } catch (e) {
     return { ok: false, error: errorMessage(e) };
   }
 }

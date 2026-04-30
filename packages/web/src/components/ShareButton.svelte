@@ -43,26 +43,23 @@
     state = 'sharing';
 
     try {
-      const shares = (rs as any).shares;
-      if (!shares) throw new Error('Shares module not available');
+      const shares = rs.shares;
 
       // PUT directly to remote, bypassing shares.storeFile() which has a
       // thumbnail bug (reads Image dimensions before onload → 0×0 canvas throw).
-      const remote = (rs as any).remote;
+      const remote = rs.remote;
       if (!remote?.connected) throw new Error('Not connected to remote storage');
 
       // Read file via RS inbox module
-      const inbox = (rs as any).inbox;
-      if (!inbox) throw new Error('Inbox module not available');
-      const file = await inbox.getFile(filePath);
+      const file = await rs.inbox.getFile(filePath);
       if (!file?.data) throw new Error('File not found');
 
       const resolvedMime = mimeType || file.mimeType || 'application/octet-stream';
       const ext = (filePath.split('/').pop()?.match(/\.[^.]+$/)?.[0]) || mimeToExt(resolvedMime);
       const uid = Math.random().toString(36).slice(2, 8);
-      const shareName = shares._formattedDate(new Date()) + '-' + uid + ext;
+      const shareName = `${shares._formattedDate(new Date())}-${uid}${ext}`;
 
-      const filePutPath = '/public/shares/' + shareName;
+      const filePutPath = `/public/shares/${shareName}`;
       await remote.put(filePutPath, file.data, resolvedMime);
 
       const shareUrl = remote.href + filePutPath;
@@ -86,20 +83,21 @@
 {#if state === 'done'}
   <div class="share-result">
     <span class="saved-indicator">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
       Sharesome
     </span>
-    <button class="btn-copy" onclick={copyUrl}>
+    <button type="button" class="btn-copy" onclick={copyUrl}>
       {copied ? 'Copied!' : 'Copy link'}
     </button>
   </div>
 {:else}
   <div class="share-action">
     <span class="save-label">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
       Save to
     </span>
     <button
+      type="button"
       class="btn-share"
       onclick={share}
       disabled={state === 'sharing'}

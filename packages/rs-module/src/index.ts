@@ -117,9 +117,31 @@ function schemaAlias(type: string): string {
   }
 }
 
+/**
+ * Minimal shape of the remotestoragejs `BaseClient` we receive in the module
+ * builder. Defined locally so we don't pull the whole `remotestoragejs` type
+ * dependency tree into this module's public types — and because the library's
+ * own typings declare most methods as returning `Promise<unknown>`, which we'd
+ * have to cast through anyway.
+ */
+type RSPrivateClient = {
+  declareType(name: string, schema: object): void;
+  getAll(path: string, maxAge?: false | number): Promise<unknown>;
+  getObject(path: string): Promise<unknown>;
+  storeObject(type: string, path: string, obj: object): Promise<unknown>;
+  storeFile(
+    mimeType: string,
+    path: string,
+    data: ArrayBuffer,
+  ): Promise<unknown>;
+  getFile(path: string): Promise<unknown>;
+  remove(path: string): Promise<unknown>;
+  on(event: 'change', handler: (event: unknown) => void): void;
+};
+
 const InboxModule = {
   name: 'inbox',
-  builder: (privateClient: any) => {
+  builder: (privateClient: RSPrivateClient) => {
     privateClient.declareType('bookmark', bookmarkSchema);
     privateClient.declareType('note', noteSchema);
     privateClient.declareType('image-meta', imageMetaSchema);
@@ -155,7 +177,9 @@ const InboxModule = {
           // (origin: 'remote') in stores.ts, so the snapshot can be cache-
           // first without losing remote updates — this just stops blocking
           // the UI on the first fetch.
-          const items = await privateClient.getAll('items/', false);
+          const items = (await privateClient.getAll('items/', false)) as
+            | Record<string, InboxItem>
+            | undefined;
           if (!items) return {};
           // Stamp _migrateVersion on items that lack it (e.g. written by
           // the mobile app's direct HTTP client) so they aren't falsely
@@ -177,7 +201,9 @@ const InboxModule = {
         },
 
         async getById(id: string): Promise<InboxItem | undefined> {
-          const item = await privateClient.getObject(`items/${id}`);
+          const item = (await privateClient.getObject(`items/${id}`)) as
+            | InboxItem
+            | undefined;
           if (
             item &&
             item._migrateVersion === undefined &&
@@ -227,9 +253,15 @@ const InboxModule = {
         async getFile(
           path: string,
         ): Promise<{ data: ArrayBuffer; mimeType: string } | undefined> {
-          const file = await privateClient.getFile(path);
+          const file = (await privateClient.getFile(path)) as
+            | {
+                data: ArrayBuffer | string;
+                mimeType?: string;
+                contentType?: string;
+              }
+            | undefined;
           if (!file?.data) return undefined;
-          const mimeType = file.mimeType || file.contentType;
+          const mimeType = file.mimeType || file.contentType || '';
           // Both branches are no-ops for correctly-uploaded files; they
           // recover bytes from the v1.8-and-earlier store path. See
           // `legacy/binary-recovery.ts` for the detection invariant.
@@ -241,7 +273,9 @@ const InboxModule = {
         },
 
         async getConfig(): Promise<AppConfig> {
-          return (await privateClient.getObject('config/app')) || {};
+          return (
+            ((await privateClient.getObject('config/app')) as AppConfig) || {}
+          );
         },
 
         async setConfig(config: AppConfig): Promise<void> {
@@ -249,7 +283,10 @@ const InboxModule = {
         },
 
         async getUserSettings(): Promise<UserSettings> {
-          return (await privateClient.getObject('config/user')) || {};
+          return (
+            ((await privateClient.getObject('config/user')) as UserSettings) ||
+            {}
+          );
         },
 
         async setUserSettings(settings: UserSettings): Promise<void> {
@@ -262,12 +299,16 @@ const InboxModule = {
 
         async getAllCollections(): Promise<Record<string, Collection>> {
           // See `getAll` above for why we pass `maxAge: false`.
-          const cols = await privateClient.getAll('collections/', false);
+          const cols = (await privateClient.getAll('collections/', false)) as
+            | Record<string, Collection>
+            | undefined;
           return cols || {};
         },
 
         async getCollectionById(id: string): Promise<Collection | undefined> {
-          return privateClient.getObject(`collections/${id}`);
+          return (await privateClient.getObject(`collections/${id}`)) as
+            | Collection
+            | undefined;
         },
 
         async storeCollection(collection: Collection): Promise<void> {
@@ -284,12 +325,16 @@ const InboxModule = {
 
         async getAllGroups(): Promise<Record<string, CollectionGroup>> {
           // See `getAll` above for why we pass `maxAge: false`.
-          const groups = await privateClient.getAll('groups/', false);
+          const groups = (await privateClient.getAll('groups/', false)) as
+            | Record<string, CollectionGroup>
+            | undefined;
           return groups || {};
         },
 
         async getGroupById(id: string): Promise<CollectionGroup | undefined> {
-          return privateClient.getObject(`groups/${id}`);
+          return (await privateClient.getObject(`groups/${id}`)) as
+            | CollectionGroup
+            | undefined;
         },
 
         async storeGroup(group: CollectionGroup): Promise<void> {
@@ -311,10 +356,12 @@ const InboxModule = {
         async runAllMigrations(): Promise<MigrateResult[]> {
           return migrator.migrateAll('items', {
             getAll: () =>
-              privateClient.getAll('items/').then((r: any) => r || {}),
-            save: async (key: string, doc: any) => {
+              privateClient
+                .getAll('items/')
+                .then((r) => (r ?? {}) as Record<string, unknown>),
+            save: async (key: string, doc: Record<string, unknown>) => {
               await privateClient.storeObject(
-                schemaAlias(doc.type),
+                schemaAlias((doc.type as string) ?? ''),
                 `items/${key}`,
                 doc,
               );

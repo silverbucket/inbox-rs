@@ -504,8 +504,8 @@ describe('round-trip', () => {
       (c: any[]) => c[0].id === 'img1',
     );
     expect(imgCall).toBeDefined();
-    expect(imgCall![1]).toBeInstanceOf(ArrayBuffer);
-    expect(Array.from(new Uint8Array(imgCall![1]))).toEqual([1, 2, 3, 4, 5]);
+    expect(imgCall?.[1]).toBeInstanceOf(ArrayBuffer);
+    expect(Array.from(new Uint8Array(imgCall?.[1]))).toEqual([1, 2, 3, 4, 5]);
 
     expect(mockInbox.setConfig).toHaveBeenCalledWith(testConfig);
     expect(mockInbox.setUserSettings).toHaveBeenCalledWith(testSettings);

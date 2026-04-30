@@ -62,7 +62,7 @@
   }
   let storedQuickAddId = $state<string | undefined>(readStoredQuickAddId());
 
-  function focusOnMount(node: HTMLInputElement) {
+  function _focusOnMount(node: HTMLInputElement) {
     node.focus();
   }
 
@@ -288,12 +288,12 @@
 
     {#if completedTodos.length > 0}
       <div class="completed-section">
-        <button
+        <button type="button"
           class="btn-completed-toggle"
           onclick={toggleCompletedSection}
           aria-expanded={completedExpanded}
         >
-          <svg class="chevron" class:open={completedExpanded} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg aria-hidden="true" class="chevron" class:open={completedExpanded} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="6 9 12 15 18 9"></polyline>
           </svg>
           {completedTodos.length} completed
@@ -443,11 +443,6 @@
     font-size: 0.88rem;
   }
 
-  .quick-add--compact .quick-add__collection {
-    min-height: 2.25rem;
-    font-size: 0.88rem;
-  }
-
   .quick-add input {
     min-height: 2.75rem;
     min-width: 0;
@@ -517,6 +512,11 @@
     outline: none;
     border-color: var(--accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+
+  .quick-add--compact .quick-add__collection {
+    min-height: 2.25rem;
+    font-size: 0.88rem;
   }
 
   .empty-hint {

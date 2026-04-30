@@ -1,8 +1,53 @@
 import InboxModule, {
+  type InboxModuleExports,
   recoverLegacyBinaryStringEncoding,
 } from '@inbox-rs/rs-module';
 import SharesModule from 'remotestorage-module-shares';
 import RemoteStorage from 'remotestoragejs';
+
+/**
+ * Shape of the remoteStorage instance once our modules are loaded.
+ * remotestoragejs attaches each registered module's `exports` as a property
+ * on the RS instance (e.g. `rs.inbox`), but its TypeScript types don't know
+ * about our specific modules — this augments them.
+ */
+type SharesModuleExports = {
+  list: (path?: string) => Promise<Record<string, unknown>>;
+  get: (path: string) => Promise<unknown>;
+  put: (
+    path: string,
+    body: ArrayBuffer | string,
+    contentType: string,
+  ) => Promise<unknown>;
+  remove: (path: string) => Promise<unknown>;
+  // The shares module exposes a couple of helper methods prefixed with `_`
+  // — they're documented as semi-public utilities, but their typings aren't
+  // exported. Listing them here keeps callers strongly typed.
+  _formattedDate: (date: Date) => string;
+  _isImage: (mime: string) => boolean;
+};
+
+/**
+ * The internal `remote` object that remotestoragejs attaches to its main
+ * instance. Only the bits we actually read are listed; everything else is
+ * left untyped (the library's own published types don't expose any of this).
+ */
+type RSRemote = {
+  href?: string;
+  token?: string;
+  connected?: boolean;
+  put: (
+    path: string,
+    body: ArrayBuffer | string,
+    contentType: string,
+  ) => Promise<unknown>;
+};
+
+export type RSWithModules = RemoteStorage & {
+  inbox: InboxModuleExports;
+  shares: SharesModuleExports;
+  remote: RSRemote;
+};
 
 // Re-enable WebFinger lookups against localhost / private-IP RS servers.
 //
@@ -126,12 +171,15 @@ import RemoteStorage from 'remotestoragejs';
 async function detectAndRecoverCorruptDb(): Promise<void> {
   if (typeof indexedDB === 'undefined') return;
 
-  if (typeof (indexedDB as any).databases === 'function') {
+  // `IDBFactory.databases()` is supported on Chromium and modern WebKit but
+  // missing on Firefox; treat it as an optional capability.
+  type IndexedDBWithDatabases = IDBFactory & {
+    databases?: () => Promise<Array<{ name?: string; version?: number }>>;
+  };
+  const idb = indexedDB as IndexedDBWithDatabases;
+  if (typeof idb.databases === 'function') {
     try {
-      const dbs = (await (indexedDB as any).databases()) as Array<{
-        name?: string;
-        version?: number;
-      }>;
+      const dbs = await idb.databases();
       if (!dbs.find((db) => db.name === 'remotestorage')) {
         console.log(
           `[idb-probe] no existing 'remotestorage' DB — RS will create one fresh`,
@@ -171,7 +219,7 @@ async function detectAndRecoverCorruptDb(): Promise<void> {
       );
       settle('failed');
     };
-    probe.onblocked = (event: any) => {
+    probe.onblocked = (event: IDBVersionChangeEvent) => {
       console.warn(
         `[idb-probe] T+${Date.now() - probeStart}ms ONBLOCKED — old=${event?.oldVersion} new=${event?.newVersion}`,
       );
@@ -252,25 +300,27 @@ async function deleteRsDb(): Promise<void> {
 // completes, or rejects with `'blocked'` if a stuck connection prevents it
 // — at which point the user needs to close other tabs or quit Chrome.
 if (typeof window !== 'undefined' && typeof indexedDB !== 'undefined') {
-  (window as any).__cleanupRSDb = () =>
-    new Promise<void>((resolve, reject) => {
-      console.log(`[idb-cleanup] manual: deleteDatabase('remotestorage')`);
-      const req = indexedDB.deleteDatabase('remotestorage');
-      req.onsuccess = () => {
-        console.log(`[idb-cleanup] deleted — reload the page now`);
-        resolve();
-      };
-      req.onerror = () => {
-        console.error(`[idb-cleanup] error`, req.error);
-        reject(req.error);
-      };
-      req.onblocked = () => {
-        console.warn(
-          `[idb-cleanup] BLOCKED — close other tabs of this app, or quit Chrome and reopen`,
-        );
-        reject(new Error('blocked'));
-      };
-    });
+  // Stash on `window` so users can call `__cleanupRSDb()` from devtools.
+  (window as Window & { __cleanupRSDb?: () => Promise<void> }).__cleanupRSDb =
+    () =>
+      new Promise<void>((resolve, reject) => {
+        console.log(`[idb-cleanup] manual: deleteDatabase('remotestorage')`);
+        const req = indexedDB.deleteDatabase('remotestorage');
+        req.onsuccess = () => {
+          console.log(`[idb-cleanup] deleted — reload the page now`);
+          resolve();
+        };
+        req.onerror = () => {
+          console.error(`[idb-cleanup] error`, req.error);
+          reject(req.error);
+        };
+        req.onblocked = () => {
+          console.warn(
+            `[idb-cleanup] BLOCKED — close other tabs of this app, or quit Chrome and reopen`,
+          );
+          reject(new Error('blocked'));
+        };
+      });
 }
 
 // Block module exports until the corrupt-DB recovery has run. Importers
@@ -281,7 +331,7 @@ await detectAndRecoverCorruptDb();
 const rs = new RemoteStorage({
   modules: [InboxModule, SharesModule],
   changeEvents: { local: true, window: false, remote: true, conflict: true },
-});
+}) as RSWithModules;
 
 rs.access.claim('inbox', 'rw');
 rs.access.claim('shares', 'rw');
@@ -339,7 +389,7 @@ export async function fetchFileBlobUrl(
   path: string,
   expectedMimeType?: string,
 ): Promise<string | null> {
-  const remote = (rs as any).remote;
+  const remote = rs.remote;
   if (!remote?.href || !remote?.token) return null;
   return fetchFileWithAuth(remote.href, remote.token, path, expectedMimeType);
 }

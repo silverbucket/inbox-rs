@@ -15,8 +15,7 @@
 
   async function loadAudio() {
     try {
-      const inbox = (rs as any).inbox;
-      const file = await inbox.getFile(item.filePath);
+      const file = await rs.inbox.getFile(item.filePath);
       if (file?.data) {
         if (blobUrl) URL.revokeObjectURL(blobUrl);
         blobUrl = URL.createObjectURL(new Blob([file.data], { type: item.mimeType }));
@@ -49,7 +48,12 @@
     {:else if error}
       <p class="status">Failed to load audio</p>
     {:else if blobUrl}
-      <audio controls src={blobUrl} preload="metadata"></audio>
+      <!-- User-recorded audio has no separate captions track; the
+           transcription text (when present) is rendered alongside the player
+           in ViewCardModal. The empty <track> just satisfies the lint rule. -->
+      <audio controls src={blobUrl} preload="metadata">
+        <track kind="captions" />
+      </audio>
     {/if}
   </div>
 </div>

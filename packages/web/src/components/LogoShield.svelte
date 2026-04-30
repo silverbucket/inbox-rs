@@ -27,7 +27,7 @@
   });
 </script>
 
-<svg viewBox="0 0 155 40" xmlns="http://www.w3.org/2000/svg" class="logo-shield">
+<svg aria-hidden="true" viewBox="0 0 155 40" xmlns="http://www.w3.org/2000/svg" class="logo-shield">
   <!-- Icon -->
   <g transform="translate(4, 2) scale(1.15)">
     <path d="M16 2 L28 7 L28 16 Q28 26 16 30 Q4 26 4 16 L4 7 Z" fill="#6366f1"/>

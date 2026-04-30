@@ -116,7 +116,7 @@ describe('discoverStorage', () => {
 
     await discoverStorage('alice@localhost:8000', fetchImpl);
 
-    const calledUrl = fetchImpl.mock.calls[0]![0] as string;
+    const calledUrl = fetchImpl.mock.calls[0]?.[0] as string;
     expect(calledUrl.startsWith('http://localhost:8000/')).toBe(true);
   });
 
@@ -125,7 +125,7 @@ describe('discoverStorage', () => {
 
     await discoverStorage('user+tag@example.com', fetchImpl);
 
-    const calledUrl = fetchImpl.mock.calls[0]![0] as string;
+    const calledUrl = fetchImpl.mock.calls[0]?.[0] as string;
     expect(calledUrl).toContain('resource=acct:user%2Btag%40example.com');
   });
 
@@ -292,7 +292,7 @@ describe('connectViaOAuth', () => {
       fetchImpl,
     });
 
-    const calledUrl = launchAuthFlow.mock.calls[0]![0] as string;
+    const calledUrl = launchAuthFlow.mock.calls[0]?.[0] as string;
     const parsed = new URL(calledUrl);
     expect(parsed.origin + parsed.pathname).toBe(
       'https://storage.example.com/oauth',
@@ -318,7 +318,7 @@ describe('connectViaOAuth', () => {
       fetchImpl,
     });
 
-    const parsed = new URL(launchAuthFlow.mock.calls[0]![0] as string);
+    const parsed = new URL(launchAuthFlow.mock.calls[0]?.[0] as string);
     expect(parsed.searchParams.get('scope')).toBe('inbox:rw');
   });
 
@@ -392,7 +392,7 @@ describe('connectViaOAuth', () => {
       fetchImpl,
     });
 
-    const params = new URL(launchAuthFlow.mock.calls[0]![0] as string)
+    const params = new URL(launchAuthFlow.mock.calls[0]?.[0] as string)
       .searchParams;
     expect(params.get('scope')).toBe('inbox:r contacts:rw');
   });
@@ -411,7 +411,7 @@ describe('connectViaOAuth', () => {
       fetchImpl,
     });
 
-    const launchedUrl = new URL(launchAuthFlow.mock.calls[0]![0] as string);
+    const launchedUrl = new URL(launchAuthFlow.mock.calls[0]?.[0] as string);
     // We expect exactly four query params (client_id, redirect_uri,
     // response_type, scope). Anything else means the helper is appending
     // more than it should.
@@ -518,7 +518,7 @@ describe('DirectRS', () => {
       await rs.store({ id: 'note-1' } as any);
 
       expect(fetchImpl).toHaveBeenCalledTimes(1);
-      const calledUrl = fetchImpl.mock.calls[0]![0] as string;
+      const calledUrl = fetchImpl.mock.calls[0]?.[0] as string;
       expect(calledUrl).toContain('/inbox/items/note-1');
     });
 
@@ -534,8 +534,8 @@ describe('DirectRS', () => {
       await rs.store(item, new ArrayBuffer(16));
 
       expect(fetchImpl).toHaveBeenCalledTimes(2);
-      const fileUrl = fetchImpl.mock.calls[0]![0] as string;
-      const metaUrl = fetchImpl.mock.calls[1]![0] as string;
+      const fileUrl = fetchImpl.mock.calls[0]?.[0] as string;
+      const metaUrl = fetchImpl.mock.calls[1]?.[0] as string;
       expect(fileUrl).toContain('/inbox/files/img-1.jpg');
       expect(metaUrl).toContain('/inbox/items/img-1');
     });
@@ -547,7 +547,7 @@ describe('DirectRS', () => {
       await rs.store({ id: 'note-2' } as any, new ArrayBuffer(8));
 
       expect(fetchImpl).toHaveBeenCalledTimes(1);
-      const calledUrl = fetchImpl.mock.calls[0]![0] as string;
+      const calledUrl = fetchImpl.mock.calls[0]?.[0] as string;
       expect(calledUrl).toContain('/inbox/items/note-2');
     });
 
@@ -577,7 +577,7 @@ describe('DirectRS', () => {
 
       await rs.storeObject('items/x', {});
 
-      const auth = (fetchImpl.mock.calls[0]![1] as RequestInit)
+      const auth = (fetchImpl.mock.calls[0]?.[1] as RequestInit)
         .headers as Record<string, string>;
       expect(auth.Authorization).toBe('Bearer tok');
       expect(auth.Authorization).toMatch(/^Bearer [^ ]+$/);
@@ -589,7 +589,7 @@ describe('DirectRS', () => {
 
       await rs.storeFile('files/x.png', new ArrayBuffer(0), 'image/png');
 
-      const headers = (fetchImpl.mock.calls[0]![1] as RequestInit)
+      const headers = (fetchImpl.mock.calls[0]?.[1] as RequestInit)
         .headers as Record<string, string>;
       expect(headers.Authorization).toBe('Bearer tok');
     });
@@ -601,7 +601,7 @@ describe('DirectRS', () => {
 
       await rs.storeObject('items/x', {});
 
-      const headers = (fetchImpl.mock.calls[0]![1] as RequestInit)
+      const headers = (fetchImpl.mock.calls[0]?.[1] as RequestInit)
         .headers as Record<string, string>;
       expect(headers.Authorization).toBe(`Bearer ${weirdToken}`);
     });
@@ -615,10 +615,10 @@ describe('DirectRS', () => {
       await rs.storeObject('items/abc', {});
       await rs.storeFile('files/x.png', new ArrayBuffer(0), 'image/png');
 
-      expect(fetchImpl.mock.calls[0]![0]).toBe(
+      expect(fetchImpl.mock.calls[0]?.[0]).toBe(
         'https://storage.example.com/storage/alice/inbox/items/abc',
       );
-      expect(fetchImpl.mock.calls[1]![0]).toBe(
+      expect(fetchImpl.mock.calls[1]?.[0]).toBe(
         'https://storage.example.com/storage/alice/inbox/files/x.png',
       );
     });
@@ -629,7 +629,7 @@ describe('DirectRS', () => {
 
       await rs.storeObject('items/with-dashes_and.dots', {});
 
-      expect(fetchImpl.mock.calls[0]![0]).toContain(
+      expect(fetchImpl.mock.calls[0]?.[0]).toContain(
         '/inbox/items/with-dashes_and.dots',
       );
     });
@@ -702,7 +702,7 @@ describe('DirectRS', () => {
 
       await rs.storeFile('files/x.bin', data, 'application/octet-stream');
 
-      const init = fetchImpl.mock.calls[0]![1] as RequestInit;
+      const init = fetchImpl.mock.calls[0]?.[1] as RequestInit;
       expect(init.body).toBe(data);
       expect(init.body).toBeInstanceOf(ArrayBuffer);
     });

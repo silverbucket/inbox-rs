@@ -66,7 +66,7 @@ export function insertNewlineWithIndent(state: TextState): TextState {
   const line = value.slice(lineStart, start);
   const match = line.match(/^(\s*)/);
   const leadingWhitespace = match ? match[1] : '';
-  const insertion = '\n' + leadingWhitespace;
+  const insertion = `\n${leadingWhitespace}`;
   return {
     value: value.slice(0, start) + insertion + value.slice(end),
     selectionStart: start + insertion.length,

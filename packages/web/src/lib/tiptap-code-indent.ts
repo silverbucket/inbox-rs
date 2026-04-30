@@ -14,7 +14,7 @@ export const CodeBlockAutoIndent = Extension.create({
       Enter: ({ editor }) => {
         const { state } = editor;
         const { selection } = state;
-        const { $from, empty } = selection;
+        const { $from } = selection;
 
         // Only act inside code blocks
         if ($from.parent.type.name !== 'codeBlock') {
@@ -35,7 +35,7 @@ export const CodeBlockAutoIndent = Extension.create({
         const match = currentLine.match(/^(\s*)/);
         const leadingWhitespace = match ? match[1] : '';
 
-        const insertion = '\n' + leadingWhitespace;
+        const insertion = `\n${leadingWhitespace}`;
 
         // Use a raw transaction to insert text directly into the code block.
         // insertContent goes through HTML parsing which doesn't handle

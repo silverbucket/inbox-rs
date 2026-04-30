@@ -114,10 +114,10 @@ describe('saveAsImage', () => {
     });
 
     expect(result).not.toBeNull();
-    expect(result!.type).toBe('image');
-    expect(result!.filePath).toBe('files/img-123.jpg');
-    expect(result!.mimeType).toBe('image/jpeg');
-    expect(result!.sourceUrl).toBe('https://cdn.example.com/photo.jpg');
+    expect(result?.type).toBe('image');
+    expect(result?.filePath).toBe('files/img-123.jpg');
+    expect(result?.mimeType).toBe('image/jpeg');
+    expect(result?.sourceUrl).toBe('https://cdn.example.com/photo.jpg');
 
     expect(mockSendMessage).toHaveBeenCalledWith({
       type: 'download-and-store-image',
@@ -140,7 +140,7 @@ describe('saveAsImage', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
     });
 
-    expect(result!.title).toBe('sunset.png');
+    expect(result?.title).toBe('sunset.png');
   });
 
   it('includes note as description', async () => {
@@ -157,7 +157,7 @@ describe('saveAsImage', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
     });
 
-    expect(result!.description).toBe('Nice sunset shot');
+    expect(result?.description).toBe('Nice sunset shot');
   });
 
   it('returns null when download fails', async () => {
@@ -190,7 +190,7 @@ describe('saveAsImage', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
     });
 
-    expect(result!.filePath).toBe('files/img-ext.webp');
+    expect(result?.filePath).toBe('files/img-ext.webp');
   });
 
   it('defaults to jpg when URL has no image extension', async () => {
@@ -207,7 +207,7 @@ describe('saveAsImage', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
     });
 
-    expect(result!.filePath).toBe('files/img-noext.jpg');
+    expect(result?.filePath).toBe('files/img-noext.jpg');
   });
 
   it('uses correct MIME type fallback when service worker omits mimeType', async () => {
@@ -224,7 +224,7 @@ describe('saveAsImage', () => {
       pageNote: '',
       createdAt: '2026-01-01T00:00:00.000Z',
     });
-    expect(svgResult!.mimeType).toBe('image/svg+xml');
+    expect(svgResult?.mimeType).toBe('image/svg+xml');
 
     const icoResult = await saveAsImage({
       rs,
@@ -234,7 +234,7 @@ describe('saveAsImage', () => {
       pageNote: '',
       createdAt: '2026-01-01T00:00:00.000Z',
     });
-    expect(icoResult!.mimeType).toBe('image/x-icon');
+    expect(icoResult?.mimeType).toBe('image/x-icon');
 
     const jpgResult = await saveAsImage({
       rs,
@@ -244,7 +244,7 @@ describe('saveAsImage', () => {
       pageNote: '',
       createdAt: '2026-01-01T00:00:00.000Z',
     });
-    expect(jpgResult!.mimeType).toBe('image/jpeg');
+    expect(jpgResult?.mimeType).toBe('image/jpeg');
   });
 });
 

@@ -17,12 +17,17 @@
     placeholder?: string;
   } = $props();
 
-  let editorElement = $state<HTMLDivElement>(undefined!);
+  // Bound via `bind:this` below — populated after mount, so the type is
+  // optional and `onMount` returns early if the bind hasn't resolved yet
+  // (it always has by the time onMount fires, but keeping the type honest
+  // avoids the non-null assertion hack).
+  let editorElement = $state<HTMLDivElement>();
   let editor: Editor | null = null;
 
   const lowlight = createLowlight(common);
 
   onMount(() => {
+    if (!editorElement) return;
     editor = new Editor({
       element: editorElement,
       extensions: [

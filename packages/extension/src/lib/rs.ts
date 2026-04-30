@@ -51,13 +51,23 @@ export async function connectViaOAuth(userAddress: string): Promise<RSConfig> {
 
 /**
  * Configure an RS instance with a previously obtained token.
+ *
+ * Throws if any of the required post-auth fields are missing — those are
+ * populated by `connectViaOAuth`, so a missing field here means the caller
+ * passed in a half-built config (a real bug, not something to paper over).
  */
 export function configureRS(rs: RemoteStorage, config: RSConfig): void {
+  const { href, storageApi, token } = config;
+  if (!href || !storageApi || !token) {
+    throw new Error(
+      'configureRS: config is missing href, storageApi, or token (run connectViaOAuth first)',
+    );
+  }
   rs.remote.configure({
     userAddress: config.userAddress,
-    href: config.href!,
-    storageApi: config.storageApi!,
-    token: config.token!,
+    href,
+    storageApi,
+    token,
     properties: undefined,
   });
 }

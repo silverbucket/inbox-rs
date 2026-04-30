@@ -101,7 +101,8 @@ function captureRsHandlers() {
     string,
     (...args: any[]) => any,
   ][]) {
-    (rsHandlerMap[event] ??= []).push(handler);
+    rsHandlerMap[event] ??= [];
+    rsHandlerMap[event].push(handler);
   }
 }
 captureRsHandlers();
@@ -343,9 +344,9 @@ describe('groupCollections', () => {
     groups.set({ g1: group });
 
     const result = get(groupCollections);
-    expect(result['g1']).toHaveLength(2);
-    expect(result['g1'][0].id).toBe('c1');
-    expect(result['g1'][1].id).toBe('c2');
+    expect(result.g1).toHaveLength(2);
+    expect(result.g1[0].id).toBe('c1');
+    expect(result.g1[1].id).toBe('c2');
   });
 
   it('shows collections with groupId but missing from collectionIds', () => {
@@ -358,9 +359,9 @@ describe('groupCollections', () => {
     groups.set({ g1: group });
 
     const result = get(groupCollections);
-    expect(result['g1']).toHaveLength(2);
-    expect(result['g1'][0].id).toBe('c1');
-    expect(result['g1'][1].id).toBe('c2');
+    expect(result.g1).toHaveLength(2);
+    expect(result.g1[0].id).toBe('c1');
+    expect(result.g1[1].id).toBe('c2');
   });
 
   it('preserves collectionIds order and appends orphans after', () => {
@@ -374,7 +375,7 @@ describe('groupCollections', () => {
     groups.set({ g1: group });
 
     const result = get(groupCollections);
-    expect(result['g1'].map((c) => c.id)).toEqual(['c2', 'c1', 'c3']);
+    expect(result.g1.map((c) => c.id)).toEqual(['c2', 'c1', 'c3']);
   });
 
   it('filters out stale collectionIds entries', () => {
@@ -386,8 +387,8 @@ describe('groupCollections', () => {
     groups.set({ g1: group });
 
     const result = get(groupCollections);
-    expect(result['g1']).toHaveLength(1);
-    expect(result['g1'][0].id).toBe('c1');
+    expect(result.g1).toHaveLength(1);
+    expect(result.g1[0].id).toBe('c1');
   });
 
   it('does not show collection in stale group after move', () => {
@@ -401,9 +402,9 @@ describe('groupCollections', () => {
 
     const result = get(groupCollections);
     // c1 should only appear in g2 (its actual groupId), not g1
-    expect(result['g1']).toHaveLength(0);
-    expect(result['g2']).toHaveLength(1);
-    expect(result['g2'][0].id).toBe('c1');
+    expect(result.g1).toHaveLength(0);
+    expect(result.g2).toHaveLength(1);
+    expect(result.g2[0].id).toBe('c1');
   });
 
   it('returns empty array for group with no collections', () => {
@@ -411,7 +412,7 @@ describe('groupCollections', () => {
     groups.set({ g1: group });
 
     const result = get(groupCollections);
-    expect(result['g1']).toEqual([]);
+    expect(result.g1).toEqual([]);
   });
 });
 
@@ -545,7 +546,7 @@ describe('collection todo consistency', () => {
       t1: canonical,
     });
 
-    await rsHandlers['connected']();
+    await rsHandlers.connected();
 
     expect(get(items)).toEqual({ t1: canonical });
     expect(get(todoItems)).toEqual([]);
@@ -561,7 +562,7 @@ describe('collection todo consistency', () => {
     items.set({ t1: inboxTodo });
     collections.set({ c1: collection });
 
-    expect(get(collectionItems)['c1']).toEqual([]);
+    expect(get(collectionItems).c1).toEqual([]);
     expect(get(todoItems).map((todo) => todo.id)).toEqual(['t1']);
   });
 });
@@ -590,9 +591,9 @@ describe('moveItemToCollection', () => {
 
     await moveItemToCollection('t1', 'target');
 
-    expect(get(collections)['source'].itemIds).toEqual([]);
-    expect(get(collections)['target'].itemIds).toEqual(['t1']);
-    expect(get(items)['t1'].collectionId).toBe('target');
+    expect(get(collections).source.itemIds).toEqual([]);
+    expect(get(collections).target.itemIds).toEqual(['t1']);
+    expect(get(items).t1.collectionId).toBe('target');
   });
 
   it('adds to the target collection itemIds when moving from unfiled', async () => {
@@ -604,8 +605,8 @@ describe('moveItemToCollection', () => {
 
     await moveItemToCollection('t1', 'target');
 
-    expect(get(collections)['target'].itemIds).toEqual(['t1']);
-    expect(get(items)['t1'].collectionId).toBe('target');
+    expect(get(collections).target.itemIds).toEqual(['t1']);
+    expect(get(items).t1.collectionId).toBe('target');
   });
 });
 
@@ -627,7 +628,7 @@ describe('deleteGroup', () => {
     const result = await deleteGroup('g1');
 
     expect(result).toBe(false);
-    expect(get(groups)['g1']).toBeDefined();
+    expect(get(groups).g1).toBeDefined();
   });
 
   it('refuses to delete a group when collectionIds and groupId both reference it', async () => {
@@ -640,7 +641,7 @@ describe('deleteGroup', () => {
     const result = await deleteGroup('g1');
 
     expect(result).toBe(false);
-    expect(get(groups)['g1']).toBeDefined();
+    expect(get(groups).g1).toBeDefined();
   });
 
   it('allows deleting a group with no collections referencing it', async () => {
@@ -651,7 +652,7 @@ describe('deleteGroup', () => {
     const result = await deleteGroup('g1');
 
     expect(result).toBe(true);
-    expect(get(groups)['g1']).toBeUndefined();
+    expect(get(groups).g1).toBeUndefined();
   });
 
   it('allows deleting a group where collectionIds has stale entries but no collection has matching groupId', async () => {
@@ -665,7 +666,7 @@ describe('deleteGroup', () => {
     const result = await deleteGroup('g1');
 
     expect(result).toBe(true);
-    expect(get(groups)['g1']).toBeUndefined();
+    expect(get(groups).g1).toBeUndefined();
   });
 });
 
@@ -677,7 +678,7 @@ describe('pendingMigrationCount visibility timing', () => {
     // pendingMigrationCount) are reset alongside the public ones — loadItems
     // now merges into rawItems instead of replacing, so leftover entries
     // from prior tests in this file would otherwise leak in here.
-    rsHandlers['disconnected']?.();
+    rsHandlers.disconnected?.();
     connected.set(false);
     items.set({});
     collections.set({});
@@ -699,7 +700,7 @@ describe('pendingMigrationCount visibility timing', () => {
       legacy: makeLegacyVoiceMemo('legacy'),
     });
 
-    await rsHandlers['connected']();
+    await rsHandlers.connected();
 
     expect(get(pendingMigrationCount)).toBe(0);
 
@@ -713,7 +714,7 @@ describe('pendingMigrationCount visibility timing', () => {
       legacy: makeLegacyVoiceMemo('legacy'),
     });
 
-    await rsHandlers['connected']();
+    await rsHandlers.connected();
 
     expect(get(pendingMigrationCount)).toBe(0);
 
@@ -727,7 +728,7 @@ describe('pendingMigrationCount visibility timing', () => {
       note1: makeVersionedNote('note1', 1),
     });
 
-    await rsHandlers['connected']();
+    await rsHandlers.connected();
     emitRsEvent('sync-done');
 
     expect(get(pendingMigrationCount)).toBe(0);
@@ -752,7 +753,7 @@ describe('no group recreation after deletion', () => {
     groups.set({ g1: group });
 
     await deleteGroup('g1');
-    expect(get(groups)['g1']).toBeUndefined();
+    expect(get(groups).g1).toBeUndefined();
 
     // An unrelated item change should not recreate the deleted group
     emitModuleChange({
@@ -788,8 +789,8 @@ describe('per-item change handling', () => {
     };
     emitModuleChange({ relativePath: 'items/i1', newValue: item });
 
-    expect(get(items)['i1']).toBeDefined();
-    expect(get(items)['i1'].title).toBe('Test');
+    expect(get(items).i1).toBeDefined();
+    expect(get(items).i1.title).toBe('Test');
   });
 
   it('removes a deleted item from the store', () => {
@@ -808,7 +809,7 @@ describe('per-item change handling', () => {
       oldValue: { id: 'i1' },
     });
 
-    expect(get(items)['i1']).toBeUndefined();
+    expect(get(items).i1).toBeUndefined();
   });
 
   it('adds an incoming collection with itemIds normalization', () => {
@@ -819,8 +820,8 @@ describe('per-item change handling', () => {
     };
     emitModuleChange({ relativePath: 'collections/c1', newValue: col });
 
-    expect(get(collections)['c1']).toBeDefined();
-    expect(get(collections)['c1'].itemIds).toEqual([]);
+    expect(get(collections).c1).toBeDefined();
+    expect(get(collections).c1.itemIds).toEqual([]);
   });
 
   it('adds an incoming group with collectionIds normalization', () => {
@@ -831,8 +832,8 @@ describe('per-item change handling', () => {
     };
     emitModuleChange({ relativePath: 'groups/g1', newValue: grp });
 
-    expect(get(groups)['g1']).toBeDefined();
-    expect(get(groups)['g1'].collectionIds).toEqual([]);
+    expect(get(groups).g1).toBeDefined();
+    expect(get(groups).g1.collectionIds).toEqual([]);
   });
 
   it('updates appConfig on config/app change', () => {
@@ -860,7 +861,7 @@ describe('per-item change handling', () => {
       newValue: { id: 'i1', type: 'note', title: 'X', createdAt: '' },
     });
 
-    expect(get(items)['i1']).toBeUndefined();
+    expect(get(items).i1).toBeUndefined();
   });
 
   it('handles multiple incoming items without calling getAll', () => {
@@ -889,7 +890,7 @@ describe('per-item change handling', () => {
       oldValue: { id: 'c1' },
     });
 
-    expect(get(collections)['c1']).toBeUndefined();
+    expect(get(collections).c1).toBeUndefined();
   });
 
   it('removes a deleted group from the store', () => {
@@ -901,7 +902,7 @@ describe('per-item change handling', () => {
       oldValue: { id: 'g1' },
     });
 
-    expect(get(groups)['g1']).toBeUndefined();
+    expect(get(groups).g1).toBeUndefined();
   });
 });
 
@@ -924,10 +925,10 @@ describe('deleteGroup preserves collections', () => {
     await deleteGroup('g1');
 
     // g1 is gone, g2 and c1 are untouched
-    expect(get(groups)['g1']).toBeUndefined();
-    expect(get(groups)['g2']).toBeDefined();
-    expect(get(collections)['c1']).toBeDefined();
-    expect(get(collections)['c1'].groupId).toBe('g2');
+    expect(get(groups).g1).toBeUndefined();
+    expect(get(groups).g2).toBeDefined();
+    expect(get(collections).c1).toBeDefined();
+    expect(get(collections).c1.groupId).toBe('g2');
   });
 
   it('does not modify any collection groupId when deleting a group', async () => {
@@ -942,8 +943,8 @@ describe('deleteGroup preserves collections', () => {
     await deleteGroup('g1');
 
     // All collection groupIds unchanged
-    expect(get(collections)['c1'].groupId).toBe('g2');
-    expect(get(collections)['c2'].groupId).toBeUndefined();
+    expect(get(collections).c1.groupId).toBe('g2');
+    expect(get(collections).c2.groupId).toBeUndefined();
     expect(mockInbox.storeCollection).not.toHaveBeenCalled();
   });
 });
@@ -962,7 +963,7 @@ describe('deleteGroup with non-existent group', () => {
     const result = await deleteGroup('g_nonexistent');
 
     expect(result).toBe(false);
-    expect(get(groups)['g1']).toBeDefined();
+    expect(get(groups).g1).toBeDefined();
     expect(mockInbox.removeGroup).not.toHaveBeenCalled();
   });
 });
@@ -985,8 +986,8 @@ describe('storeCollection: raw groupId handling', () => {
 
     await storeCollection(col);
 
-    expect(get(collections)['c1']).toBeDefined();
-    expect(get(collections)['c1'].groupId).toBeUndefined();
+    expect(get(collections).c1).toBeDefined();
+    expect(get(collections).c1.groupId).toBeUndefined();
     expect(mockInbox.storeGroup).not.toHaveBeenCalled();
   });
 
@@ -1001,7 +1002,7 @@ describe('storeCollection: raw groupId handling', () => {
 
     await storeCollection(col);
 
-    expect(get(collections)['c1'].groupId).toBe('');
+    expect(get(collections).c1.groupId).toBe('');
   });
 });
 
@@ -1024,7 +1025,7 @@ describe('reorderGroupCollections with invalid group ids', () => {
     await reorderGroupCollections('', ['c2', 'c1']);
 
     // g1 should be untouched
-    expect(get(groups)['g1'].collectionIds).toEqual(['c1', 'c2']);
+    expect(get(groups).g1.collectionIds).toEqual(['c1', 'c2']);
     expect(mockInbox.storeGroup).not.toHaveBeenCalled();
   });
 
@@ -1038,7 +1039,7 @@ describe('reorderGroupCollections with invalid group ids', () => {
 
     await reorderGroupCollections('g1', ['c2', 'c1']);
 
-    expect(get(groups)['g1'].collectionIds).toEqual(['c2', 'c1']);
+    expect(get(groups).g1.collectionIds).toEqual(['c2', 'c1']);
     expect(mockInbox.storeGroup).toHaveBeenCalled();
   });
 });
@@ -1209,10 +1210,10 @@ describe('offline-create-then-login: group association is preserved', () => {
       g1: makeGroup('g1', ['c1']),
     });
 
-    await rsHandlers['connected']();
+    await rsHandlers.connected();
 
-    expect(get(collections)['c1'].groupId).toBe('g1');
-    expect(get(groups)['g1'].collectionIds).toEqual(['c1']);
+    expect(get(collections).c1.groupId).toBe('g1');
+    expect(get(groups).g1.collectionIds).toEqual(['c1']);
     expect(get(orphanCollections)).toEqual([]);
   });
 
@@ -1227,7 +1228,7 @@ describe('offline-create-then-login: group association is preserved', () => {
       g1: makeGroup('g1', ['c1']),
     });
 
-    await rsHandlers['connected']();
+    await rsHandlers.connected();
 
     // Now simulate the fireInitial replay — emits a 'local' event for every
     // cached document. Both group and collection are replayed.
@@ -1245,7 +1246,7 @@ describe('offline-create-then-login: group association is preserved', () => {
     });
 
     expect(get(orphanCollections)).toEqual([]);
-    expect(get(collections)['c1'].groupId).toBe('g1');
+    expect(get(collections).c1.groupId).toBe('g1');
   });
 
   it('survives collection-before-group event ordering during fireInitial', async () => {
@@ -1256,7 +1257,7 @@ describe('offline-create-then-login: group association is preserved', () => {
     mockInbox.getAllCollections.mockResolvedValue({});
     mockInbox.getAllGroups.mockResolvedValue({});
 
-    await rsHandlers['connected']();
+    await rsHandlers.connected();
 
     // Collection arrives first, before the group is in the store.
     emitModuleChange({
@@ -1273,7 +1274,7 @@ describe('offline-create-then-login: group association is preserved', () => {
       oldValue: undefined,
     });
 
-    expect(get(collections)['c1'].groupId).toBe('g1');
+    expect(get(collections).c1.groupId).toBe('g1');
     expect(get(orphanCollections)).toEqual([]);
   });
 
@@ -1291,9 +1292,9 @@ describe('offline-create-then-login: group association is preserved', () => {
       g1: makeGroup('g1', ['c1']),
     });
 
-    await rsHandlers['connected']();
+    await rsHandlers.connected();
 
-    expect(get(collections)['c1'].groupId).toBe('g1');
+    expect(get(collections).c1.groupId).toBe('g1');
     expect(get(orphanCollections)).toEqual([]);
   });
 
@@ -1310,7 +1311,7 @@ describe('offline-create-then-login: group association is preserved', () => {
       g1: makeGroup('g1', ['c1']),
     });
 
-    await rsHandlers['connected']();
+    await rsHandlers.connected();
 
     emitModuleChange({
       relativePath: 'collections/c1',
@@ -1319,7 +1320,7 @@ describe('offline-create-then-login: group association is preserved', () => {
       oldValue: undefined,
     });
 
-    expect(get(collections)['c1'].groupId).toBe('g1');
+    expect(get(collections).c1.groupId).toBe('g1');
     expect(get(orphanCollections)).toEqual([]);
   });
 
@@ -1341,9 +1342,9 @@ describe('offline-create-then-login: group association is preserved', () => {
       g1: true as unknown as CollectionGroup,
     });
 
-    await rsHandlers['connected']();
+    await rsHandlers.connected();
 
-    expect(get(collections)['c1'].groupId).toBe('g1');
+    expect(get(collections).c1.groupId).toBe('g1');
     expect(get(orphanCollections)).toEqual([]);
   });
 
@@ -1524,10 +1525,10 @@ describe('moveCollectionToGroup', () => {
 
     await moveCollectionToGroup('c1', 'g1');
 
-    const updatedCol = get(collections)['c1'];
+    const updatedCol = get(collections).c1;
     expect(updatedCol.groupId).toBe('g1');
 
-    const updatedGroup = get(groups)['g1'];
+    const updatedGroup = get(groups).g1;
     expect(updatedGroup.collectionIds).toContain('c1');
   });
 
@@ -1541,13 +1542,13 @@ describe('moveCollectionToGroup', () => {
 
     await moveCollectionToGroup('c1', 'g2');
 
-    const updatedOldGroup = get(groups)['g1'];
+    const updatedOldGroup = get(groups).g1;
     expect(updatedOldGroup.collectionIds).not.toContain('c1');
 
-    const updatedNewGroup = get(groups)['g2'];
+    const updatedNewGroup = get(groups).g2;
     expect(updatedNewGroup.collectionIds).toContain('c1');
 
-    expect(get(collections)['c1'].groupId).toBe('g2');
+    expect(get(collections).c1.groupId).toBe('g2');
   });
 
   it('throws without mutating when target group is missing', async () => {
@@ -1561,8 +1562,8 @@ describe('moveCollectionToGroup', () => {
       'Cannot move collection to missing group',
     );
 
-    expect(get(collections)['c1'].groupId).toBe('g1');
-    expect(get(groups)['g1'].collectionIds).toEqual(['c1']);
+    expect(get(collections).c1.groupId).toBe('g1');
+    expect(get(groups).g1.collectionIds).toEqual(['c1']);
     expect(mockInbox.storeCollection).not.toHaveBeenCalled();
     expect(mockInbox.storeGroup).not.toHaveBeenCalled();
   });
@@ -1746,8 +1747,8 @@ describe('deleteCollection: empty-only guard', () => {
     const ok = await deleteCollection('c1');
 
     expect(ok).toBe(false);
-    expect(get(collections)['c1']).toBeDefined();
-    expect(get(items)['i1'].collectionId).toBe('c1'); // item untouched
+    expect(get(collections).c1).toBeDefined();
+    expect(get(items).i1.collectionId).toBe('c1'); // item untouched
     expect(mockInbox.removeCollection).not.toHaveBeenCalled();
     expect(mockInbox.store).not.toHaveBeenCalled(); // no orphaning side effect
   });
@@ -1759,8 +1760,8 @@ describe('deleteCollection: empty-only guard', () => {
     const ok = await deleteCollection('c1');
 
     expect(ok).toBe(true);
-    expect(get(collections)['c1']).toBeUndefined();
-    expect(get(collections)['c2']).toBeDefined();
+    expect(get(collections).c1).toBeUndefined();
+    expect(get(collections).c2).toBeDefined();
     expect(get(appConfig).collectionsOrder).toEqual(['c2']);
     expect(mockInbox.removeCollection).toHaveBeenCalledWith('c1');
   });
@@ -1791,7 +1792,7 @@ describe('deleteCollection: empty-only guard', () => {
     const ok = await deleteCollection('c1');
 
     expect(ok).toBe(true);
-    expect(get(collections)['c1']).toBeUndefined();
+    expect(get(collections).c1).toBeUndefined();
   });
 });
 
@@ -1811,9 +1812,9 @@ describe('createCollection: group assignment', () => {
     const stored = await createCollection(col);
 
     expect(stored.groupId).toBe('g1');
-    expect(get(collections)['c1'].groupId).toBe('g1');
-    expect(get(groups)['g1'].collectionIds).toContain('c1');
-    expect(get(groupCollections)['g1'].map((c) => c.id)).toEqual(['c1']);
+    expect(get(collections).c1.groupId).toBe('g1');
+    expect(get(groups).g1.collectionIds).toContain('c1');
+    expect(get(groupCollections).g1.map((c) => c.id)).toEqual(['c1']);
     // No new group was auto-created
     expect(Object.keys(get(groups))).toEqual(['g1']);
   });
@@ -1822,7 +1823,7 @@ describe('createCollection: group assignment', () => {
     await expect(createCollection(makeCollection('c1'))).rejects.toThrow(
       'Cannot create collection without a real group',
     );
-    expect(get(collections)['c1']).toBeUndefined();
+    expect(get(collections).c1).toBeUndefined();
     expect(mockInbox.storeGroup).not.toHaveBeenCalled();
   });
 
@@ -1830,7 +1831,7 @@ describe('createCollection: group assignment', () => {
     await expect(
       createCollection(makeCollection('c1', 'missing')),
     ).rejects.toThrow('Cannot create collection without a real group');
-    expect(get(collections)['c1']).toBeUndefined();
+    expect(get(collections).c1).toBeUndefined();
   });
 });
 
@@ -1850,9 +1851,9 @@ describe('load-time collection/group loading', () => {
     mockInbox.getAllCollections.mockResolvedValue({ c1: makeCollection('c1') });
     mockInbox.getAllGroups.mockResolvedValue({});
 
-    await rsHandlers['connected']();
+    await rsHandlers.connected();
 
-    expect(get(collections)['c1'].groupId).toBeUndefined();
+    expect(get(collections).c1.groupId).toBeUndefined();
     expect(get(groups)).toEqual({});
     expect(mockInbox.storeGroup).not.toHaveBeenCalled();
     expect(mockInbox.storeCollection).not.toHaveBeenCalled();
@@ -1865,9 +1866,9 @@ describe('load-time collection/group loading', () => {
     });
     mockInbox.getAllGroups.mockResolvedValue({ g1 });
 
-    await rsHandlers['connected']();
+    await rsHandlers.connected();
 
-    expect(get(collections)['c1'].groupId).toBe('deleted-group');
+    expect(get(collections).c1.groupId).toBe('deleted-group');
     expect(get(groups)).toEqual({ g1 });
     expect(mockInbox.storeGroup).not.toHaveBeenCalled();
     expect(mockInbox.storeCollection).not.toHaveBeenCalled();
@@ -1884,10 +1885,10 @@ describe('load-time collection/group loading', () => {
       new Error('temporary groups read failure'),
     );
 
-    await rsHandlers['connected']();
+    await rsHandlers.connected();
 
-    expect(get(collections)['c1'].groupId).toBe('g1');
-    expect(get(groups)['g1']).toBeDefined();
+    expect(get(collections).c1.groupId).toBe('g1');
+    expect(get(groups).g1).toBeDefined();
     expect(mockInbox.storeGroup).not.toHaveBeenCalled();
     expect(mockInbox.storeCollection).not.toHaveBeenCalled();
   });

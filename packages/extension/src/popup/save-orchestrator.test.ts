@@ -189,7 +189,7 @@ describe('runSavePage', () => {
       now: () => '2099-12-31T23:59:59.999Z',
     });
 
-    const stored = JSON.parse(mockFetch.mock.calls[0]![1].body);
+    const stored = JSON.parse(mockFetch.mock.calls[0]?.[1].body);
     expect(stored.id).toBe('custom-id');
     expect(stored.createdAt).toBe('2099-12-31T23:59:59.999Z');
   });
@@ -217,7 +217,7 @@ describe('runSavePage', () => {
       }),
     );
     // And the bookmark stored under the same id.
-    const bookmark = JSON.parse(mockFetch.mock.calls[0]![1].body);
+    const bookmark = JSON.parse(mockFetch.mock.calls[0]?.[1].body);
     expect(bookmark.id).toBe('shared-id');
   });
 
@@ -232,7 +232,7 @@ describe('runSavePage', () => {
       pageDescription: 'OG description',
     });
 
-    const stored = JSON.parse(mockFetch.mock.calls[0]![1].body);
+    const stored = JSON.parse(mockFetch.mock.calls[0]?.[1].body);
     expect(stored.description).toContain('My note');
     expect(stored.description).toContain('OG description');
   });
@@ -271,7 +271,7 @@ describe('runSaveNote', () => {
       now: () => '2026-04-29T12:00:00.000Z',
     });
 
-    const stored = JSON.parse(mockFetch.mock.calls[0]![1].body);
+    const stored = JSON.parse(mockFetch.mock.calls[0]?.[1].body);
     expect(stored).toEqual({
       id: 'note-1',
       type: 'note',
@@ -294,7 +294,7 @@ describe('runSaveNote', () => {
       noteBody: longBody,
     });
 
-    const stored = JSON.parse(mockFetch.mock.calls[0]![1].body);
+    const stored = JSON.parse(mockFetch.mock.calls[0]?.[1].body);
     expect(stored.title).toBe(longBody.slice(0, 50));
     expect(stored.body).toBe(longBody);
   });
@@ -310,7 +310,7 @@ describe('runSaveNote', () => {
       noteBody: '  hello  ',
     });
 
-    const stored = JSON.parse(mockFetch.mock.calls[0]![1].body);
+    const stored = JSON.parse(mockFetch.mock.calls[0]?.[1].body);
     expect(stored.title).toBe('hello');
     expect(stored.body).toBe('hello');
   });

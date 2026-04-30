@@ -10,9 +10,10 @@ const {
   mockStorageGet,
   mockFetch,
 } = vi.hoisted(() => {
-  const onInstalledListeners: Function[] = [];
-  const onClickedListeners: Function[] = [];
-  const onMessageListeners: Function[] = [];
+  type Listener = (...args: unknown[]) => unknown;
+  const onInstalledListeners: Listener[] = [];
+  const onClickedListeners: Listener[] = [];
+  const onMessageListeners: Listener[] = [];
   return {
     onInstalledListeners,
     onClickedListeners,
@@ -28,13 +29,17 @@ vi.mock('webextension-polyfill', () => ({
   default: {
     runtime: {
       onInstalled: {
-        addListener: (fn: Function) => onInstalledListeners.push(fn),
+        addListener: (fn: Listener) => onInstalledListeners.push(fn),
       },
-      onMessage: { addListener: (fn: Function) => onMessageListeners.push(fn) },
+      onMessage: {
+        addListener: (fn: Listener) => onMessageListeners.push(fn),
+      },
     },
     contextMenus: {
       create: mockContextMenusCreate,
-      onClicked: { addListener: (fn: Function) => onClickedListeners.push(fn) },
+      onClicked: {
+        addListener: (fn: Listener) => onClickedListeners.push(fn),
+      },
     },
     tabs: {
       sendMessage: mockTabsSendMessage,

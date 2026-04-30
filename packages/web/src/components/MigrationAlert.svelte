@@ -22,7 +22,7 @@
     <p>{count} item{count === 1 ? '' : 's'} need{count === 1 ? 's' : ''} to be migrated to the latest format.</p>
   </div>
   <div class="alert-actions">
-    <button class="btn-migrate" onclick={handleMigrate} disabled={running}>
+    <button type="button" class="btn-migrate" onclick={handleMigrate} disabled={running}>
       {running ? 'Migrating...' : 'Migrate'}
     </button>
   </div>

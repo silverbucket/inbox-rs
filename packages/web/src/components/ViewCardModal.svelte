@@ -63,8 +63,8 @@
     docBlobUrl = null;
     docLoading = false;
 
-    if (currentItem.type === 'note' && (currentItem as any).body) {
-      renderMarkdown((currentItem as any).body).then((html) => {
+    if (currentItem.type === 'note' && currentItem.body) {
+      renderMarkdown(currentItem.body).then((html) => {
         if (item.id === currentItem.id) renderedBody = html;
       });
     }
@@ -82,8 +82,7 @@
     transcribing = true;
     transcriptionError = false;
     try {
-      const inbox = (rs as any).inbox;
-      const file = await inbox.getFile(target.filePath);
+      const file = await rs.inbox.getFile(target.filePath);
       if (!file?.data) throw new Error('Could not load audio file');
       const blob = new Blob([file.data], { type: target.mimeType });
       const text = await transcribeAudio(blob);
@@ -107,8 +106,7 @@
     if (docBlobUrl) { openDownload(docBlobUrl); return; }
     docLoading = true;
     try {
-      const inbox = (rs as any).inbox;
-      const file = await inbox.getFile(item.filePath);
+      const file = await rs.inbox.getFile(item.filePath);
       if (file?.data) {
         docBlobUrl = URL.createObjectURL(new Blob([file.data], { type: item.mimeType }));
         openDownload(docBlobUrl);
@@ -146,9 +144,16 @@
     try {
       const { completedAt: _, ...rest } = item;
       await moveItemToCollection(item.id, undefined);
-      const updated = { ...rest, isTodo: true, completed: false };
-      delete (updated as any).collectionId;
-      await storeItem(updated as InboxItem);
+      // Strip collectionId so the converted todo lands in Unfiled. Cast to
+      // Record<string,unknown> for the structural mutation, then back to
+      // InboxItem when we're done.
+      const updated: Record<string, unknown> = {
+        ...rest,
+        isTodo: true,
+        completed: false,
+      };
+      delete updated.collectionId;
+      await storeItem(updated as unknown as InboxItem);
       closeMakeTodoMenu();
       onclose();
     } catch (error) {
@@ -325,16 +330,19 @@
   async function convertToReference() {
     convertingRef = true;
     try {
-      const updated = { ...item };
-      delete (updated as any).isTodo;
-      delete (updated as any).completed;
-      delete (updated as any).completedAt;
+      // Cast to Record<string,unknown> for the structural rewrite below —
+      // we're deleting and re-typing fields, which the discriminated InboxItem
+      // union actively prevents at the type level.
+      const updated: Record<string, unknown> = { ...item };
+      delete updated.isTodo;
+      delete updated.completed;
+      delete updated.completedAt;
       // type: 'todo' items require `completed` in the schema — convert to note
       if (updated.type === 'todo') {
-        (updated as any).type = 'note';
-        if (!(updated as any).body) (updated as any).body = '';
+        updated.type = 'note';
+        if (!updated.body) updated.body = '';
       }
-      await storeItem(updated as InboxItem);
+      await storeItem(updated as unknown as InboxItem);
       onclose();
     } finally {
       convertingRef = false;
@@ -365,16 +373,21 @@
     catch { return url; }
   }
 
-  // Notes and body helpers
+  // Notes and body helpers. We've already type-narrowed via `'notes' in item`
+  // / `'body' in item` / `'filePath' in item`, but biome's narrowing for
+  // discriminated unions doesn't always carry through across `in` checks —
+  // pull the field through a Record cast so callers stay strict.
   const notes = $derived(
-    'notes' in item ? (item as any).notes : undefined
+    'notes' in item ? (item as Record<string, unknown>).notes : undefined,
   );
   const body = $derived(
-    'body' in item ? (item as any).body : undefined
+    'body' in item ? (item as Record<string, unknown>).body : undefined,
   );
   const description = $derived(item.description);
 
-  const hasFile = $derived('filePath' in item && !!(item as any).filePath);
+  const hasFile = $derived(
+    'filePath' in item && !!(item as Record<string, unknown>).filePath,
+  );
 
   const imageSrc = $derived(
     item.type === 'bookmark'
@@ -429,7 +442,7 @@
       <span class="type-badge">{item.type}</span>
       <time class="date">{formatDate(item.createdAt)}</time>
       {#if canMakeTodo}
-        <button
+        <button type="button"
           class="btn-todo btn-todo-top"
           class:open={showMakeTodoMenu}
           bind:this={makeTodoButtonEl}
@@ -438,19 +451,19 @@
           aria-haspopup="listbox"
           aria-expanded={showMakeTodoMenu}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="9 11 12 14 22 4"></polyline>
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
           </svg>
           Make Todo
-          <svg class="caret" class:open={showMakeTodoMenu} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg aria-hidden="true" class="caret" class:open={showMakeTodoMenu} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="6 9 12 15 18 9"></polyline>
           </svg>
         </button>
       {/if}
       {#if canMakeRef}
-        <button class="btn-todo btn-todo-top" disabled={convertingRef} onclick={convertToReference}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button type="button" class="btn-todo btn-todo-top" disabled={convertingRef} onclick={convertToReference}>
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
             <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
           </svg>
@@ -461,9 +474,9 @@
 
     <h2 class="title" id="view-modal-title">
       {#if item.type === 'bookmark'}
-        <a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}<svg class="link-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>
+        <a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}<svg aria-hidden="true" class="link-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>
       {:else if item.type === 'email' && 'messageUrl' in item && item.messageUrl}
-        <a href={item.messageUrl}>{item.title}<svg class="link-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>
+        <a href={item.messageUrl}>{item.title}<svg aria-hidden="true" class="link-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>
       {:else}
         {item.title}
       {/if}
@@ -496,8 +509,8 @@
         src={imageSrc}
         alt={item.title}
         onclose={() => showLightbox = false}
-        filePath={'filePath' in item ? (item as any).filePath : undefined}
-        mimeType={'mimeType' in item ? (item as any).mimeType : undefined}
+        filePath={'filePath' in item ? (item as Record<string, unknown>).filePath as string | undefined : undefined}
+        mimeType={'mimeType' in item ? (item as Record<string, unknown>).mimeType as string | undefined : undefined}
         filename={item.title || undefined}
       />
     {/if}
@@ -508,7 +521,10 @@
           <p class="status-text">Failed to load audio</p>
         {:else if audioSrc}
           <audio controls src={audioSrc} preload="metadata"
-            onerror={() => audioError = true}></audio>
+            onerror={() => audioError = true}>
+            <!-- See AudioCard.svelte for why an empty captions track is OK here. -->
+            <track kind="captions" />
+          </audio>
         {:else}
           <p class="status-text">Connect to load audio</p>
         {/if}
@@ -519,9 +535,9 @@
           <p class="status-text">Transcribing...</p>
         {:else if transcriptionError}
           <p class="status-text">Transcription failed</p>
-          <button class="btn-action" onclick={handleTranscribe}>Retry</button>
+          <button type="button" class="btn-action" onclick={handleTranscribe}>Retry</button>
         {:else if audioSrc && !item.transcribed && !item.body}
-          <button class="btn-action" onclick={handleTranscribe}>Transcribe</button>
+          <button type="button" class="btn-action" onclick={handleTranscribe}>Transcribe</button>
         {/if}
       </div>
     {/if}
@@ -533,7 +549,7 @@
       {#if item.fileSize}
         <span class="meta-text">{formatSize(item.fileSize)}</span>
       {/if}
-      <button class="btn-action" onclick={(e) => { e.stopPropagation(); downloadDoc(); }} disabled={docLoading}>
+      <button type="button" class="btn-action" onclick={(e) => { e.stopPropagation(); downloadDoc(); }} disabled={docLoading}>
         {docLoading ? 'Loading...' : 'Download'}
       </button>
     {/if}
@@ -566,21 +582,21 @@
 
     {#if hasFile}
       <div class="share-row">
-        <ShareButton filePath={(item as any).filePath} mimeType={(item as any).mimeType} filename={item.title || undefined} />
+        <ShareButton filePath={(item as Record<string, unknown>).filePath as string} mimeType={(item as Record<string, unknown>).mimeType as string | undefined} filename={item.title || undefined} />
       </div>
     {/if}
 
     <div class="actions">
-      <button class="btn-delete" onclick={() => showDelete = true}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <button type="button" class="btn-delete" onclick={() => showDelete = true}>
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="3 6 5 6 21 6"></polyline>
           <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
         </svg>
         Delete
       </button>
       <div class="move-container">
-        <button class="btn-move" bind:this={moveButtonEl} onclick={toggleMoveMenu}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button type="button" class="btn-move" bind:this={moveButtonEl} onclick={toggleMoveMenu}>
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="7" height="7"></rect>
             <rect x="14" y="3" width="7" height="7"></rect>
             <rect x="3" y="14" width="7" height="7"></rect>
@@ -589,8 +605,8 @@
           {item.collectionId ? 'Move' : 'Collect'}
         </button>
       </div>
-      <button class="btn-cancel" onclick={onclose}>Close</button>
-      <button class="btn-edit" onclick={() => onedit(item)}>Edit</button>
+      <button type="button" class="btn-cancel" onclick={onclose}>Close</button>
+      <button type="button" class="btn-edit" onclick={() => onedit(item)}>Edit</button>
     </div>
 
     {#if showDelete}
@@ -614,7 +630,7 @@
         {#if convertError}
           <p class="move-error" role="status" aria-live="polite">{convertError}</p>
         {/if}
-        <button class="move-option" onclick={convertToUnfiledTodo} disabled={convertingTodo}>
+        <button type="button" class="move-option" onclick={convertToUnfiledTodo} disabled={convertingTodo}>
           <span class="move-dot" style="background: #9ca3af"></span>
           Unfiled
         </button>
@@ -623,7 +639,7 @@
         {/if}
         {#each $sortedGroups as group (group.id)}
           {#each ($groupCollections[group.id] ?? []) as col (col.id)}
-            <button class="move-option" onclick={() => convertToTodoInCollection(col.id)} disabled={convertingTodo}>
+            <button type="button" class="move-option" onclick={() => convertToTodoInCollection(col.id)} disabled={convertingTodo}>
               <span class="move-dot" style="background: {col.color || '#6366f1'}"></span>
               <span class="move-group-prefix" style="color: {group.color || 'var(--accent)'}">{group.name}</span> : {col.name}
             </button>
@@ -642,7 +658,7 @@
       ></button>
       <div class="move-dropdown" style={dropdownStyle}>
         {#if item.collectionId}
-          <button class="move-option" onclick={() => { moveItemToCollection(item.id, undefined).catch(e => console.error('Move failed:', e)); closeMoveMenu(); onclose(); }}>
+          <button type="button" class="move-option" onclick={() => { moveItemToCollection(item.id, undefined).catch(e => console.error('Move failed:', e)); closeMoveMenu(); onclose(); }}>
             <span class="move-dot" style="background: #9ca3af"></span>
             {item.isTodo || item.type === 'todo' ? 'Unfile' : 'Inbox'}
           </button>
@@ -651,7 +667,7 @@
         {#each $sortedGroups as group (group.id)}
           {#each ($groupCollections[group.id] ?? []) as col (col.id)}
             {#if col.id !== item.collectionId}
-              <button class="move-option" onclick={() => { moveItemToCollection(item.id, col.id).catch(e => console.error('Move failed:', e)); closeMoveMenu(); onclose(); }}>
+              <button type="button" class="move-option" onclick={() => { moveItemToCollection(item.id, col.id).catch(e => console.error('Move failed:', e)); closeMoveMenu(); onclose(); }}>
                 <span class="move-dot" style="background: {col.color || '#6366f1'}"></span>
                 <span class="move-group-prefix" style="color: {group.color || 'var(--accent)'}">{group.name}</span> : {col.name}
               </button>

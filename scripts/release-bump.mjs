@@ -128,7 +128,7 @@ export function previousTag(gitCwd = rootDir) {
 function setVersionInFile(absPath, version) {
   const json = JSON.parse(readFileSync(absPath, 'utf8'));
   json.version = version;
-  writeFileSync(absPath, JSON.stringify(json, null, 2) + '\n');
+  writeFileSync(absPath, `${JSON.stringify(json, null, 2)}\n`);
 }
 
 /** CLI entrypoint. Logs every bump (and every skip) so release logs are readable. */

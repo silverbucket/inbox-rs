@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Component } from 'svelte';
   import { onDestroy } from 'svelte';
-  import type { InboxItemType, InboxItem } from '@inbox-rs/rs-module';
+  import type { BookmarkItem, InboxItem, InboxItemType } from '@inbox-rs/rs-module';
   import {
     storeItem, moveItemToCollection,
     sortedGroups, groupCollections,
@@ -11,6 +11,7 @@
   import {
     canCaptureTodo,
     loadMarkdownEditorComponent,
+    type MarkdownEditorProps,
     shouldLoadMarkdownEditor,
     shouldShowCollectionPicker,
     shouldSubmitAddEntryForm,
@@ -150,7 +151,7 @@
 
   // Markdown editor mode for notes
   let editorMode = $state<'visual' | 'write' | 'preview'>('visual');
-  let MarkdownEditorComponent = $state<Component<any> | null>(null);
+  let MarkdownEditorComponent = $state<Component<MarkdownEditorProps> | null>(null);
   let markdownEditorLoadError = $state('');
   let previewHtml = $state('');
 
@@ -271,46 +272,53 @@
   let error = $state('');
 
   // For edit mode, check if the item already has a file
-  const hasExistingFile = isEdit && 'filePath' in editItem! && !!editItem!.filePath;
+  const hasExistingFile = !!editItem && 'filePath' in editItem && !!editItem.filePath;
 
   async function handleSubmit() {
     saving = true;
     error = '';
     try {
-      const id = isEdit ? editItem!.id : crypto.randomUUID();
-      const createdAt = isEdit ? editItem!.createdAt : new Date().toISOString();
+      const id = isEdit ? editItem?.id : crypto.randomUUID();
+      const createdAt = isEdit ? editItem?.createdAt : new Date().toISOString();
       let item: InboxItem;
       let fileData: ArrayBuffer | undefined;
 
       if (type === 'bookmark') {
-        item = { id, type: 'bookmark', title: title || url, url, description: description || undefined, createdAt };
+        const bookmark: BookmarkItem = {
+          id,
+          type: 'bookmark',
+          title: title || url,
+          url,
+          description: description || undefined,
+          createdAt,
+        };
         // Preserve existing bookmark metadata when editing
-        if (isEdit && editItem!.type === 'bookmark') {
-          const e = editItem!;
-          if (e.favicon) (item as any).favicon = e.favicon;
-          if (e.ogImage) (item as any).ogImage = e.ogImage;
-          if (e.siteName) (item as any).siteName = e.siteName;
-          if (e.body) (item as any).body = e.body;
-          if (e.filePath) (item as any).filePath = e.filePath;
-          if (e.mimeType) (item as any).mimeType = e.mimeType;
+        if (editItem && editItem.type === 'bookmark') {
+          if (editItem.favicon) bookmark.favicon = editItem.favicon;
+          if (editItem.ogImage) bookmark.ogImage = editItem.ogImage;
+          if (editItem.siteName) bookmark.siteName = editItem.siteName;
+          if (editItem.body) bookmark.body = editItem.body;
+          if (editItem.filePath) bookmark.filePath = editItem.filePath;
+          if (editItem.mimeType) bookmark.mimeType = editItem.mimeType;
         }
+        item = bookmark;
       } else if (type === 'note') {
         item = { id, type: 'note', title: title || body.slice(0, 50), body, description: description || undefined, createdAt };
       } else if (type === 'image') {
         if (file) {
-          const existingPath = isEdit && editItem!.type === 'image' ? editItem!.filePath : undefined;
+          const existingPath = isEdit && editItem?.type === 'image' ? editItem?.filePath : undefined;
           const ext = getExtension(file.name);
           const filePath = existingPath || `files/${id}${ext}`;
           fileData = await file.arrayBuffer();
           item = { id, type: 'image', title: title || file.name, filePath, mimeType: file.type, description: description || undefined, createdAt };
-        } else if (isEdit && editItem!.type === 'image') {
-          item = { ...editItem!, title: title || editItem!.title, description: description || undefined };
+        } else if (editItem && editItem.type === 'image') {
+          item = { ...editItem, title: title || editItem.title, description: description || undefined };
         } else {
           return;
         }
       } else if (type === 'audio') {
         if (recordedBlob || file) {
-          const existingPath = isEdit && editItem!.type === 'audio' ? editItem!.filePath : undefined;
+          const existingPath = isEdit && editItem?.type === 'audio' ? editItem?.filePath : undefined;
           let filePath: string;
           let mimeType: string;
           let duration: number | undefined;
@@ -332,25 +340,25 @@
           const autoTitle = title || transcript || 'Audio';
           const transcribed = !!(recordedBlob || transcript || body) || undefined;
           item = { id, type: 'audio', title: autoTitle, filePath, mimeType, duration, body: memoBody, transcribed, description: description || undefined, createdAt };
-        } else if (isEdit && editItem!.type === 'audio') {
-          item = { ...editItem!, title: title || editItem!.title, body: body || undefined, description: description || undefined };
+        } else if (editItem && editItem.type === 'audio') {
+          item = { ...editItem, title: title || editItem.title, body: body || undefined, description: description || undefined };
         } else {
           return;
         }
       } else if (type === 'document') {
         if (file) {
-          const existingPath = isEdit && editItem!.type === 'document' ? editItem!.filePath : undefined;
+          const existingPath = isEdit && editItem?.type === 'document' ? editItem?.filePath : undefined;
           const ext = getExtension(file.name);
           const filePath = existingPath || `files/${id}${ext}`;
           fileData = await file.arrayBuffer();
           item = { id, type: 'document', title: title || file.name, filePath, mimeType: file.type, fileSize: file.size, fileName: file.name, description: description || undefined, createdAt };
-        } else if (isEdit && editItem!.type === 'document') {
-          item = { ...editItem!, title: title || editItem!.title, description: description || undefined };
+        } else if (editItem && editItem.type === 'document') {
+          item = { ...editItem, title: title || editItem.title, description: description || undefined };
         } else {
           return;
         }
       } else if (type === 'email') {
-        const emailMessageUrl = isEdit && editItem!.type === 'email' ? editItem!.messageUrl : undefined;
+        const emailMessageUrl = isEdit && editItem?.type === 'email' ? editItem?.messageUrl : undefined;
         item = { id, type: 'email', title: title || 'Untitled email', body, from: from || undefined, notes: notes || undefined, messageUrl: emailMessageUrl, createdAt };
       } else if (type === 'todo') {
         item = { id, type: 'todo', title, body: body || undefined, completed, completedAt: completed && !(editItem && 'completed' in editItem && editItem.completed) ? new Date().toISOString() : (editItem && 'completedAt' in editItem ? editItem.completedAt : undefined), description: description || undefined, createdAt, isTodo: true };
@@ -361,9 +369,9 @@
       // Preserve todo fields when editing non-todo types (converted items).
       // For actual todo types, the form's completed checkbox is the source of truth.
       if (isEdit && type !== 'todo') {
-        if (editItem!.isTodo) item.isTodo = true;
-        if (editItem!.completed) item.completed = editItem!.completed;
-        if (editItem!.completedAt) item.completedAt = editItem!.completedAt;
+        if (editItem?.isTodo) item.isTodo = true;
+        if (editItem?.completed) item.completed = editItem?.completed;
+        if (editItem?.completedAt) item.completedAt = editItem?.completedAt;
       }
 
       // Picker → storage shape:
@@ -371,9 +379,9 @@
       //   undefined + todo        → unfiled todo (no collectionId, no fake
       //                              collection/group written)
       //   real id                 → assign via moveItemToCollection after storage
-      await storeItem(item!, fileData);
+      await storeItem(item, fileData);
       if (selectedCollectionId && !isEdit) {
-        await moveItemToCollection(item!.id, selectedCollectionId);
+        await moveItemToCollection(item?.id, selectedCollectionId);
       }
       onclose();
     } catch (e) {
@@ -384,11 +392,12 @@
     }
   }
 
-  async function convertToTodo() {
+  async function _convertToTodo() {
     saving = true;
     error = '';
     try {
-      const { completedAt: _, ...rest } = editItem!;
+      if (!editItem) return;
+      const { completedAt: _, ...rest } = editItem;
       const updated = { ...rest, isTodo: true, completed: false };
       await storeItem(updated as InboxItem);
       onclose();
@@ -655,7 +664,10 @@
                 <span class="rec-timer">{formatTimer(recordingDuration)}</span>
                 <button type="button" class="rec-btn rec-stop" onclick={stopRecording}>Stop</button>
               {:else if recordedBlob}
-                <audio controls src={recordedUrl} preload="metadata"></audio>
+                <!-- See AudioCard.svelte for why an empty captions track is OK here. -->
+                <audio controls src={recordedUrl} preload="metadata">
+                  <track kind="captions" />
+                </audio>
                 <button type="button" class="rec-btn rec-discard" onclick={discardRecording}>Discard</button>
               {:else}
                 <button type="button" class="rec-btn rec-start" onclick={startRecording}>Start Recording</button>
@@ -749,7 +761,7 @@
               aria-expanded={collectionPickerOpen}
             >
               <span class="dest-label">{collectionLabel}</span>
-              <svg class="dest-chevron" class:open={collectionPickerOpen} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg aria-hidden="true" class="dest-chevron" class:open={collectionPickerOpen} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="6 9 12 15 18 9"></polyline>
               </svg>
             </button>
@@ -812,16 +824,16 @@
 
       <div class="actions">
         {#if isEdit && ondelete && editItem}
-          <button class="btn-delete-item" disabled={saving} onclick={() => ondelete(editItem!)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button type="button" class="btn-delete-item" disabled={saving} onclick={() => editItem && ondelete?.(editItem)}>
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="3 6 5 6 21 6"></polyline>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
             </svg>
             Delete
           </button>
         {/if}
-        <button class="btn-cancel" onclick={onclose}>Cancel</button>
-        <button class="btn-save" disabled={!canSubmit} onclick={handleSubmit}>
+        <button type="button" class="btn-cancel" onclick={onclose}>Cancel</button>
+        <button type="button" class="btn-save" disabled={!canSubmit} onclick={handleSubmit}>
           {saving ? 'Saving...' : 'Save'}
         </button>
       </div>
