@@ -27,10 +27,10 @@
  * worker user so we can assert on a known-empty starting state.
  */
 
+import type { InboxItem } from '@inbox-rs/rs-module';
 import { putInboxItem } from '../helpers/armadietto';
 import { expect, test } from '../helpers/fixtures';
 import { seedRsSession } from '../helpers/pwa';
-import type { InboxItem } from '@inbox-rs/rs-module';
 
 test('Migrate writes only docs whose content actually changes', async ({
   context,
