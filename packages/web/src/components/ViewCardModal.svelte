@@ -1,24 +1,37 @@
 <script lang="ts">
-  import { untrack, onDestroy } from 'svelte';
+  import { onDestroy } from 'svelte';
   import type { InboxItem } from '@inbox-rs/rs-module';
-  import { deleteItem, storeItem, blobUrls, connected, sortedGroups, groupCollections, moveItemToCollection, loadFileBlobUrl } from '../lib/stores';
-  import rs from '../lib/rs';
-  import { transcribeAudio } from '../lib/transcribe';
+  import {
+    deleteItem,
+    storeItem,
+    sortedGroups,
+    groupCollections,
+    moveItemToCollection,
+  } from '../lib/stores';
   import ShareButton from './ShareButton.svelte';
-  import Lightbox from './Lightbox.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
-  import 'highlight.js/styles/github-dark.min.css';
-  import { renderMarkdown } from '../lib/markdown';
+  import BookmarkView from './view-card/BookmarkView.svelte';
+  import NoteView from './view-card/NoteView.svelte';
+  import ImageView from './view-card/ImageView.svelte';
+  import AudioView from './view-card/AudioView.svelte';
+  import DocumentView from './view-card/DocumentView.svelte';
+  import EmailView from './view-card/EmailView.svelte';
+  import TodoView from './view-card/TodoView.svelte';
 
-  let { item, onclose, onedit }: {
+  let {
+    item,
+    onclose,
+    onedit,
+  }: {
     item: InboxItem;
     onclose: () => void;
     onedit: (item: InboxItem) => void;
   } = $props();
 
+  const TITLE_ID = 'view-modal-title';
+
   let showDelete = $state(false);
   let deleting = $state(false);
-  let showLightbox = $state(false);
   let showMoveMenu = $state(false);
   let moveButtonEl = $state<HTMLButtonElement | null>(null);
   let dropdownStyle = $state('');
@@ -30,99 +43,16 @@
   let makeTodoButtonEl = $state<HTMLButtonElement | null>(null);
   let makeTodoDropdownStyle = $state('');
 
-  // Audio playback
-  const audioSrc = $derived(
-    item.type === 'audio'
-      ? ($blobUrls[item.filePath] || null)
-      : null
-  );
-
-  // Audio state
-  let audioError = $state(false);
-  let transcribing = $state(false);
-  let transcriptionError = $state(false);
-
-  // Markdown rendering for notes
-  let renderedBody = $state('');
-
-  // Document download
-  let docBlobUrl = $state<string | null>(null);
-  let docLoading = $state(false);
-
-  $effect(() => {
-    // Track only item to trigger reloads when it changes
-    const currentItem = item;
-
-    // Reset per-item state
-    audioError = false;
-    transcribing = false;
-    transcriptionError = false;
-    renderedBody = '';
-    showLightbox = false;
-    untrack(() => { if (docBlobUrl) URL.revokeObjectURL(docBlobUrl); });
-    docBlobUrl = null;
-    docLoading = false;
-
-    if (currentItem.type === 'note' && currentItem.body) {
-      renderMarkdown(currentItem.body).then((html) => {
-        if (item.id === currentItem.id) renderedBody = html;
-      });
-    }
-  });
+  let convertingTodo = $state(false);
+  // Surface conversion failures inline. Both Make-Todo paths share this so
+  // either flow can announce its error in the same dropdown.
+  let convertError = $state('');
+  let convertingRef = $state(false);
 
   onDestroy(() => {
-    if (docBlobUrl) URL.revokeObjectURL(docBlobUrl);
     removeMoveMenuListeners();
     removeMakeTodoMenuListeners();
   });
-
-  async function handleTranscribe() {
-    if (item.type !== 'audio') return;
-    const target = item; // snapshot to guard against item changing mid-transcription
-    transcribing = true;
-    transcriptionError = false;
-    try {
-      const file = await rs.inbox.getFile(target.filePath);
-      if (!file?.data) throw new Error('Could not load audio file');
-      const blob = new Blob([file.data], { type: target.mimeType });
-      const text = await transcribeAudio(blob);
-      const updated = {
-        ...target,
-        body: text || undefined,
-        title: text && target.title === 'Audio' ? text.slice(0, 50) : target.title,
-        transcribed: true,
-      };
-      await storeItem(updated);
-    } catch (e) {
-      console.warn('Transcription failed:', e);
-      if (item.id === target.id) transcriptionError = true;
-    } finally {
-      if (item.id === target.id) transcribing = false;
-    }
-  }
-
-  async function downloadDoc() {
-    if (item.type !== 'document') return;
-    if (docBlobUrl) { openDownload(docBlobUrl); return; }
-    docLoading = true;
-    try {
-      const file = await rs.inbox.getFile(item.filePath);
-      if (file?.data) {
-        docBlobUrl = URL.createObjectURL(new Blob([file.data], { type: item.mimeType }));
-        openDownload(docBlobUrl);
-      }
-    } finally {
-      docLoading = false;
-    }
-  }
-
-  function openDownload(url: string) {
-    if (item.type !== 'document') return;
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = item.fileName || item.title;
-    a.click();
-  }
 
   async function handleDelete() {
     deleting = true;
@@ -131,11 +61,6 @@
     deleting = false;
     onclose();
   }
-
-  let convertingTodo = $state(false);
-  // Surface conversion failures inline. Both Make-Todo paths share this so
-  // either flow can announce its error in the same dropdown.
-  let convertError = $state('');
 
   /** Promote the current item to an unfiled todo. */
   async function convertToUnfiledTodo() {
@@ -158,7 +83,8 @@
       onclose();
     } catch (error) {
       console.error('Failed to convert to unfiled todo', error);
-      convertError = error instanceof Error ? error.message : 'Failed to convert to todo';
+      convertError =
+        error instanceof Error ? error.message : 'Failed to convert to todo';
     } finally {
       convertingTodo = false;
     }
@@ -184,15 +110,43 @@
       await moveItemToCollection(item.id, collectionId);
       // Now flip the todo flags. storeItem only touches the item doc — the
       // itemIds arrays are already reconciled by the move above.
-      const updated = { ...rest, isTodo: true, completed: false, collectionId };
+      const updated = {
+        ...rest,
+        isTodo: true,
+        completed: false,
+        collectionId,
+      };
       await storeItem(updated as InboxItem);
       closeMakeTodoMenu();
       onclose();
     } catch (error) {
       console.error('Failed to convert to todo', error);
-      convertError = error instanceof Error ? error.message : 'Failed to convert to todo';
+      convertError =
+        error instanceof Error ? error.message : 'Failed to convert to todo';
     } finally {
       convertingTodo = false;
+    }
+  }
+
+  async function convertToReference() {
+    convertingRef = true;
+    try {
+      // Cast to Record<string,unknown> for the structural rewrite below —
+      // we're deleting and re-typing fields, which the discriminated InboxItem
+      // union actively prevents at the type level.
+      const updated: Record<string, unknown> = { ...item };
+      delete updated.isTodo;
+      delete updated.completed;
+      delete updated.completedAt;
+      // type: 'todo' items require `completed` in the schema — convert to note
+      if (updated.type === 'todo') {
+        updated.type = 'note';
+        if (!updated.body) updated.body = '';
+      }
+      await storeItem(updated as unknown as InboxItem);
+      onclose();
+    } finally {
+      convertingRef = false;
     }
   }
 
@@ -255,7 +209,8 @@
 
   function handleMakeTodoMenuScroll(event: Event) {
     const target = event.target;
-    if (target instanceof Element && target.closest('.make-todo-dropdown')) return;
+    if (target instanceof Element && target.closest('.make-todo-dropdown'))
+      return;
     closeMakeTodoMenu();
   }
 
@@ -285,14 +240,20 @@
 
     const openUpward = spaceAbove > spaceBelow;
     const available = openUpward ? spaceAbove : spaceBelow;
-    const maxHeight = Math.max(0, Math.min(available - viewportPadding, dropdownMaxHeight));
+    const maxHeight = Math.max(
+      0,
+      Math.min(available - viewportPadding, dropdownMaxHeight),
+    );
 
     const dropdownWidth = Math.min(280, window.innerWidth - viewportPadding * 2);
     // Anchor to the right edge of the button so the picker doesn't drift off
     // the right side of the modal on tight layouts — Make Todo lives on the
     // right side of the header.
     const right = window.innerWidth - rect.right;
-    const clampedRight = Math.max(viewportPadding, Math.min(right, window.innerWidth - dropdownWidth - viewportPadding));
+    const clampedRight = Math.max(
+      viewportPadding,
+      Math.min(right, window.innerWidth - dropdownWidth - viewportPadding),
+    );
 
     if (openUpward) {
       makeTodoDropdownStyle = `bottom: ${window.innerHeight - rect.top + gap}px; right: ${clampedRight}px; max-height: ${maxHeight}px;`;
@@ -312,11 +273,17 @@
 
     const openUpward = spaceAbove > spaceBelow;
     const available = openUpward ? spaceAbove : spaceBelow;
-    const maxHeight = Math.max(0, Math.min(available - viewportPadding, dropdownMaxHeight));
+    const maxHeight = Math.max(
+      0,
+      Math.min(available - viewportPadding, dropdownMaxHeight),
+    );
 
     // Clamp horizontal position using max possible rendered width
     const dropdownWidth = Math.min(280, window.innerWidth - viewportPadding * 2);
-    const left = Math.max(viewportPadding, Math.min(rect.left, window.innerWidth - dropdownWidth - viewportPadding));
+    const left = Math.max(
+      viewportPadding,
+      Math.min(rect.left, window.innerWidth - dropdownWidth - viewportPadding),
+    );
 
     if (openUpward) {
       dropdownStyle = `bottom: ${window.innerHeight - rect.top + gap}px; left: ${left}px; max-height: ${maxHeight}px;`;
@@ -325,89 +292,25 @@
     }
   }
 
-  let convertingRef = $state(false);
-
-  async function convertToReference() {
-    convertingRef = true;
-    try {
-      // Cast to Record<string,unknown> for the structural rewrite below —
-      // we're deleting and re-typing fields, which the discriminated InboxItem
-      // union actively prevents at the type level.
-      const updated: Record<string, unknown> = { ...item };
-      delete updated.isTodo;
-      delete updated.completed;
-      delete updated.completedAt;
-      // type: 'todo' items require `completed` in the schema — convert to note
-      if (updated.type === 'todo') {
-        updated.type = 'note';
-        if (!updated.body) updated.body = '';
-      }
-      await storeItem(updated as unknown as InboxItem);
-      onclose();
-    } finally {
-      convertingRef = false;
-    }
-  }
-
   function formatDate(iso: string): string {
     const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+    return d.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
   }
 
-  function formatSize(bytes?: number): string {
-    if (!bytes) return '';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
-  function formatDuration(seconds?: number): string {
-    if (!seconds) return '';
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  }
-
-  function getDomain(url: string): string {
-    try { return new URL(url).hostname.replace(/^www\./, ''); }
-    catch { return url; }
-  }
-
-  // Notes and body helpers. We've already type-narrowed via `'notes' in item`
-  // / `'body' in item` / `'filePath' in item`, but biome's narrowing for
-  // discriminated unions doesn't always carry through across `in` checks —
-  // pull the field through a Record cast so callers stay strict.
-  const notes = $derived(
-    'notes' in item ? (item as Record<string, unknown>).notes : undefined,
-  );
-  const body = $derived(
-    'body' in item ? (item as Record<string, unknown>).body : undefined,
-  );
+  // The discriminated union narrows nicely on `item.type === 'X'`, but a few
+  // shared trailing sections (notes/description/share) want to peek at
+  // optional fields without forcing the per-type branches. Use a Record cast
+  // for those structural reads.
   const description = $derived(item.description);
-
   const hasFile = $derived(
     'filePath' in item && !!(item as Record<string, unknown>).filePath,
   );
-
-  const imageSrc = $derived(
-    item.type === 'bookmark'
-      ? ((item.filePath ? ($blobUrls[item.filePath] || null) : null) || item.ogImage || null)
-      : item.type === 'image'
-        ? ($blobUrls[item.filePath] || null)
-        : null
-  );
-
-  // Fetch file-backed items via Authorization header (works on all RS servers).
-  // Forward mimeType so the blob is tagged with the clean type from item
-  // metadata rather than the server's Content-Type (5apps preserves the
-  // `; charset=binary` suffix that wireclient adds on upload, and Chrome won't
-  // render an <img>/<audio> whose Blob type carries that suffix).
-  $effect(() => {
-    if (!$connected) return;
-    if (item.type === 'image' && item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
-    if (item.type === 'audio' && item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
-    if (item.type === 'bookmark' && 'filePath' in item && item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
-  });
 
   /**
    * Window-level Escape handler. Defers to nested overlays when any are open
@@ -427,7 +330,7 @@
    */
   function handleWindowEscape(e: KeyboardEvent) {
     if (e.key !== 'Escape') return;
-    if (showDelete || showLightbox || showMoveMenu || showMakeTodoMenu) return;
+    if (showDelete || showMoveMenu || showMakeTodoMenu) return;
     onclose();
   }
 </script>
@@ -437,12 +340,19 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="overlay" onclick={onclose}>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="view-modal-title" onclick={(e) => e.stopPropagation()}>
+  <div
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby={TITLE_ID}
+    onclick={(e) => e.stopPropagation()}
+  >
     <div class="modal-header">
       <span class="type-badge">{item.type}</span>
       <time class="date">{formatDate(item.createdAt)}</time>
       {#if canMakeTodo}
-        <button type="button"
+        <button
+          type="button"
           class="btn-todo btn-todo-top"
           class:open={showMakeTodoMenu}
           bind:this={makeTodoButtonEl}
@@ -451,127 +361,100 @@
           aria-haspopup="listbox"
           aria-expanded={showMakeTodoMenu}
         >
-          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg
+            aria-hidden="true"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <polyline points="9 11 12 14 22 4"></polyline>
-            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"
+            ></path>
           </svg>
           Make Todo
-          <svg aria-hidden="true" class="caret" class:open={showMakeTodoMenu} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg
+            aria-hidden="true"
+            class="caret"
+            class:open={showMakeTodoMenu}
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <polyline points="6 9 12 15 18 9"></polyline>
           </svg>
         </button>
       {/if}
       {#if canMakeRef}
-        <button type="button" class="btn-todo btn-todo-top" disabled={convertingRef} onclick={convertToReference}>
-          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button
+          type="button"
+          class="btn-todo btn-todo-top"
+          disabled={convertingRef}
+          onclick={convertToReference}
+        >
+          <svg
+            aria-hidden="true"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
+            ></path>
           </svg>
           Make Reference
         </button>
       {/if}
     </div>
 
-    <h2 class="title" id="view-modal-title">
+    <!--
+      Per-type body. Each child renders the title (with type-specific link
+      icon for bookmark/email) plus its own meta and main content. Wrapping
+      in `{#key item.id}` resets per-type local state (audio transcribe
+      flags, document blob URL caches, image lightbox state, etc.) when the
+      user navigates between cards without forcing every child to write its
+      own reset effect.
+    -->
+    {#key item.id}
       {#if item.type === 'bookmark'}
-        <a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}<svg aria-hidden="true" class="link-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>
-      {:else if item.type === 'email' && 'messageUrl' in item && item.messageUrl}
-        <a href={item.messageUrl}>{item.title}<svg aria-hidden="true" class="link-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>
+        <BookmarkView {item} titleId={TITLE_ID} />
+      {:else if item.type === 'note'}
+        <NoteView {item} titleId={TITLE_ID} />
+      {:else if item.type === 'image'}
+        <ImageView {item} titleId={TITLE_ID} />
+      {:else if item.type === 'audio'}
+        <AudioView {item} titleId={TITLE_ID} />
+      {:else if item.type === 'document'}
+        <DocumentView {item} titleId={TITLE_ID} />
+      {:else if item.type === 'email'}
+        <EmailView {item} titleId={TITLE_ID} />
+      {:else if item.type === 'todo'}
+        <TodoView {item} titleId={TITLE_ID} />
       {:else}
-        {item.title}
+        <!--
+          Generic fallback for item types without a dedicated view (e.g.
+          `video`, which the rs-module schema reserves but the web UI
+          doesn't yet render). Renders the title only so the modal still
+          presents something legible — and so `aria-labelledby` always
+          resolves to a real heading.
+        -->
+        <h2 class="title" id={TITLE_ID}>{item.title}</h2>
       {/if}
-    </h2>
-
-    {#if item.type === 'bookmark'}
-      <div class="meta-row">
-        {#if item.favicon}
-          <img class="favicon" src={item.favicon} alt="" width="16" height="16"
-            onerror={(e) => (e.currentTarget as HTMLImageElement).style.display = 'none'} />
-        {/if}
-        <span class="domain">{item.siteName || getDomain(item.url)}</span>
-      </div>
-    {/if}
-
-    {#if item.type === 'email' && 'from' in item && item.from}
-      <p class="meta-text">From: {item.from}</p>
-    {/if}
-
-    {#if imageSrc}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="view-image-link" onclick={() => showLightbox = true}>
-        <img class="view-image" src={imageSrc} alt=""
-          onerror={(e) => (e.currentTarget as HTMLImageElement).style.display = 'none'} />
-      </div>
-    {/if}
-    {#if showLightbox && imageSrc}
-      <Lightbox
-        src={imageSrc}
-        alt={item.title}
-        onclose={() => showLightbox = false}
-        filePath={'filePath' in item ? (item as Record<string, unknown>).filePath as string | undefined : undefined}
-        mimeType={'mimeType' in item ? (item as Record<string, unknown>).mimeType as string | undefined : undefined}
-        filename={item.title || undefined}
-      />
-    {/if}
-
-    {#if item.type === 'audio'}
-      <div class="player">
-        {#if audioError}
-          <p class="status-text">Failed to load audio</p>
-        {:else if audioSrc}
-          <audio controls src={audioSrc} preload="metadata"
-            onerror={() => audioError = true}>
-            <!-- See AudioCard.svelte for why an empty captions track is OK here. -->
-            <track kind="captions" />
-          </audio>
-        {:else}
-          <p class="status-text">Connect to load audio</p>
-        {/if}
-        {#if item.duration}
-          <span class="duration">{formatDuration(item.duration)}</span>
-        {/if}
-        {#if transcribing}
-          <p class="status-text">Transcribing...</p>
-        {:else if transcriptionError}
-          <p class="status-text">Transcription failed</p>
-          <button type="button" class="btn-action" onclick={handleTranscribe}>Retry</button>
-        {:else if audioSrc && !item.transcribed && !item.body}
-          <button type="button" class="btn-action" onclick={handleTranscribe}>Transcribe</button>
-        {/if}
-      </div>
-    {/if}
-
-    {#if item.type === 'document'}
-      {#if item.fileName}
-        <p class="meta-text">{item.fileName}</p>
-      {/if}
-      {#if item.fileSize}
-        <span class="meta-text">{formatSize(item.fileSize)}</span>
-      {/if}
-      <button type="button" class="btn-action" onclick={(e) => { e.stopPropagation(); downloadDoc(); }} disabled={docLoading}>
-        {docLoading ? 'Loading...' : 'Download'}
-      </button>
-    {/if}
-
-    <!-- Notes prioritized over body -->
-    {#if notes}
-      <div class="content-block notes-block">
-        <span class="content-label">Notes</span>
-        <p class="content-text">{notes}</p>
-      </div>
-    {/if}
-
-    {#if body}
-      <div class="content-block">
-        <span class="content-label">{item.type === 'audio' ? 'Transcription' : 'Body'}</span>
-        {#if item.type === 'note' && renderedBody}
-          <div class="markdown-body">{@html renderedBody}</div>
-        {:else}
-          <p class="content-text">{body}</p>
-        {/if}
-      </div>
-    {/if}
+    {/key}
 
     {#if description}
       <div class="content-block">
@@ -582,21 +465,54 @@
 
     {#if hasFile}
       <div class="share-row">
-        <ShareButton filePath={(item as Record<string, unknown>).filePath as string} mimeType={(item as Record<string, unknown>).mimeType as string | undefined} filename={item.title || undefined} />
+        <ShareButton
+          filePath={(item as Record<string, unknown>).filePath as string}
+          mimeType={(item as Record<string, unknown>).mimeType as
+            | string
+            | undefined}
+          filename={item.title || undefined}
+        />
       </div>
     {/if}
 
     <div class="actions">
-      <button type="button" class="btn-delete" onclick={() => showDelete = true}>
-        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <button type="button" class="btn-delete" onclick={() => (showDelete = true)}>
+        <svg
+          aria-hidden="true"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <polyline points="3 6 5 6 21 6"></polyline>
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          <path
+            d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+          ></path>
         </svg>
         Delete
       </button>
       <div class="move-container">
-        <button type="button" class="btn-move" bind:this={moveButtonEl} onclick={toggleMoveMenu}>
-          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button
+          type="button"
+          class="btn-move"
+          bind:this={moveButtonEl}
+          onclick={toggleMoveMenu}
+        >
+          <svg
+            aria-hidden="true"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <rect x="3" y="3" width="7" height="7"></rect>
             <rect x="14" y="3" width="7" height="7"></rect>
             <rect x="3" y="14" width="7" height="7"></rect>
@@ -612,7 +528,7 @@
     {#if showDelete}
       <DeleteConfirm
         onConfirm={handleDelete}
-        onCancel={() => showDelete = false}
+        onCancel={() => (showDelete = false)}
         {deleting}
       />
     {/if}
@@ -625,12 +541,24 @@
         aria-label="Close make todo menu"
         onclick={() => closeMakeTodoMenu()}
       ></button>
-      <div class="move-dropdown make-todo-dropdown" style={makeTodoDropdownStyle} role="listbox" aria-label="Choose a collection for this todo">
+      <div
+        class="move-dropdown make-todo-dropdown"
+        style={makeTodoDropdownStyle}
+        role="listbox"
+        aria-label="Choose a collection for this todo"
+      >
         <div class="picker-title">File todo</div>
         {#if convertError}
-          <p class="move-error" role="status" aria-live="polite">{convertError}</p>
+          <p class="move-error" role="status" aria-live="polite">
+            {convertError}
+          </p>
         {/if}
-        <button type="button" class="move-option" onclick={convertToUnfiledTodo} disabled={convertingTodo}>
+        <button
+          type="button"
+          class="move-option"
+          onclick={convertToUnfiledTodo}
+          disabled={convertingTodo}
+        >
           <span class="move-dot" style="background: #9ca3af"></span>
           Unfiled
         </button>
@@ -638,10 +566,21 @@
           <div class="move-divider"></div>
         {/if}
         {#each $sortedGroups as group (group.id)}
-          {#each ($groupCollections[group.id] ?? []) as col (col.id)}
-            <button type="button" class="move-option" onclick={() => convertToTodoInCollection(col.id)} disabled={convertingTodo}>
-              <span class="move-dot" style="background: {col.color || '#6366f1'}"></span>
-              <span class="move-group-prefix" style="color: {group.color || 'var(--accent)'}">{group.name}</span> : {col.name}
+          {#each $groupCollections[group.id] ?? [] as col (col.id)}
+            <button
+              type="button"
+              class="move-option"
+              onclick={() => convertToTodoInCollection(col.id)}
+              disabled={convertingTodo}
+            >
+              <span
+                class="move-dot"
+                style="background: {col.color || '#6366f1'}"
+              ></span>
+              <span
+                class="move-group-prefix"
+                style="color: {group.color || 'var(--accent)'}">{group.name}</span
+              > : {col.name}
             </button>
           {/each}
         {/each}
@@ -658,18 +597,45 @@
       ></button>
       <div class="move-dropdown" style={dropdownStyle}>
         {#if item.collectionId}
-          <button type="button" class="move-option" onclick={() => { moveItemToCollection(item.id, undefined).catch(e => console.error('Move failed:', e)); closeMoveMenu(); onclose(); }}>
+          <button
+            type="button"
+            class="move-option"
+            onclick={() => {
+              moveItemToCollection(item.id, undefined).catch((e) =>
+                console.error('Move failed:', e),
+              );
+              closeMoveMenu();
+              onclose();
+            }}
+          >
             <span class="move-dot" style="background: #9ca3af"></span>
             {item.isTodo || item.type === 'todo' ? 'Unfile' : 'Inbox'}
           </button>
           <div class="move-divider"></div>
         {/if}
         {#each $sortedGroups as group (group.id)}
-          {#each ($groupCollections[group.id] ?? []) as col (col.id)}
+          {#each $groupCollections[group.id] ?? [] as col (col.id)}
             {#if col.id !== item.collectionId}
-              <button type="button" class="move-option" onclick={() => { moveItemToCollection(item.id, col.id).catch(e => console.error('Move failed:', e)); closeMoveMenu(); onclose(); }}>
-                <span class="move-dot" style="background: {col.color || '#6366f1'}"></span>
-                <span class="move-group-prefix" style="color: {group.color || 'var(--accent)'}">{group.name}</span> : {col.name}
+              <button
+                type="button"
+                class="move-option"
+                onclick={() => {
+                  moveItemToCollection(item.id, col.id).catch((e) =>
+                    console.error('Move failed:', e),
+                  );
+                  closeMoveMenu();
+                  onclose();
+                }}
+              >
+                <span
+                  class="move-dot"
+                  style="background: {col.color || '#6366f1'}"
+                ></span>
+                <span
+                  class="move-group-prefix"
+                  style="color: {group.color || 'var(--accent)'}"
+                  >{group.name}</span
+                > : {col.name}
               </button>
             {/if}
           {/each}
@@ -706,7 +672,8 @@
 
   @media (max-width: 600px), (display-mode: standalone) {
     .overlay {
-      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      padding: env(safe-area-inset-top) env(safe-area-inset-right)
+        env(safe-area-inset-bottom) env(safe-area-inset-left);
       background: var(--bg);
     }
 
@@ -741,62 +708,68 @@
     color: var(--text-muted);
   }
 
-  .title {
+  /*
+   * Per-type view styles. Children render `.title` / `.meta-row` / etc. into
+   * the modal's DOM, but Svelte CSS scoping would otherwise prevent these
+   * rules from matching them. Scoping under `.modal` keeps the leak bounded
+   * to this modal's children.
+   */
+  .modal :global(.title) {
     font-size: 1.15rem;
     font-weight: 600;
     margin-bottom: 0.5rem;
     line-height: 1.3;
   }
 
-  .title a {
+  .modal :global(.title a) {
     color: var(--text);
     transition: color 0.15s;
   }
 
-  .title a:hover {
+  .modal :global(.title a:hover) {
     color: var(--accent);
   }
 
-  .title :global(.link-icon) {
+  .modal :global(.title .link-icon) {
     display: inline;
     vertical-align: middle;
     margin-left: 0.35rem;
     opacity: 0.5;
   }
 
-  .title a:hover :global(.link-icon) {
+  .modal :global(.title a:hover .link-icon) {
     opacity: 1;
   }
 
-  .meta-row {
+  .modal :global(.meta-row) {
     display: flex;
     align-items: center;
     gap: 0.4rem;
     margin-bottom: 0.5rem;
   }
 
-  .favicon {
+  .modal :global(.favicon) {
     border-radius: 2px;
     flex-shrink: 0;
   }
 
-  .domain {
+  .modal :global(.domain) {
     font-size: 0.8rem;
     color: var(--text-muted);
   }
 
-  .meta-text {
+  .modal :global(.meta-text) {
     font-size: 0.85rem;
     color: var(--text-muted);
     margin-bottom: 0.5rem;
   }
 
-  .view-image-link {
+  .modal :global(.view-image-link) {
     cursor: zoom-in;
     margin-bottom: 0.75rem;
   }
 
-  .view-image {
+  .modal :global(.view-image) {
     width: 100%;
     max-height: 300px;
     object-fit: cover;
@@ -804,157 +777,26 @@
     border: 1px solid var(--border);
   }
 
-  .player {
+  .modal :global(.player) {
     margin-bottom: 0.75rem;
   }
 
-  .player audio {
+  .modal :global(.player audio) {
     width: 100%;
     height: 36px;
   }
 
-  .duration {
+  .modal :global(.duration) {
     font-size: 0.8rem;
     color: var(--text-muted);
   }
 
-  .status-text {
+  .modal :global(.status-text) {
     font-size: 0.8rem;
     color: var(--text-muted);
   }
 
-  .content-block {
-    margin-bottom: 0.75rem;
-  }
-
-  .content-label {
-    display: block;
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    margin-bottom: 0.25rem;
-  }
-
-  .content-text {
-    font-size: 0.9rem;
-    color: var(--text);
-    line-height: 1.6;
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-
-  .markdown-body {
-    font-size: 0.9rem;
-    color: var(--text);
-    line-height: 1.6;
-    word-break: break-word;
-  }
-
-  .markdown-body :global(h1) { font-size: 1.1rem; font-weight: 600; margin: 0.75rem 0 0.4rem; }
-  .markdown-body :global(h2) { font-size: 1rem; font-weight: 600; margin: 0.6rem 0 0.35rem; }
-  .markdown-body :global(h3) { font-size: 0.95rem; font-weight: 600; margin: 0.5rem 0 0.3rem; }
-  .markdown-body :global(h4),
-  .markdown-body :global(h5),
-  .markdown-body :global(h6) { font-size: 0.9rem; font-weight: 600; margin: 0.4rem 0 0.25rem; }
-
-  .markdown-body :global(p) { margin: 0 0 0.5rem; }
-  .markdown-body :global(p:last-child) { margin-bottom: 0; }
-
-  .markdown-body :global(ul),
-  .markdown-body :global(ol) {
-    padding-left: 1.5rem;
-    margin: 0 0 0.5rem;
-  }
-  .markdown-body :global(ul) { list-style: disc; }
-  .markdown-body :global(ol) { list-style: decimal; }
-  .markdown-body :global(li) { margin-bottom: 0.15rem; }
-  .markdown-body :global(li > ul),
-  .markdown-body :global(li > ol) { margin-top: 0.15rem; margin-bottom: 0; }
-
-  .markdown-body :global(blockquote) {
-    border-left: 3px solid var(--accent);
-    padding-left: 0.75rem;
-    margin: 0 0 0.5rem;
-    color: var(--text-muted);
-  }
-
-  .markdown-body :global(a) {
-    color: var(--accent);
-    text-decoration: none;
-  }
-  .markdown-body :global(a:hover) { text-decoration: underline; }
-
-  .markdown-body :global(code) {
-    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
-    background: rgba(255, 255, 255, 0.06);
-    padding: 0.1rem 0.3rem;
-    border-radius: 3px;
-    font-size: 0.82rem;
-  }
-
-  .markdown-body :global(pre) {
-    background: #0d1117;
-    border-radius: var(--radius-sm);
-    padding: 0.75rem;
-    margin: 0 0 0.5rem;
-    overflow-x: auto;
-    max-height: 400px;
-    overflow-y: auto;
-  }
-
-  .markdown-body :global(pre code) {
-    background: none;
-    padding: 0;
-    font-size: 0.8rem;
-    line-height: 1.5;
-    color: #e6edf3;
-  }
-
-  .markdown-body :global(pre .hljs) {
-    background: transparent;
-    padding: 0;
-  }
-
-  .markdown-body :global(hr) {
-    border: none;
-    border-top: 1px solid var(--border);
-    margin: 0.75rem 0;
-  }
-
-  .markdown-body :global(strong) { font-weight: 600; }
-  .markdown-body :global(em) { font-style: italic; }
-
-  .markdown-body :global(table) {
-    border-collapse: collapse;
-    width: 100%;
-    margin: 0 0 0.5rem;
-    font-size: 0.85rem;
-  }
-  .markdown-body :global(th),
-  .markdown-body :global(td) {
-    border: 1px solid var(--border);
-    padding: 0.35rem 0.6rem;
-    text-align: left;
-  }
-  .markdown-body :global(th) {
-    font-weight: 600;
-    background: rgba(255, 255, 255, 0.03);
-  }
-
-  .notes-block .content-text {
-    color: var(--accent);
-    font-style: italic;
-  }
-
-  .share-row {
-    margin-bottom: 0.75rem;
-    padding-top: 0.5rem;
-    border-top: 1px solid var(--border);
-  }
-
-  .btn-action {
+  .modal :global(.btn-action) {
     background: var(--accent-subtle);
     color: var(--accent);
     border: none;
@@ -966,13 +808,180 @@
     margin-bottom: 0.75rem;
   }
 
-  .btn-action:hover {
+  .modal :global(.btn-action:hover) {
     background: var(--accent-subtle-strong);
   }
 
-  .btn-action:disabled {
+  .modal :global(.btn-action:disabled) {
     opacity: 0.5;
     cursor: default;
+  }
+
+  .modal :global(.content-block) {
+    margin-bottom: 0.75rem;
+  }
+
+  .modal :global(.content-label) {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.25rem;
+  }
+
+  .modal :global(.content-text) {
+    font-size: 0.9rem;
+    color: var(--text);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .modal :global(.notes-block .content-text) {
+    color: var(--accent);
+    font-style: italic;
+  }
+
+  /* Markdown rendering inside note view. */
+  .modal :global(.markdown-body) {
+    font-size: 0.9rem;
+    color: var(--text);
+    line-height: 1.6;
+    word-break: break-word;
+  }
+
+  .modal :global(.markdown-body h1) {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0.75rem 0 0.4rem;
+  }
+  .modal :global(.markdown-body h2) {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0.6rem 0 0.35rem;
+  }
+  .modal :global(.markdown-body h3) {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0.5rem 0 0.3rem;
+  }
+  .modal :global(.markdown-body h4),
+  .modal :global(.markdown-body h5),
+  .modal :global(.markdown-body h6) {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin: 0.4rem 0 0.25rem;
+  }
+
+  .modal :global(.markdown-body p) {
+    margin: 0 0 0.5rem;
+  }
+  .modal :global(.markdown-body p:last-child) {
+    margin-bottom: 0;
+  }
+
+  .modal :global(.markdown-body ul),
+  .modal :global(.markdown-body ol) {
+    padding-left: 1.5rem;
+    margin: 0 0 0.5rem;
+  }
+  .modal :global(.markdown-body ul) {
+    list-style: disc;
+  }
+  .modal :global(.markdown-body ol) {
+    list-style: decimal;
+  }
+  .modal :global(.markdown-body li) {
+    margin-bottom: 0.15rem;
+  }
+  .modal :global(.markdown-body li > ul),
+  .modal :global(.markdown-body li > ol) {
+    margin-top: 0.15rem;
+    margin-bottom: 0;
+  }
+
+  .modal :global(.markdown-body blockquote) {
+    border-left: 3px solid var(--accent);
+    padding-left: 0.75rem;
+    margin: 0 0 0.5rem;
+    color: var(--text-muted);
+  }
+
+  .modal :global(.markdown-body a) {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .modal :global(.markdown-body a:hover) {
+    text-decoration: underline;
+  }
+
+  .modal :global(.markdown-body code) {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.82rem;
+  }
+
+  .modal :global(.markdown-body pre) {
+    background: #0d1117;
+    border-radius: var(--radius-sm);
+    padding: 0.75rem;
+    margin: 0 0 0.5rem;
+    overflow-x: auto;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .modal :global(.markdown-body pre code) {
+    background: none;
+    padding: 0;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: #e6edf3;
+  }
+
+  .modal :global(.markdown-body pre .hljs) {
+    background: transparent;
+    padding: 0;
+  }
+
+  .modal :global(.markdown-body hr) {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 0.75rem 0;
+  }
+
+  .modal :global(.markdown-body strong) {
+    font-weight: 600;
+  }
+  .modal :global(.markdown-body em) {
+    font-style: italic;
+  }
+
+  .modal :global(.markdown-body table) {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+  }
+  .modal :global(.markdown-body th),
+  .modal :global(.markdown-body td) {
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+  }
+  .modal :global(.markdown-body th) {
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .share-row {
+    margin-bottom: 0.75rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
   }
 
   .actions {
