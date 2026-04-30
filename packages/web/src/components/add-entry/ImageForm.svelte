@@ -1,12 +1,8 @@
 <script lang="ts">
-  import type { ImageItem, InboxItem } from '@inbox-rs/rs-module';
+  import type { InboxItem } from '@inbox-rs/rs-module';
   import { autofocus } from '../../lib/actions';
-  import {
-    type BuildItemContext,
-    type BuildItemFn,
-    type BuildItemResult,
-    getFileExtension,
-  } from '../../lib/add-entry-modal';
+  import type { BuildItemFn } from '../../lib/add-entry-modal';
+  import { buildImageItem } from '../../lib/build-item';
 
   let {
     editItem,
@@ -18,7 +14,6 @@
     buildItem?: BuildItemFn;
   } = $props();
 
-  const isEdit = !!editItem;
   const hasExistingFile = !!(
     editItem &&
     'filePath' in editItem &&
@@ -40,39 +35,11 @@
     file = input.files?.[0] ?? null;
   }
 
-  buildItem = async ({
-    id,
-    createdAt,
-  }: BuildItemContext): Promise<BuildItemResult | null> => {
-    if (file) {
-      // On edit, reuse the original file path so the new bytes overwrite
-      // the existing storage location instead of leaving the old blob behind.
-      const existingPath =
-        isEdit && editItem?.type === 'image' ? editItem?.filePath : undefined;
-      const ext = getFileExtension(file.name);
-      const filePath = existingPath || `files/${id}${ext}`;
-      const fileData = await file.arrayBuffer();
-      const item: ImageItem = {
-        id,
-        type: 'image',
-        title: title || file.name,
-        filePath,
-        mimeType: file.type,
-        description: description || undefined,
-        createdAt,
-      };
-      return { item, fileData };
-    }
-    if (editItem && editItem.type === 'image') {
-      const item: ImageItem = {
-        ...editItem,
-        title: title || editItem.title,
-        description: description || undefined,
-      };
-      return { item };
-    }
-    return null;
-  };
+  buildItem = ({ id, createdAt, editItem: ctxEditItem }) =>
+    buildImageItem(
+      { id, createdAt, editItem: ctxEditItem },
+      { title, description, file },
+    );
 </script>
 
 <label class="field">

@@ -1,14 +1,12 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import type { AudioItem, InboxItem } from '@inbox-rs/rs-module';
+  import type { InboxItem } from '@inbox-rs/rs-module';
   import { autofocus } from '../../lib/actions';
   import {
-    type BuildItemContext,
     type BuildItemFn,
-    type BuildItemResult,
     formatRecordingTimer,
-    getFileExtension,
   } from '../../lib/add-entry-modal';
+  import { buildAudioItem } from '../../lib/build-item';
   import { transcribeAudio } from '../../lib/transcribe';
 
   let {
@@ -130,64 +128,19 @@
     transcribing = false;
   }
 
-  buildItem = async ({
-    id,
-    createdAt,
-  }: BuildItemContext): Promise<BuildItemResult | null> => {
-    if (recordedBlob || file) {
-      const existingPath =
-        isEdit && editItem?.type === 'audio' ? editItem?.filePath : undefined;
-      let filePath: string;
-      let mimeType: string;
-      let duration: number | undefined;
-      let fileData: ArrayBuffer;
-      if (recordedBlob) {
-        const ext = recordedBlob.type.includes('webm')
-          ? '.webm'
-          : recordedBlob.type.includes('mp4')
-            ? '.mp4'
-            : '.ogg';
-        filePath = existingPath || `files/${id}${ext}`;
-        mimeType = recordedBlob.type || 'audio/webm';
-        fileData = await recordedBlob.arrayBuffer();
-        duration = recordingDuration || undefined;
-      } else if (file) {
-        const ext = getFileExtension(file.name);
-        filePath = existingPath || `files/${id}${ext}`;
-        mimeType = file.type;
-        fileData = await file.arrayBuffer();
-      } else {
-        return null;
-      }
-      const memoBody = body || transcript || undefined;
-      const autoTitle = title || transcript || 'Audio';
-      const transcribed =
-        !!(recordedBlob || transcript || body) || undefined;
-      const item: AudioItem = {
-        id,
-        type: 'audio',
-        title: autoTitle,
-        filePath,
-        mimeType,
-        duration,
-        body: memoBody,
-        transcribed,
-        description: description || undefined,
-        createdAt,
-      };
-      return { item, fileData };
-    }
-    if (editItem && editItem.type === 'audio') {
-      const item: AudioItem = {
-        ...editItem,
-        title: title || editItem.title,
-        body: body || undefined,
-        description: description || undefined,
-      };
-      return { item };
-    }
-    return null;
-  };
+  buildItem = ({ id, createdAt, editItem: ctxEditItem }) =>
+    buildAudioItem(
+      { id, createdAt, editItem: ctxEditItem },
+      {
+        title,
+        body,
+        description,
+        file,
+        recordedBlob,
+        recordingDuration,
+        transcript,
+      },
+    );
 
   onDestroy(() => {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {

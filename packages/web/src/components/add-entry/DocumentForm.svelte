@@ -1,12 +1,8 @@
 <script lang="ts">
-  import type { DocumentItem, InboxItem } from '@inbox-rs/rs-module';
+  import type { InboxItem } from '@inbox-rs/rs-module';
   import { autofocus } from '../../lib/actions';
-  import {
-    type BuildItemContext,
-    type BuildItemFn,
-    type BuildItemResult,
-    getFileExtension,
-  } from '../../lib/add-entry-modal';
+  import type { BuildItemFn } from '../../lib/add-entry-modal';
+  import { buildDocumentItem } from '../../lib/build-item';
 
   let {
     editItem,
@@ -18,7 +14,6 @@
     buildItem?: BuildItemFn;
   } = $props();
 
-  const isEdit = !!editItem;
   const hasExistingFile = !!(
     editItem &&
     'filePath' in editItem &&
@@ -38,39 +33,11 @@
     file = input.files?.[0] ?? null;
   }
 
-  buildItem = async ({
-    id,
-    createdAt,
-  }: BuildItemContext): Promise<BuildItemResult | null> => {
-    if (file) {
-      const existingPath =
-        isEdit && editItem?.type === 'document' ? editItem?.filePath : undefined;
-      const ext = getFileExtension(file.name);
-      const filePath = existingPath || `files/${id}${ext}`;
-      const fileData = await file.arrayBuffer();
-      const item: DocumentItem = {
-        id,
-        type: 'document',
-        title: title || file.name,
-        filePath,
-        mimeType: file.type,
-        fileSize: file.size,
-        fileName: file.name,
-        description: description || undefined,
-        createdAt,
-      };
-      return { item, fileData };
-    }
-    if (editItem && editItem.type === 'document') {
-      const item: DocumentItem = {
-        ...editItem,
-        title: title || editItem.title,
-        description: description || undefined,
-      };
-      return { item };
-    }
-    return null;
-  };
+  buildItem = ({ id, createdAt, editItem: ctxEditItem }) =>
+    buildDocumentItem(
+      { id, createdAt, editItem: ctxEditItem },
+      { title, description, file },
+    );
 </script>
 
 <label class="field">

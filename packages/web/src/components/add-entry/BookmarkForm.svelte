@@ -1,11 +1,8 @@
 <script lang="ts">
-  import type { BookmarkItem, InboxItem } from '@inbox-rs/rs-module';
+  import type { InboxItem } from '@inbox-rs/rs-module';
   import { autofocus } from '../../lib/actions';
-  import type {
-    BuildItemContext,
-    BuildItemFn,
-    BuildItemResult,
-  } from '../../lib/add-entry-modal';
+  import type { BuildItemFn } from '../../lib/add-entry-modal';
+  import { buildBookmarkItem } from '../../lib/build-item';
 
   let {
     editItem,
@@ -30,30 +27,13 @@
 
   // Set the build function once. The closure reads the latest reactive
   // state on every call, so the shell can invoke this whenever the user
-  // clicks Save.
-  buildItem = ({ id, createdAt }: BuildItemContext): BuildItemResult => {
-    const bookmark: BookmarkItem = {
-      id,
-      type: 'bookmark',
-      title: title || url,
-      url,
-      description: description || undefined,
-      createdAt,
-    };
-    // Preserve enrichment metadata fetched by the extension (favicon,
-    // ogImage, siteName, embedded body, downloaded image) — the web form
-    // doesn't surface these fields, so we'd lose them if we didn't copy
-    // them through on edit.
-    if (editItem && editItem.type === 'bookmark') {
-      if (editItem.favicon) bookmark.favicon = editItem.favicon;
-      if (editItem.ogImage) bookmark.ogImage = editItem.ogImage;
-      if (editItem.siteName) bookmark.siteName = editItem.siteName;
-      if (editItem.body) bookmark.body = editItem.body;
-      if (editItem.filePath) bookmark.filePath = editItem.filePath;
-      if (editItem.mimeType) bookmark.mimeType = editItem.mimeType;
-    }
-    return { item: bookmark };
-  };
+  // clicks Save. Item-shaping rules live in the pure builder so they can
+  // be unit-tested without mounting this component.
+  buildItem = ({ id, createdAt, editItem: ctxEditItem }) =>
+    buildBookmarkItem(
+      { id, createdAt, editItem: ctxEditItem },
+      { url, title, description },
+    );
 </script>
 
 <p class="info-note">

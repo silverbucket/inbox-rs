@@ -1,15 +1,14 @@
 <script lang="ts">
   import type { Component } from 'svelte';
-  import type { InboxItem, NoteItem } from '@inbox-rs/rs-module';
+  import type { InboxItem } from '@inbox-rs/rs-module';
   import { autofocus } from '../../lib/actions';
   import {
-    type BuildItemContext,
     type BuildItemFn,
-    type BuildItemResult,
     loadMarkdownEditorComponent,
     type MarkdownEditorProps,
     shouldLoadMarkdownEditor,
   } from '../../lib/add-entry-modal';
+  import { buildNoteItem } from '../../lib/build-item';
   import { createCodeKeydownHandler } from '../../lib/code-indent';
   import { renderMarkdown } from '../../lib/markdown';
 
@@ -41,17 +40,11 @@
     canSubmit = !!(title || body);
   });
 
-  buildItem = ({ id, createdAt }: BuildItemContext): BuildItemResult => {
-    const item: NoteItem = {
-      id,
-      type: 'note',
-      title: title || body.slice(0, 50),
-      body,
-      description: description || undefined,
-      createdAt,
-    };
-    return { item };
-  };
+  buildItem = ({ id, createdAt, editItem: ctxEditItem }) =>
+    buildNoteItem(
+      { id, createdAt, editItem: ctxEditItem },
+      { title, body, description },
+    );
 
   // Lazy-load the visual editor on demand: it pulls in TipTap and friends
   // (~hundreds of KB) and only ~60% of users open the note modal in any

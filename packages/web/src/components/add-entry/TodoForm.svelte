@@ -1,12 +1,11 @@
 <script lang="ts">
-  import type { InboxItem, TodoItem } from '@inbox-rs/rs-module';
+  import type { InboxItem } from '@inbox-rs/rs-module';
   import { autofocus } from '../../lib/actions';
   import {
-    type BuildItemContext,
     type BuildItemFn,
-    type BuildItemResult,
     canCaptureTodo,
   } from '../../lib/add-entry-modal';
+  import { buildTodoItem } from '../../lib/build-item';
   import { createCodeKeydownHandler } from '../../lib/code-indent';
 
   let {
@@ -34,34 +33,11 @@
     canSubmit = canCaptureTodo(title);
   });
 
-  buildItem = ({ id, createdAt }: BuildItemContext): BuildItemResult => {
-    // Stamp `completedAt` only on the false→true transition. Otherwise we
-    // pass the editItem's existing value through untouched — including the
-    // case where the user *unchecks* a previously-completed todo, where we
-    // intentionally retain the historical timestamp instead of clearing it.
-    // This matches the pre-refactor behaviour and means the schema can
-    // surface "last completed at <time>" hints even on re-opened todos.
-    const wasCompleted =
-      editItem && 'completed' in editItem && !!editItem.completed;
-    const previousCompletedAt =
-      editItem && 'completedAt' in editItem ? editItem.completedAt : undefined;
-    const completedAt =
-      completed && !wasCompleted
-        ? new Date().toISOString()
-        : previousCompletedAt;
-    const item: TodoItem = {
-      id,
-      type: 'todo',
-      title,
-      body: body || undefined,
-      completed,
-      completedAt,
-      description: description || undefined,
-      createdAt,
-      isTodo: true,
-    };
-    return { item };
-  };
+  buildItem = ({ id, createdAt, editItem: ctxEditItem }) =>
+    buildTodoItem(
+      { id, createdAt, editItem: ctxEditItem },
+      { title, body, description, completed },
+    );
 </script>
 
 <label class="field">

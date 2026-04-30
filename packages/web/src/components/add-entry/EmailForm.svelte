@@ -1,11 +1,8 @@
 <script lang="ts">
-  import type { EmailItem, InboxItem } from '@inbox-rs/rs-module';
+  import type { InboxItem } from '@inbox-rs/rs-module';
   import { autofocus } from '../../lib/actions';
-  import type {
-    BuildItemContext,
-    BuildItemFn,
-    BuildItemResult,
-  } from '../../lib/add-entry-modal';
+  import type { BuildItemFn } from '../../lib/add-entry-modal';
+  import { buildEmailItem } from '../../lib/build-item';
 
   let {
     editItem,
@@ -17,8 +14,6 @@
     buildItem?: BuildItemFn;
   } = $props();
 
-  const isEdit = !!editItem;
-
   let title = $state(editItem?.title ?? '');
   let body = $state(editItem && 'body' in editItem ? (editItem.body ?? '') : '');
   let from = $state(editItem && 'from' in editItem ? (editItem.from ?? '') : '');
@@ -28,23 +23,11 @@
     canSubmit = !!body;
   });
 
-  buildItem = ({ id, createdAt }: BuildItemContext): BuildItemResult => {
-    // Preserve the mid: URI when editing — this links the captured email
-    // back to the user's mail client and isn't surfaced in the form.
-    const emailMessageUrl =
-      isEdit && editItem?.type === 'email' ? editItem?.messageUrl : undefined;
-    const item: EmailItem = {
-      id,
-      type: 'email',
-      title: title || 'Untitled email',
-      body,
-      from: from || undefined,
-      notes: notes || undefined,
-      messageUrl: emailMessageUrl,
-      createdAt,
-    };
-    return { item };
-  };
+  buildItem = ({ id, createdAt, editItem: ctxEditItem }) =>
+    buildEmailItem(
+      { id, createdAt, editItem: ctxEditItem },
+      { title, body, from, notes },
+    );
 </script>
 
 <label class="field">
