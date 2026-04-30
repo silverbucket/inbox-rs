@@ -1,5 +1,5 @@
 <script lang="ts">
-  import rs from '../lib/rs';
+  import rs, { type RSWithModules } from '../lib/rs';
   import { getSharedUrl, saveSharedUrl, verifySharedUrl } from '../lib/shared-state';
 
   let { src, alt = '', onclose, filePath, mimeType, filename }: {
@@ -14,7 +14,7 @@
   /** Build a safe share filename from a short random id, preserving extension. */
   function safeShareName(ext: string): string {
     const uid = Math.random().toString(36).slice(2, 8);
-    return uid + (ext.startsWith('.') ? ext : '.' + ext);
+    return uid + (ext.startsWith('.') ? ext : `.${ext}`);
   }
 
   function mimeToExt(mime: string): string {
@@ -81,12 +81,9 @@
 
     // Fallback: RS module direct file access
     if (filePath) {
-      const inbox = (rs as any).inbox;
-      if (inbox) {
-        const file = await inbox.getFile(filePath);
-        if (file?.data) {
-          return { data: file.data, mime: mimeType || file.mimeType || mime };
-        }
+      const file = await rs.inbox.getFile(filePath);
+      if (file?.data) {
+        return { data: file.data, mime: mimeType || file.mimeType || mime };
       }
     }
 
@@ -102,7 +99,8 @@
           const canvas = document.createElement('canvas');
           canvas.width = img.naturalWidth;
           canvas.height = img.naturalHeight;
-          const ctx = canvas.getContext('2d')!;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { resolve(null); return; }
           ctx.drawImage(img, 0, 0);
           const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
           if (blob) {
@@ -142,14 +140,13 @@
     shareState = 'sharing';
 
     try {
-      const shares = (rs as any).shares;
-      if (!shares) throw new Error('Shares module not available');
+      const shares = rs.shares;
 
       // PUT directly to remote, bypassing the sync layer entirely.
       // Two reasons: (1) shares module has a sync thumbnail bug that throws
       // because it reads Image dimensions before onload, and (2) the sync
       // layer silently fails to push binary file data (same RS bug as inbox files).
-      const remote = (rs as any).remote;
+      const remote = rs.remote;
       if (!remote?.connected) throw new Error('Not connected to remote storage');
 
       let data: ArrayBuffer;
@@ -164,18 +161,18 @@
         data = result.data;
         mime = result.mime;
         const ext = (filePath?.split('/').pop()?.match(/\.[^.]+$/)?.[0]) || mimeToExt(mime);
-        shareName = datePrefix + '-' + safeShareName(ext);
+        shareName = `${datePrefix}-${safeShareName(ext)}`;
       } catch {
         // Image data couldn't be fetched (likely CORS-blocked external URL).
         // Save an HTML redirect page instead so the user still gets a shareable link.
         if (!isExternalUrl(src)) throw new Error('Could not load file data');
         data = buildRedirectPage(src);
         mime = 'text/html';
-        shareName = datePrefix + '-' + safeShareName('.html');
+        shareName = `${datePrefix}-${safeShareName('.html')}`;
         isRedirect = true;
       }
 
-      const filePutPath = '/public/shares/' + shareName;
+      const filePutPath = `/public/shares/${shareName}`;
       await remote.put(filePutPath, data, mime);
 
       // Generate and upload thumbnail directly if it's an image
@@ -199,7 +196,7 @@
   }
 
   async function generateThumbnail(
-    data: ArrayBuffer, mime: string, name: string, remote: any
+    data: ArrayBuffer, mime: string, name: string, remote: RSWithModules['remote']
   ) {
     const blob = new Blob([data], { type: mime });
     const url = URL.createObjectURL(blob);
@@ -220,14 +217,15 @@
       const canvas = document.createElement('canvas');
       canvas.width = size;
       canvas.height = size;
-      const ctx = canvas.getContext('2d')!;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas 2d context unavailable');
       ctx.drawImage(img, sx, sy, cropW, cropH, 0, 0, size, size);
 
       const thumbBlob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(b => b ? resolve(b) : reject(), 'image/png');
       });
       const thumbData = await thumbBlob.arrayBuffer();
-      await remote.put('/public/shares/thumbnails/' + name + '.png', thumbData, 'image/png');
+      await remote.put(`/public/shares/thumbnails/${name}.png`, thumbData, 'image/png');
     } finally {
       URL.revokeObjectURL(url);
     }
@@ -250,7 +248,7 @@
   <img
     class="lightbox-img"
     {src}
-    {alt}
+    alt={alt}
     onclick={(e) => e.stopPropagation()}
   />
   <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -258,18 +256,18 @@
   <div class="lightbox-toolbar" onclick={(e) => e.stopPropagation()}>
     {#if shareState === 'done'}
       <span class="saved-indicator">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         Sharesome
       </span>
-      <button class="toolbar-btn" onclick={copyUrl}>
+      <button type="button" class="toolbar-btn" onclick={copyUrl}>
         {copied ? 'Copied!' : 'Copy link'}
       </button>
     {:else}
       <span class="save-label">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
         Save to
       </span>
-      <button class="toolbar-btn" onclick={share} disabled={shareState === 'sharing'}>
+      <button type="button" class="toolbar-btn" onclick={share} disabled={shareState === 'sharing'}>
         {#if shareState === 'sharing'}
           Saving...
         {:else if shareState === 'error'}
@@ -280,7 +278,7 @@
       </button>
     {/if}
   </div>
-  <button class="lightbox-close" onclick={(e) => { e.stopPropagation(); onclose(); }} aria-label="Close">&times;</button>
+  <button type="button" class="lightbox-close" onclick={(e) => { e.stopPropagation(); onclose(); }} aria-label="Close">&times;</button>
 </div>
 
 <style>

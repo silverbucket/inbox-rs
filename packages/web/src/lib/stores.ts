@@ -12,7 +12,7 @@ import { cleanForStorage } from './clean-for-storage';
 import rs, { fetchFileBlobUrl } from './rs';
 
 function getInbox() {
-  return (rs as any).inbox;
+  return rs.inbox;
 }
 
 /** Blob URLs for files that were just uploaded (available before remote sync completes) */
@@ -357,14 +357,15 @@ rs.on('sync-done', () => {
   markMigrationAlertReady();
 });
 
-rs.on('error', (e: any) => console.warn('[inbox] rs:error', e));
+rs.on('error', (e: unknown) => console.warn('[inbox] rs:error', e));
 
 rs.on('connected', async () => {
   connected.set(true);
+  // The connected user's address lives on `rs.remote` once auth completes;
+  // fall back to localStorage so we have something to display before sync.
+  const remote = rs.remote as { userAddress?: string } | undefined;
   const addr =
-    (rs as any).remote?.userAddress ||
-    localStorage.getItem('inbox-rs:userAddress') ||
-    '';
+    remote?.userAddress || localStorage.getItem('inbox-rs:userAddress') || '';
   userAddress.set(addr);
   await loadConnectedData();
 });
@@ -446,7 +447,15 @@ export async function updateUserSettings(patch: Partial<UserSettings>) {
 // See: https://remotestorage.io/rs.js/docs/api/baseclient/classes/BaseClient.html#change-events
 const inboxRef = getInbox();
 if (inboxRef) {
-  inboxRef.onChange((event: any) => {
+  // The change event payload is documented in remotestoragejs but typed as
+  // `unknown` on the public API. Narrow to the fields we actually read.
+  type ChangeEvent = {
+    origin?: string;
+    relativePath?: string;
+    newValue?: unknown;
+  };
+  inboxRef.onChange((rawEvent: unknown) => {
+    const event = rawEvent as ChangeEvent;
     if (!event || event.origin === 'window') return;
     const path: string = event.relativePath || '';
     const value = event.newValue;
@@ -530,7 +539,7 @@ if (inboxRef) {
 // This is the correct use of startSync() — local writes push automatically,
 // but we need to explicitly ask for remote changes after being backgrounded.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && (rs as any).remote?.connected) {
+  if (document.visibilityState === 'visible' && rs.remote?.connected) {
     rs.startSync();
   }
 });
@@ -666,7 +675,9 @@ export async function storeItem(item: InboxItem, fileData?: ArrayBuffer) {
   const cleanItem = cleanForStorage(item);
   await inbox.store(cleanItem, fileData);
   if (fileData && 'filePath' in item && item.filePath && 'mimeType' in item) {
-    const blob = new Blob([fileData], { type: (item as any).mimeType });
+    const blob = new Blob([fileData], {
+      type: (item as { mimeType?: string }).mimeType,
+    });
     const url = URL.createObjectURL(blob);
     blobUrls.update((current) => ({
       ...current,
@@ -784,14 +795,18 @@ export async function moveItemToCollection(
     for (const key of Object.keys(next)) {
       if (next[key].id === itemId) {
         oldCollectionId = next[key].collectionId;
-        const updated = { ...next[key] };
+        // Cast to a record so we can drop `collectionId` when the caller
+        // moves the item back to Inbox/unfiled — the InboxItem union types
+        // collectionId as required-but-optional and rejects structural
+        // delete.
+        const updated: Record<string, unknown> = { ...next[key] };
         if (collectionId) {
           updated.collectionId = collectionId;
         } else {
-          delete (updated as any).collectionId;
+          delete updated.collectionId;
         }
-        next[key] = updated as InboxItem;
-        item = updated as InboxItem;
+        next[key] = updated as unknown as InboxItem;
+        item = updated as unknown as InboxItem;
         break;
       }
     }
@@ -807,12 +822,15 @@ export async function moveItemToCollection(
 
     // Update source collection's itemIds
     if (oldCollectionId && !isSameCollection) {
+      // Capture narrowed value so the closure below doesn't lose the type
+      // narrowing (TS doesn't propagate narrowed values through closures).
+      const colId = oldCollectionId;
       collections.update((current) => {
-        const col = current[oldCollectionId!];
+        const col = current[colId];
         if (col) {
           return {
             ...current,
-            [oldCollectionId!]: {
+            [colId]: {
               ...col,
               itemIds: col.itemIds.filter((id) => id !== itemId),
             },
@@ -1009,12 +1027,14 @@ export async function moveCollectionToGroup(
 
     // Remove from old group
     if (oldGroupId) {
+      // Capture narrowed value so the closure below keeps it non-undefined.
+      const grpId = oldGroupId;
       groups.update((current) => {
-        const grp = current[oldGroupId!];
+        const grp = current[grpId];
         if (grp) {
           return {
             ...current,
-            [oldGroupId!]: {
+            [grpId]: {
               ...grp,
               collectionIds: grp.collectionIds.filter(
                 (id) => id !== collectionId,
@@ -1129,7 +1149,8 @@ export async function reorderUnfiledTodos(newUnfiledOrder: string[]) {
       // queue entries that dropped out (shouldn't happen in practice, but
       // keeps the splice resilient to stale callers).
       while (queue.length && !newSet.has(queue[0])) queue.shift();
-      if (queue.length) result.push(queue.shift()!);
+      const next = queue.shift();
+      if (next !== undefined) result.push(next);
     } else {
       result.push(id);
     }
@@ -1137,7 +1158,8 @@ export async function reorderUnfiledTodos(newUnfiledOrder: string[]) {
   // Append any ids the caller included that weren't already in the global
   // order (e.g. freshly-created todos whose id hasn't been persisted yet).
   while (queue.length) {
-    const id = queue.shift()!;
+    const id = queue.shift();
+    if (id === undefined) break;
     if (newSet.has(id) && !result.includes(id)) result.push(id);
   }
   await updateConfig({ todosGlobalOrder: result });

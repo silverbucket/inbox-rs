@@ -25,8 +25,8 @@
   <div class="dialog" onclick={(e) => e.stopPropagation()}>
     <p>{message}</p>
     <div class="actions">
-      <button class="btn-cancel" onclick={onCancel} disabled={deleting}>Cancel</button>
-      <button class="btn-confirm" onclick={onConfirm} disabled={deleting}>
+      <button type="button" class="btn-cancel" onclick={onCancel} disabled={deleting}>Cancel</button>
+      <button type="button" class="btn-confirm" onclick={onConfirm} disabled={deleting}>
         {deleting ? 'Deleting...' : 'Delete'}
       </button>
     </div>

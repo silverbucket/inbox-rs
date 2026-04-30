@@ -88,6 +88,7 @@
 </script>
 
 <button
+  type="button"
   class="fab"
   onclick={onclick}
   aria-label={label}

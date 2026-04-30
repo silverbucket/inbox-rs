@@ -183,7 +183,7 @@ describe('connectViaOAuth (chrome/firefox)', () => {
     it('derives client_id from the redirect_uri origin', async () => {
       await connectViaOAuth('alice@example.com');
 
-      const launchedUrl = mockChromeLaunchWebAuthFlow.mock.calls[0]![0].url;
+      const launchedUrl = mockChromeLaunchWebAuthFlow.mock.calls[0]?.[0].url;
       const params = new URL(launchedUrl).searchParams;
       const clientId = params.get('client_id');
       const redirectUri = params.get('redirect_uri');
@@ -203,7 +203,7 @@ describe('connectViaOAuth (chrome/firefox)', () => {
 
       await connectViaOAuth('alice@example.com');
 
-      const launchedUrl = mockChromeLaunchWebAuthFlow.mock.calls[0]![0].url;
+      const launchedUrl = mockChromeLaunchWebAuthFlow.mock.calls[0]?.[0].url;
       const params = new URL(launchedUrl).searchParams;
       expect(params.get('client_id')).toBe('https://other.chromiumapp.org');
       expect(params.get('redirect_uri')).toBe(
@@ -214,14 +214,14 @@ describe('connectViaOAuth (chrome/firefox)', () => {
     it('uses inbox:rw as the OAuth scope', async () => {
       await connectViaOAuth('alice@example.com');
 
-      const launchedUrl = mockChromeLaunchWebAuthFlow.mock.calls[0]![0].url;
+      const launchedUrl = mockChromeLaunchWebAuthFlow.mock.calls[0]?.[0].url;
       expect(new URL(launchedUrl).searchParams.get('scope')).toBe('inbox:rw');
     });
 
     it('uses implicit-grant response_type', async () => {
       await connectViaOAuth('alice@example.com');
 
-      const launchedUrl = mockChromeLaunchWebAuthFlow.mock.calls[0]![0].url;
+      const launchedUrl = mockChromeLaunchWebAuthFlow.mock.calls[0]?.[0].url;
       expect(new URL(launchedUrl).searchParams.get('response_type')).toBe(
         'token',
       );
@@ -267,7 +267,7 @@ describe('connectViaOAuth (chrome/firefox)', () => {
 
       await connectViaOAuth('alice@localhost:8000');
 
-      const url = mockFetch.mock.calls[0]![0] as string;
+      const url = mockFetch.mock.calls[0]?.[0] as string;
       expect(url.startsWith('http://localhost:8000/')).toBe(true);
     });
 

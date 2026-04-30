@@ -34,7 +34,7 @@ export interface ImportProgress {
 }
 
 function getInbox() {
-  return (rs as any).inbox;
+  return rs.inbox;
 }
 
 export async function exportToZipBytes(
@@ -85,7 +85,7 @@ export async function exportToZipBytes(
       } else {
         failedFiles.push(filePath);
       }
-    } catch (e) {
+    } catch (_e) {
       failedFiles.push(filePath);
     }
   }

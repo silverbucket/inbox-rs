@@ -123,7 +123,7 @@
     aria-label="{expanded ? 'Collapse' : 'Expand'} {collection.name}"
   >
     <span class="color-indicator"></span>
-    <svg class="chevron" class:open={expanded} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <svg aria-hidden="true" class="chevron" class:open={expanded} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="6 9 12 15 18 9"></polyline>
     </svg>
     <div class="header-info">
@@ -147,16 +147,16 @@
       {/if}
     </div>
     <div class="header-actions">
-      <button class="btn-header" onclick={(e) => { e.stopPropagation(); onedit(); }} aria-label="Edit collection" title="Edit">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <button type="button" class="btn-header" onclick={(e) => { e.stopPropagation(); onedit(); }} aria-label="Edit collection" title="Edit">
+        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
         </svg>
       </button>
       {#if availableGroups.length > 0}
         <div class="move-menu-wrapper">
-          <button class="btn-header" bind:this={moveButtonEl} aria-label="Move to group" aria-haspopup="menu" aria-expanded={showMoveMenu} title="Move to group" onclick={toggleMoveMenu}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button type="button" class="btn-header" bind:this={moveButtonEl} aria-label="Move to group" aria-haspopup="menu" aria-expanded={showMoveMenu} title="Move to group" onclick={toggleMoveMenu}>
+            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
               <line x1="12" y1="11" x2="12" y2="17"></line>
               <polyline points="9 14 12 11 15 14"></polyline>
@@ -169,7 +169,7 @@
             <div class="move-menu" style="top: {menuPos.top}px; right: {menuPos.right}px;" onclick={(e) => e.stopPropagation()}>
               <div class="move-menu-label">Move to group</div>
               {#each availableGroups as g (g.id)}
-                <button
+                <button type="button"
                   class="move-menu-item"
                   class:current={collection.groupId === g.id}
                   onclick={() => handleMoveToGroup(g.id)}
@@ -178,7 +178,7 @@
                   <span class="move-dot" style="background: {g.color || 'var(--accent)'}"></span>
                   {g.name}
                   {#if collection.groupId === g.id}
-                    <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <svg aria-hidden="true" class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                       <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
                   {/if}
@@ -201,8 +201,8 @@
       <section class="todos-section" aria-label="Todos in {collection.name}">
         <div class="section-header">
           <h4>Todos</h4>
-          <button class="btn-inline" onclick={() => addingType = 'todo'} title="Add todo" aria-label="Add todo to {collection.name}">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <button type="button" class="btn-inline" onclick={() => addingType = 'todo'} title="Add todo" aria-label="Add todo to {collection.name}">
+            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
@@ -234,12 +234,12 @@
         {/if}
 
         {#if completedTodos.length > 0}
-          <button
+          <button type="button"
             class="btn-completed-toggle"
             onclick={toggleCompletedSection}
             aria-expanded={completedExpanded}
           >
-            <svg class="chevron-sm" class:open={completedExpanded} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <svg aria-hidden="true" class="chevron-sm" class:open={completedExpanded} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="6 9 12 15 18 9"></polyline>
             </svg>
             {completedTodos.length} completed
@@ -271,8 +271,8 @@
               <div class="grid-card-wrapper">
                 <InboxCard {item} {onselect} />
                 <div class="card-actions">
-                  <button class="btn-card-action" onclick={() => makeTodo(item)} title="Move to todos" aria-label="Make todo">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <button type="button" class="btn-card-action" onclick={() => makeTodo(item)} title="Move to todos" aria-label="Make todo">
+                    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                       <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
                   </button>

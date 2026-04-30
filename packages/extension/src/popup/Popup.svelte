@@ -120,8 +120,8 @@
   <header>
     <h1>Inbox <span class="accent">RS</span></h1>
     {#if connected}
-      <button class="btn-text" onclick={openSetup} title="Settings">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <button type="button" class="btn-text" onclick={openSetup} title="Settings">
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
     {/if}
   </header>
@@ -129,7 +129,7 @@
   {#if !connected}
     <div class="not-connected">
       <p>Connect your remoteStorage to get started.</p>
-      <button class="btn-primary" onclick={openSetup}>Set Up</button>
+      <button type="button" class="btn-primary" onclick={openSetup}>Set Up</button>
     </div>
   {:else if saved}
     <div class="saved">
@@ -137,10 +137,10 @@
     </div>
   {:else}
     <div class="tabs">
-      <button class="tab" class:active={mode === 'page'} onclick={() => mode = 'page'}>
+      <button type="button" class="tab" class:active={mode === 'page'} onclick={() => mode = 'page'}>
         Save Page
       </button>
-      <button class="tab" class:active={mode === 'note'} onclick={() => mode = 'note'}>
+      <button type="button" class="tab" class:active={mode === 'note'} onclick={() => mode = 'note'}>
         Quick Note
       </button>
     </div>
@@ -157,7 +157,7 @@
         <input type="text" bind:value={pageTitle} placeholder="Title" />
         <input type="url" bind:value={pageUrl} placeholder="URL" />
         {#if embeddedContent}
-          <div class="embedded-preview">{embeddedContent.length > 200 ? embeddedContent.slice(0, 200) + '...' : embeddedContent}</div>
+          <div class="embedded-preview">{embeddedContent.length > 200 ? `${embeddedContent.slice(0, 200)}...` : embeddedContent}</div>
         {/if}
         {#if tweetImages.length > 0}
           <div class="tweet-images-note">{tweetImages.length} image{tweetImages.length > 1 ? 's' : ''} will be saved</div>

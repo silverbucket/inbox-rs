@@ -19,15 +19,14 @@
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
-  async function download() {
+  async function _download() {
     if (blobUrl) {
       open(blobUrl);
       return;
     }
     loading = true;
     try {
-      const inbox = (rs as any).inbox;
-      const file = await inbox.getFile(item.filePath);
+      const file = await rs.inbox.getFile(item.filePath);
       if (file?.data) {
         blobUrl = URL.createObjectURL(new Blob([file.data], { type: item.mimeType }));
         open(blobUrl);

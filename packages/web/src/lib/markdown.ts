@@ -31,7 +31,7 @@ const MARKDOWN_SANITIZE_OPTIONS = {
   FORBID_ATTR: ['style'],
 } as const;
 
-export const langModules: Record<string, () => Promise<any>> = {
+export const langModules: Record<string, () => Promise<unknown>> = {
   javascript: () => import('highlight.js/lib/languages/javascript'),
   typescript: () => import('highlight.js/lib/languages/typescript'),
   python: () => import('highlight.js/lib/languages/python'),
@@ -87,8 +87,7 @@ export async function renderMarkdown(source: string): Promise<string> {
   // Collect code block languages so we can load them before rendering
   const langsToLoad = new Set<string>();
   const langPattern = /^```([\w+#.-]+)/gm;
-  let match: RegExpExecArray | null = null;
-  while ((match = langPattern.exec(source)) !== null) {
+  for (const match of source.matchAll(langPattern)) {
     langsToLoad.add(match[1].toLowerCase());
   }
 

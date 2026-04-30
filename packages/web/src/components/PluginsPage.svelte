@@ -343,10 +343,6 @@
     max-width: calc(50% - 0.5rem);
   }
 
-  .extension-section.compact .feature-list {
-    grid-template-columns: 1fr;
-  }
-
   .section-header {
     display: grid;
     gap: 0.65rem;
@@ -375,6 +371,10 @@
     list-style: none;
     font-size: 0.88rem;
     color: color-mix(in srgb, var(--text) 88%, var(--text-muted) 12%);
+  }
+
+  .extension-section.compact .feature-list {
+    grid-template-columns: 1fr;
   }
 
   .feature-list li {

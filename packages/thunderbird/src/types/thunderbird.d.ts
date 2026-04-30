@@ -38,8 +38,8 @@ declare namespace messenger {
 declare namespace browser {
   namespace storage {
     namespace local {
-      function get(key: string): Promise<Record<string, any>>;
-      function set(items: Record<string, any>): Promise<void>;
+      function get(key: string): Promise<Record<string, unknown>>;
+      function set(items: Record<string, unknown>): Promise<void>;
       function remove(key: string): Promise<void>;
     }
   }

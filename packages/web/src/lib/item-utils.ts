@@ -28,21 +28,29 @@ export function typeIconPath(type: InboxItemType): string {
 }
 
 export async function makeTodo(item: InboxItem): Promise<void> {
-  const updated = { ...item, isTodo: true, completed: false };
-  delete (updated as any).completedAt;
-  await storeItem(updated as InboxItem);
+  // Cast to a record so we can drop the now-stale `completedAt` field —
+  // the discriminated InboxItem union doesn't allow structural deletes.
+  const updated: Record<string, unknown> = {
+    ...item,
+    isTodo: true,
+    completed: false,
+  };
+  delete updated.completedAt;
+  await storeItem(updated as unknown as InboxItem);
 }
 
 export async function makeReference(item: InboxItem): Promise<void> {
-  const updated = { ...item };
-  delete (updated as any).isTodo;
-  delete (updated as any).completed;
-  delete (updated as any).completedAt;
+  // Cast to a record for structural rewrites: dropping todo flags and
+  // (when the source was a `todo` item) changing the `type` field.
+  const updated: Record<string, unknown> = { ...item };
+  delete updated.isTodo;
+  delete updated.completed;
+  delete updated.completedAt;
   if (updated.type === 'todo') {
-    (updated as any).type = 'note';
-    if (!(updated as any).body) (updated as any).body = '';
+    updated.type = 'note';
+    if (!updated.body) updated.body = '';
   }
-  await storeItem(updated as InboxItem);
+  await storeItem(updated as unknown as InboxItem);
 }
 
 export function typeBadge(item: InboxItem): string | null {
@@ -50,11 +58,15 @@ export function typeBadge(item: InboxItem): string | null {
 }
 
 export function todoNote(item: InboxItem): string | null {
+  // Reach into optional fields that don't exist on every variant of
+  // InboxItem. A Record cast keeps the expression readable without
+  // sprinkling `any` through the lookups.
+  const r = item as Record<string, unknown>;
   const notes =
-    ('notes' in item ? (item as any).notes : null) ||
+    ('notes' in item ? (r.notes as string | undefined) : null) ||
     item.description ||
-    ('body' in item ? (item as any).body : null);
+    ('body' in item ? (r.body as string | undefined) : null);
   if (!notes) return null;
   const firstLine = notes.split('\n')[0].trim();
-  return firstLine.length > 80 ? firstLine.slice(0, 80) + '...' : firstLine;
+  return firstLine.length > 80 ? `${firstLine.slice(0, 80)}...` : firstLine;
 }

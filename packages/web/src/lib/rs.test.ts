@@ -222,7 +222,7 @@ describe('fetchFileWithAuth', () => {
 
     // The Blob should contain the recovered original bytes, not the corrupted ones.
     expect(lastCreatedBlob).toBeTruthy();
-    const recoveredBuf = await lastCreatedBlob!.arrayBuffer();
+    const recoveredBuf = await lastCreatedBlob?.arrayBuffer();
     expect(new Uint8Array(recoveredBuf)).toEqual(original);
   });
 
@@ -244,7 +244,7 @@ describe('fetchFileWithAuth', () => {
     );
 
     expect(lastCreatedBlob).toBeTruthy();
-    const result = new Uint8Array(await lastCreatedBlob!.arrayBuffer());
+    const result = new Uint8Array(await lastCreatedBlob?.arrayBuffer());
     expect(result).toEqual(raw);
   });
 });

@@ -9,7 +9,11 @@
   let { item, onselect }: { item: InboxItem; onselect: (item: InboxItem) => void } = $props();
 
   const cardNotes = $derived(
-    ('notes' in item ? (item as any).notes : null) || item.description || null
+    ('notes' in item
+      ? ((item as { notes?: string | null }).notes ?? null)
+      : null) ||
+      item.description ||
+      null,
   );
 
   function formatDate(iso: string): string {

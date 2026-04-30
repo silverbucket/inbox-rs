@@ -55,11 +55,11 @@ test('nav buttons remain visible at touch-target size', async ({
     const box = await btn.boundingBox();
     expect(box, `${label} bounding box missing`).not.toBeNull();
     expect(
-      box!.width,
+      box?.width,
       `${label} too narrow for a touch target: ${JSON.stringify(box)}`,
     ).toBeGreaterThan(40);
     expect(
-      box!.height,
+      box?.height,
       `${label} too short for a touch target: ${JSON.stringify(box)}`,
     ).toBeGreaterThan(24);
   }

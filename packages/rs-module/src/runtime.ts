@@ -97,7 +97,14 @@ export async function discoverStorage(
   const data = await response.json();
 
   const rsLink = Array.isArray(data?.links)
-    ? data.links.find((link: any) => RS_LINK_RELS.has(link?.rel))
+    ? (
+        data.links as Array<{
+          rel?: string;
+          href?: string;
+          type?: string;
+          properties?: Record<string, string>;
+        }>
+      ).find((link) => RS_LINK_RELS.has(link?.rel ?? ''))
     : undefined;
   if (!rsLink) throw new Error('No remoteStorage link found in WebFinger');
 
@@ -204,13 +211,16 @@ export async function connectViaOAuth(
  */
 export class DirectRS {
   private readonly fetchImpl: FetchLike;
+  // Captured at construction once the optional fields on RSConfig have been
+  // validated, so the type system reflects what the runtime guarantees.
+  private readonly href: string;
+  private readonly token: string;
 
-  constructor(
-    private readonly config: RSConfig,
-    fetchImpl: FetchLike = fetch,
-  ) {
+  constructor(config: RSConfig, fetchImpl: FetchLike = fetch) {
     if (!config.href) throw new Error('DirectRS requires config.href');
     if (!config.token) throw new Error('DirectRS requires config.token');
+    this.href = config.href;
+    this.token = config.token;
     // Bind to globalThis so member-access calls (`this.fetchImpl(...)`) don't
     // trip the browser's "Illegal invocation" check, which requires `this`
     // on the global `fetch` to be the Window. Without this, calling
@@ -223,11 +233,11 @@ export class DirectRS {
   }
 
   private get headers(): Record<string, string> {
-    return { Authorization: `Bearer ${this.config.token!}` };
+    return { Authorization: `Bearer ${this.token}` };
   }
 
   private url(path: string): string {
-    return `${this.config.href}/inbox/${path}`;
+    return `${this.href}/inbox/${path}`;
   }
 
   /** PUT a JSON object to `inbox/<path>`. Throws on non-2xx. */

@@ -1,5 +1,13 @@
-let transcriber: any = null;
-let loadPromise: Promise<any> | null = null;
+// The pipeline returned by @xenova/transformers is a callable instance whose
+// own published types are too involved to be useful here — it's effectively a
+// `(input, opts) => Promise<{ text: string }>` for whisper. Treat it as such.
+type Transcriber = (
+  input: Float32Array,
+  options: { language: string; task: string },
+) => Promise<{ text?: string }>;
+
+let transcriber: Transcriber | null = null;
+let loadPromise: Promise<Transcriber> | null = null;
 
 async function getTranscriber() {
   if (transcriber) return transcriber;
@@ -8,13 +16,13 @@ async function getTranscriber() {
     try {
       const { pipeline, env } = await import('@xenova/transformers');
       env.allowLocalModels = false;
-      transcriber = await pipeline(
+      transcriber = (await pipeline(
         'automatic-speech-recognition',
         'Xenova/whisper-tiny',
         {
           quantized: true,
         },
-      );
+      )) as unknown as Transcriber;
       return transcriber;
     } catch (e) {
       console.error('[transcribe] Failed to load pipeline:', e);

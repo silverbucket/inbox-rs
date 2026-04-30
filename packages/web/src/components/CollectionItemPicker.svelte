@@ -17,7 +17,7 @@
     return all.filter(i =>
       i.title.toLowerCase().includes(q) ||
       i.description?.toLowerCase().includes(q) ||
-      ('body' in i && typeof (i as any).body === 'string' && (i as any).body.toLowerCase().includes(q))
+      ('body' in i && typeof (i as { body?: unknown }).body === 'string' && ((i as { body: string }).body).toLowerCase().includes(q))
     );
   });
 </script>
@@ -45,10 +45,10 @@
         </div>
       {:else}
         {#each availableItems as item (item.id)}
-          <button class="item-row" onclick={() => onpick(item)}>
+          <button type="button" class="item-row" onclick={() => onpick(item)}>
             <span class="type-badge">{item.type}</span>
             <span class="item-title">{item.title}</span>
-            <svg class="add-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg aria-hidden="true" class="add-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
@@ -58,7 +58,7 @@
     </div>
 
     <div class="actions">
-      <button class="btn-cancel" onclick={onclose}>Done</button>
+      <button type="button" class="btn-cancel" onclick={onclose}>Done</button>
     </div>
   </div>
 </div>

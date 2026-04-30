@@ -41,7 +41,7 @@
   function formatRelative(iso: string | undefined): string {
     if (!iso) return '';
     const then = new Date(iso);
-    if (isNaN(then.getTime())) return '';
+    if (Number.isNaN(then.getTime())) return '';
     const diffMs = Date.now() - then.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     if (diffDays <= 0) return 'today';
@@ -134,7 +134,7 @@
     </span>
     {#if showTypeIcon}
       <span class="type-pill" title={typeLabel} aria-label={typeLabel}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           {@html typeIconSvg}
         </svg>
       </span>
@@ -148,7 +148,7 @@
     <!-- Hover/focus-reveal quick-add: creates a new todo in this row's
          collection. Also triggerable via "+" keyboard shortcut when the row
          has focus, so keyboard users don't need to tab to the button. -->
-    <button
+    <button type="button"
       class="btn-quick-add"
       onclick={handleQuickAdd}
       aria-label="Add todo to {collectionName}"
@@ -189,11 +189,6 @@
     outline-offset: 2px;
   }
 
-  .todo-row.completed .title {
-    text-decoration: line-through;
-    opacity: 0.5;
-  }
-
   .checkbox {
     width: 18px;
     height: 18px;
@@ -212,6 +207,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .todo-row.completed .title {
+    text-decoration: line-through;
+    opacity: 0.5;
   }
 
   /* On desktop the meta row is inline — title takes the free horizontal space,

@@ -1,4 +1,6 @@
 import { mount } from 'svelte';
 import Popup from './Popup.svelte';
 
-mount(Popup, { target: document.getElementById('app')! });
+const target = document.getElementById('app');
+if (!target) throw new Error('Mount target #app not found');
+mount(Popup, { target });

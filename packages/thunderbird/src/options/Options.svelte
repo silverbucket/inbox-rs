@@ -30,8 +30,8 @@
       await saveConfig(config);
       connected = true;
       savedAddress = config.userAddress;
-    } catch (e: any) {
-      error = e.message || 'Connection failed';
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Connection failed';
     } finally {
       connecting = false;
     }
@@ -62,7 +62,7 @@
       <p class="help-text">
         You're all set. Click the Inbox RS button in the message toolbar to save emails to your inbox.
       </p>
-      <button class="btn-disconnect" onclick={disconnect}>Disconnect</button>
+      <button type="button" class="btn-disconnect" onclick={disconnect}>Disconnect</button>
     {:else}
       <div class="steps">
         <div class="step">
@@ -92,7 +92,6 @@
           bind:value={userAddress}
           placeholder="user@provider.example"
           disabled={connecting}
-          autofocus
         />
         <button type="submit" class="btn-primary" disabled={connecting || !userAddress.trim()}>
           {connecting ? 'Connecting...' : 'Connect & Authorize'}

@@ -1,6 +1,6 @@
+import { copyFileSync, mkdirSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
-import { copyFileSync, mkdirSync } from 'fs';
-import { resolve } from 'path';
 import { defineConfig } from 'vite';
 
 function copyManifestAndIcons() {

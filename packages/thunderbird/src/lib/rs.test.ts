@@ -89,7 +89,7 @@ describe('connectViaOAuth (thunderbird)', () => {
   it('derives client_id from the redirect_uri origin (not a static identifier)', async () => {
     await connectViaOAuth('alice@example.com');
 
-    const launchedUrl = mockLaunchWebAuthFlow.mock.calls[0]![0].url;
+    const launchedUrl = mockLaunchWebAuthFlow.mock.calls[0]?.[0].url;
     const params = new URL(launchedUrl).searchParams;
     const clientId = params.get('client_id');
     const redirectUri = params.get('redirect_uri');
@@ -113,7 +113,7 @@ describe('connectViaOAuth (thunderbird)', () => {
 
     await connectViaOAuth('alice@example.com');
 
-    const launchedUrl = mockLaunchWebAuthFlow.mock.calls[0]![0].url;
+    const launchedUrl = mockLaunchWebAuthFlow.mock.calls[0]?.[0].url;
     const params = new URL(launchedUrl).searchParams;
     expect(params.get('client_id')).toBe('https://other-host.allizom.org');
     expect(params.get('redirect_uri')).toBe(

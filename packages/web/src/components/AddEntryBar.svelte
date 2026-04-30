@@ -29,8 +29,8 @@
 -->
 <div class="add-strip">
   {#each buttons as btn}
-    <button class="add-btn" onclick={() => onadd(btn.type)} title={`Add ${btn.label}`}>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <button type="button" class="add-btn" onclick={() => onadd(btn.type)} title={`Add ${btn.label}`}>
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         {@html typeIconPath(btn.type)}
       </svg>
       <span>{btn.label}</span>

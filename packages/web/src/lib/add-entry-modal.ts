@@ -31,7 +31,12 @@ export function shouldSubmitAddEntryForm(
   );
 }
 
-export async function loadMarkdownEditorComponent(): Promise<Component<any>> {
+/** Props the MarkdownEditor lazy-loaded component expects. */
+export type MarkdownEditorProps = { value: string; placeholder?: string };
+
+export async function loadMarkdownEditorComponent(): Promise<
+  Component<MarkdownEditorProps>
+> {
   const module = await import('../components/MarkdownEditor.svelte');
   return module.default;
 }

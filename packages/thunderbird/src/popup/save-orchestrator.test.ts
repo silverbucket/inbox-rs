@@ -61,7 +61,7 @@ describe('runSaveEmail', () => {
 
     await runSaveEmail({ rs, ...baseParams, subject: '' });
 
-    const body = JSON.parse(fetchImpl.mock.calls[0]![1].body);
+    const body = JSON.parse(fetchImpl.mock.calls[0]?.[1].body);
     expect(body.title).toBe('Untitled email');
   });
 
@@ -79,7 +79,7 @@ describe('runSaveEmail', () => {
       messageUrl: '',
     });
 
-    const body = JSON.parse(fetchImpl.mock.calls[0]![1].body);
+    const body = JSON.parse(fetchImpl.mock.calls[0]?.[1].body);
     expect(body.from).toBeUndefined();
     expect(body.notes).toBeUndefined();
     expect(body.messageUrl).toBeUndefined();
@@ -93,7 +93,7 @@ describe('runSaveEmail', () => {
 
     await runSaveEmail({ rs, ...baseParams, notes: '  important context  ' });
 
-    const body = JSON.parse(fetchImpl.mock.calls[0]![1].body);
+    const body = JSON.parse(fetchImpl.mock.calls[0]?.[1].body);
     expect(body.notes).toBe('important context');
   });
 

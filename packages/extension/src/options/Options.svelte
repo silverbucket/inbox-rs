@@ -30,8 +30,8 @@
       await saveConfig(config);
       connected = true;
       savedAddress = config.userAddress;
-    } catch (e: any) {
-      error = e.message || 'Connection failed';
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Connection failed';
     } finally {
       connecting = false;
     }
@@ -63,7 +63,7 @@
         You're all set. Click the extension icon in your toolbar to save links and notes.
         You can also right-click on any link or selected text to send it to your inbox.
       </p>
-      <button class="btn-disconnect" onclick={disconnect}>Disconnect</button>
+      <button type="button" class="btn-disconnect" onclick={disconnect}>Disconnect</button>
     {:else}
       <div class="steps">
         <div class="step">
@@ -93,7 +93,6 @@
           bind:value={userAddress}
           placeholder="user@provider.example"
           disabled={connecting}
-          autofocus
         />
         <button type="submit" class="btn-primary" disabled={connecting || !userAddress.trim()}>
           {connecting ? 'Connecting...' : 'Connect & Authorize'}

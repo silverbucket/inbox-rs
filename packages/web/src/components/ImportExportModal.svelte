@@ -84,7 +84,7 @@
     return '';
   }
 
-  function progressPercent(s: ModalState): number {
+  function _progressPercent(s: ModalState): number {
     if (s.kind === 'exporting' || s.kind === 'importing') {
       const p = 'progress' in s ? s.progress : null;
       if (p && p.total > 0) return Math.round((p.current / p.total) * 100);
@@ -105,8 +105,8 @@
         <p class="warning">This will <strong>replace all existing data</strong> with the contents of the import file. This cannot be undone.</p>
         <p class="file-name">{state.file.name}</p>
         <div class="actions">
-          <button class="btn btn-secondary" onclick={close}>Cancel</button>
-          <button class="btn btn-danger" onclick={confirmImport}>Replace All Data</button>
+          <button type="button" class="btn btn-secondary" onclick={close}>Cancel</button>
+          <button type="button" class="btn btn-danger" onclick={confirmImport}>Replace All Data</button>
         </div>
 
       {:else if state.kind === 'exporting' || state.kind === 'importing'}
@@ -120,14 +120,14 @@
         <h3>Done</h3>
         <p>{state.message}</p>
         <div class="actions">
-          <button class="btn btn-primary" onclick={close}>Close</button>
+          <button type="button" class="btn btn-primary" onclick={close}>Close</button>
         </div>
 
       {:else if state.kind === 'error'}
         <h3>Error</h3>
         <p class="error-message">{state.message}</p>
         <div class="actions">
-          <button class="btn btn-secondary" onclick={close}>Close</button>
+          <button type="button" class="btn btn-secondary" onclick={close}>Close</button>
         </div>
       {/if}
     </div>
