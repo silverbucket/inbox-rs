@@ -83,3 +83,80 @@ export function isOnClosingFence(
   const line = value.slice(lineStart, selectionStart);
   return /^\s*```\s*$/.test(line);
 }
+
+/**
+ * Apply a computed TextState to a textarea using setRangeText, which
+ * preserves native undo/redo and auto-fires the input event so any
+ * Svelte `bind:value` stays in sync.
+ */
+export function applyTextState(ta: HTMLTextAreaElement, next: TextState): void {
+  ta.setRangeText(next.value, 0, ta.value.length, 'end');
+  ta.selectionStart = next.selectionStart;
+  ta.selectionEnd = next.selectionEnd;
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+/**
+ * Build a keydown handler that auto-indents inside fenced code blocks and
+ * preserves indentation on Enter. Each call returns a fresh closure with its
+ * own `tabTrapped` state so Tab→indent vs. Tab→focus-next decisions are
+ * per-textarea (Escape unlatches the trap, the next regular keypress re-arms
+ * it). Pass `alwaysActive: true` to skip the inside-code-block check —
+ * useful for textareas where the entire content is treated as code.
+ */
+export function createCodeKeydownHandler(
+  opts: { alwaysActive?: boolean } = {},
+): (e: KeyboardEvent) => void {
+  let tabTrapped = true;
+  return function handleKeydown(e: KeyboardEvent) {
+    const ta = e.currentTarget as HTMLTextAreaElement;
+
+    if (e.key === 'Escape') {
+      tabTrapped = false;
+      return;
+    }
+
+    // Any non-modifier key re-enables the Tab trap (user is typing again).
+    if (
+      !e.key.startsWith('Shift') &&
+      !e.key.startsWith('Alt') &&
+      !e.key.startsWith('Control') &&
+      !e.key.startsWith('Meta') &&
+      e.key !== 'Tab' &&
+      e.key !== 'Enter'
+    ) {
+      tabTrapped = true;
+    }
+
+    const active =
+      opts.alwaysActive || isInsideCodeBlock(ta.value, ta.selectionStart);
+    if (!active) return;
+
+    if (e.key === 'Tab' && tabTrapped) {
+      e.preventDefault();
+      const state = {
+        value: ta.value,
+        selectionStart: ta.selectionStart,
+        selectionEnd: ta.selectionEnd,
+      };
+      if (state.selectionStart === state.selectionEnd) {
+        applyTextState(ta, insertIndent(state));
+      } else if (e.shiftKey) {
+        applyTextState(ta, dedentSelection(state));
+      } else {
+        applyTextState(ta, indentSelection(state));
+      }
+    } else if (e.key === 'Enter') {
+      if (!opts.alwaysActive && isOnClosingFence(ta.value, ta.selectionStart))
+        return;
+
+      e.preventDefault();
+      const state = {
+        value: ta.value,
+        selectionStart: ta.selectionStart,
+        selectionEnd: ta.selectionEnd,
+      };
+      applyTextState(ta, insertNewlineWithIndent(state));
+    }
+  };
+}

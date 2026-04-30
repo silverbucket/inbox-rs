@@ -2,6 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   canCaptureTodo,
+  formatRecordingTimer,
+  getFileExtension,
   loadMarkdownEditorComponent,
   makeUnfiledTodo,
   shouldLoadMarkdownEditor,
@@ -104,5 +106,48 @@ describe('collection picker todo capture rules', () => {
 
   it('keeps the collection picker visible for non-todo refs', () => {
     expect(shouldShowCollectionPicker(false, 'note', false)).toBe(true);
+  });
+});
+
+describe('getFileExtension', () => {
+  it('returns the dotted suffix for typical filenames', () => {
+    expect(getFileExtension('photo.png')).toBe('.png');
+    expect(getFileExtension('archive.tar.gz')).toBe('.gz');
+  });
+
+  it('returns an empty string when no extension is present', () => {
+    expect(getFileExtension('Makefile')).toBe('');
+    expect(getFileExtension('')).toBe('');
+  });
+
+  it('treats a trailing dot as a zero-length extension', () => {
+    // Edge case: "foo." technically has an extension that is the empty
+    // string. Document the current behaviour so callers don't rely on a
+    // different reading.
+    expect(getFileExtension('foo.')).toBe('.');
+  });
+
+  it('treats a leading dot as the extension on dotfiles', () => {
+    // ".bashrc" has no actual extension, but lastIndexOf returns 0, so
+    // the function reports the entire name as the extension. This
+    // matches the old in-modal helper exactly; keeping the test here
+    // freezes the contract.
+    expect(getFileExtension('.bashrc')).toBe('.bashrc');
+  });
+});
+
+describe('formatRecordingTimer', () => {
+  it('renders zero seconds as 0:00', () => {
+    expect(formatRecordingTimer(0)).toBe('0:00');
+  });
+
+  it('zero-pads the seconds component', () => {
+    expect(formatRecordingTimer(5)).toBe('0:05');
+    expect(formatRecordingTimer(65)).toBe('1:05');
+  });
+
+  it('does not zero-pad the minutes component', () => {
+    expect(formatRecordingTimer(599)).toBe('9:59');
+    expect(formatRecordingTimer(600)).toBe('10:00');
   });
 });
