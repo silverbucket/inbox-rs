@@ -1,10 +1,17 @@
 {
   "manifest_version": 3,
   "name": "Inbox RS",
-  "version": "2.1.4",
+  "version": "2.1.5",
   "description": "Save links, text, and more to your remoteStorage inbox.",
-  "permissions": ["contextMenus", "activeTab", "storage", "identity"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": [
+    "contextMenus",
+    "activeTab",
+    "storage",
+    "identity"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "action": {
     "default_popup": "src/popup/index.html",
     "default_title": "Inbox RS",
@@ -15,7 +22,9 @@
     }
   },
   "background": {
-    "scripts": ["service-worker.js"],
+    "scripts": [
+      "service-worker.js"
+    ],
     "type": "module"
   },
   "browser_specific_settings": {
@@ -23,15 +32,21 @@
       "id": "inbox-rs@silverbucket.net",
       "strict_min_version": "126.0",
       "data_collection_permissions": {
-        "required": ["none"],
+        "required": [
+          "none"
+        ],
         "optional": []
       }
     }
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content-metadata.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content-metadata.js"
+      ],
       "run_at": "document_idle"
     }
   ],
