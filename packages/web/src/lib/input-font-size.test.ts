@@ -6,9 +6,14 @@ import { describe, expect, it } from 'vitest';
 /*
  * iOS Safari auto-zooms the viewport when a focused <input>/<textarea>/<select>
  * has a computed font-size below 16px (1rem at the 16px root default), and
- * that zoom doesn't reset on blur — it persists and breaks the layout. This
- * test enforces a repo-wide floor: every CSS rule that targets a form control
- * must declare font-size at >= 1rem.
+ * that zoom doesn't reset on blur — it persists and breaks the layout.
+ *
+ * What this test enforces: every CSS rule that targets a form control AND
+ * explicitly declares `font-size` must declare it at >= 1rem. Rules that omit
+ * `font-size` entirely (and therefore inherit from the root, which the app
+ * sets to 16px in `global.css`) are NOT flagged. Rules that set the size via
+ * the `font` shorthand are also NOT flagged — we don't currently use the
+ * shorthand for form controls anywhere in the repo.
  *
  * See AGENTS.md → "Form controls: never below 1rem".
  */
@@ -82,10 +87,11 @@ function stripCssComments(css: string): string {
 function svelteStyleChunks(source: string): CssChunk[] {
   const chunks: CssChunk[] = [];
   const re = /<style\b[^>]*>([\s\S]*?)<\/style>/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(source)) !== null) {
+  let m = re.exec(source);
+  while (m !== null) {
     const bodyOffset = m.index + m[0].indexOf(m[1]);
     chunks.push({ text: m[1], offset: bodyOffset });
+    m = re.exec(source);
   }
   return chunks;
 }
@@ -105,28 +111,30 @@ function findViolations(
   const violations: Violation[] = [];
   const css = stripCssComments(chunk.text);
   const ruleRe = /([^{}\s][^{}]*?)\s*\{([^{}]*)\}/g;
-  let m: RegExpExecArray | null;
-  while ((m = ruleRe.exec(css)) !== null) {
+  let m = ruleRe.exec(css);
+  while (m !== null) {
     const selector = m[1].trim();
-    if (selector.startsWith('@')) continue;
-    if (!selectorTargetsFormControl(selector)) continue;
-
-    const body = m[2];
-    const fsRe = /font-size\s*:\s*([^;}]+?)\s*(?:!important)?\s*(?:;|$)/gi;
-    let fs: RegExpExecArray | null;
-    while ((fs = fsRe.exec(body)) !== null) {
-      const value = fs[1].trim();
-      if (!isBelow1rem(value)) continue;
-      const declAbsOffset =
-        chunk.offset + m.index + m[0].indexOf(body) + fs.index;
-      const line = source.slice(0, declAbsOffset).split('\n').length;
-      violations.push({
-        file,
-        line,
-        selector,
-        declaration: `font-size: ${value}`,
-      });
+    if (!selector.startsWith('@') && selectorTargetsFormControl(selector)) {
+      const body = m[2];
+      const fsRe = /font-size\s*:\s*([^;}]+?)\s*(?:!important)?\s*(?:;|$)/gi;
+      let fs = fsRe.exec(body);
+      while (fs !== null) {
+        const value = fs[1].trim();
+        if (isBelow1rem(value)) {
+          const declAbsOffset =
+            chunk.offset + m.index + m[0].indexOf(body) + fs.index;
+          const line = source.slice(0, declAbsOffset).split('\n').length;
+          violations.push({
+            file,
+            line,
+            selector,
+            declaration: `font-size: ${value}`,
+          });
+        }
+        fs = fsRe.exec(body);
+      }
     }
+    m = ruleRe.exec(css);
   }
   return violations;
 }
@@ -142,7 +150,7 @@ function findFileViolations(file: string): Violation[] {
 }
 
 describe('form-control font-size floor (iOS Safari focus-zoom prevention)', () => {
-  it('every input/textarea/select rule has font-size >= 1rem', () => {
+  it('no form-control rule explicitly declares font-size below 1rem', () => {
     const files = SCAN_DIRS.flatMap((d) => collectStyleFiles(d));
     const violations = files.flatMap(findFileViolations);
     const formatted = violations.map(
@@ -151,8 +159,8 @@ describe('form-control font-size floor (iOS Safari focus-zoom prevention)', () =
     );
     expect(
       formatted,
-      'Form-control font-size must be >= 1rem to avoid iOS Safari focus-zoom.\n' +
-        'See AGENTS.md → "Form controls: never below 1rem".\n' +
+      'Form-control rules must not declare font-size below 1rem (iOS Safari ' +
+        'focus-zoom).\nSee AGENTS.md → "Form controls: never below 1rem".\n' +
         `Violations:\n  ${formatted.join('\n  ')}`,
     ).toEqual([]);
   });
