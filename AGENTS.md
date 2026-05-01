@@ -123,8 +123,17 @@ Enforced by `packages/web/src/lib/input-font-size.test.ts`. The scanner walks
 every `.svelte` and `.css` file under `packages/{web,extension,thunderbird}/src`
 and fails on any rule whose selector targets a form control AND explicitly
 declares `font-size` below 1rem (or below the equivalent in `px`/`em`/`%`).
-It does **not** flag rules that omit `font-size` (those are safe via
-inheritance) or rules that use the `font` shorthand (we don't use it on form
-controls anywhere). When you add a class that's applied to a form control but
-doesn't include `input`/`textarea`/`select` as a token in its name (e.g.
-`.search`), add it to the `NAMED_INPUT_CLASSES` list in that test.
+It does **not** flag:
+
+- Rules that omit `font-size` — safe via inheritance from the 16px root.
+- Rules that use the `font` shorthand — we don't use it on form controls
+  anywhere.
+- Values that are CSS-wide keywords (`inherit`, `initial`, `unset`, etc.).
+- `var(--…)` custom-property values — we don't statically resolve the
+  cascade, so the detector treats them as compliant. The codebase has zero
+  uses of `font-size: var(…)` on form controls today; **don't introduce
+  one** unless you can guarantee the variable never resolves below 1rem.
+
+When you add a class that's applied to a form control but doesn't include
+`input`/`textarea`/`select` as a token in its name (e.g. `.search`), add it
+to the `NAMED_INPUT_CLASSES` list in that test.

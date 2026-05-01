@@ -9,11 +9,24 @@ import { describe, expect, it } from 'vitest';
  * that zoom doesn't reset on blur — it persists and breaks the layout.
  *
  * What this test enforces: every CSS rule that targets a form control AND
- * explicitly declares `font-size` must declare it at >= 1rem. Rules that omit
- * `font-size` entirely (and therefore inherit from the root, which the app
- * sets to 16px in `global.css`) are NOT flagged. Rules that set the size via
- * the `font` shorthand are also NOT flagged — we don't currently use the
- * shorthand for form controls anywhere in the repo.
+ * explicitly declares `font-size` with a numeric literal must declare it at
+ * >= 1rem. The detector intentionally does NOT flag:
+ *
+ * - Rules that omit `font-size` entirely (they inherit from the root, which
+ *   `global.css` sets to 16px / 17px on narrow viewports — safe).
+ * - Rules that set the size via the `font` shorthand. We don't use the
+ *   shorthand for form controls anywhere in the repo today.
+ * - Rules where the value is a CSS-wide keyword (`inherit`, `initial`,
+ *   `unset`, `revert`, `currentcolor`).
+ * - Rules where the value is a `var(--…)` custom property. We can't
+ *   statically resolve the variable's value (or its fallback chain) without
+ *   building a real CSS-cascade evaluator, so any `var()` is treated as
+ *   compliant. This is a real gap — if someone introduces
+ *   `font-size: var(--foo)` on a form control and `--foo` resolves below
+ *   1rem, this test won't catch it. Today the codebase has zero uses of
+ *   `font-size: var(…)` (verified by grep at the time of writing); avoid
+ *   introducing one for a form control unless you can guarantee the variable
+ *   never resolves below 1rem.
  *
  * See AGENTS.md → "Form controls: never below 1rem".
  */
