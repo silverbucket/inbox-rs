@@ -70,3 +70,70 @@ npm run build:extension  # Build browser extension only
 - **No server-side code.** Everything runs in the browser.
 - **No Node.js-only dependencies in runtime code.** Packages like `onnxruntime-node` must be optional — the app runs in-browser only.
 - Target both Chrome and Firefox for the extension.
+
+## Pre-commit checks
+
+> **Always run `npm run check` and `npm run test` before committing.** Both
+> must pass.
+>
+> ```bash
+> npm run check   # biome check — lint + format + organize-imports
+> npm run test    # full vitest suite across all workspaces
+> ```
+>
+> Use `npm run check`, **not** `npm run lint`. `biome lint` only runs the
+> linter and skips the formatter and import-sort passes — CI runs
+> `npx biome ci` (≈ `biome check`), so a passing `npm run lint` doesn't mean
+> CI will pass. If `npm run check` flags formatting or import-order issues,
+> `npx biome check --write` will auto-fix the safe ones; re-run `npm run
+> check` afterwards to confirm.
+>
+> If either step fails, fix the underlying issue and re-run. Don't
+> `--no-verify` past a failing hook and don't commit "I'll fix it in the
+> next push" — the next push is harder to land cleanly. CI will catch this
+> anyway, so failing locally just costs you a round-trip.
+
+## Styling Rules
+
+### Form controls: never below 1rem
+
+CSS rules targeting `<input>`, `<textarea>`, or `<select>` must never set
+`font-size` below **`1rem` (16px)**. iOS Safari auto-zooms the viewport when
+a focused form control's computed font-size is below 16px, and that zoom
+doesn't reset on blur — it persists and breaks the layout.
+
+The rule applies to:
+
+- Element selectors: `input`, `textarea`, `select`, and any compound (e.g.
+  `input:focus`, `input::placeholder`, `input[type='text']`).
+- Class selectors that are applied to a form control in the markup, e.g.
+  `.search`, `.abbrev-input`, `.code-input`, `.quick-add input`.
+- `:global(...)` wrappers used inside scoped Svelte styles.
+
+Checkboxes, radios, and file inputs don't trigger the iOS zoom, but the floor
+applies repo-wide for consistency.
+
+If a form control omits `font-size` entirely it inherits from the root,
+which `packages/web/src/styles/global.css` sets to 16px (17px on narrow
+viewports) — so inheritance is safe and is the preferred default. Add an
+explicit `font-size` only when you need to override the inherited value;
+when you do, keep it `>= 1rem`.
+
+Enforced by `packages/web/src/lib/input-font-size.test.ts`. The scanner walks
+every `.svelte` and `.css` file under `packages/{web,extension,thunderbird}/src`
+and fails on any rule whose selector targets a form control AND explicitly
+declares `font-size` below 1rem (or below the equivalent in `px`/`em`/`%`).
+It does **not** flag:
+
+- Rules that omit `font-size` — safe via inheritance from the 16px root.
+- Rules that use the `font` shorthand — we don't use it on form controls
+  anywhere.
+- Values that are CSS-wide keywords (`inherit`, `initial`, `unset`, etc.).
+- `var(--…)` custom-property values — we don't statically resolve the
+  cascade, so the detector treats them as compliant. The codebase has zero
+  uses of `font-size: var(…)` on form controls today; **don't introduce
+  one** unless you can guarantee the variable never resolves below 1rem.
+
+When you add a class that's applied to a form control but doesn't include
+`input`/`textarea`/`select` as a token in its name (e.g. `.search`), add it
+to the `NAMED_INPUT_CLASSES` list in that test.

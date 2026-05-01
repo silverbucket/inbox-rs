@@ -116,7 +116,9 @@
     border-radius: var(--radius-sm);
     color: var(--text);
     padding: 0.5rem 0.65rem;
-    font-size: 0.9rem;
+    /* `.search` is applied to an <input>; keep >=1rem to avoid iOS Safari
+       focus-zoom on touch devices. */
+    font-size: 1rem;
     font-family: inherit;
     margin-bottom: 0.75rem;
   }

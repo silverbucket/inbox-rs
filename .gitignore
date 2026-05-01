@@ -22,6 +22,10 @@ rs-data/
 # Extension build outputs (already covered by dist/, listed explicitly for clarity)
 *.xpi
 
+# Source-archive tarballs produced for Firefox AMO / Mozilla addon review.
+# Generated on demand; never tracked.
+packages/*/inbox-rs-src.tar.gz
+
 # Dev-only download staging area (copied into dist/ during build)
 packages/web/public/downloads/
 

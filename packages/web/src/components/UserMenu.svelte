@@ -457,7 +457,8 @@
     border: 1px solid var(--accent);
     background: var(--accent-subtle);
     color: var(--accent);
-    font-size: 0.85rem;
+    /* Keep at >=1rem to avoid iOS Safari focus-zoom on touch devices. */
+    font-size: 1rem;
     font-weight: 700;
     text-align: center;
     text-transform: uppercase;
@@ -720,7 +721,8 @@
     border-radius: var(--radius-sm);
     padding: 0.4rem 0.6rem;
     color: var(--text);
-    font-size: 0.82rem;
+    /* Keep at >=1rem to avoid iOS Safari focus-zoom on touch devices. */
+    font-size: 1rem;
     outline: none;
     transition: border-color 150ms;
     width: 100%;
