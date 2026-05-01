@@ -73,17 +73,25 @@ npm run build:extension  # Build browser extension only
 
 ## Pre-commit checks
 
-> **Always run lint and tests before committing.** Both must pass.
+> **Always run `npm run check` and `npm run test` before committing.** Both
+> must pass.
 >
 > ```bash
-> npm run lint   # biome lint — must report zero warnings/errors
-> npm run test   # full vitest suite across all workspaces
+> npm run check   # biome check — lint + format + organize-imports
+> npm run test    # full vitest suite across all workspaces
 > ```
 >
-> If either fails, fix the underlying issue and re-run. Don't `--no-verify`
-> past a failing hook and don't commit "I'll fix it in the next push" — the
-> next push is harder to land cleanly. CI will catch this anyway, so failing
-> locally just costs you a round-trip.
+> Use `npm run check`, **not** `npm run lint`. `biome lint` only runs the
+> linter and skips the formatter and import-sort passes — CI runs
+> `npx biome ci` (≈ `biome check`), so a passing `npm run lint` doesn't mean
+> CI will pass. If `npm run check` flags formatting or import-order issues,
+> `npx biome check --write` will auto-fix the safe ones; re-run `npm run
+> check` afterwards to confirm.
+>
+> If either step fails, fix the underlying issue and re-run. Don't
+> `--no-verify` past a failing hook and don't commit "I'll fix it in the
+> next push" — the next push is harder to land cleanly. CI will catch this
+> anyway, so failing locally just costs you a round-trip.
 
 ## Styling Rules
 

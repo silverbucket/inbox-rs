@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -48,7 +48,8 @@ function selectorTargetsFormControl(selector: string): boolean {
 
 function isBelow1rem(value: string): boolean {
   const trimmed = value.trim().toLowerCase();
-  if (/^(inherit|initial|unset|revert|currentcolor)$/.test(trimmed)) return false;
+  if (/^(inherit|initial|unset|revert|currentcolor)$/.test(trimmed))
+    return false;
   if (trimmed.startsWith('var(')) return false;
   const m = trimmed.match(/^(\d+(?:\.\d+)?)(rem|em|px|%)?$/);
   if (!m) return false;
@@ -61,7 +62,8 @@ function isBelow1rem(value: string): boolean {
 
 function collectStyleFiles(dir: string, accum: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
-    if (entry === 'node_modules' || entry === 'dist' || entry === '.git') continue;
+    if (entry === 'node_modules' || entry === 'dist' || entry === '.git')
+      continue;
     const fullPath = join(dir, entry);
     const stat = statSync(fullPath);
     if (stat.isDirectory()) {
@@ -259,7 +261,8 @@ describe('form-control font-size floor (iOS Safari focus-zoom prevention)', () =
     });
 
     it('ignores braces inside CSS comments', () => {
-      const css = '/* example: input { font-size: 0.5rem } */ .ok { color: red; }';
+      const css =
+        '/* example: input { font-size: 0.5rem } */ .ok { color: red; }';
       const v = findViolations('fake.svelte', css, { text: css, offset: 0 });
       expect(v).toEqual([]);
     });
