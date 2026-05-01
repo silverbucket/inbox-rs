@@ -557,7 +557,8 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: 0.5rem 0.75rem;
-    font-size: 0.85rem;
+    /* Keep at >=1rem to avoid iOS Safari focus-zoom on touch devices. */
+    font-size: 1rem;
     color: var(--text);
     font-family: inherit;
     resize: vertical;
@@ -571,7 +572,9 @@
   }
 
   .form :global(input[type='file']) {
-    font-size: 0.85rem;
+    /* Keep at >=1rem for consistency with the other form controls. iOS doesn't
+       zoom on file inputs specifically, but the floor applies repo-wide. */
+    font-size: 1rem;
     color: var(--text-muted);
   }
 
@@ -585,7 +588,9 @@
 
   .form :global(.code-input) {
     font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
-    font-size: 0.8rem;
+    /* `.code-input` is applied to a <textarea>; keep >=1rem to avoid iOS
+       Safari focus-zoom on touch devices. */
+    font-size: 1rem;
     line-height: 1.5;
     tab-size: 2;
   }

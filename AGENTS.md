@@ -70,3 +70,30 @@ npm run build:extension  # Build browser extension only
 - **No server-side code.** Everything runs in the browser.
 - **No Node.js-only dependencies in runtime code.** Packages like `onnxruntime-node` must be optional — the app runs in-browser only.
 - Target both Chrome and Firefox for the extension.
+
+## Styling Rules
+
+### Form controls: never below 1rem
+
+Every CSS rule that applies to an `<input>`, `<textarea>`, or `<select>` must
+declare `font-size` at **`1rem` (16px) or larger**. iOS Safari auto-zooms the
+viewport when a focused form control's computed font-size is below 16px, and
+that zoom doesn't reset on blur — it persists and breaks the layout.
+
+This applies to:
+
+- Element selectors: `input`, `textarea`, `select`, and any compound (e.g.
+  `input:focus`, `input::placeholder`, `input[type='text']`).
+- Class selectors that are applied to a form control in the markup, e.g.
+  `.search`, `.abbrev-input`, `.code-input`, `.quick-add input`.
+- `:global(...)` wrappers used inside scoped Svelte styles.
+
+Checkboxes, radios, and file inputs don't trigger the iOS zoom, but the floor
+applies repo-wide for consistency.
+
+Enforced by `packages/web/src/lib/input-font-size.test.ts` — that test scans
+every `.svelte` and `.css` file under `packages/{web,extension,thunderbird}/src`
+and fails on any matching rule with `font-size` below 1rem (or below 16px /
+100% in equivalent units). When you add a class that's applied to a form
+control but doesn't include `input`/`textarea`/`select` as a token in its
+name (e.g. `.search`), add it to the `NAMED_INPUT_CLASSES` list in that test.

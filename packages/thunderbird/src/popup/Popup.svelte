@@ -169,7 +169,8 @@
     padding: 0.5rem 0.75rem;
     color: var(--text);
     font-family: inherit;
-    font-size: 0.85rem;
+    /* Keep at >=1rem to avoid iOS Safari focus-zoom on touch devices. */
+    font-size: 1rem;
     outline: none;
     resize: vertical;
   }
