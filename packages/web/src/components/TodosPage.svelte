@@ -8,6 +8,7 @@
     collections, sortedGroups, groupCollections, appConfig, updateConfig,
   } from '../lib/stores';
   import { canCaptureTodo, makeUnfiledTodo } from '../lib/add-entry-modal';
+  import { autofocus } from '../lib/actions';
   import TodoRow from './TodoRow.svelte';
   import Fab from './Fab.svelte';
 
@@ -61,10 +62,6 @@
     }
   }
   let storedQuickAddId = $state<string | undefined>(readStoredQuickAddId());
-
-  function _focusOnMount(node: HTMLInputElement) {
-    node.focus();
-  }
 
   // Trailing "Other" optgroup — without this, a user with only ungrouped
   // collections would see no options beyond "Unfiled".
@@ -206,7 +203,7 @@
         placeholder={compact ? 'Add a todo…' : 'What needs doing?'}
         aria-label="Todo title"
         disabled={quickSaving}
-        use:focusOnMount
+        use:autofocus
       />
       <!-- Empty-string sentinel maps to undefined (Unfiled) on save. -->
       <select
