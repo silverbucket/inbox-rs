@@ -12,27 +12,40 @@
  * This test exercises the full path — render → type → submit → see —
  * so any future rename, action-binding break, or save-flow regression
  * fails here loudly instead of in production.
+ *
+ * Uses `freshRsUser` / `freshRsToken` (per-test) rather than the shared
+ * worker `connectedPage`: the empty-state branch only renders when the
+ * account has zero todos, and we both rely on that *and* create a todo
+ * during the test. A fresh per-test user keeps the assertion stable no
+ * matter what runs alongside this spec.
  */
 
 import { expect, test } from '../helpers/fixtures';
-import { assertNoConsoleErrors, attachConsoleCapture } from '../helpers/pwa';
+import { assertNoConsoleErrors, attachConsoleCapture, seedRsSession } from '../helpers/pwa';
 
 test('quick-add composer captures a todo from the empty state', async ({
-  connectedPage,
+  context,
+  freshRsUser,
+  freshRsToken,
   webOrigin,
 }) => {
-  const log = attachConsoleCapture(connectedPage);
-  await connectedPage.goto(`${webOrigin}/#/todos`);
-  await connectedPage.waitForLoadState('networkidle');
+  await seedRsSession(context, freshRsUser, freshRsToken, {
+    clientOrigin: webOrigin,
+  });
+  const page = await context.newPage();
+  const log = attachConsoleCapture(page);
+
+  await page.goto(`${webOrigin}/#/todos`);
+  await page.waitForLoadState('networkidle');
 
   // Empty-state hero variant — the placeholder differs from the compact
   // (above-list) variant, so this also asserts which branch rendered.
-  const input = connectedPage.getByPlaceholder('What needs doing?');
+  const input = page.getByPlaceholder('What needs doing?');
   await expect(input).toBeVisible();
 
   // The action-binding bug manifested as the input never auto-focusing
   // (and, in fact, the whole snippet failing to mount). Asserting focus
-  // is the cheapest signal that `use:focusOnMount` actually fired.
+  // is the cheapest signal that `use:autofocus` actually fired.
   await expect(input).toBeFocused();
 
   const sentinel = 'playwright-quick-add-α';
@@ -45,7 +58,7 @@ test('quick-add composer captures a todo from the empty state', async ({
   // The todo row carries the title text. Wait long enough for the RS
   // round-trip; everything before this is in-memory but `storeItem` does
   // an actual remote PUT.
-  await expect(connectedPage.getByText(sentinel)).toBeVisible({
+  await expect(page.getByText(sentinel)).toBeVisible({
     timeout: 10_000,
   });
 
