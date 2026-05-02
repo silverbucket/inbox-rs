@@ -21,7 +21,11 @@
  */
 
 import { expect, test } from '../helpers/fixtures';
-import { assertNoConsoleErrors, attachConsoleCapture, seedRsSession } from '../helpers/pwa';
+import {
+  assertNoConsoleErrors,
+  attachConsoleCapture,
+  seedRsSession,
+} from '../helpers/pwa';
 
 test('quick-add composer captures a todo from the empty state', async ({
   context,
