@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
+  import { tick } from 'svelte';
   import { dndzone } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import { slide, fade } from 'svelte/transition';
@@ -48,6 +49,10 @@
   let quickTitle = $state('');
   let quickSaving = $state(false);
   let quickError = $state('');
+  // Bound from the quick-add input so we can restore focus after a submit
+  // — `disabled` toggling during the save blurs the input, and the first
+  // todo also remounts the input as the page transitions hero → compact.
+  let quickInputEl = $state<HTMLInputElement | undefined>(undefined);
 
   // Quick-add collection target. Stored in localStorage rather than the
   // synced appConfig: it's a per-device preference, and a `config/app`
@@ -107,6 +112,13 @@
       quickError = error instanceof Error ? error.message : 'Failed to add todo';
     } finally {
       quickSaving = false;
+      // Return focus to the input so the user can keep capturing todos in
+      // succession from the keyboard. tick() lets the post-state DOM settle
+      // — the very first todo transitions the page from empty (hero input)
+      // to populated (compact input), remounting the element bind:this
+      // points at. Refocusing before that flip would target a detached node.
+      await tick();
+      quickInputEl?.focus();
     }
   }
 
@@ -204,6 +216,7 @@
         the gate is mainly load-bearing for desktop with existing todos.
       -->
       <input
+        bind:this={quickInputEl}
         type="text"
         bind:value={quickTitle}
         placeholder={compact ? 'Add a todo…' : 'What needs doing?'}
