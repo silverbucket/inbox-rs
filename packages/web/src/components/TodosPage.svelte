@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
+  import { tick } from 'svelte';
   import { dndzone } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import { slide, fade } from 'svelte/transition';
@@ -8,7 +9,7 @@
     collections, sortedGroups, groupCollections, appConfig, updateConfig,
   } from '../lib/stores';
   import { canCaptureTodo, makeUnfiledTodo } from '../lib/add-entry-modal';
-  import { autofocus } from '../lib/actions';
+  import { autofocusIf } from '../lib/actions';
   import TodoRow from './TodoRow.svelte';
   import Fab from './Fab.svelte';
 
@@ -48,6 +49,10 @@
   let quickTitle = $state('');
   let quickSaving = $state(false);
   let quickError = $state('');
+  // Bound from the quick-add input so we can restore focus after a submit
+  // — `disabled` toggling during the save blurs the input, and the first
+  // todo also remounts the input as the page transitions hero → compact.
+  let quickInputEl = $state<HTMLInputElement | undefined>(undefined);
 
   // Quick-add collection target. Stored in localStorage rather than the
   // synced appConfig: it's a per-device preference, and a `config/app`
@@ -107,6 +112,13 @@
       quickError = error instanceof Error ? error.message : 'Failed to add todo';
     } finally {
       quickSaving = false;
+      // Return focus to the input so the user can keep capturing todos in
+      // succession from the keyboard. tick() lets the post-state DOM settle
+      // — the very first todo transitions the page from empty (hero input)
+      // to populated (compact input), remounting the element bind:this
+      // points at. Refocusing before that flip would target a detached node.
+      await tick();
+      quickInputEl?.focus();
     }
   }
 
@@ -197,13 +209,20 @@
         addQuickTodo();
       }}
     >
+      <!--
+        Autofocus only the hero (empty-state) variant. The compact variant
+        renders above an existing list; stealing focus there would interrupt
+        a user trying to scroll or click rows. Mobile is hidden via CSS so
+        the gate is mainly load-bearing for desktop with existing todos.
+      -->
       <input
+        bind:this={quickInputEl}
         type="text"
         bind:value={quickTitle}
         placeholder={compact ? 'Add a todo…' : 'What needs doing?'}
         aria-label="Todo title"
         disabled={quickSaving}
-        use:autofocus
+        use:autofocusIf={!compact}
       />
       <!-- Empty-string sentinel maps to undefined (Unfiled) on save. -->
       <select
@@ -245,7 +264,10 @@
     <div class="empty-state" in:fade={{ duration: 180 }}>
       <p class="empty-title">Jot a todo</p>
       {@render quickAddComposer(false)}
-      <p class="empty-hint">Capture it now. Organize it later.</p>
+      <p class="empty-hint empty-hint--desktop">Capture it now. Organize it later.</p>
+      <!-- Mobile: the inline composer is hidden in favour of the floating
+           FAB, so the hint needs to point at it. CSS swaps which line shows. -->
+      <p class="empty-hint empty-hint--mobile">Tap + to capture one. Organize it later.</p>
       <!-- Persistent aria-live region — kept in the DOM so screen readers
            reliably announce errors as they appear. The visually-empty state
            collapses via the `:empty` selector below. -->
@@ -522,6 +544,13 @@
     margin: 0;
   }
 
+  /* Mobile-only sibling — hidden by default, revealed in the mobile media
+     query below. Keeps both lines in the DOM so screen readers see only the
+     one that's currently visible. */
+  .empty-hint--mobile {
+    display: none;
+  }
+
   .quick-error {
     margin: 0;
     color: var(--danger);
@@ -539,35 +568,39 @@
     text-align: left;
   }
 
-  /* Mobile-only: reserve room so the fixed-position FAB doesn't float over
-     the last todo when scrolled to the bottom. Desktop renders the add
-     button inline in the toolbar, so no bottom reservation is needed. */
+  /*
+   * Mobile: the floating FAB is the canonical capture surface, and the inline
+   * quick-add composer was eating vertical space that's better spent on the
+   * todo list itself. Hide it (both hero and compact variants) along with its
+   * inline error region, and swap the empty-state hint to one that points at
+   * the FAB. The composer's submit path stays mounted but unreachable, which
+   * is fine — `quickError` only fills when the form is submitted.
+   *
+   * Desktop renders the add button inline in the toolbar, so no
+   * bottom-padding reservation is needed there.
+   */
   @media (max-width: 768px) {
     .todos-page {
       padding-bottom: 5rem;
+    }
+
+    .quick-add,
+    .quick-error--inline {
+      display: none;
+    }
+
+    .empty-hint--desktop {
+      display: none;
+    }
+
+    .empty-hint--mobile {
+      display: block;
     }
   }
 
   @media (max-width: 600px) {
     .todos-page {
       padding-bottom: 4.5rem;
-    }
-
-    .empty-state {
-      align-items: stretch;
-      text-align: left;
-      padding-inline: 0;
-    }
-
-    /* Hero variant stacks vertically on phones; compact stays single-row. */
-    .quick-add:not(.quick-add--compact) {
-      grid-template-columns: 1fr;
-    }
-
-    .quick-add:not(.quick-add--compact) button,
-    .quick-add:not(.quick-add--compact) .quick-add__collection {
-      width: 100%;
-      max-width: none;
     }
   }
 </style>
