@@ -22,3 +22,26 @@
 export function autofocus(node: HTMLElement) {
   requestAnimationFrame(() => node.focus());
 }
+
+/**
+ * Conditional variant of {@link autofocus}. Focuses the bound element on the
+ * next animation frame only when `enabled` is true.
+ *
+ * Use when the same `<input>` markup is rendered in multiple branches and
+ * only some branches should grab focus on mount — for example, an empty-state
+ * hero composer that should autofocus vs. a compact composer rendered above
+ * an existing list, where stealing focus would interrupt the user.
+ *
+ * Example:
+ * ```svelte
+ * <input use:autofocusIf={!compact} type="text" bind:value={title} />
+ * ```
+ *
+ * Lives here (rather than as a local helper in the consuming component) so
+ * biome's Svelte parser can see the import is used — local helpers
+ * referenced only via `use:` directives are invisible to biome's
+ * unused-variable analysis and get falsely flagged.
+ */
+export function autofocusIf(node: HTMLElement, enabled: boolean) {
+  if (enabled) requestAnimationFrame(() => node.focus());
+}

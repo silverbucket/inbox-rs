@@ -8,7 +8,7 @@
     collections, sortedGroups, groupCollections, appConfig, updateConfig,
   } from '../lib/stores';
   import { canCaptureTodo, makeUnfiledTodo } from '../lib/add-entry-modal';
-  import { autofocus } from '../lib/actions';
+  import { autofocusIf } from '../lib/actions';
   import TodoRow from './TodoRow.svelte';
   import Fab from './Fab.svelte';
 
@@ -197,13 +197,19 @@
         addQuickTodo();
       }}
     >
+      <!--
+        Autofocus only the hero (empty-state) variant. The compact variant
+        renders above an existing list; stealing focus there would interrupt
+        a user trying to scroll or click rows. Mobile is hidden via CSS so
+        the gate is mainly load-bearing for desktop with existing todos.
+      -->
       <input
         type="text"
         bind:value={quickTitle}
         placeholder={compact ? 'Add a todo…' : 'What needs doing?'}
         aria-label="Todo title"
         disabled={quickSaving}
-        use:autofocus
+        use:autofocusIf={!compact}
       />
       <!-- Empty-string sentinel maps to undefined (Unfiled) on save. -->
       <select
