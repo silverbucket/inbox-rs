@@ -84,13 +84,19 @@
     return '';
   }
 
-  function _progressPercent(s: ModalState): number {
-    if (s.kind === 'exporting' || s.kind === 'importing') {
-      const p = 'progress' in s ? s.progress : null;
-      if (p && p.total > 0) return Math.round((p.current / p.total) * 100);
+  // A `$derived` rather than a helper function so the value is referenced
+  // as `{progressPercent}` directly in the template — biome's Svelte
+  // parser tracks reactive bindings used in template expressions, but not
+  // function calls inlined inside attribute string templates like
+  // `style="width: {fn(...)}%"`. Using `$derived` keeps the lint rule
+  // useful instead of forcing an override.
+  const progressPercent = $derived.by(() => {
+    if (!state || (state.kind !== 'exporting' && state.kind !== 'importing')) {
+      return 0;
     }
-    return 0;
-  }
+    const p = state.progress;
+    return p.total > 0 ? Math.round((p.current / p.total) * 100) : 0;
+  });
 </script>
 
 <svelte:window onkeydown={onKeydown} />
@@ -113,7 +119,7 @@
         <h3>{state.kind === 'exporting' ? 'Exporting' : 'Importing'}...</h3>
         <p class="progress-label">{progressLabel(state)}</p>
         <div class="progress-bar">
-          <div class="progress-fill" style="width: {progressPercent(state)}%"></div>
+          <div class="progress-fill" style="width: {progressPercent}%"></div>
         </div>
 
       {:else if state.kind === 'done'}

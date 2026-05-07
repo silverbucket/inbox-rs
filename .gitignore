@@ -19,6 +19,13 @@ rs-data/
 .context/
 .DS_Store
 
+# Per-developer Claude Code overrides. The `*.local` pattern above
+# doesn't match `*.local.json`, so list explicitly. Project-wide
+# `.claude/settings.json` IS committed — only the personal override
+# file is private.
+.claude/settings.local.json
+.claude/settings.local*.json
+
 # Extension build outputs (already covered by dist/, listed explicitly for clarity)
 *.xpi
 
