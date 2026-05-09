@@ -8,6 +8,14 @@
     groups,
   } from '../lib/stores';
   import { makeTodo } from '../lib/item-utils';
+  import {
+    filterCompletedTodos,
+    filterOpenTodos,
+    filterReferenceItems,
+    filterTodos,
+    sortCompletedTodosByCompletedAt,
+    spliceOpenTodoOrder,
+  } from '../lib/collection-todos';
   import { slide, fade } from 'svelte/transition';
   import { flip } from 'svelte/animate';
   import { dndzone } from 'svelte-dnd-action';
@@ -29,15 +37,12 @@
   // reference items (the existing masonry grid below) so the page keeps all
   // data in context while the flat Todos page shows the cross-collection view.
   const items = $derived($collectionItems[collection.id] ?? []);
-  const todoItems = $derived(items.filter(i => i.isTodo || i.type === 'todo'));
-  const openTodos = $derived(todoItems.filter(t => !t.completed));
+  const todoItems = $derived(filterTodos(items));
+  const openTodos = $derived(filterOpenTodos(todoItems));
   const completedTodos = $derived(
-    todoItems.filter(t => t.completed)
-      .slice()
-      .sort((a, b) => new Date(b.completedAt ?? b.createdAt).getTime()
-                     - new Date(a.completedAt ?? a.createdAt).getTime())
+    sortCompletedTodosByCompletedAt(filterCompletedTodos(todoItems))
   );
-  const referenceItems = $derived(items.filter(i => !i.isTodo && i.type !== 'todo'));
+  const referenceItems = $derived(filterReferenceItems(items));
 
   // Shared group lookup for TodoRow styling — collection's own color takes
   // priority, but we also supply the group so the pill colour degrades
@@ -88,14 +93,13 @@
   async function handleDndFinalize(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
     const previous = openTodos.map(t => ({ ...t }));
     dndOpen = e.detail.items;
-    const newOpenIds = dndOpen.map(t => t.id);
     try {
-      // Splice the new open-todo order into itemIds while preserving the
-      // relative order of completed todos and reference items — otherwise a
-      // drag of a single open todo would also scramble the refs grid.
-      const openIds = new Set(openTodos.map(t => t.id));
-      const rest = collection.itemIds.filter(id => !openIds.has(id));
-      await reorderCollectionItems(collection.id, [...newOpenIds, ...rest]);
+      const newItemIds = spliceOpenTodoOrder(
+        collection.itemIds,
+        previous.map(t => t.id),
+        dndOpen.map(t => t.id),
+      );
+      await reorderCollectionItems(collection.id, newItemIds);
     } catch (error) {
       console.error('Failed to reorder collection todos', error);
       dndOpen = previous;

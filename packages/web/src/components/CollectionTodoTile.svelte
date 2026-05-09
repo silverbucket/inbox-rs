@@ -7,6 +7,12 @@
     appConfig, updateConfig, reorderCollectionItems,
   } from '../lib/stores';
   import { cleanForStorage } from '../lib/clean-for-storage';
+  import {
+    filterCompletedTodos,
+    filterOpenTodos,
+    filterTodos,
+    spliceOpenTodoOrder,
+  } from '../lib/collection-todos';
   import { typeBadge, todoNote } from '../lib/item-utils';
   import AddEntryModal from './AddEntryModal.svelte';
 
@@ -17,9 +23,9 @@
   } = $props();
 
   const items = $derived($collectionItems[collection.id] ?? []);
-  const todoItems = $derived(items.filter(i => i.isTodo || i.type === 'todo'));
-  const openTodos = $derived(todoItems.filter(t => !t.completed));
-  const completedTodos = $derived(todoItems.filter(t => t.completed));
+  const todoItems = $derived(filterTodos(items));
+  const openTodos = $derived(filterOpenTodos(todoItems));
+  const completedTodos = $derived(filterCompletedTodos(todoItems));
 
   // Collapse state persists in appConfig.expandedCollections. Collections
   // default to collapsed; expanding a tile adds its id to the set.
@@ -50,12 +56,12 @@
   async function handleDndFinalize(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
     const previous = openTodos.map(t => ({ ...t }));
     dndOpen = e.detail.items;
-    // Preserve order of completed todos and non-todo items
-    const openIds = new Set(openTodos.map(t => t.id));
-    const newOpenIds = dndOpen.map(t => t.id);
-    const rest = collection.itemIds.filter(id => !openIds.has(id));
-    const newItemIds = [...newOpenIds, ...rest];
     try {
+      const newItemIds = spliceOpenTodoOrder(
+        collection.itemIds,
+        previous.map(t => t.id),
+        dndOpen.map(t => t.id),
+      );
       await reorderCollectionItems(collection.id, newItemIds);
     } catch (error) {
       console.error('Failed to reorder collection todos', error);
