@@ -11,6 +11,7 @@
     "dev": "npm run dev --workspace=packages/web",
     "build": "npm run build --workspace=packages/web",
     "vendor:transcription-assets": "npm run vendor:transcription-assets --workspace=packages/web",
+    "vendor:transcription-assets:refresh": "npm run vendor:transcription-assets:refresh --workspace=packages/web",
     "package:plugins": "node scripts/package-plugins.mjs",
     "build:extension": "npm run build --workspace=packages/extension",
     "build:thunderbird": "npm run build --workspace=packages/thunderbird",
