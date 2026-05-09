@@ -35,6 +35,7 @@ packages/*/inbox-rs-src.tar.gz
 
 # Dev-only download staging area (copied into dist/ during build)
 packages/web/public/downloads/
+packages/web/public/ml/
 
 # End-to-end test artefacts (see tests/e2e/README.md)
 tests/e2e/playwright-report/
