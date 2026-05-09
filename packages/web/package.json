@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "predev": "node ../../scripts/gen-plugin-metadata.mjs",
-    "prebuild": "node ../../scripts/package-plugins.mjs",
+    "predev": "npm run vendor:transcription-assets && node ../../scripts/gen-plugin-metadata.mjs",
+    "prebuild": "npm run vendor:transcription-assets && node ../../scripts/package-plugins.mjs",
     "build": "vite build",
     "preview": "vite preview",
+    "pretest": "npm run vendor:transcription-assets",
+    "vendor:transcription-assets": "node ../../scripts/vendor-transcription-assets.mjs",
     "test": "vitest run"
   },
   "dependencies": {
