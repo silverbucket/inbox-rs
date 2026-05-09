@@ -1,5 +1,4 @@
-import type { Collection, InboxItem } from '@inbox-rs/rs-module';
-import { reorderCollectionItems } from './stores';
+import type { InboxItem } from '@inbox-rs/rs-module';
 
 export function filterTodos(items: InboxItem[]): InboxItem[] {
   return items.filter((i) => i.isTodo || i.type === 'todo');
@@ -42,19 +41,4 @@ export function spliceOpenTodoOrder(
   const openSet = new Set(previousOpenIds);
   const rest = currentItemIds.filter((id) => !openSet.has(id));
   return [...newOpenIds, ...rest];
-}
-
-// Persist a new open-todo order. Errors propagate so the caller can roll back
-// its local dnd UI state.
-export async function applyOpenTodoReorder(
-  collection: Collection,
-  previousOpenIds: string[],
-  newOpenIds: string[],
-): Promise<void> {
-  const newItemIds = spliceOpenTodoOrder(
-    collection.itemIds,
-    previousOpenIds,
-    newOpenIds,
-  );
-  await reorderCollectionItems(collection.id, newItemIds);
 }

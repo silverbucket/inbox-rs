@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import type { InboxItem, NoteItem, TodoItem } from '@inbox-rs/rs-module';
 import { describe, expect, it } from 'vitest';
 import {

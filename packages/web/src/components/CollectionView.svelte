@@ -4,17 +4,17 @@
     collectionItems,
     deleteItem,
     sortedGroups, moveCollectionToGroup,
-    appConfig, updateConfig,
+    appConfig, updateConfig, reorderCollectionItems,
     groups,
   } from '../lib/stores';
   import { makeTodo } from '../lib/item-utils';
   import {
-    applyOpenTodoReorder,
     filterCompletedTodos,
     filterOpenTodos,
     filterReferenceItems,
     filterTodos,
     sortCompletedTodosByCompletedAt,
+    spliceOpenTodoOrder,
   } from '../lib/collection-todos';
   import { slide, fade } from 'svelte/transition';
   import { flip } from 'svelte/animate';
@@ -94,11 +94,12 @@
     const previous = openTodos.map(t => ({ ...t }));
     dndOpen = e.detail.items;
     try {
-      await applyOpenTodoReorder(
-        collection,
+      const newItemIds = spliceOpenTodoOrder(
+        collection.itemIds,
         previous.map(t => t.id),
         dndOpen.map(t => t.id),
       );
+      await reorderCollectionItems(collection.id, newItemIds);
     } catch (error) {
       console.error('Failed to reorder collection todos', error);
       dndOpen = previous;

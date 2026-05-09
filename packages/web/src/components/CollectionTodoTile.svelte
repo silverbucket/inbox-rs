@@ -4,14 +4,14 @@
   import { slide } from 'svelte/transition';
   import {
     collectionItems, storeItem, deleteItem,
-    appConfig, updateConfig,
+    appConfig, updateConfig, reorderCollectionItems,
   } from '../lib/stores';
   import { cleanForStorage } from '../lib/clean-for-storage';
   import {
-    applyOpenTodoReorder,
     filterCompletedTodos,
     filterOpenTodos,
     filterTodos,
+    spliceOpenTodoOrder,
   } from '../lib/collection-todos';
   import { typeBadge, todoNote } from '../lib/item-utils';
   import AddEntryModal from './AddEntryModal.svelte';
@@ -57,11 +57,12 @@
     const previous = openTodos.map(t => ({ ...t }));
     dndOpen = e.detail.items;
     try {
-      await applyOpenTodoReorder(
-        collection,
+      const newItemIds = spliceOpenTodoOrder(
+        collection.itemIds,
         previous.map(t => t.id),
         dndOpen.map(t => t.id),
       );
+      await reorderCollectionItems(collection.id, newItemIds);
     } catch (error) {
       console.error('Failed to reorder collection todos', error);
       dndOpen = previous;
