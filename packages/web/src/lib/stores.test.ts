@@ -65,6 +65,7 @@ import {
   createCollection,
   deleteCollection,
   deleteGroup,
+  deleteItem,
   groupCollections,
   groups,
   items,
@@ -273,6 +274,64 @@ describe('loadFileBlobUrl', () => {
     });
 
     expect(mockFetchFileBlobUrl).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('blob URL cleanup (memory leak prevention)', () => {
+  let revokeSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    blobUrls.set({});
+    connected.set(true);
+    // Spy on revoke so we can assert cleanup behavior.
+    // Do NOT call vi.clearAllMocks() here — it would wipe the captured
+    // rs.on() calls that other tests (and emitRsEvent) rely on.
+    revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    revokeSpy?.mockRestore();
+    blobUrls.set({});
+  });
+
+  it('revokes and removes blob URL when deleteItem is called with a file-backed item', async () => {
+    blobUrls.set({ 'files/photo.jpg': 'blob:mem/abc123' });
+
+    const fileItem: InboxItem = {
+      id: 'note-with-photo',
+      type: 'note',
+      title: 'test',
+      body: '',
+      createdAt: new Date().toISOString(),
+      filePath: 'files/photo.jpg',
+    } as any;
+
+    await deleteItem('note-with-photo', fileItem);
+
+    expect(revokeSpy).toHaveBeenCalledWith('blob:mem/abc123');
+    expect(get(blobUrls)['files/photo.jpg']).toBeUndefined();
+  });
+
+  it('revokes all blob URLs on disconnect (via captured handler)', () => {
+    blobUrls.set({
+      'files/a.jpg': 'blob:mem/a',
+      'files/b.mp3': 'blob:mem/b',
+    });
+
+    // Use the test helper that fires all captured handlers for the event.
+    // This avoids mutating mock state.
+    emitRsEvent('disconnected');
+
+    expect(revokeSpy).toHaveBeenCalledWith('blob:mem/a');
+    expect(revokeSpy).toHaveBeenCalledWith('blob:mem/b');
+    expect(get(blobUrls)).toEqual({});
+  });
+
+  it('does not throw when revoking during disconnect with no blobs', () => {
+    blobUrls.set({});
+
+    expect(() => emitRsEvent('disconnected')).not.toThrow();
+    expect(get(blobUrls)).toEqual({});
   });
 });
 
