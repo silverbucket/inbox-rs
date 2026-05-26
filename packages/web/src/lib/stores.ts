@@ -371,6 +371,18 @@ rs.on('connected', async () => {
 });
 
 rs.on('disconnected', () => {
+  // Revoke all blob URLs to prevent memory leaks across reconnects / long sessions.
+  const currentBlobs = get(blobUrls);
+  for (const url of Object.values(currentBlobs)) {
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      // ignore revoke errors during shutdown
+    }
+  }
+  blobUrls.set({});
+  pendingBlobLoads.clear();
+
   connected.set(false);
   userAddress.set('');
   localStorage.removeItem('inbox-rs:userAddress');
@@ -694,6 +706,31 @@ export async function storeItem(item: InboxItem, fileData?: ArrayBuffer) {
 export async function deleteItem(id: string, item?: InboxItem) {
   const inbox = getInbox();
   await inbox.remove(id, item);
+
+  // Revoke and remove any associated blob URL to prevent memory leaks.
+  // All current callers pass the full item; we also do a defensive lookup.
+  const filePath =
+    (item && 'filePath' in item && (item as { filePath?: string }).filePath) ||
+    (get(items)[id] &&
+      'filePath' in get(items)[id] &&
+      (get(items)[id] as { filePath?: string }).filePath);
+
+  if (typeof filePath === 'string' && filePath) {
+    const existing = get(blobUrls)[filePath];
+    if (existing) {
+      try {
+        URL.revokeObjectURL(existing);
+      } catch {
+        // ignore
+      }
+      blobUrls.update((current) => {
+        const next = { ...current };
+        delete next[filePath];
+        return next;
+      });
+    }
+  }
+
   rawItems.update((current) => {
     const next = { ...current };
     for (const key of Object.keys(next)) {
