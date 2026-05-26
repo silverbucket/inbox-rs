@@ -138,6 +138,7 @@ a:hover {
   input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
   textarea,
   select {
-    font-size: 16px;
+    /* biome-ignore lint/complexity/noImportantStyles: Required to beat Svelte scoped selectors (.svelte-xxx) so the iOS zoom prevention floor is effective. See comment above. */
+    font-size: 16px !important;
   }
 }
