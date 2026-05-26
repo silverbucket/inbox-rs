@@ -24,19 +24,53 @@ browser.runtime.onInstalled.addListener(() => {
   });
 });
 
-/** Download an image and return the binary data + detected mime type */
+/** Max size for images fetched via the extension (25 MiB). */
+const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+/** Hard timeout for image fetches (network can be slow on some RS servers). */
+const FETCH_TIMEOUT_MS = 20_000;
+
+/** Download an image and return the binary data + detected mime type.
+ *  Applies size and timeout limits to avoid DoS / excessive memory use in the
+ *  service worker (which has <all_urls> and is triggered by context menus or
+ *  the popup on arbitrary pages).
+ */
 async function fetchImageData(
   url: string,
 ): Promise<{ data: ArrayBuffer; mimeType: string } | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
   try {
-    const resp = await fetch(url);
+    const resp = await fetch(url, { signal: controller.signal });
     if (!resp.ok) return null;
+
+    // Enforce size limit using Content-Length when present (cheap early exit).
+    // Require the entire (trimmed) header value to be pure digits to avoid
+    // partial parses like "123abc" or "20MB" bypassing the early guard.
+    const len = resp.headers.get('content-length')?.trim();
+    const contentLength = len && /^\d+$/.test(len) ? Number(len) : NaN;
+    if (!Number.isNaN(contentLength) && contentLength > MAX_IMAGE_BYTES) {
+      return null;
+    }
+
     const mimeType =
       resp.headers.get('content-type')?.split(';')[0] || 'image/png';
+
+    // Guard against non-image responses from weird servers / redirects.
+    if (!mimeType.startsWith('image/')) {
+      return null;
+    }
+
     const data = await resp.arrayBuffer();
+    if (data.byteLength > MAX_IMAGE_BYTES) {
+      return null;
+    }
+
     return { data, mimeType };
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
