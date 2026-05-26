@@ -372,6 +372,10 @@ rs.on('connected', async () => {
 
 rs.on('disconnected', () => {
   // Revoke all blob URLs to prevent memory leaks across reconnects / long sessions.
+  // Bump the generation so any in-flight loadFileBlobUrl promises from
+  // before this disconnect are ignored when they resolve (prevents stale
+  // blob URLs from being re-added after cleanup).
+  blobLoadGeneration++;
   const currentBlobs = get(blobUrls);
   for (const url of Object.values(currentBlobs)) {
     try {
@@ -651,32 +655,38 @@ export const collectionItems = derived(
 
 // ---- File blob URL loading ----
 
-const pendingBlobLoads = new Set<string>();
+/** Incremented on full blob URL revocation (e.g. disconnect) to invalidate in-flight loads. */
+let blobLoadGeneration = 0;
+const pendingBlobLoads = new Map<string, number>();
 
 /**
  * Fetch a file from RS and create a blob URL, stored in blobUrls for reactive display.
  * No-ops if already loaded or in progress. Components should call this on mount.
  *
- * Callers should pass `mimeType` when they know it (e.g. from item metadata) so the
- * resulting blob is created with a clean image/audio/... type regardless of what the
- * server echoes back in its Content-Type header. See `fetchFileWithAuth` for the
- * `charset=binary` quirk that makes this necessary.
+ * A generation number is captured at start time. After a disconnect (or other
+ * full revocation), the generation is bumped so stale promises cannot
+ * re-populate blobUrls with URLs created after cleanup.
  */
 export function loadFileBlobUrl(filePath: string, mimeType?: string): void {
   if (!filePath) return;
   if (get(blobUrls)[filePath] || pendingBlobLoads.has(filePath)) return;
   if (!get(connected)) return;
-  pendingBlobLoads.add(filePath);
+  const gen = blobLoadGeneration;
+  pendingBlobLoads.set(filePath, gen);
   fetchFileBlobUrl(filePath, mimeType)
     .then((url) => {
-      if (url) {
+      // Only act on the result if this load was not invalidated by a later
+      // full revocation (e.g. disconnect).
+      if (url && pendingBlobLoads.get(filePath) === gen) {
         const old = get(blobUrls)[filePath];
         if (old) URL.revokeObjectURL(old);
         blobUrls.update((current) => ({ ...current, [filePath]: url }));
       }
     })
     .finally(() => {
-      pendingBlobLoads.delete(filePath);
+      if (pendingBlobLoads.get(filePath) === gen) {
+        pendingBlobLoads.delete(filePath);
+      }
     });
 }
 
@@ -729,6 +739,8 @@ export async function deleteItem(id: string, item?: InboxItem) {
         return next;
       });
     }
+    // Also drop any in-flight load for this specific file (no global gen bump needed).
+    pendingBlobLoads.delete(filePath);
   }
 
   rawItems.update((current) => {
