@@ -114,7 +114,11 @@ describe('service-worker', () => {
         { id: 1, title: 'Test Page' },
       );
 
-      expect(mockFetch).toHaveBeenCalledWith('https://example.com/photo.jpg');
+      // fetch is now called with an AbortSignal for timeout protection
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://example.com/photo.jpg',
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/inbox/files/test-uuid-1234.jpg'),
@@ -237,6 +241,30 @@ describe('service-worker', () => {
           type: 'download-and-store-image',
           url: 'https://example.com/missing.png',
           filePath: 'files/abc.png',
+        },
+        {},
+      );
+
+      expect(result).toEqual({ ok: false });
+    });
+
+    it('rejects oversized images (Content-Length guard)', async () => {
+      const huge = String(30 * 1024 * 1024); // > 25 MiB limit
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({
+          'content-type': 'image/jpeg',
+          'content-length': huge,
+        }),
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+      });
+
+      const handler = onMessageListeners[0];
+      const result = await handler(
+        {
+          type: 'download-and-store-image',
+          url: 'https://example.com/huge.jpg',
+          filePath: 'files/huge.jpg',
         },
         {},
       );
