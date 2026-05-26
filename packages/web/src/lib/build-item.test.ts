@@ -328,8 +328,9 @@ describe('buildAudioItem', () => {
     });
 
     expect((result?.item as AudioItem).title).toBe('Audio');
-    // No transcript and no user-typed body → don't lie that it was
-    // transcribed. The recorder ran, but we have nothing to show.
+    // Recording exists (even with no transcript text) → mark as having
+    // audio content. The `transcribed` field here indicates presence of
+    // a recording rather than the existence of text.
     expect((result?.item as AudioItem).transcribed).toBe(true);
   });
 
