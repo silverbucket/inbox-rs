@@ -272,6 +272,47 @@ describe('service-worker', () => {
       expect(result).toEqual({ ok: false });
     });
 
+    it('rejects non-image Content-Type', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'text/html' }),
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(100)),
+      });
+
+      const handler = onMessageListeners[0];
+      const result = await handler(
+        {
+          type: 'download-and-store-image',
+          url: 'https://example.com/page.html',
+          filePath: 'files/page.html',
+        },
+        {},
+      );
+
+      expect(result).toEqual({ ok: false });
+    });
+
+    it('rejects oversized images when Content-Length is absent', async () => {
+      const huge = new ArrayBuffer(30 * 1024 * 1024); // > 25 MiB
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'image/jpeg' }),
+        arrayBuffer: () => Promise.resolve(huge),
+      });
+
+      const handler = onMessageListeners[0];
+      const result = await handler(
+        {
+          type: 'download-and-store-image',
+          url: 'https://example.com/huge.jpg',
+          filePath: 'files/huge.jpg',
+        },
+        {},
+      );
+
+      expect(result).toEqual({ ok: false });
+    });
+
     it('returns ok:false when config is missing', async () => {
       mockStorageGet.mockResolvedValue({});
 
