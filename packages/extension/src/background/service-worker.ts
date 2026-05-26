@@ -45,9 +45,10 @@ async function fetchImageData(
     if (!resp.ok) return null;
 
     // Enforce size limit using Content-Length when present (cheap early exit).
-    // Use parseInt for stricter integer validation on the header value.
-    const len = resp.headers.get('content-length');
-    const contentLength = len ? parseInt(len, 10) : NaN;
+    // Require the entire (trimmed) header value to be pure digits to avoid
+    // partial parses like "123abc" or "20MB" bypassing the early guard.
+    const len = resp.headers.get('content-length')?.trim();
+    const contentLength = len && /^\d+$/.test(len) ? Number(len) : NaN;
     if (!Number.isNaN(contentLength) && contentLength > MAX_IMAGE_BYTES) {
       return null;
     }
