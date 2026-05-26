@@ -80,5 +80,5 @@
   {docLoading ? 'Loading...' : 'Download'}
 </button>
 {#if docError}
-  <p class="status-text">Failed to load document</p>
+  <p class="status-text" role="alert">Failed to load document</p>
 {/if}
