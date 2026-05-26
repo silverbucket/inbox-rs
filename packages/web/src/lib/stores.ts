@@ -386,6 +386,7 @@ rs.on('disconnected', () => {
   }
   blobUrls.set({});
   pendingBlobLoads.clear();
+  revokedBlobPaths.clear();
 
   connected.set(false);
   userAddress.set('');
@@ -658,6 +659,8 @@ export const collectionItems = derived(
 /** Incremented on full blob URL revocation (e.g. disconnect) to invalidate in-flight loads. */
 let blobLoadGeneration = 0;
 const pendingBlobLoads = new Map<string, number>();
+/** Paths for which we have explicitly revoked (via deleteItem) so in-flight loads don't re-insert. */
+const revokedBlobPaths = new Set<string>();
 
 /**
  * Fetch a file from RS and create a blob URL, stored in blobUrls for reactive display.
@@ -669,19 +672,30 @@ const pendingBlobLoads = new Map<string, number>();
  */
 export function loadFileBlobUrl(filePath: string, mimeType?: string): void {
   if (!filePath) return;
+  // A new explicit load attempt clears any prior delete tombstone for this path.
+  revokedBlobPaths.delete(filePath);
   if (get(blobUrls)[filePath] || pendingBlobLoads.has(filePath)) return;
   if (!get(connected)) return;
   const gen = blobLoadGeneration;
   pendingBlobLoads.set(filePath, gen);
   fetchFileBlobUrl(filePath, mimeType)
     .then((url) => {
-      // Only act on the result if this load was not invalidated by a later
-      // full revocation (e.g. disconnect).
-      if (url && pendingBlobLoads.get(filePath) === gen) {
-        const old = get(blobUrls)[filePath];
-        if (old) URL.revokeObjectURL(old);
-        blobUrls.update((current) => ({ ...current, [filePath]: url }));
+      if (!url) return;
+      // Ignore (and revoke) results that are stale due to disconnect, delete, etc.
+      if (
+        pendingBlobLoads.get(filePath) !== gen ||
+        revokedBlobPaths.has(filePath)
+      ) {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          // ignore
+        }
+        return;
       }
+      const old = get(blobUrls)[filePath];
+      if (old) URL.revokeObjectURL(old);
+      blobUrls.update((current) => ({ ...current, [filePath]: url }));
     })
     .finally(() => {
       if (pendingBlobLoads.get(filePath) === gen) {
@@ -741,6 +755,8 @@ export async function deleteItem(id: string, item?: InboxItem) {
     }
     // Also drop any in-flight load for this specific file (no global gen bump needed).
     pendingBlobLoads.delete(filePath);
+    // Mark as revoked so any concurrent in-flight load for this exact path is ignored on resolution.
+    revokedBlobPaths.add(filePath);
   }
 
   rawItems.update((current) => {
