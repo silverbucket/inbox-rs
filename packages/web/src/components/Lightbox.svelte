@@ -127,12 +127,24 @@
   }
 
   function buildRedirectPage(url: string): ArrayBuffer {
+    // Validate protocol to prevent javascript: or other dangerous schemes
+    try {
+      const parsed = new URL(url);
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        throw new Error('Invalid protocol');
+      }
+    } catch {
+      throw new Error('Invalid URL for redirect page');
+    }
+
     const html = `<!DOCTYPE html>
 <html><head>
 <meta http-equiv="refresh" content="0;url=${url.replace(/"/g, '&quot;')}">
 <style>body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui;background:#111;color:#ccc}a{color:#6cf}</style>
 </head><body><a href="${url.replace(/"/g, '&quot;')}">View image</a></body></html>`;
-    return new TextEncoder().encode(html).buffer;
+
+    const encoded = new TextEncoder().encode(html);
+    return encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength);
   }
 
   async function share() {
