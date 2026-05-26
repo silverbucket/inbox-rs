@@ -78,7 +78,12 @@
       completed: nowCompleted,
       completedAt: nowCompleted ? new Date().toISOString() : undefined,
     };
-    await storeItem(cleanForStorage(updated));
+    try {
+      await storeItem(cleanForStorage(updated));
+    } catch (error) {
+      console.error('Failed to toggle todo completion', error);
+      // Checkbox reverts on next render because the item prop is unchanged
+    }
   }
 
   async function handleExpandToggle() {

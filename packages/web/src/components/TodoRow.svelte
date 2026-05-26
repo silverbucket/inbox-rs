@@ -63,7 +63,12 @@
       completed: nowCompleted,
       completedAt: nowCompleted ? new Date().toISOString() : undefined,
     };
-    await storeItem(cleanForStorage(updated) as InboxItem);
+    try {
+      await storeItem(cleanForStorage(updated) as InboxItem);
+    } catch (err) {
+      console.error('Failed to update todo:', err);
+      // Checkbox reverts on next render because the `todo` prop is unchanged
+    }
   }
 
   function handleClick(e: MouseEvent) {

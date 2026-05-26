@@ -7,6 +7,7 @@
 
   let docBlobUrl = $state<string | null>(null);
   let docLoading = $state(false);
+  let docError = $state(false);
 
   // The parent shell wraps the per-type view in `{#key item.id}`, so
   // navigating between documents fully remounts this component and
@@ -32,6 +33,7 @@
       return;
     }
     docLoading = true;
+    docError = false;
     try {
       const file = await rs.inbox.getFile(item.filePath);
       if (file?.data) {
@@ -39,7 +41,13 @@
           new Blob([file.data], { type: item.mimeType }),
         );
         openDownload(docBlobUrl);
+      } else {
+        console.error('Document file data is missing or empty', item.filePath);
+        docError = true;
       }
+    } catch (e) {
+      console.error('Failed to download document:', e);
+      docError = true;
     } finally {
       docLoading = false;
     }
@@ -72,3 +80,6 @@
 >
   {docLoading ? 'Loading...' : 'Download'}
 </button>
+{#if docError}
+  <p class="status-text" role="alert">Failed to load document</p>
+{/if}
