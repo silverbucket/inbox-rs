@@ -48,7 +48,8 @@ export async function makeReference(item: InboxItem): Promise<void> {
   delete updated.completedAt;
   if (updated.type === 'todo') {
     updated.type = 'note';
-    if (!updated.body) updated.body = '';
+    if (!updated.body) updated.body = updated.description || '';
+    delete updated.description;
   }
   await storeItem(updated as unknown as InboxItem);
 }
