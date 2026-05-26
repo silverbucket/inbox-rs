@@ -1,10 +1,17 @@
 {
   "manifest_version": 3,
   "name": "Inbox RS",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": "Save links, text, and more to your remoteStorage inbox.",
-  "permissions": ["contextMenus", "activeTab", "storage", "identity"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": [
+    "contextMenus",
+    "activeTab",
+    "storage",
+    "identity"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "action": {
     "default_popup": "src/popup/index.html",
     "default_title": "Inbox RS",
@@ -20,8 +27,12 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content-metadata.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content-metadata.js"
+      ],
       "run_at": "document_idle"
     }
   ],

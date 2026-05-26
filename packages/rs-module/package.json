@@ -1,6 +1,6 @@
 {
   "name": "@inbox-rs/rs-module",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "private": true,
   "type": "module",
   "main": "dist/index.js",
