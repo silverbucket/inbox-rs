@@ -42,6 +42,7 @@
         );
         openDownload(docBlobUrl);
       } else {
+        console.error('Document file data is missing or empty', item.filePath);
         docError = true;
       }
     } catch (e) {
