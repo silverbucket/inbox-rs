@@ -45,6 +45,7 @@
   let transcriptionId = 0;
   let mediaRecorder: MediaRecorder | null = null;
   let recordingInterval: ReturnType<typeof setInterval> | null = null;
+  let recordingError = $state('');
 
   $effect(() => {
     if (recording) {
@@ -77,6 +78,7 @@
   }
 
   async function startRecording() {
+    recordingError = '';
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const chunks: Blob[] = [];
@@ -102,8 +104,9 @@
       recordingInterval = setInterval(() => {
         recordingDuration++;
       }, 1000);
-    } catch {
-      // Mic permission denied or unavailable
+    } catch (error) {
+      recordingError = 'Microphone access denied or unavailable';
+      console.warn('Failed to start recording:', error);
     }
   }
 
@@ -175,6 +178,9 @@
         <button type="button" class="rec-btn rec-start" onclick={startRecording}
           >Start Recording</button
         >
+        {#if recordingError}
+          <p class="status-text">{recordingError}</p>
+        {/if}
       {/if}
     </div>
   </div>
