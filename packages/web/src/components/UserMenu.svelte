@@ -1,8 +1,10 @@
 <script lang="ts">
+  import type { Component } from 'svelte';
   import { tick } from 'svelte';
   import rs from '../lib/rs';
   import { connected, syncing, userAddress, userSettings, updateUserSettings } from '../lib/stores';
-  import ImportExportModal from './ImportExportModal.svelte';
+
+  type LazyComponent = Component<Record<string, unknown>>;
 
   let open = $state(false);
   let inputAddress = $state('');
@@ -11,9 +13,14 @@
   let abbrevInput = $state('');
   let abbrevInputEl = $state<HTMLInputElement | null>(null);
   let connectInputEl = $state<HTMLInputElement | null>(null);
-  let importExportModal = $state<ReturnType<typeof ImportExportModal>>();
+  let ImportExportModalComponent = $state<LazyComponent | null>(null);
+  let importExportModal = $state<{ startExport: () => void; promptImport: (file: File) => void } | null>(null);
   let importExportOpen = $state(false);
   let fileInputEl = $state<HTMLInputElement | null>(null);
+
+  async function loadImportExportModal() {
+    ImportExportModalComponent ??= (await import('./ImportExportModal.svelte')).default as LazyComponent;
+  }
 
   // Theme: synced settings take priority, localStorage is the offline fallback
   let localTheme = $state<'system' | 'light' | 'dark'>(
@@ -143,7 +150,9 @@
 
   function handleExport() {
     open = false;
-    importExportModal?.startExport();
+    void loadImportExportModal().then(() => {
+      importExportModal?.startExport();
+    });
   }
 
   function handleImportClick() {
@@ -155,7 +164,9 @@
     const file = input.files?.[0];
     if (file) {
       open = false;
-      importExportModal?.promptImport(file);
+      void loadImportExportModal().then(() => {
+        importExportModal?.promptImport(file);
+      });
     }
     input.value = '';
   }
@@ -351,7 +362,9 @@
   {/if}
 </div>
 
-<ImportExportModal bind:this={importExportModal} bind:open={importExportOpen} />
+{#if ImportExportModalComponent}
+  <ImportExportModalComponent bind:this={importExportModal} bind:open={importExportOpen} />
+{/if}
 
 <style>
   .user-menu {

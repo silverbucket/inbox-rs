@@ -1,18 +1,12 @@
 <script lang="ts">
+  import type { Component } from 'svelte';
   import { onMount } from 'svelte';
   import type { InboxItemType, InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
   import UserMenu from './components/UserMenu.svelte';
   import InboxGrid from './components/InboxGrid.svelte';
   import AddEntryBar from './components/AddEntryBar.svelte';
-  import AddEntryModal from './components/AddEntryModal.svelte';
-  import ViewCardModal from './components/ViewCardModal.svelte';
   import MigrationAlert from './components/MigrationAlert.svelte';
-  import PluginsPage from './components/PluginsPage.svelte';
-  import CollectionsPage from './components/CollectionsPage.svelte';
-  import TodosPage from './components/TodosPage.svelte';
   import GroupFilterBar from './components/GroupFilterBar.svelte';
-  import CollectionFormModal from './components/CollectionFormModal.svelte';
-  import GroupFormModal from './components/GroupFormModal.svelte';
   import {
     connected, deleteItem, openTodos, pendingMigrationCount, runAllMigrations,
     createCollection, storeGroup,
@@ -22,18 +16,55 @@
   import { appVersion } from './lib/plugin-downloads.generated';
   import LogoShield from './components/LogoShield.svelte';
 
+  type LazyComponent = Component<Record<string, unknown>>;
+
   let activeModal = $state<InboxItemType | null>(null);
   let editingItem = $state<InboxItem | undefined>(undefined);
   let viewingItem = $state<InboxItem | null>(null);
   let showCollectionForm = $state(false);
   let showGroupForm = $state(false);
   let userMenu = $state<InstanceType<typeof UserMenu> | null>(null);
+  let AddEntryModalComponent = $state<LazyComponent | null>(null);
+  let ViewCardModalComponent = $state<LazyComponent | null>(null);
+  let PluginsPageComponent = $state<LazyComponent | null>(null);
+  let TodosPageComponent = $state<LazyComponent | null>(null);
+  let CollectionsPageComponent = $state<LazyComponent | null>(null);
+  let CollectionFormModalComponent = $state<LazyComponent | null>(null);
+  let GroupFormModalComponent = $state<LazyComponent | null>(null);
   // Collection to pre-select when opening the add-entry modal. Used by the
   // per-row quick-add on the Todos page so the new todo lands in the same
   // collection as the row the user is adding alongside.
   let preselectedCollectionId = $state<string | undefined>(undefined);
 
   let route = $state<Route>(parseHash(window.location.hash));
+
+  async function loadAddEntryModal() {
+    AddEntryModalComponent ??= (await import('./components/AddEntryModal.svelte')).default as LazyComponent;
+  }
+
+  async function loadViewCardModal() {
+    ViewCardModalComponent ??= (await import('./components/ViewCardModal.svelte')).default as LazyComponent;
+  }
+
+  async function loadPluginsPage() {
+    PluginsPageComponent ??= (await import('./components/PluginsPage.svelte')).default as LazyComponent;
+  }
+
+  async function loadTodosPage() {
+    TodosPageComponent ??= (await import('./components/TodosPage.svelte')).default as LazyComponent;
+  }
+
+  async function loadCollectionsPage() {
+    CollectionsPageComponent ??= (await import('./components/CollectionsPage.svelte')).default as LazyComponent;
+  }
+
+  async function loadCollectionFormModal() {
+    CollectionFormModalComponent ??= (await import('./components/CollectionFormModal.svelte')).default as LazyComponent;
+  }
+
+  async function loadGroupFormModal() {
+    GroupFormModalComponent ??= (await import('./components/GroupFormModal.svelte')).default as LazyComponent;
+  }
 
   // ---- Route ↔ filter sync ----
   // Source of truth for filters is `appConfig.activeGroupFilters`. URL params
@@ -81,6 +112,34 @@
     viewingItem = null;
   });
 
+  $effect(() => {
+    if (route.page === 'plugins') void loadPluginsPage();
+  });
+
+  $effect(() => {
+    if (route.page === 'todos') void loadTodosPage();
+  });
+
+  $effect(() => {
+    if (route.page === 'collections') void loadCollectionsPage();
+  });
+
+  $effect(() => {
+    if (activeModal) void loadAddEntryModal();
+  });
+
+  $effect(() => {
+    if (viewingItem) void loadViewCardModal();
+  });
+
+  $effect(() => {
+    if (showCollectionForm) void loadCollectionFormModal();
+  });
+
+  $effect(() => {
+    if (showGroupForm) void loadGroupFormModal();
+  });
+
   // Lock body scroll when any modal is open (including iOS Safari)
   const anyModalOpen = $derived(!!viewingItem || !!activeModal || showCollectionForm || showGroupForm);
   let savedScrollY = 0;
@@ -123,6 +182,7 @@
     editingItem = undefined;
     preselectedCollectionId = undefined;
     activeModal = type;
+    void loadAddEntryModal();
   }
 
   function openAddTodo() {
@@ -140,6 +200,7 @@
 
   function openView(item: InboxItem) {
     viewingItem = item;
+    void loadViewCardModal();
   }
 
   function openEditFromView(item: InboxItem) {
@@ -178,6 +239,11 @@
     } catch (error) {
       console.error('Failed to create group', error);
     }
+  }
+
+  function openGroupForm() {
+    showGroupForm = true;
+    void loadGroupFormModal();
   }
 
   // Surface a small badge with open todo count next to the Todos nav item.
@@ -226,7 +292,7 @@
     <div class="header-filters">
       <div class="header-filters-inner">
         <GroupFilterBar
-          onaddgroup={() => showGroupForm = true}
+          onaddgroup={openGroupForm}
           dimmed={!pageUsesFilters(route.page)}
         />
       </div>
@@ -236,7 +302,9 @@
 
 <main>
   {#if route.page === 'plugins'}
-    <PluginsPage />
+    {#if PluginsPageComponent}
+      <PluginsPageComponent />
+    {/if}
   {:else}
     {#if $pendingMigrationCount > 0}
       <MigrationAlert count={$pendingMigrationCount} onrun={runAllMigrations} />
@@ -253,9 +321,13 @@
       </div>
       <InboxGrid onselect={openView} onconnect={openConnectMenu} />
     {:else if route.page === 'todos'}
-      <TodosPage onselect={openView} onaddtodo={openAddTodo} onaddtodoincollection={openAddTodoInCollection} />
+      {#if TodosPageComponent}
+        <TodosPageComponent onselect={openView} onaddtodo={openAddTodo} onaddtodoincollection={openAddTodoInCollection} />
+      {/if}
     {:else}
-      <CollectionsPage onselect={openView} />
+      {#if CollectionsPageComponent}
+        <CollectionsPageComponent onselect={openView} />
+      {/if}
     {/if}
   {/if}
 </main>
@@ -278,25 +350,33 @@
 </footer>
 
 {#if viewingItem}
-  <ViewCardModal item={viewingItem} onclose={closeViewModal} onedit={openEditFromView} />
+  {#if ViewCardModalComponent}
+    <ViewCardModalComponent item={viewingItem} onclose={closeViewModal} onedit={openEditFromView} />
+  {/if}
 {/if}
 
 {#if activeModal}
-  <AddEntryModal
-    type={activeModal}
-    editItem={editingItem}
-    collectionId={preselectedCollectionId}
-    onclose={closeModal}
-    ondelete={async (item) => { await deleteItem(item.id, item); closeModal(); }}
-  />
+  {#if AddEntryModalComponent}
+    <AddEntryModalComponent
+      type={activeModal}
+      editItem={editingItem}
+      collectionId={preselectedCollectionId}
+      onclose={closeModal}
+      ondelete={async (item: InboxItem) => { await deleteItem(item.id, item); closeModal(); }}
+    />
+  {/if}
 {/if}
 
 {#if showCollectionForm}
-  <CollectionFormModal onclose={() => showCollectionForm = false} onsave={handleCreateCollection} />
+  {#if CollectionFormModalComponent}
+    <CollectionFormModalComponent onclose={() => showCollectionForm = false} onsave={handleCreateCollection} />
+  {/if}
 {/if}
 
 {#if showGroupForm}
-  <GroupFormModal onclose={() => showGroupForm = false} onsave={handleCreateGroup} />
+  {#if GroupFormModalComponent}
+    <GroupFormModalComponent onclose={() => showGroupForm = false} onsave={handleCreateGroup} />
+  {/if}
 {/if}
 
 <style>
