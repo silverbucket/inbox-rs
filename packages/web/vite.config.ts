@@ -26,6 +26,10 @@ export default defineConfig({
         'icon-512.png',
       ],
       workbox: {
+        additionalManifestEntries: [
+          { url: '/', revision: version },
+          { url: '/capture/', revision: version },
+        ],
         cleanupOutdatedCaches: true,
         navigateFallback: '/index.html',
         globPatterns: ['**/*.{js,css,html,png,svg,webmanifest}'],
@@ -51,5 +55,11 @@ export default defineConfig({
     // 89 / Firefox 89 / Safari 15 — all 2021 baselines, well below our
     // supported floor.
     target: ['chrome89', 'edge89', 'firefox89', 'safari15'],
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        capture: path.resolve(__dirname, 'capture/index.html'),
+      },
+    },
   },
 });
