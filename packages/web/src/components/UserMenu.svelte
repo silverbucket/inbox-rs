@@ -164,9 +164,7 @@
     const file = input.files?.[0];
     if (file) {
       open = false;
-      void loadImportExportModal().then(() => {
-        importExportModal?.promptImport(file);
-      });
+      void withImportExportModal((modal) => modal.promptImport(file));
     }
     input.value = '';
   }

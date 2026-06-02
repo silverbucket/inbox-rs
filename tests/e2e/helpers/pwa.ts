@@ -61,6 +61,21 @@ function rsLocalStoragePayload(
  * the web app's `RemoteStorage` constructor runs, the auth state is in
  * place and the connect widget skips straight to the connected UI.
  */
+/**
+ * Wait until the production service worker controls the page.
+ *
+ * Call after the first navigation to the app origin so Workbox has finished
+ * installing and `clients.claim()` has taken effect.
+ */
+export async function waitForServiceWorkerController(
+  page: Page,
+): Promise<void> {
+  await page.waitForFunction(
+    () => navigator.serviceWorker?.controller != null,
+    { timeout: 15_000 },
+  );
+}
+
 export async function seedRsSession(
   context: BrowserContext,
   user: RsUser,
