@@ -1,11 +1,10 @@
 /**
  * Offline behavior.
  *
- * The web app uses remotestoragejs's caching layer (`rs.caching.enable('/inbox/')`)
- * which keeps everything in IndexedDB and replays writes when the network
- * returns. We don't ship a service worker yet, so an offline cold-load is
- * expected to fail — but a *warm* offline load (already-loaded SPA losing
- * network) must keep the cached UI usable.
+ * The web app uses a service worker for the app shell and remotestoragejs's
+ * caching layer (`rs.caching.enable('/inbox/')`) for data. Once the app has
+ * loaded online and installed the service worker, a later offline launch should
+ * still render the cached shell and local data.
  */
 
 import { expect, test } from '../helpers/fixtures';
@@ -15,13 +14,6 @@ test('warm offline still renders shell', async ({
   connectedPage,
   webOrigin,
 }) => {
-  // Load the app, then go offline and reload. With no service worker
-  // today this WILL fail to navigate — that's the documented behaviour
-  // we want to lock in so a future SW addition is an obvious test diff.
-  //
-  // To rephrase: this test is a *characterization test*. When we ship
-  // the PWA service worker, flip the assertion at the bottom and the
-  // suite will tell you the moment offline-first regresses.
   attachConsoleCapture(connectedPage);
   await connectedPage.goto(webOrigin);
   await connectedPage.waitForLoadState('networkidle');
@@ -45,17 +37,38 @@ test('warm offline still renders shell', async ({
   await connectedPage.context().setOffline(false);
 });
 
-test('cold offline load is blocked without service worker', async ({
+test('installed app shell loads offline', async ({
+  context,
   page,
   webOrigin,
 }) => {
-  // Without a service worker, a fully-offline cold load can't reach the
-  // server. Documented here so a regression means somebody added (or
-  // removed) a SW and forgot to update either the docs or the test.
-  await page.context().setOffline(true);
+  await page.goto(webOrigin);
+  await page.waitForLoadState('networkidle');
+  await page.evaluate(() => navigator.serviceWorker.ready.then(() => true));
 
-  // Playwright surfaces network failures as a navigation error.
+  await context.setOffline(true);
+  const offlinePage = await context.newPage();
+  await offlinePage.goto(webOrigin);
+
+  await expect(
+    offlinePage.getByRole('button', { name: 'Inbox' }).first(),
+  ).toBeVisible();
+
+  await context.setOffline(false);
+  await offlinePage.close();
+});
+
+test('first-ever offline load still requires one online visit', async ({
+  browser,
+  webOrigin,
+}) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await context.setOffline(true);
+
   await expect(page.goto(webOrigin, { timeout: 5_000 })).rejects.toThrow(
     /net::ERR_INTERNET_DISCONNECTED|NS_ERROR_OFFLINE|net::ERR_FAILED/i,
   );
+
+  await context.close();
 });
