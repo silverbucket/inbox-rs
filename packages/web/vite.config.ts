@@ -29,6 +29,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         navigateFallback: '/index.html',
         globPatterns: ['**/*.{js,css,html,png,svg,webmanifest,wasm}'],
+        globIgnores: ['ml/**/*'],
       },
     }),
   ],
