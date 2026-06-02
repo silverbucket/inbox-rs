@@ -44,7 +44,17 @@ test('installed app shell loads offline', async ({
 }) => {
   await page.goto(webOrigin);
   await page.waitForLoadState('networkidle');
-  await page.evaluate(() => navigator.serviceWorker.ready.then(() => true));
+  await page.evaluate(() =>
+    Promise.race([
+      navigator.serviceWorker.ready.then(() => true),
+      new Promise<never>((_, reject) => {
+        setTimeout(
+          () => reject(new Error('Timed out waiting for service worker')),
+          5_000,
+        );
+      }),
+    ]),
+  );
 
   await context.setOffline(true);
   const offlinePage = await context.newPage();
@@ -63,12 +73,14 @@ test('first-ever offline load still requires one online visit', async ({
   webOrigin,
 }) => {
   const context = await browser.newContext();
-  const page = await context.newPage();
-  await context.setOffline(true);
+  try {
+    const page = await context.newPage();
+    await context.setOffline(true);
 
-  await expect(page.goto(webOrigin, { timeout: 5_000 })).rejects.toThrow(
-    /net::ERR_INTERNET_DISCONNECTED|NS_ERROR_OFFLINE|net::ERR_FAILED/i,
-  );
-
-  await context.close();
+    await expect(page.goto(webOrigin, { timeout: 5_000 })).rejects.toThrow(
+      /net::ERR_INTERNET_DISCONNECTED|NS_ERROR_OFFLINE|net::ERR_FAILED/i,
+    );
+  } finally {
+    await context.close();
+  }
 });
