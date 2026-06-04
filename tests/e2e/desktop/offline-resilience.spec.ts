@@ -8,15 +8,15 @@
  */
 
 import { expect, test } from '../helpers/fixtures';
-import { attachConsoleCapture } from '../helpers/pwa';
+import { waitForServiceWorkerController } from '../helpers/pwa';
 
 test('warm offline still renders shell', async ({
   connectedPage,
   webOrigin,
 }) => {
-  attachConsoleCapture(connectedPage);
   await connectedPage.goto(webOrigin);
   await connectedPage.waitForLoadState('networkidle');
+  await waitForServiceWorkerController(connectedPage);
 
   // We're in. Capture a sentinel from the live DOM so we can prove a
   // subsequent offline interaction worked against cached data.
@@ -24,16 +24,14 @@ test('warm offline still renders shell', async ({
     connectedPage.getByRole('button', { name: 'Inbox' }).first(),
   ).toBeVisible();
 
-  // Drop the network. Existing in-memory app keeps working — RS's
-  // IndexedDB cache satisfies reads, writes queue up.
+  // Drop the network. Existing in-memory app keeps working: RS's IndexedDB
+  // cache satisfies reads, writes queue up, and the hash router stays local.
   await connectedPage.context().setOffline(true);
-  // The hash router doesn't hit the network, so this should still work.
   await connectedPage.getByRole('button', { name: 'Collections' }).click();
   await expect(
     connectedPage.getByRole('button', { name: 'Collections' }).first(),
   ).toHaveAttribute('aria-current', 'page');
 
-  // Re-online for cleanup so the context teardown doesn't spam errors.
   await connectedPage.context().setOffline(false);
 });
 
@@ -83,4 +81,26 @@ test('first-ever offline load still requires one online visit', async ({
   } finally {
     await context.close();
   }
+});
+
+test('offline reload serves app shell after service worker install', async ({
+  page,
+  webOrigin,
+}) => {
+  await page.goto(webOrigin);
+  await page.waitForLoadState('networkidle');
+  await waitForServiceWorkerController(page);
+
+  await page.context().setOffline(true);
+
+  const reload = await page.reload({
+    waitUntil: 'domcontentloaded',
+    timeout: 15_000,
+  });
+  expect(reload?.ok()).toBeTruthy();
+  await expect(
+    page.getByRole('button', { name: 'Inbox' }).first(),
+  ).toBeVisible();
+
+  await page.context().setOffline(false);
 });
