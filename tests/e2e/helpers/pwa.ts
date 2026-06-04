@@ -54,14 +54,6 @@ function rsLocalStoragePayload(
 }
 
 /**
- * Pre-populate the browser context with an authorized RS session.
- *
- * Must be called *before* the page navigates to the app. Internally uses
- * `addInitScript`, which fires before any page script — so by the time
- * the web app's `RemoteStorage` constructor runs, the auth state is in
- * place and the connect widget skips straight to the connected UI.
- */
-/**
  * Wait until the production service worker controls the page.
  *
  * Call after the first navigation to the app origin so Workbox has finished
@@ -76,6 +68,14 @@ export async function waitForServiceWorkerController(
   );
 }
 
+/**
+ * Pre-populate the browser context with an authorized RS session.
+ *
+ * Must be called *before* the page navigates to the app. Internally uses
+ * `addInitScript`, which fires before any page script — so by the time
+ * the web app's `RemoteStorage` constructor runs, the auth state is in
+ * place and the connect widget skips straight to the connected UI.
+ */
 export async function seedRsSession(
   context: BrowserContext,
   user: RsUser,
