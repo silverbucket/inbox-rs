@@ -1,3 +1,22 @@
+export {
+  TRANSCRIPTION_MODEL_BASE_PATH,
+  TRANSCRIPTION_MODEL_FILES,
+  TRANSCRIPTION_MODEL_ID,
+  TRANSCRIPTION_MODEL_REVISION,
+  TRANSCRIPTION_WASM_BASE_PATH,
+  TRANSCRIPTION_WASM_FILES,
+} from './transcription-manifest';
+
+import {
+  createStoredWasmPaths,
+  createTranscriptionAssetCache,
+} from './transcription-assets';
+import {
+  TRANSCRIPTION_MODEL_BASE_PATH,
+  TRANSCRIPTION_MODEL_ID,
+  TRANSCRIPTION_WASM_BASE_PATH,
+} from './transcription-manifest';
+
 // The pipeline returned by @xenova/transformers is a callable instance whose
 // own published types are too involved to be useful here — it's effectively a
 // `(input, opts) => Promise<{ text: string }>` for whisper. Treat it as such.
@@ -10,48 +29,48 @@ type TransformersEnv = {
   allowLocalModels: boolean;
   allowRemoteModels: boolean;
   localModelPath: string;
+  useBrowserCache: boolean;
+  useCustomCache: boolean;
+  customCache: unknown;
   backends: {
     onnx: {
       wasm: {
-        wasmPaths: string;
+        wasmPaths: string | Record<string, string>;
+        numThreads?: number;
       };
     };
   };
 };
 
-export const TRANSCRIPTION_MODEL_ID = 'Xenova/whisper-tiny';
-export const TRANSCRIPTION_MODEL_REVISION =
-  '5332fcc35e32a33b86612b9a57a89be7906102b1';
-export const TRANSCRIPTION_MODEL_BASE_PATH = '/ml/models/';
-export const TRANSCRIPTION_WASM_BASE_PATH = '/ml/onnxruntime/';
-export const TRANSCRIPTION_MODEL_FILES = [
-  'config.json',
-  'generation_config.json',
-  'preprocessor_config.json',
-  'tokenizer.json',
-  'tokenizer_config.json',
-  'onnx/encoder_model_quantized.onnx',
-  'onnx/decoder_model_merged_quantized.onnx',
-] as const;
-export const TRANSCRIPTION_WASM_FILES = [
-  'ort-wasm.wasm',
-  'ort-wasm-simd.wasm',
-  'ort-wasm-threaded.wasm',
-  'ort-wasm-threaded.js',
-  'ort-wasm-threaded.worker.js',
-  'ort-wasm-simd-threaded.wasm',
-] as const;
+type TranscriptionEnvOptions = {
+  assetCache?: unknown;
+  wasmPaths?: Record<string, string>;
+};
 
 let transcriber: Transcriber | null = null;
 let loadPromise: Promise<Transcriber> | null = null;
 
-export function configureTranscriptionEnv(env: TransformersEnv) {
+export function configureTranscriptionEnv(
+  env: TransformersEnv,
+  options: TranscriptionEnvOptions = {},
+) {
   // Keep inference entirely same-origin so the runtime does not fall back to
   // remote models or CDN-hosted ONNX assets.
   env.allowLocalModels = true;
   env.allowRemoteModels = false;
   env.localModelPath = TRANSCRIPTION_MODEL_BASE_PATH;
-  env.backends.onnx.wasm.wasmPaths = TRANSCRIPTION_WASM_BASE_PATH;
+  if (options.assetCache) {
+    env.useBrowserCache = false;
+    env.useCustomCache = true;
+    env.customCache = options.assetCache;
+  }
+  env.backends.onnx.wasm.wasmPaths = Object.keys(options.wasmPaths ?? {}).length
+    ? (options.wasmPaths as Record<string, string>)
+    : TRANSCRIPTION_WASM_BASE_PATH;
+  // `wasmPaths` only overrides WASM files, not ONNX Runtime's threaded worker
+  // script. Keep transcription on the non-threaded runtime so cached blob URLs
+  // are enough for offline inference.
+  env.backends.onnx.wasm.numThreads = 1;
 }
 
 async function getTranscriber() {
@@ -60,7 +79,10 @@ async function getTranscriber() {
   loadPromise = (async () => {
     try {
       const { pipeline, env } = await import('@xenova/transformers');
-      configureTranscriptionEnv(env as TransformersEnv);
+      configureTranscriptionEnv(env as TransformersEnv, {
+        assetCache: createTranscriptionAssetCache(),
+        wasmPaths: await createStoredWasmPaths(),
+      });
       transcriber = (await pipeline(
         'automatic-speech-recognition',
         TRANSCRIPTION_MODEL_ID,
