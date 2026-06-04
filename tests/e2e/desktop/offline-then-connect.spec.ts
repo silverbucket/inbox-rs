@@ -1,9 +1,9 @@
 /**
  * Offline → online → connect transitions.
  *
- * Both scenarios start with the disconnected app shell loaded online so the
- * service worker can install (see `offline-resilience.spec.ts` for cold-load
- * behaviour without a prior visit). The network is then
+ * Both scenarios start with the disconnected app shell loaded online (we
+ * don't ship a service worker yet, so a *cold* offline load is expected
+ * to fail — see `offline-resilience.spec.ts`). The network is then
  * dropped to exercise the "user opened the page on a flaky connection"
  * path, brought back, and the connect flow runs to completion.
  *
