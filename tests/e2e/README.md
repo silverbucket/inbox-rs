@@ -20,6 +20,7 @@ schemas.
 | `desktop/offline-resilience.spec.ts` | warm-offline keeps SPA usable; cold-offline characterization (will flip when SW lands) |
 | `desktop/offline-then-connect.spec.ts` | offline → online → connect, both for a brand-new account *and* an existing account with pre-seeded data that must sync down |
 | `desktop/inbox-crud.spec.ts` | add a Note via the modal, see it in the grid (smoke for the change-event path) |
+| `desktop/quick-capture.spec.ts` | Quick Capture PWA at `/capture/`: manifest, OAuth connect, note/todo/bookmark sync, offline queue, cross-app visibility in main inbox |
 | `mobile/mobile-layout.spec.ts` | 768 px breakpoint promotes header to grid, logo shrinks, touch targets sized |
 | `mobile/touch-interactions.spec.ts` | `tap()` (touch dispatch) opens menus and navigates |
 | `mobile/modal-scroll-lock.spec.ts` | iOS body-scroll-lock fixed on open, restored on close |

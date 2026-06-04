@@ -151,6 +151,36 @@ export async function oauthToken(
 }
 
 /**
+ * List all inbox items for a user by walking the RS folder index.
+ */
+export async function listInboxItems(
+  user: RsUser,
+  token: string,
+): Promise<InboxItem[]> {
+  const indexUrl = `${ARMADIETTO_ORIGIN}/storage/${user.username}/inbox/items/`;
+  const indexResp = await fetch(indexUrl, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+  });
+  if (indexResp.status !== 200) {
+    const text = await indexResp.text().catch(() => '');
+    throw new Error(
+      `GET /inbox/items/ for ${user.username} failed: HTTP ${indexResp.status} — ${text.slice(0, 200)}`,
+    );
+  }
+  const index = (await indexResp.json()) as {
+    items?: Record<string, unknown>;
+  };
+  const ids = Object.keys(index.items ?? {});
+  const items: InboxItem[] = [];
+  for (const id of ids) {
+    const item = await getInboxItem(user, token, id);
+    if (item) items.push(item);
+  }
+  return items;
+}
+
+/**
  * Write a single inbox item directly to RS, bypassing the web app.
  *
  * Targets `PUT /storage/<user>/inbox/items/<id>`, which is the same path
@@ -188,4 +218,71 @@ export async function putInboxItem(
       `PUT /inbox/items/${item.id} for ${user.username} failed: HTTP ${r.status} — ${text.slice(0, 200)}`,
     );
   }
+}
+
+/**
+ * Read a single inbox item directly from RS, bypassing the web app.
+ *
+ * Returns `null` when the item does not exist (HTTP 404).
+ */
+export async function getInboxItem(
+  user: RsUser,
+  token: string,
+  itemId: string,
+): Promise<InboxItem | null> {
+  const r = await fetch(
+    `${ARMADIETTO_ORIGIN}/storage/${user.username}/inbox/items/${itemId}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    },
+  );
+  if (r.status === 404) return null;
+  if (r.status !== 200) {
+    const text = await r.text().catch(() => '');
+    throw new Error(
+      `GET /inbox/items/${itemId} for ${user.username} failed: HTTP ${r.status} — ${text.slice(0, 200)}`,
+    );
+  }
+  return (await r.json()) as InboxItem;
+}
+
+/**
+ * OAuth token for the Quick Capture PWA at `/capture/`.
+ */
+export async function oauthTokenForCapture(
+  user: RsUser,
+  options: { clientOrigin: string; scopes?: string },
+): Promise<string> {
+  const { clientOrigin, scopes = 'inbox:rw' } = options;
+  const redirectUri = `${clientOrigin}/capture/`;
+  const body = new URLSearchParams({
+    client_id: redirectUri,
+    redirect_uri: redirectUri,
+    response_type: 'token',
+    scope: scopes,
+    state: '',
+    username: user.username,
+    password: user.password,
+    allow: 'Allow',
+  });
+  const r = await fetch(`${ARMADIETTO_ORIGIN}/oauth`, {
+    method: 'POST',
+    body,
+    redirect: 'manual',
+    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+  });
+  if (r.status !== 302) {
+    const text = await r.text().catch(() => '');
+    throw new Error(
+      `OAuth Allow for ${user.username} (capture) returned HTTP ${r.status}, expected 302. Body: ${text.slice(0, 200)}`,
+    );
+  }
+  const location = r.headers.get('Location') ?? '';
+  const fragment = location.split('#')[1] ?? '';
+  for (const kv of fragment.split('&')) {
+    const [k, v = ''] = kv.split('=');
+    if (k === 'access_token') return decodeURIComponent(v);
+  }
+  throw new Error(`OAuth redirect missing access_token: ${location}`);
 }
