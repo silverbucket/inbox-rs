@@ -1,10 +1,10 @@
 /**
  * Offline behavior.
  *
- * The web app uses remotestoragejs's caching layer (`rs.caching.enable('/inbox/')`)
- * which keeps everything in IndexedDB and replays writes when the network
- * returns. A Workbox service worker precaches the app shell so reloads work
- * offline after one online visit.
+ * The web app uses a service worker for the app shell and remotestoragejs's
+ * caching layer (`rs.caching.enable('/inbox/')`) for data. Once the app has
+ * loaded online and installed the service worker, a later offline launch should
+ * still render the cached shell and local data.
  */
 
 import { expect, test } from '../helpers/fixtures';
@@ -22,38 +22,69 @@ test('warm offline still renders shell', async ({
   await connectedPage.waitForLoadState('networkidle');
   await waitForServiceWorkerController(connectedPage);
 
+  // We're in. Capture a sentinel from the live DOM so we can prove a
+  // subsequent offline interaction worked against cached data.
   await expect(
     connectedPage.getByRole('button', { name: 'Inbox' }).first(),
   ).toBeVisible();
 
+  // Drop the network. Existing in-memory app keeps working: RS's IndexedDB
+  // cache satisfies reads, writes queue up, and the hash router stays local.
   await connectedPage.context().setOffline(true);
-
   await connectedPage.getByRole('button', { name: 'Collections' }).click();
   await expect(
     connectedPage.getByRole('button', { name: 'Collections' }).first(),
   ).toHaveAttribute('aria-current', 'page');
 
-  const reload = await connectedPage.reload({
-    waitUntil: 'domcontentloaded',
-    timeout: 15_000,
-  });
-  expect(reload?.ok()).toBeTruthy();
-  await expect(
-    connectedPage.getByRole('button', { name: 'Inbox' }).first(),
-  ).toBeVisible();
-
   await connectedPage.context().setOffline(false);
 });
 
-test('cold offline load fails without a prior visit', async ({
+test('installed app shell loads offline', async ({
+  context,
   page,
   webOrigin,
 }) => {
-  await page.context().setOffline(true);
-
-  await expect(page.goto(webOrigin, { timeout: 5_000 })).rejects.toThrow(
-    /net::ERR_INTERNET_DISCONNECTED|NS_ERROR_OFFLINE|net::ERR_FAILED/i,
+  await page.goto(webOrigin);
+  await page.waitForLoadState('networkidle');
+  await page.evaluate(() =>
+    Promise.race([
+      navigator.serviceWorker.ready.then(() => true),
+      new Promise<never>((_, reject) => {
+        setTimeout(
+          () => reject(new Error('Timed out waiting for service worker')),
+          5_000,
+        );
+      }),
+    ]),
   );
+
+  await context.setOffline(true);
+  const offlinePage = await context.newPage();
+  await offlinePage.goto(webOrigin);
+
+  await expect(
+    offlinePage.getByRole('button', { name: 'Inbox' }).first(),
+  ).toBeVisible();
+
+  await context.setOffline(false);
+  await offlinePage.close();
+});
+
+test('first-ever offline load still requires one online visit', async ({
+  browser,
+  webOrigin,
+}) => {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await context.setOffline(true);
+
+    await expect(page.goto(webOrigin, { timeout: 5_000 })).rejects.toThrow(
+      /net::ERR_INTERNET_DISCONNECTED|NS_ERROR_OFFLINE|net::ERR_FAILED/i,
+    );
+  } finally {
+    await context.close();
+  }
 });
 
 test('offline reload serves app shell after service worker install', async ({

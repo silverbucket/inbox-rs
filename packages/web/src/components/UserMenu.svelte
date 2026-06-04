@@ -148,11 +148,11 @@
     editingAbbrev = false;
   }
 
-  function handleExport() {
+  async function handleExport() {
     open = false;
-    void loadImportExportModal().then(() => {
-      importExportModal?.startExport();
-    });
+    await loadImportExportModal();
+    await tick();
+    importExportModal?.startExport();
   }
 
   function handleImportClick() {
@@ -164,7 +164,11 @@
     const file = input.files?.[0];
     if (file) {
       open = false;
-      void withImportExportModal((modal) => modal.promptImport(file));
+      void (async () => {
+        await loadImportExportModal();
+        await tick();
+        importExportModal?.promptImport(file);
+      })();
     }
     input.value = '';
   }
