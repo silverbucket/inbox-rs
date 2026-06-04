@@ -39,6 +39,14 @@ jobs:
       - run: npm ci
       - run: npm install @rollup/rollup-linux-x64-gnu --no-save
 
+      - name: Restore transcription asset cache
+        uses: actions/cache@v4
+        with:
+          path: packages/web/public/ml
+          key: ${{ runner.os }}-transcription-assets-${{ hashFiles('scripts/vendor-transcription-assets.mjs', 'package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-transcription-assets-
+
       - run: npm run build
 
       # Stash the built web app so the e2e job doesn't pay for a second
@@ -64,6 +72,14 @@ jobs:
 
       - run: npm ci
       - run: npm install @rollup/rollup-linux-x64-gnu --no-save
+
+      - name: Restore transcription asset cache
+        uses: actions/cache@v4
+        with:
+          path: packages/web/public/ml
+          key: ${{ runner.os }}-transcription-assets-${{ hashFiles('scripts/vendor-transcription-assets.mjs', 'package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-transcription-assets-
 
       # Other workspaces resolve @inbox-rs/rs-module via its `main:
       # dist/index.js`, so the dist must exist before vitest can import it.
