@@ -86,6 +86,7 @@ const modelBaseUrl = `https://huggingface.co/${MODEL_ID}/resolve/${MODEL_REVISIO
 const forceRefresh =
   process.argv.includes('--refresh') ||
   process.env.FORCE_VENDOR_TRANSCRIPTION_ASSETS === '1';
+const MAX_DOWNLOAD_ATTEMPTS = 5;
 
 async function ensureDir(dir) {
   await mkdir(dir, { recursive: true });
@@ -104,6 +105,64 @@ async function fileMatchesManifest(file, asset) {
   } catch {
     return false;
   }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseRetryAfterMs(header) {
+  if (!header) return null;
+
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) {
+    return Math.max(0, seconds * 1000);
+  }
+
+  const timestamp = Date.parse(header);
+  if (Number.isNaN(timestamp)) return null;
+  return Math.max(0, timestamp - Date.now());
+}
+
+function isRetryableDownloadStatus(status) {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+async function fetchWithRetry(url) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= MAX_DOWNLOAD_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(url);
+      if (
+        response.ok ||
+        !isRetryableDownloadStatus(response.status) ||
+        attempt === MAX_DOWNLOAD_ATTEMPTS
+      ) {
+        return response;
+      }
+
+      const retryAfterMs = parseRetryAfterMs(
+        response.headers.get('retry-after'),
+      );
+      const delayMs = retryAfterMs ?? 1000 * 2 ** (attempt - 1);
+      console.warn(
+        `[vendor-transcription-assets] retrying ${url} after ${response.status} ${response.statusText} (attempt ${attempt}/${MAX_DOWNLOAD_ATTEMPTS})`,
+      );
+      await sleep(delayMs);
+    } catch (error) {
+      lastError = error;
+      if (attempt === MAX_DOWNLOAD_ATTEMPTS) break;
+
+      const delayMs = 1000 * 2 ** (attempt - 1);
+      console.warn(
+        `[vendor-transcription-assets] retrying ${url} after download error (attempt ${attempt}/${MAX_DOWNLOAD_ATTEMPTS})`,
+      );
+      await sleep(delayMs);
+    }
+  }
+
+  throw lastError;
 }
 
 async function copyStaticFile(source, destination, asset) {
@@ -128,7 +187,7 @@ async function downloadStaticFile(url, destination, asset) {
     return;
   }
 
-  const response = await fetch(url);
+  const response = await fetchWithRetry(url);
   if (!response.ok) {
     throw new Error(
       `Failed to download ${url}: ${response.status} ${response.statusText}`,
