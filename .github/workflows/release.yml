@@ -30,18 +30,35 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.sha }}
         run: |
-          STATUS=$(gh run list \
-            --workflow=ci.yml \
-            --branch=master \
-            --commit "$SHA" \
-            --json status,conclusion \
-            --jq '[.[] | select(.status=="completed")] | .[0].conclusion' \
-            || echo "")
-          echo "ci.yml conclusion for $SHA: ${STATUS:-<none>}"
-          if [ "$STATUS" != "success" ]; then
-            echo "::error::Refusing to release: ci.yml has not passed for $SHA. Re-run CI on master and try again."
-            exit 1
-          fi
+          for attempt in {1..60}; do
+            RUN=$(gh run list \
+              --workflow="CI" \
+              --branch=master \
+              --commit "$SHA" \
+              --json status,conclusion,headSha,url \
+              --jq '[.[] | select(.headSha=="'"$SHA"'")] | first // {status:"",conclusion:"",url:""}' \
+              || echo '{"status":"","conclusion":"","url":""}')
+
+            STATUS=$(jq -r '.status // ""' <<< "$RUN")
+            CONCLUSION=$(jq -r '.conclusion // ""' <<< "$RUN")
+            URL=$(jq -r '.url // ""' <<< "$RUN")
+
+            echo "CI status for $SHA: ${STATUS:-<none>} ${CONCLUSION:-}"
+
+            if [ "$STATUS" = "completed" ] && [ "$CONCLUSION" = "success" ]; then
+              exit 0
+            fi
+
+            if [ "$STATUS" = "completed" ]; then
+              echo "::error::CI completed for $SHA but did not succeed (conclusion: $CONCLUSION). $URL"
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          echo "::error::Timed out waiting for CI to complete for $SHA on master."
+          exit 1
 
   release:
     runs-on: ubuntu-latest
@@ -59,6 +76,14 @@ jobs:
 
       - run: npm ci
       - run: npm install @rollup/rollup-linux-x64-gnu --no-save
+
+      - name: Restore transcription asset cache
+        uses: actions/cache@v4
+        with:
+          path: packages/web/public/ml
+          key: ${{ runner.os }}-transcription-assets-${{ hashFiles('scripts/vendor-transcription-assets.mjs', 'package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-transcription-assets-
 
       - name: Configure git
         run: |
@@ -84,6 +109,9 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: node scripts/release-bump.mjs "$VERSION"
 
+      - name: Build web app
+        run: npm run build
+
       - name: Commit version bump and tag
         # This clean commit (no build artifacts) is what gets pushed to origin/master.
         # `git add -u` picks up exactly what release-bump.mjs touched — which
@@ -96,9 +124,6 @@ jobs:
           git commit -m "release v${VERSION}"
           git tag "v${VERSION}"
           git push origin HEAD:master --tags
-
-      - name: Build web app
-        run: npm run build
 
       - name: Setup SSH for 5apps
         env:
