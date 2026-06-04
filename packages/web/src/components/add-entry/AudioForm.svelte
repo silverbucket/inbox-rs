@@ -8,6 +8,7 @@
   } from '../../lib/add-entry-modal';
   import { buildAudioItem } from '../../lib/build-item';
   import { transcribeAudio } from '../../lib/transcribe';
+  import OfflineTranscriptionAssets from '../OfflineTranscriptionAssets.svelte';
 
   let {
     editItem,
@@ -187,6 +188,7 @@
   {#if transcribing}
     <p class="transcript-status">Transcribing...</p>
   {/if}
+  <OfflineTranscriptionAssets />
   {#if transcript}
     <div class="field">
       <span>Transcript</span>

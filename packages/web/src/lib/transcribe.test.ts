@@ -12,6 +12,10 @@ import {
   TRANSCRIPTION_WASM_BASE_PATH,
   TRANSCRIPTION_WASM_FILES,
 } from './transcribe';
+import {
+  formatTranscriptionAssetBytes,
+  TRANSCRIPTION_ASSETS,
+} from './transcription-assets';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../../../..');
@@ -25,10 +29,14 @@ describe('configureTranscriptionEnv', () => {
       allowLocalModels: false,
       allowRemoteModels: true,
       localModelPath: '/',
+      useBrowserCache: true,
+      useCustomCache: false,
+      customCache: null,
       backends: {
         onnx: {
           wasm: {
             wasmPaths: '/cdn/',
+            numThreads: undefined as number | undefined,
           },
         },
       },
@@ -39,7 +47,40 @@ describe('configureTranscriptionEnv', () => {
     expect(env.allowLocalModels).toBe(true);
     expect(env.allowRemoteModels).toBe(false);
     expect(env.localModelPath).toBe(TRANSCRIPTION_MODEL_BASE_PATH);
+    expect(env.useBrowserCache).toBe(true);
+    expect(env.useCustomCache).toBe(false);
+    expect(env.customCache).toBe(null);
     expect(env.backends.onnx.wasm.wasmPaths).toBe(TRANSCRIPTION_WASM_BASE_PATH);
+    expect(env.backends.onnx.wasm.numThreads).toBe(1);
+  });
+
+  it('uses custom cached transcription assets when provided', () => {
+    const customCache = { match: () => undefined, put: () => undefined };
+    const wasmPaths = { 'ort-wasm-simd.wasm': 'blob:test' };
+    const env = {
+      allowLocalModels: false,
+      allowRemoteModels: true,
+      localModelPath: '/',
+      useBrowserCache: true,
+      useCustomCache: false,
+      customCache: null as unknown,
+      backends: {
+        onnx: {
+          wasm: {
+            wasmPaths: '/cdn/' as string | Record<string, string>,
+            numThreads: undefined as number | undefined,
+          },
+        },
+      },
+    };
+
+    configureTranscriptionEnv(env, { assetCache: customCache, wasmPaths });
+
+    expect(env.useBrowserCache).toBe(false);
+    expect(env.useCustomCache).toBe(true);
+    expect(env.customCache).toBe(customCache);
+    expect(env.backends.onnx.wasm.wasmPaths).toBe(wasmPaths);
+    expect(env.backends.onnx.wasm.numThreads).toBe(1);
   });
 });
 
@@ -74,5 +115,27 @@ describe('vendored transcription assets', () => {
         `Missing ONNX Runtime asset: ${path.relative(repoRoot, file)}`,
       ).toBe(true);
     }
+  });
+
+  it('tracks every local transcription file in the offline asset manifest', () => {
+    const expectedUrls = new Set([
+      ...TRANSCRIPTION_MODEL_FILES.map(
+        (file) =>
+          `${TRANSCRIPTION_MODEL_BASE_PATH}${TRANSCRIPTION_MODEL_ID}/${file}`,
+      ),
+      ...TRANSCRIPTION_WASM_FILES.map(
+        (file) => `${TRANSCRIPTION_WASM_BASE_PATH}${file}`,
+      ),
+    ]);
+
+    expect(new Set(TRANSCRIPTION_ASSETS.map((asset) => asset.url))).toEqual(
+      expectedUrls,
+    );
+    expect(TRANSCRIPTION_ASSETS.every((asset) => asset.size > 0)).toBe(true);
+  });
+
+  it('formats offline transcription asset sizes for the UI', () => {
+    expect(formatTranscriptionAssetBytes(1024)).toBe('1 KB');
+    expect(formatTranscriptionAssetBytes(10 * 1024 * 1024)).toBe('10 MB');
   });
 });
