@@ -3,6 +3,7 @@
   import { blobUrls, connected, loadFileBlobUrl, storeItem } from '../../lib/stores';
   import rs from '../../lib/rs';
   import { transcribeAudio } from '../../lib/transcribe';
+  import OfflineTranscriptionAssets from '../OfflineTranscriptionAssets.svelte';
 
   let { item, titleId }: { item: AudioItem; titleId: string } = $props();
 
@@ -92,6 +93,7 @@
       >Transcribe</button
     >
   {/if}
+  <OfflineTranscriptionAssets />
 </div>
 
 {#if item.body}
