@@ -196,7 +196,6 @@
     editingItem = undefined;
     preselectedCollectionId = collectionId;
     activeModal = 'todo';
-    void loadAddEntryModal();
   }
 
   function openView(item: InboxItem) {

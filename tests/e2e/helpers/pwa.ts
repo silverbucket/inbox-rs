@@ -54,21 +54,6 @@ function rsLocalStoragePayload(
 }
 
 /**
- * Wait until the production service worker controls the page.
- *
- * Call after the first navigation to the app origin so Workbox has finished
- * installing and `clients.claim()` has taken effect.
- */
-export async function waitForServiceWorkerController(
-  page: Page,
-): Promise<void> {
-  await page.waitForFunction(
-    () => navigator.serviceWorker?.controller != null,
-    { timeout: 15_000 },
-  );
-}
-
-/**
  * Pre-populate the browser context with an authorized RS session.
  *
  * Must be called *before* the page navigates to the app. Internally uses
