@@ -8,16 +8,12 @@
  */
 
 import { expect, test } from '../helpers/fixtures';
-import {
-  attachConsoleCapture,
-  waitForServiceWorkerController,
-} from '../helpers/pwa';
+import { waitForServiceWorkerController } from '../helpers/pwa';
 
 test('warm offline still renders shell', async ({
   connectedPage,
   webOrigin,
 }) => {
-  attachConsoleCapture(connectedPage);
   await connectedPage.goto(webOrigin);
   await connectedPage.waitForLoadState('networkidle');
   await waitForServiceWorkerController(connectedPage);
