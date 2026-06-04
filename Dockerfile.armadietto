@@ -1,5 +1,9 @@
 FROM node:20-alpine
-RUN npm install -g armadietto
+RUN npm install -g \
+  armadietto@0.6.5 \
+  @aws-sdk/client-s3@3.525.0 \
+  @aws-sdk/lib-storage@3.525.1 \
+  @smithy/node-http-handler@2.5.0
 COPY armadietto.conf.json /etc/armadietto/config.json
 EXPOSE 8000
 CMD ["armadietto", "-c", "/etc/armadietto/config.json"]

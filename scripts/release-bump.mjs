@@ -124,11 +124,18 @@ export function previousTag(gitCwd = rootDir) {
   }
 }
 
-/** Set `version` in a JSON file in-place, preserving the trailing newline. */
+/** Set `version` in a JSON file in-place. Biome formats it afterwards. */
 function setVersionInFile(absPath, version) {
   const json = JSON.parse(readFileSync(absPath, 'utf8'));
   json.version = version;
   writeFileSync(absPath, `${JSON.stringify(json, null, 2)}\n`);
+}
+
+function formatFiles(files) {
+  execFileSync('npx', ['biome', 'format', '--write', ...files], {
+    cwd: rootDir,
+    stdio: 'inherit',
+  });
 }
 
 /** CLI entrypoint. Logs every bump (and every skip) so release logs are readable. */
@@ -187,6 +194,8 @@ export function main(argv = process.argv) {
     setVersionInFile(join(rootDir, file), version);
     console.log(`[release-bump] ${file} → ${version}`);
   }
+
+  formatFiles(plan.map(({ file }) => file));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
