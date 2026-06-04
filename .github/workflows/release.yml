@@ -37,7 +37,7 @@ jobs:
               --commit "$SHA" \
               --json status,conclusion,headSha,url \
               --jq '[.[] | select(.headSha=="'"$SHA"'")] | first // {status:"",conclusion:"",url:""}' \
-              || echo '{"status":"","conclusion":"","url":""}')
+              || jq -n '{status:"",conclusion:"",url:""}')
 
             STATUS=$(jq -r '.status // ""' <<< "$RUN")
             CONCLUSION=$(jq -r '.conclusion // ""' <<< "$RUN")
