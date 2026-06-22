@@ -28,39 +28,72 @@ export function clearConfig(): void {
 }
 
 export async function startConnect(userAddress: string): Promise<void> {
-  const discovery = await discoverStorage(userAddress.trim());
+  const address = userAddress.trim();
+  const discovery = await discoverStorage(address);
+  // The OAuth endpoint comes straight from the user's WebFinger response, so a
+  // hostile provider could hand back a `javascript:`/`data:` URL that would run
+  // in our origin the moment we navigate to it. Only follow real HTTP(S)
+  // endpoints — and plain HTTP only for localhost, mirroring schemeForHost.
+  const authUrl = parseSafeAuthUrl(discovery.authUrl);
   localStorage.setItem(
     PENDING_AUTH_KEY,
-    JSON.stringify({ userAddress: userAddress.trim(), discovery }),
+    JSON.stringify({ userAddress: address, discovery }),
   );
   const redirectUri = `${window.location.origin}/capture/`;
-  const params = new URLSearchParams({
-    client_id: redirectUri,
-    redirect_uri: redirectUri,
-    response_type: 'token',
-    scope: 'inbox:rw',
-  });
-  window.location.href = `${discovery.authUrl}?${params.toString()}`;
+  authUrl.searchParams.set('client_id', redirectUri);
+  authUrl.searchParams.set('redirect_uri', redirectUri);
+  authUrl.searchParams.set('response_type', 'token');
+  authUrl.searchParams.set('scope', 'inbox:rw');
+  window.location.href = authUrl.toString();
+}
+
+function parseSafeAuthUrl(rawAuthUrl: string): URL {
+  let url: URL;
+  try {
+    url = new URL(rawAuthUrl);
+  } catch {
+    throw new Error('remoteStorage returned an invalid OAuth endpoint');
+  }
+  const isHttps = url.protocol === 'https:';
+  const isLocalhostHttp =
+    url.protocol === 'http:' && url.hostname === 'localhost';
+  if (!isHttps && !isLocalhostHttp) {
+    throw new Error('remoteStorage returned an insecure OAuth endpoint');
+  }
+  return url;
 }
 
 export function finishConnectFromRedirect(): RSConfig | null {
-  if (!window.location.hash.includes('access_token=')) return getConfig();
+  // Tokens (and OAuth errors) can arrive in either the fragment or the query
+  // string, so check both. An `error=` redirect still needs cleanup even though
+  // it yields no token, so the pending state and callback URL are always
+  // scrubbed once we've decided a callback is present.
+  const callback = `${window.location.hash} ${window.location.search}`;
+  if (!callback.includes('access_token=') && !callback.includes('error='))
+    return getConfig();
+
   const pending = readJson<{
     userAddress: string;
     discovery: { href: string; storageApi?: string };
   }>(PENDING_AUTH_KEY);
-  if (!pending) return getConfig();
 
-  const config: RSConfig = {
-    userAddress: pending.userAddress,
-    token: extractTokenFromRedirect(window.location.href),
-    href: pending.discovery.href,
-    storageApi: pending.discovery.storageApi,
-  };
-  localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-  localStorage.removeItem(PENDING_AUTH_KEY);
-  window.history.replaceState(null, '', '/capture/');
-  return config;
+  try {
+    if (!pending) return getConfig();
+    const config: RSConfig = {
+      userAddress: pending.userAddress,
+      token: extractTokenFromRedirect(window.location.href),
+      href: pending.discovery.href,
+      storageApi: pending.discovery.storageApi,
+    };
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+    return config;
+  } catch {
+    // extractTokenFromRedirect throws on `error=` responses or a missing token.
+    return getConfig();
+  } finally {
+    localStorage.removeItem(PENDING_AUTH_KEY);
+    window.history.replaceState(null, '', '/capture/');
+  }
 }
 
 export function getQueue(): QueuedCapture[] {

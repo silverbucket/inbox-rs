@@ -81,9 +81,14 @@
   }
 
   async function connect() {
-    if (!userAddress.trim()) return;
+    const address = userAddress.trim();
+    if (!address) return;
     status = 'Opening remoteStorage login...';
-    await startConnect(userAddress);
+    try {
+      await startConnect(address);
+    } catch (error) {
+      status = error instanceof Error ? error.message : 'Could not connect';
+    }
   }
 
   function disconnect() {
