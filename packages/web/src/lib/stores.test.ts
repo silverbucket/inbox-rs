@@ -18,6 +18,7 @@ const { mockRs, mockInbox } = vi.hoisted(() => {
     onChange: vi.fn(),
     store: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
+    getFile: vi.fn().mockResolvedValue(undefined),
     storeCollection: vi.fn().mockResolvedValue(undefined),
     removeCollection: vi.fn().mockResolvedValue(undefined),
     storeGroup: vi.fn().mockResolvedValue(undefined),
@@ -188,12 +189,38 @@ describe('loadFileBlobUrl', () => {
     expect(mockFetchFileBlobUrl).not.toHaveBeenCalled();
   });
 
-  it('does not fetch if not connected', () => {
+  it('reads from the local cache (not the network) when not connected', async () => {
+    // Regression: a file captured while disconnected is persisted to the local
+    // cache (alongside its metadata) and must still render after a reload,
+    // without hitting the remote.
     connected.set(false);
+    const bytes = new Uint8Array([1, 2, 3]).buffer;
+    mockInbox.getFile.mockResolvedValue({ data: bytes, mimeType: 'image/png' });
+    const createObjectURL = vi
+      .spyOn(URL, 'createObjectURL')
+      .mockReturnValue('blob:cache/photo');
 
-    loadFileBlobUrl('files/photo.jpg');
+    loadFileBlobUrl('files/photo.jpg', 'image/png');
 
+    await vi.waitFor(() => {
+      expect(get(blobUrls)['files/photo.jpg']).toBe('blob:cache/photo');
+    });
     expect(mockFetchFileBlobUrl).not.toHaveBeenCalled();
+    expect(mockInbox.getFile).toHaveBeenCalledWith('files/photo.jpg');
+
+    createObjectURL.mockRestore();
+  });
+
+  it('stores no blob URL when the cache has no bytes while disconnected', async () => {
+    connected.set(false);
+    mockInbox.getFile.mockResolvedValue(undefined);
+
+    loadFileBlobUrl('files/missing.jpg');
+
+    await vi.waitFor(() => {
+      expect(mockInbox.getFile).toHaveBeenCalledWith('files/missing.jpg');
+    });
+    expect(get(blobUrls)['files/missing.jpg']).toBeUndefined();
   });
 
   it('does not fetch for empty filePath', () => {

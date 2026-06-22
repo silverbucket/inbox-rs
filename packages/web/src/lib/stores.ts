@@ -663,8 +663,38 @@ const pendingBlobLoads = new Map<string, number>();
 const revokedBlobPaths = new Set<string>();
 
 /**
- * Fetch a file from RS and create a blob URL, stored in blobUrls for reactive display.
+ * Resolve a file's bytes to a blob URL from the best available source.
+ *
+ * When connected we fetch from the remote over authenticated HTTP. Otherwise —
+ * or when the remote 404s because the file was captured offline and hasn't
+ * synced yet — we read it from the local remoteStorage cache, where `store()`
+ * writes the bytes regardless of connection state. Without this fallback, files
+ * captured while disconnected vanish on reload even though their bytes (and
+ * metadata) are sitting in the cache.
+ */
+async function resolveFileBlobUrl(
+  filePath: string,
+  mimeType?: string,
+): Promise<string | null> {
+  if (get(connected)) {
+    const url = await fetchFileBlobUrl(filePath, mimeType);
+    if (url) return url;
+  }
+  const inbox = getInbox();
+  if (!inbox) return null;
+  const cached = await inbox.getFile(filePath);
+  if (!cached?.data) return null;
+  const blob = new Blob([cached.data], {
+    type: cached.mimeType || mimeType || '',
+  });
+  return URL.createObjectURL(blob);
+}
+
+/**
+ * Fetch a file and create a blob URL, stored in blobUrls for reactive display.
  * No-ops if already loaded or in progress. Components should call this on mount.
+ * Reads from the remote when connected, otherwise from the local cache (see
+ * resolveFileBlobUrl) so offline-captured files still render.
  *
  * A generation number is captured at start time. After a disconnect (or other
  * full revocation), the generation is bumped so stale promises cannot
@@ -675,10 +705,9 @@ export function loadFileBlobUrl(filePath: string, mimeType?: string): void {
   // A new explicit load attempt clears any prior delete tombstone for this path.
   revokedBlobPaths.delete(filePath);
   if (get(blobUrls)[filePath] || pendingBlobLoads.has(filePath)) return;
-  if (!get(connected)) return;
   const gen = blobLoadGeneration;
   pendingBlobLoads.set(filePath, gen);
-  fetchFileBlobUrl(filePath, mimeType)
+  resolveFileBlobUrl(filePath, mimeType)
     .then((url) => {
       if (!url) return;
       // Ignore (and revoke) results that are stale due to disconnect, delete, etc.
