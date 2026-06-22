@@ -1,0 +1,135 @@
+/*
+ * Quick-capture theme tokens. Neutrals come from light/dark mode; the accent
+ * comes from the chosen theme (data-accent). Tint and shadow are derived from
+ * the accent so they adapt to whichever mode is active.
+ */
+
+:root {
+  /* light neutrals (default) */
+  --bg: #f2f1ee;
+  --surface: #fbfaf7;
+  --seg: #e7e4dd;
+  --ink: #2c2a26;
+  --ink-soft: #5f5b53;
+  --ink-faint: #928d83;
+  --line: #dcd8d0;
+  --on-accent: #fdfdfb;
+
+  /* accent (overridden per data-accent below; indigo is the default) */
+  --accent: #4f46e5;
+  --accent-deep: #3f38c4;
+
+  --accent-tint: color-mix(in oklab, var(--accent) 22%, var(--bg));
+  --accent-shadow: color-mix(in oklab, var(--accent) 30%, transparent);
+
+  color-scheme: light;
+}
+
+/* dark neutrals — explicit choice */
+:root[data-mode="dark"] {
+  --bg: #201f1d;
+  --surface: #2a2825;
+  --seg: #302d29;
+  --ink: #ece8e1;
+  --ink-soft: #b4afa5;
+  --ink-faint: #8b867c;
+  --line: #37342f;
+  color-scheme: dark;
+}
+
+/* dark neutrals — follow the system when no explicit mode is set */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-mode="light"]):not([data-mode="dark"]) {
+    --bg: #201f1d;
+    --surface: #2a2825;
+    --seg: #302d29;
+    --ink: #ece8e1;
+    --ink-soft: #b4afa5;
+    --ink-faint: #8b867c;
+    --line: #37342f;
+    color-scheme: dark;
+  }
+}
+
+:root[data-accent="indigo"] {
+  --accent: #4f46e5;
+  --accent-deep: #3f38c4;
+}
+:root[data-accent="forest"] {
+  --accent: #3f7d54;
+  --accent-deep: #336545;
+}
+:root[data-accent="plum"] {
+  --accent: #8a4a6f;
+  --accent-deep: #743c5e;
+}
+:root[data-accent="teal"] {
+  --accent: #2f8079;
+  --accent-deep: #266860;
+}
+:root[data-accent="slate"] {
+  --accent: #41607f;
+  --accent-deep: #34506c;
+}
+:root[data-accent="rose"] {
+  --accent: #b15775;
+  --accent-deep: #984862;
+}
+:root[data-accent="mustard"] {
+  --accent: #8a6a1f;
+  --accent-deep: #6f551a;
+}
+:root[data-accent="graphite"] {
+  --accent: #5b6b8c;
+  --accent-deep: #4a5876;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+#capture-app {
+  height: 100%;
+}
