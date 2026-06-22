@@ -41,3 +41,6 @@ packages/web/public/ml/
 tests/e2e/playwright-report/
 tests/e2e/test-results/
 tests/e2e/blob-report/
+
+# Local-only design mockups (not part of the app or build)
+mockups/
