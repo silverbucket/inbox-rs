@@ -40,7 +40,10 @@ export interface BuildContext {
  * item back to the Inbox. Applied unconditionally on edit (including across
  * type conversions) so an item filed in a collection stays there.
  */
-function preserveCollection<T extends InboxItem>(ctx: BuildContext, item: T): T {
+function preserveCollection<T extends InboxItem>(
+  ctx: BuildContext,
+  item: T,
+): T {
   if (ctx.editItem?.collectionId) {
     item.collectionId = ctx.editItem.collectionId;
   }
