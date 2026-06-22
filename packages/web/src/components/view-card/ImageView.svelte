@@ -16,7 +16,9 @@
   // Pass mimeType so the blob is tagged with the clean type from item
   // metadata; see BookmarkView for the longer note.
   $effect(() => {
-    if (!$connected) return;
+    // Load from the remote when connected, otherwise the local cache, so
+    // offline-captured files still render; retries on reconnect.
+    void $connected;
     if (item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
   });
 </script>

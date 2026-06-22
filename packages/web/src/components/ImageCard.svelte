@@ -8,12 +8,15 @@
 
   const imageSrc = $derived($blobUrls[item.filePath] || null);
 
-  // Fetch file via Authorization header when connected (works on all RS servers).
-  // Pass mimeType so the blob is tagged as `image/jpeg` rather than whatever
-  // the server echoes back (e.g. `image/jpeg; charset=binary` on 5apps, which
-  // Chrome refuses to render as an <img> source).
+  // Load the image bytes. loadFileBlobUrl fetches from the remote when
+  // connected and the local cache otherwise, so files captured while offline
+  // still render. Pass mimeType so the blob is tagged as `image/jpeg` rather
+  // than whatever the server echoes back (e.g. `image/jpeg; charset=binary` on
+  // 5apps, which Chrome refuses to render). Referencing `$connected` re-runs
+  // this so we retry over the network once a connection is established.
   $effect(() => {
-    if ($connected && item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
+    void $connected;
+    if (item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
   });
 </script>
 

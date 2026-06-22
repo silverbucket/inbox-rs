@@ -29,7 +29,9 @@
   // `; charset=binary` suffix that wireclient adds on upload, and Chrome
   // won't render an <img> whose Blob type carries that suffix.
   $effect(() => {
-    if (!$connected) return;
+    // Load from the remote when connected, otherwise the local cache, so
+    // offline-captured files still render; retries on reconnect.
+    void $connected;
     if (item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
   });
 </script>

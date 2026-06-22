@@ -25,12 +25,15 @@
     (item.filePath ? ($blobUrls[item.filePath] || null) : null) || item.ogImage || null
   );
 
-  // Fetch stored file via Authorization header (works on all RS servers).
-  // Pass mimeType so the blob is tagged with the clean type from item metadata
-  // rather than the server's Content-Type (which on 5apps carries the
-  // `; charset=binary` suffix that Chrome won't render as <img>).
+  // Load from the remote when connected, otherwise the local cache, so
+  // offline-captured files still render. Pass mimeType so the blob is tagged
+  // with the clean type from item metadata rather than the server's
+  // Content-Type (which on 5apps carries the `; charset=binary` suffix that
+  // Chrome won't render as <img>). Referencing `$connected` retries over the
+  // network once a connection is established.
   $effect(() => {
-    if ($connected && item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
+    void $connected;
+    if (item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
   });
 </script>
 
