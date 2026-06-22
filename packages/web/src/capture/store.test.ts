@@ -12,10 +12,24 @@ vi.mock('@inbox-rs/rs-module/runtime', async (importOriginal) => {
   return { ...actual, discoverStorage: discoverStorageMock };
 });
 
-import { finishConnectFromRedirect, startConnect } from './store';
+import {
+  captureNote,
+  finishConnectFromRedirect,
+  flushQueue,
+  getHistory,
+  pendingCount,
+  removeRecord,
+  startConnect,
+} from './store';
 
 const PENDING_AUTH_KEY = 'inbox-rs-capture:pending-auth';
 const CONFIG_KEY = 'inbox-rs-capture:config';
+
+const SYNCED_CONFIG = JSON.stringify({
+  userAddress: 'alex@5apps.com',
+  token: 'tok',
+  href: 'https://storage.example/u',
+});
 
 function createStorage() {
   const map = new Map<string, string>();
@@ -41,8 +55,10 @@ beforeEach(() => {
   };
   replaceState = vi.fn();
   discoverStorageMock.mockReset();
+  let uuid = 0;
   vi.stubGlobal('localStorage', storage);
   vi.stubGlobal('window', { location, history: { replaceState } });
+  vi.stubGlobal('crypto', { randomUUID: () => `id-${uuid++}` });
 });
 
 describe('startConnect', () => {
@@ -158,5 +174,66 @@ describe('finishConnectFromRedirect', () => {
       token: 't',
     });
     expect(replaceState).not.toHaveBeenCalled();
+  });
+});
+
+describe('capture history + delivery', () => {
+  it('queues a note and counts it as pending', () => {
+    const record = captureNote('  buy milk  ');
+    expect(record.status).toBe('queued');
+    expect(record.item).toMatchObject({
+      type: 'note',
+      title: 'buy milk',
+      body: 'buy milk',
+    });
+    const history = getHistory();
+    expect(history).toHaveLength(1);
+    expect(pendingCount(history)).toBe(1);
+  });
+
+  it('delivers queued notes to remoteStorage and marks them synced (FIFO)', async () => {
+    storage.setItem(CONFIG_KEY, SYNCED_CONFIG);
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+
+    captureNote('first');
+    captureNote('second');
+
+    const history = await flushQueue();
+
+    expect(history.every((r) => r.status === 'synced')).toBe(true);
+    expect(pendingCount(history)).toBe(0);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // oldest-first: the first PUT carries the earliest note
+    const firstBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(firstBody.body).toBe('first');
+  });
+
+  it('marks a capture failed (and keeps it pending) when delivery errors', async () => {
+    storage.setItem(CONFIG_KEY, SYNCED_CONFIG);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 500 }),
+    );
+
+    captureNote('oops');
+    const history = await flushQueue();
+
+    expect(history[0].status).toBe('failed');
+    expect(history[0].lastError).toContain('500');
+    expect(pendingCount(history)).toBe(1);
+  });
+
+  it('does nothing when there is no connection', async () => {
+    captureNote('offline note');
+    const history = await flushQueue();
+    expect(history[0].status).toBe('queued');
+    expect(pendingCount(history)).toBe(1);
+  });
+
+  it('removes a record from history', async () => {
+    const record = captureNote('temporary');
+    const history = await removeRecord(record.id);
+    expect(history).toHaveLength(0);
   });
 });

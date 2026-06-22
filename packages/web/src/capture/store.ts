@@ -1,4 +1,9 @@
-import type { InboxItem, InboxItemType } from '@inbox-rs/rs-module';
+import type {
+  AudioItem,
+  ImageItem,
+  InboxItem,
+  NoteItem,
+} from '@inbox-rs/rs-module';
 import {
   DirectRS,
   discoverStorage,
@@ -6,18 +11,35 @@ import {
   type RSConfig,
 } from '@inbox-rs/rs-module/runtime';
 
-export type CaptureType = Extract<InboxItemType, 'bookmark' | 'note' | 'todo'>;
+/** The three ways to capture. Maps to inbox item types note / audio / image. */
+export type CaptureMode = 'note' | 'voice' | 'image';
 
-export type QueuedCapture = {
+/** Delivery state of a captured item, surfaced in the history view. */
+export type DeliveryStatus = 'queued' | 'sending' | 'synced' | 'failed';
+
+/**
+ * A single capture and its delivery state. Persisted as JSON in localStorage;
+ * any binary payload (photo/voice) is held separately in IndexedDB under the
+ * same `id` and referenced via `hasBlob`.
+ */
+export type CaptureRecord = {
   id: string;
-  item: InboxItem;
-  queuedAt: string;
+  mode: CaptureMode;
+  preview: string;
+  createdAt: string;
+  status: DeliveryStatus;
   lastError?: string;
+  item: InboxItem;
+  hasBlob: boolean;
 };
 
 const CONFIG_KEY = 'inbox-rs-capture:config';
 const PENDING_AUTH_KEY = 'inbox-rs-capture:pending-auth';
-const QUEUE_KEY = 'inbox-rs-capture:queue';
+const HISTORY_KEY = 'inbox-rs-capture:history';
+
+// ---------------------------------------------------------------------------
+// remoteStorage connection (unchanged from the original capture flow)
+// ---------------------------------------------------------------------------
 
 export function getConfig(): RSConfig | null {
   return readJson<RSConfig>(CONFIG_KEY);
@@ -96,79 +118,270 @@ export function finishConnectFromRedirect(): RSConfig | null {
   }
 }
 
-export function getQueue(): QueuedCapture[] {
-  return readJson<QueuedCapture[]>(QUEUE_KEY) ?? [];
+// ---------------------------------------------------------------------------
+// Capture history + delivery queue
+// ---------------------------------------------------------------------------
+
+export function getHistory(): CaptureRecord[] {
+  const records = readJson<CaptureRecord[]>(HISTORY_KEY) ?? [];
+  // A 'sending' record means we were interrupted mid-flush (e.g. a reload);
+  // treat it as still queued so it gets retried.
+  return records.map((r) =>
+    r.status === 'sending' ? { ...r, status: 'queued' } : r,
+  );
 }
 
-export function enqueueCapture(
-  type: CaptureType,
-  input: string,
-): QueuedCapture {
-  const item = buildCaptureItem(type, input);
-  const queued: QueuedCapture = {
-    id: item.id,
-    item,
-    queuedAt: new Date().toISOString(),
-  };
-  localStorage.setItem(QUEUE_KEY, JSON.stringify([...getQueue(), queued]));
-  return queued;
+function saveHistory(records: CaptureRecord[]): void {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(records));
 }
 
-export async function flushQueue(config: RSConfig | null = getConfig()) {
-  if (!config?.href || !config.token) return getQueue();
-  const rs = new DirectRS(config);
-  const remaining: QueuedCapture[] = [];
-
-  for (const entry of getQueue()) {
-    try {
-      await rs.store(entry.item);
-    } catch (error) {
-      remaining.push({ ...entry, lastError: errorMessage(error) });
-    }
-  }
-
-  localStorage.setItem(QUEUE_KEY, JSON.stringify(remaining));
-  return remaining;
+function isPending(record: CaptureRecord): boolean {
+  return record.status !== 'synced';
 }
 
-function buildCaptureItem(type: CaptureType, input: string): InboxItem {
-  const trimmed = input.trim();
-  const id = crypto.randomUUID();
-  const createdAt = new Date().toISOString();
+/** Count of captures not yet delivered (queued, sending, or failed). */
+export function pendingCount(records: CaptureRecord[] = getHistory()): number {
+  return records.filter(isPending).length;
+}
 
-  if (type === 'todo') {
-    return {
-      id,
-      type,
-      title: trimmed,
-      createdAt,
-      completed: false,
-      isTodo: true,
-    };
-  }
-
-  if (type === 'bookmark') {
-    return {
-      id,
-      type,
-      title: trimmed,
-      url: normalizeUrl(trimmed),
-      createdAt,
-    };
-  }
-
+function newRecord(
+  id: string,
+  mode: CaptureMode,
+  preview: string,
+  item: InboxItem,
+  hasBlob: boolean,
+): CaptureRecord {
   return {
     id,
-    type,
-    title: trimmed.slice(0, 50),
-    body: trimmed,
-    createdAt,
+    mode,
+    preview,
+    createdAt: new Date().toISOString(),
+    status: 'queued',
+    item,
+    hasBlob,
   };
 }
 
-function normalizeUrl(input: string): string {
-  if (/^https?:\/\//i.test(input)) return input;
-  return `https://${input}`;
+function prepend(record: CaptureRecord): void {
+  saveHistory([record, ...getHistory()]);
+}
+
+/** Queue a text note for delivery. */
+export function captureNote(text: string): CaptureRecord {
+  const trimmed = text.trim();
+  const id = crypto.randomUUID();
+  const item: NoteItem = {
+    id,
+    type: 'note',
+    title: trimmed.slice(0, 50) || 'Note',
+    body: trimmed,
+    createdAt: new Date().toISOString(),
+  };
+  const record = newRecord(
+    id,
+    'note',
+    trimmed.slice(0, 120) || 'Note',
+    item,
+    false,
+  );
+  prepend(record);
+  return record;
+}
+
+/** Queue a photo for delivery; the binary is held in IndexedDB until synced. */
+export async function captureImage(file: File): Promise<CaptureRecord> {
+  const id = crypto.randomUUID();
+  const ext = extFromName(file.name) || extFromMime(file.type) || '.jpg';
+  const item: ImageItem = {
+    id,
+    type: 'image',
+    title: file.name || 'Photo',
+    filePath: `files/${id}${ext}`,
+    mimeType: file.type || 'image/jpeg',
+    createdAt: new Date().toISOString(),
+  };
+  await putBlob(id, file);
+  const record = newRecord(id, 'image', file.name || 'Photo', item, true);
+  prepend(record);
+  return record;
+}
+
+/** Queue a voice memo for delivery; the binary is held in IndexedDB. */
+export async function captureVoice(
+  blob: Blob,
+  durationSec?: number,
+): Promise<CaptureRecord> {
+  const id = crypto.randomUUID();
+  const ext = blob.type.includes('mp4')
+    ? '.mp4'
+    : blob.type.includes('ogg')
+      ? '.ogg'
+      : '.webm';
+  const item: AudioItem = {
+    id,
+    type: 'audio',
+    title: 'Voice memo',
+    filePath: `files/${id}${ext}`,
+    mimeType: blob.type || 'audio/webm',
+    duration: durationSec,
+    createdAt: new Date().toISOString(),
+  };
+  await putBlob(id, blob);
+  const preview = durationSec
+    ? `Voice memo · ${formatDuration(durationSec)}`
+    : 'Voice memo';
+  const record = newRecord(id, 'voice', preview, item, true);
+  prepend(record);
+  return record;
+}
+
+/**
+ * Deliver every pending capture to remoteStorage, oldest first (FIFO), updating
+ * each record's status as it goes. Safe to call repeatedly — it also retries
+ * anything previously marked failed.
+ */
+export async function flushQueue(
+  config: RSConfig | null = getConfig(),
+): Promise<CaptureRecord[]> {
+  let records = getHistory();
+  if (!config?.href || !config.token) return records;
+
+  const rs = new DirectRS(config);
+  const pending = records.filter(isPending).reverse(); // oldest first
+
+  for (const entry of pending) {
+    records = patch(records, entry.id, {
+      status: 'sending',
+      lastError: undefined,
+    });
+    saveHistory(records);
+    try {
+      const fileData = entry.hasBlob ? await getBlobBytes(entry.id) : undefined;
+      await rs.store(entry.item, fileData);
+      records = patch(records, entry.id, {
+        status: 'synced',
+        lastError: undefined,
+      });
+      if (entry.hasBlob) await deleteBlob(entry.id);
+    } catch (error) {
+      records = patch(records, entry.id, {
+        status: 'failed',
+        lastError: errorMessage(error),
+      });
+    }
+    saveHistory(records);
+  }
+  return records;
+}
+
+/** Remove a capture from history and discard any pending binary. */
+export async function removeRecord(id: string): Promise<CaptureRecord[]> {
+  const records = getHistory().filter((r) => r.id !== id);
+  saveHistory(records);
+  await deleteBlob(id);
+  return records;
+}
+
+function patch(
+  records: CaptureRecord[],
+  id: string,
+  changes: Partial<CaptureRecord>,
+): CaptureRecord[] {
+  return records.map((r) => (r.id === id ? { ...r, ...changes } : r));
+}
+
+// ---------------------------------------------------------------------------
+// Binary blob storage (IndexedDB, with an in-memory fallback for non-DOM envs)
+// ---------------------------------------------------------------------------
+
+const DB_NAME = 'inbox-rs-capture';
+const BLOB_STORE = 'blobs';
+const memoryBlobs = new Map<string, Blob>();
+
+function idbAvailable(): boolean {
+  return typeof indexedDB !== 'undefined';
+}
+
+function openDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(BLOB_STORE)) {
+        request.result.createObjectStore(BLOB_STORE);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function txDone(tx: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
+async function putBlob(id: string, blob: Blob): Promise<void> {
+  if (!idbAvailable()) {
+    memoryBlobs.set(id, blob);
+    return;
+  }
+  const db = await openDb();
+  const tx = db.transaction(BLOB_STORE, 'readwrite');
+  tx.objectStore(BLOB_STORE).put(blob, id);
+  await txDone(tx);
+  db.close();
+}
+
+async function getBlobBytes(id: string): Promise<ArrayBuffer | undefined> {
+  if (!idbAvailable()) {
+    return memoryBlobs.get(id)?.arrayBuffer();
+  }
+  const db = await openDb();
+  const tx = db.transaction(BLOB_STORE, 'readonly');
+  const blob = await new Promise<Blob | undefined>((resolve, reject) => {
+    const request = tx.objectStore(BLOB_STORE).get(id);
+    request.onsuccess = () => resolve(request.result as Blob | undefined);
+    request.onerror = () => reject(request.error);
+  });
+  db.close();
+  return blob?.arrayBuffer();
+}
+
+async function deleteBlob(id: string): Promise<void> {
+  if (!idbAvailable()) {
+    memoryBlobs.delete(id);
+    return;
+  }
+  const db = await openDb();
+  const tx = db.transaction(BLOB_STORE, 'readwrite');
+  tx.objectStore(BLOB_STORE).delete(id);
+  await txDone(tx);
+  db.close();
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function extFromName(name: string): string | null {
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? name.slice(dot).toLowerCase() : null;
+}
+
+function extFromMime(mime: string): string | null {
+  if (!mime) return null;
+  if (mime === 'image/jpeg') return '.jpg';
+  const slash = mime.indexOf('/');
+  return slash > 0 ? `.${mime.slice(slash + 1)}` : null;
+}
+
+export function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 function readJson<T>(key: string): T | null {
