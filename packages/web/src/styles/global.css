@@ -1,25 +1,36 @@
+@import "./theme-accents.css";
+
 :root {
+  /* Accent comes from data-accent (theme-accents.css); these are fallbacks
+     for the first paint before the stored accent is applied. */
+  --accent: #4f46e5;
+  --accent-deep: #3f38c4;
+
   --bg: #0f1117;
   --surface: #1a1d27;
   --surface-hover: #222632;
   --border: #2a2e3a;
   --text: #e4e6eb;
   --text-muted: #8b8f9a;
-  --accent: #6366f1;
-  --accent-hover: #818cf8;
   --danger: #ef4444;
   --danger-hover: #f87171;
   --radius: 12px;
   --radius-sm: 8px;
   --overlay: rgba(0, 0, 0, 0.6);
   --shadow: rgba(0, 0, 0, 0.3);
-  --accent-subtle: rgba(99, 102, 241, 0.15);
-  --accent-subtler: rgba(99, 102, 241, 0.1);
-  --accent-subtle-strong: rgba(99, 102, 241, 0.25);
   --surface-tint: rgba(255, 255, 255, 0.06);
   --surface-tint-hover: rgba(255, 255, 255, 0.1);
+
+  /* Accent-derived — these track whatever --accent the theme sets. */
+  --accent-hover: color-mix(in srgb, var(--accent) 72%, white);
+  --accent-subtle: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-subtler: color-mix(in srgb, var(--accent) 10%, transparent);
+  --accent-subtle-strong: color-mix(in srgb, var(--accent) 26%, transparent);
 }
 
+/* Light neutrals. The accent itself still comes from data-accent; only the
+   hover shade differs (darker on light backgrounds). The --accent-subtle*
+   tokens are accent-mixed-with-transparent in :root, so they hold in both modes. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     --bg: #f8f9fb;
@@ -28,17 +39,13 @@
     --border: #d8dbe3;
     --text: #1a1d27;
     --text-muted: #6b7084;
-    --accent: #4f46e5;
-    --accent-hover: #4338ca;
     --danger: #dc2626;
     --danger-hover: #b91c1c;
     --overlay: rgba(0, 0, 0, 0.4);
     --shadow: rgba(0, 0, 0, 0.1);
-    --accent-subtle: rgba(79, 70, 229, 0.1);
-    --accent-subtler: rgba(79, 70, 229, 0.06);
-    --accent-subtle-strong: rgba(79, 70, 229, 0.18);
     --surface-tint: rgba(0, 0, 0, 0.04);
     --surface-tint-hover: rgba(0, 0, 0, 0.07);
+    --accent-hover: color-mix(in srgb, var(--accent) 84%, black);
   }
 }
 
@@ -49,17 +56,13 @@
   --border: #d8dbe3;
   --text: #1a1d27;
   --text-muted: #6b7084;
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
   --danger: #dc2626;
   --danger-hover: #b91c1c;
   --overlay: rgba(0, 0, 0, 0.4);
   --shadow: rgba(0, 0, 0, 0.1);
-  --accent-subtle: rgba(79, 70, 229, 0.1);
-  --accent-subtler: rgba(79, 70, 229, 0.06);
-  --accent-subtle-strong: rgba(79, 70, 229, 0.18);
   --surface-tint: rgba(0, 0, 0, 0.04);
   --surface-tint-hover: rgba(0, 0, 0, 0.07);
+  --accent-hover: color-mix(in srgb, var(--accent) 84%, black);
 }
 
 * {

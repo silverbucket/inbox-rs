@@ -451,7 +451,9 @@
     padding: 0.25rem;
     border: 1px solid var(--border);
     border-radius: 1rem;
-    background: color-mix(in srgb, var(--surface) 88%, black 12%);
+    /* Faint accent tint rather than a flat grey, so the rail harmonises with
+       the active theme instead of clashing with it. */
+    background: color-mix(in srgb, var(--accent) 8%, var(--surface));
     flex-shrink: 0;
   }
 

@@ -3,6 +3,14 @@
   import { tick } from 'svelte';
   import rs from '../lib/rs';
   import { connected, syncing, userAddress, userSettings, updateUserSettings } from '../lib/stores';
+  import {
+    type Accent,
+    ACCENT_LABELS,
+    ACCENT_SWATCHES,
+    ACCENTS,
+    applyAccent,
+    isAccent,
+  } from '../lib/theme';
 
   type LazyComponent = Component<Record<string, unknown>>;
 
@@ -54,6 +62,16 @@
     // Keep localStorage in sync so it's available as fallback next load
     localStorage.setItem('inbox-rs:theme', theme);
   });
+
+  // Accent — local-only, shared with the quick-capture app's theme set.
+  const storedAccent = localStorage.getItem('inbox-rs:accent');
+  let accent = $state<Accent>(isAccent(storedAccent) ? storedAccent : 'indigo');
+
+  function setAccent(a: Accent) {
+    accent = a;
+    localStorage.setItem('inbox-rs:accent', a);
+    applyAccent(a);
+  }
 
   function toggle() {
     open = !open;
@@ -370,6 +388,24 @@
           </svg>
           Dark
         </button>
+      </div>
+
+      <!-- Accent -->
+      <div class="section-label">Accent</div>
+      <div class="accent-swatches" role="radiogroup" aria-label="Accent colour">
+        {#each ACCENTS as a (a)}
+          <button
+            type="button"
+            class="accent-swatch"
+            class:active={accent === a}
+            style="--sw: {ACCENT_SWATCHES[a]}"
+            role="radio"
+            aria-checked={accent === a}
+            aria-label={ACCENT_LABELS[a]}
+            title={ACCENT_LABELS[a]}
+            onclick={() => setAccent(a)}
+          ></button>
+        {/each}
       </div>
     </div>
   {/if}
@@ -817,6 +853,35 @@
     color: var(--accent);
     border-color: var(--accent);
     background: var(--accent-subtle);
+  }
+
+  .accent-swatches {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem 0.5rem;
+    justify-items: center;
+  }
+
+  .accent-swatch {
+    width: 100%;
+    aspect-ratio: 1;
+    max-width: 1.5rem;
+    border-radius: 50%;
+    background: var(--sw);
+    border: 2px solid var(--border);
+    padding: 0;
+    cursor: pointer;
+    transition: transform 150ms, box-shadow 150ms;
+  }
+
+  .accent-swatch:hover {
+    transform: translateY(-1px);
+  }
+
+  .accent-swatch.active {
+    border-color: var(--text);
+    box-shadow: 0 0 0 2px var(--accent-subtle);
   }
 
   /* ── Mobile ──────────────────────────────── */
