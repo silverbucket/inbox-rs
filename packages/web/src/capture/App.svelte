@@ -56,7 +56,6 @@
   // image
   let selectedFile = $state<File | null>(null);
   let imageUrl = $state<string | null>(null);
-  let fileInput = $state<HTMLInputElement>();
 
   // theme + install
   let accent = $state<Accent>('indigo');
@@ -194,9 +193,6 @@
   }
 
   // --- image ---
-  function pickImage() {
-    fileInput?.click();
-  }
   function onFile(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0] ?? null;
@@ -382,30 +378,34 @@
         {/if}
       </div>
     {:else}
+      <!--
+        A <label> opening a visually-hidden (not display:none) input is the only
+        approach that reliably triggers the native picker in every browser —
+        Safari/iOS refuse a programmatic .click() on a hidden file input.
+      -->
+      <input
+        id="capture-image-file"
+        class="visually-hidden"
+        type="file"
+        accept="image/*"
+        onchange={onFile}
+      />
       <div class="pad">
         {#if imageUrl}
           <img class="preview-image" src={imageUrl} alt="Selected" />
-          <button class="ghost" type="button" onclick={pickImage}>Choose another</button>
+          <label class="ghost" for="capture-image-file">Choose another</label>
         {:else}
-          <button class="record" type="button" onclick={pickImage} aria-label="Choose a photo">
+          <label class="record" for="capture-image-file" aria-label="Choose a photo">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <title>Photo</title>
               <rect x="3" y="5" width="18" height="14" rx="3" />
               <circle cx="9" cy="11" r="2" />
               <path d="M3 17l5-4 4 3 3-2 6 5" />
             </svg>
-          </button>
+          </label>
           <p class="pad-line">Take or choose a photo</p>
         {/if}
       </div>
-      <input
-        class="hidden-file"
-        bind:this={fileInput}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onchange={onFile}
-      />
     {/if}
 
     <button class="send" type="button" onclick={send} disabled={!canSend}>
@@ -691,6 +691,7 @@
     align-items: center;
     justify-content: center;
     box-shadow: 0 8px 20px var(--accent-shadow);
+    cursor: pointer;
   }
   .record svg {
     width: 2.4rem;
@@ -717,9 +718,6 @@
   }
   .preview-audio {
     width: 100%;
-  }
-  .hidden-file {
-    display: none;
   }
 
   .send {
@@ -760,6 +758,10 @@
     background: var(--surface);
     color: var(--ink);
     font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
   }
   .ghost.small {
     min-height: 2.4rem;
