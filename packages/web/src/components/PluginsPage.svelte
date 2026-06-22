@@ -2,8 +2,8 @@
   import chromeLogo from '../assets/logos/chrome.svg';
   import firefoxLogo from '../assets/logos/firefox.svg';
   import thunderbirdLogo from '../assets/logos/thunderbird.svg';
-  import mobileLogo from '../assets/logos/mobile.svg';
-  import shieldLogo from '../assets/logos/logo-shield.svg';
+  import inboxRsMobileLogo from '../assets/logos/inbox-rs-mobile.svg';
+  import captureLogo from '../assets/logos/favicon-shield.svg';
   import { pluginArtifacts } from '../lib/plugin-downloads.generated';
 
   type DownloadOption = {
@@ -63,11 +63,11 @@
   };
 
   const mobileDownload: MobileDownload = {
-    name: 'Mobile App',
-    compatibility: 'iOS & Android',
+    name: 'Inbox RS Mobile',
+    compatibility: 'Standalone native app · iOS & Android',
     repoUrl: 'https://github.com/silverbucket/inbox-rs-mobile',
     accentClass: 'mobile',
-    logoSrc: mobileLogo,
+    logoSrc: inboxRsMobileLogo,
   };
 
   const thunderbirdDownload: DownloadOption = {
@@ -215,67 +215,35 @@
     <div class="section-header">
       <h2>Mobile</h2>
       <p class="section-lede">
-        Capture to your inbox from your phone two ways. <strong>Quick
-        Capture</strong> is a PWA that installs straight from this site — no
-        app store, no system package — while the native app adds deeper OS
-        integration like the share sheet.
+        Two ways to capture from your phone. <strong>Inbox RS Mobile</strong>
+        is a separate, standalone native app (its own download, built with
+        Flutter). <strong>Quick Capture</strong> is built into Inbox RS — a PWA
+        that opens in your browser and adds to your home screen with no app
+        store and no system install.
       </p>
     </div>
 
     <ul class="feature-list">
       <li>
-        <strong>No install needed</strong> — Quick Capture runs in any modern
-        browser and can be added to your home screen
+        <strong>Inbox RS Mobile</strong> — native iOS &amp; Android, with
+        share-sheet integration to send from any app
       </li>
       <li>
-        <strong>Note, Voice &amp; Image</strong> — type, record, or snap a
-        photo straight to your inbox
+        <strong>Quick Capture</strong> — no install; runs in any modern browser
+        and adds to your home screen
+      </li>
+      <li>
+        <strong>Note, Voice &amp; Image</strong> — both capture notes, voice
+        memos, and photos to your inbox
       </li>
       <li>
         <strong>Offline-first</strong> — captures queue locally and sync once
         you're back online
       </li>
-      <li>
-        <strong>Share Sheet</strong> — the native app adds send-from-any-app
-        integration on iOS &amp; Android
-      </li>
     </ul>
 
     <div class="download-grid">
-      <p class="grid-label">Two ways to capture on mobile</p>
-
-      <article class="download-card capture">
-        <div class="card-topline">
-          <div class="card-heading">
-            <div class="logo-badge capture" aria-hidden="true">
-              <img src={shieldLogo} alt="" />
-            </div>
-            <div class="card-title-group">
-              <h3>Quick Capture</h3>
-              <span class="compatibility">Any modern browser · installable PWA</span>
-            </div>
-          </div>
-          <span class="file-pill">PWA</span>
-        </div>
-
-        <a class="download-button" href="/capture/">
-          Open Quick Capture
-        </a>
-
-        <details class="install-details">
-          <summary>About &amp; install</summary>
-          <p class="install-note">
-            A no-install alternative to the native app: open it in any modern
-            browser and it works immediately, queuing notes, voice memos, and
-            photos offline until they sync to your remoteStorage inbox.
-          </p>
-          <ol class="steps">
-            <li>Open Quick Capture with the button above.</li>
-            <li>In your browser, choose Install or Add to Home Screen.</li>
-            <li>Launch it like any app — capture notes, voice, and photos.</li>
-          </ol>
-        </details>
-      </article>
+      <p class="grid-label">Choose your capture app</p>
 
       <article class={`download-card ${mobileDownload.accentClass}`}>
         <div class="card-topline">
@@ -288,7 +256,7 @@
               <span class="compatibility">{mobileDownload.compatibility}</span>
             </div>
           </div>
-          <span class="file-pill">SOURCE</span>
+          <span class="file-pill">NATIVE</span>
         </div>
 
         <a class="download-button" href={mobileDownload.repoUrl} target="_blank" rel="noopener noreferrer">
@@ -298,15 +266,49 @@
         <details class="install-details">
           <summary>Build instructions</summary>
           <p class="install-note">
-            The native app is built from source with Flutter; pre-built binaries
-            aren't provided. It likely won't be published to the App Store or
-            Play Store for now — the annual developer fees aren't justified at
-            this stage. Use Quick Capture for a no-install option.
+            A standalone app from the inbox-rs-mobile repository, built from
+            source with Flutter; pre-built binaries aren't provided. It likely
+            won't be published to the App Store or Play Store for now — the
+            annual developer fees aren't justified at this stage. Prefer no
+            install? Use Quick Capture instead.
           </p>
           <ol class="steps">
-            <li>Clone the repository from GitHub.</li>
+            <li>Clone the inbox-rs-mobile repository from GitHub.</li>
             <li>Install Flutter and run <code>flutter pub get</code>.</li>
             <li>Build for your target platform, e.g. <code>flutter build apk</code> or <code>flutter build ios</code>.</li>
+          </ol>
+        </details>
+      </article>
+
+      <article class="download-card capture">
+        <div class="card-topline">
+          <div class="card-heading">
+            <div class="logo-badge capture" aria-hidden="true">
+              <img src={captureLogo} alt="" />
+            </div>
+            <div class="card-title-group">
+              <h3>Quick Capture</h3>
+              <span class="compatibility">Built into Inbox RS · installable PWA</span>
+            </div>
+          </div>
+          <span class="file-pill">PWA</span>
+        </div>
+
+        <a class="download-button" href="/capture/">
+          Open Quick Capture
+        </a>
+
+        <details class="install-details">
+          <summary>About &amp; install</summary>
+          <p class="install-note">
+            Part of Inbox RS — no separate download. Open it in any modern
+            browser and it works immediately, queuing notes, voice memos, and
+            photos offline until they sync to your remoteStorage inbox.
+          </p>
+          <ol class="steps">
+            <li>Open Quick Capture with the button above.</li>
+            <li>In your browser, choose Install or Add to Home Screen.</li>
+            <li>Launch it like any app — capture notes, voice, and photos.</li>
           </ol>
         </details>
       </article>
@@ -492,7 +494,7 @@
   }
 
   .download-card.mobile::before {
-    background: linear-gradient(135deg, rgba(80, 200, 120, 0.18), transparent 48%);
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.18), transparent 48%);
   }
 
   .download-card.capture::before {
@@ -540,7 +542,7 @@
     flex-shrink: 0;
     border-radius: 1.15rem;
     border: 1px solid color-mix(in srgb, var(--border) 58%, white 42%);
-    background: color-mix(in srgb, var(--surface) 58%, black 42%);
+    background: color-mix(in srgb, var(--surface) 84%, black 16%);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.08),
       0 16px 34px rgba(0, 0, 0, 0.18);
@@ -573,6 +575,12 @@
     display: block;
     object-fit: contain;
     filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.22));
+  }
+
+  /* The bare shield reads smaller than the full app-tile icon — size it up to match. */
+  .logo-badge.capture img {
+    width: 2.85rem;
+    height: 2.85rem;
   }
 
   .logo-badge.chrome {
@@ -619,17 +627,17 @@
   }
 
   .logo-badge.mobile {
-    border-color: rgba(80, 200, 120, 0.42);
+    border-color: rgba(79, 70, 229, 0.42);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.08),
-      0 18px 34px rgba(80, 200, 120, 0.2);
+      0 18px 34px rgba(79, 70, 229, 0.2);
   }
 
   .logo-badge.mobile::before {
     background:
-      radial-gradient(circle at 40% 28%, rgba(80, 200, 120, 0.6), transparent 32%),
-      radial-gradient(circle at 62% 72%, rgba(34, 197, 94, 0.4), transparent 36%),
-      linear-gradient(180deg, rgba(80, 200, 120, 0.58), rgba(22, 101, 52, 0.38) 60%, rgba(20, 22, 30, 0.18));
+      radial-gradient(circle at 40% 28%, rgba(99, 102, 241, 0.5), transparent 32%),
+      radial-gradient(circle at 64% 74%, rgba(79, 70, 229, 0.4), transparent 36%),
+      linear-gradient(180deg, rgba(79, 70, 229, 0.5), rgba(49, 46, 129, 0.38) 60%, rgba(20, 22, 30, 0.18));
   }
 
   .logo-badge.capture {
