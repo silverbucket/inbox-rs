@@ -5,6 +5,7 @@ import type {
   DocumentItem,
   EmailItem,
   ImageItem,
+  NoteItem,
   TodoItem,
 } from '@inbox-rs/rs-module';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -123,6 +124,25 @@ describe('buildBookmarkItem', () => {
     expect((result.item as BookmarkItem).body).toBeUndefined();
     expect((result.item as BookmarkItem).filePath).toBeUndefined();
   });
+
+  it('preserves collectionId when editing a bookmark filed in a collection', () => {
+    const editItem: BookmarkItem = {
+      id: 'item-1',
+      type: 'bookmark',
+      title: 'Old',
+      url: 'https://example.com',
+      collectionId: 'col-42',
+      createdAt: '2026-04-29T08:00:00.000Z',
+    };
+
+    const result = buildBookmarkItem(ctx({ id: 'item-1', editItem }), {
+      url: 'https://example.com',
+      title: 'New',
+      description: '',
+    });
+
+    expect((result.item as BookmarkItem).collectionId).toBe('col-42');
+  });
 });
 
 describe('buildNoteItem', () => {
@@ -151,6 +171,39 @@ describe('buildNoteItem', () => {
       body: 'Some body',
       description: undefined,
     });
+  });
+
+  it('preserves collectionId when editing a note filed in a collection', () => {
+    // Regression: editing a note that lives in a collection must keep it
+    // there. Previously the builder created a fresh item without
+    // collectionId, so saving an edit silently moved the note back to the
+    // Inbox.
+    const editItem: NoteItem = {
+      id: 'note-1',
+      type: 'note',
+      title: 'Old title',
+      body: 'Old body',
+      collectionId: 'col-42',
+      createdAt: '2026-04-29T08:00:00.000Z',
+    };
+
+    const result = buildNoteItem(ctx({ id: 'note-1', editItem }), {
+      title: 'New title',
+      body: 'New body',
+      description: '',
+    });
+
+    expect((result.item as NoteItem).collectionId).toBe('col-42');
+  });
+
+  it('leaves collectionId undefined for a brand-new note (stays in Inbox)', () => {
+    const result = buildNoteItem(ctx(), {
+      title: 'Title',
+      body: 'Some body',
+      description: '',
+    });
+
+    expect((result.item as NoteItem).collectionId).toBeUndefined();
   });
 });
 
@@ -209,6 +262,29 @@ describe('buildImageItem', () => {
     );
     expect((result?.item as ImageItem).mimeType).toBe('image/jpeg');
     expect((result?.item as ImageItem).title).toBe('New title');
+  });
+
+  it('preserves collectionId when replacing the bytes of a filed image', async () => {
+    const editItem: ImageItem = {
+      id: 'img-1',
+      type: 'image',
+      title: 'Old',
+      filePath: 'files/img-1.png',
+      mimeType: 'image/png',
+      collectionId: 'col-42',
+      createdAt: '2026-04-29T08:00:00.000Z',
+    };
+    const replacement = new File(['xyz'], 'replacement.jpg', {
+      type: 'image/jpeg',
+    });
+
+    const result = await buildImageItem(ctx({ id: 'img-1', editItem }), {
+      title: 'New title',
+      description: '',
+      file: replacement,
+    });
+
+    expect((result?.item as ImageItem).collectionId).toBe('col-42');
   });
 
   it('returns a metadata-only update when editing without replacing the file', async () => {
@@ -393,6 +469,31 @@ describe('buildAudioItem', () => {
       description: 'desc',
     });
   });
+
+  it('preserves collectionId when re-recording a filed audio memo', async () => {
+    const editItem: AudioItem = {
+      id: 'rec-6',
+      type: 'audio',
+      title: 'Old',
+      filePath: 'files/rec-6.webm',
+      mimeType: 'audio/webm',
+      collectionId: 'col-42',
+      createdAt: '2026-04-29T08:00:00.000Z',
+    };
+    const blob = new Blob(['audio'], { type: 'audio/webm' });
+
+    const result = await buildAudioItem(ctx({ id: 'rec-6', editItem }), {
+      title: '',
+      body: '',
+      description: '',
+      file: null,
+      recordedBlob: blob,
+      recordingDuration: 3,
+      transcript: '',
+    });
+
+    expect((result?.item as AudioItem).collectionId).toBe('col-42');
+  });
 });
 
 describe('buildDocumentItem', () => {
@@ -448,6 +549,28 @@ describe('buildDocumentItem', () => {
     });
 
     expect((result?.item as DocumentItem).filePath).toBe('files/doc-1.pdf');
+  });
+
+  it('preserves collectionId when replacing a filed document', async () => {
+    const editItem: DocumentItem = {
+      id: 'doc-1',
+      type: 'document',
+      title: 'Old',
+      filePath: 'files/doc-1.pdf',
+      mimeType: 'application/pdf',
+      collectionId: 'col-42',
+      createdAt: '2026-04-29T08:00:00.000Z',
+    };
+
+    const file = new File(['hi'], 'updated.pdf', { type: 'application/pdf' });
+
+    const result = await buildDocumentItem(ctx({ id: 'doc-1', editItem }), {
+      title: '',
+      description: '',
+      file,
+    });
+
+    expect((result?.item as DocumentItem).collectionId).toBe('col-42');
   });
 });
 
@@ -508,6 +631,26 @@ describe('buildEmailItem', () => {
     });
 
     expect((result.item as EmailItem).messageUrl).toBeUndefined();
+  });
+
+  it('preserves collectionId when editing an email filed in a collection', () => {
+    const editItem: EmailItem = {
+      id: 'mail-1',
+      type: 'email',
+      title: 'Hello',
+      body: 'orig',
+      collectionId: 'col-42',
+      createdAt: '2026-04-29T08:00:00.000Z',
+    };
+
+    const result = buildEmailItem(ctx({ id: 'mail-1', editItem }), {
+      title: 'Hello',
+      body: 'updated',
+      from: '',
+      notes: '',
+    });
+
+    expect((result.item as EmailItem).collectionId).toBe('col-42');
   });
 });
 
@@ -598,5 +741,26 @@ describe('buildTodoItem', () => {
 
     expect((result.item as TodoItem).body).toBeUndefined();
     expect((result.item as TodoItem).description).toBeUndefined();
+  });
+
+  it('preserves collectionId when editing a todo filed in a collection', () => {
+    const editItem: TodoItem = {
+      id: 'todo-1',
+      type: 'todo',
+      title: 'Buy milk',
+      completed: false,
+      isTodo: true,
+      collectionId: 'col-42',
+      createdAt: '2026-04-29T08:00:00.000Z',
+    };
+
+    const result = buildTodoItem(ctx({ id: 'todo-1', editItem }), {
+      title: 'Buy milk and bread',
+      body: '',
+      description: '',
+      completed: false,
+    });
+
+    expect((result.item as TodoItem).collectionId).toBe('col-42');
   });
 });

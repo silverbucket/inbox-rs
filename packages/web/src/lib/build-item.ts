@@ -33,6 +33,23 @@ export interface BuildContext {
   editItem?: InboxItem;
 }
 
+/**
+ * Carry the edit target's collection membership onto a freshly-rebuilt item.
+ * `collectionId` is a type-agnostic placement field the per-type forms never
+ * surface, so without this every edit would drop it and silently move the
+ * item back to the Inbox. Applied unconditionally on edit (including across
+ * type conversions) so an item filed in a collection stays there.
+ */
+function preserveCollection<T extends InboxItem>(
+  ctx: BuildContext,
+  item: T,
+): T {
+  if (ctx.editItem?.collectionId) {
+    item.collectionId = ctx.editItem.collectionId;
+  }
+  return item;
+}
+
 export interface BookmarkFormData {
   url: string;
   title: string;
@@ -63,7 +80,7 @@ export function buildBookmarkItem(
     if (ctx.editItem.filePath) bookmark.filePath = ctx.editItem.filePath;
     if (ctx.editItem.mimeType) bookmark.mimeType = ctx.editItem.mimeType;
   }
-  return { item: bookmark };
+  return { item: preserveCollection(ctx, bookmark) };
 }
 
 export interface NoteFormData {
@@ -84,7 +101,7 @@ export function buildNoteItem(
     description: data.description || undefined,
     createdAt: ctx.createdAt,
   };
-  return { item };
+  return { item: preserveCollection(ctx, item) };
 }
 
 export interface ImageFormData {
@@ -114,7 +131,7 @@ export async function buildImageItem(
       description: data.description || undefined,
       createdAt: ctx.createdAt,
     };
-    return { item, fileData };
+    return { item: preserveCollection(ctx, item), fileData };
   }
   if (ctx.editItem && ctx.editItem.type === 'image') {
     const item: ImageItem = {
@@ -182,7 +199,7 @@ export async function buildAudioItem(
       description: data.description || undefined,
       createdAt: ctx.createdAt,
     };
-    return { item, fileData };
+    return { item: preserveCollection(ctx, item), fileData };
   }
   if (ctx.editItem && ctx.editItem.type === 'audio') {
     const item: AudioItem = {
@@ -223,7 +240,7 @@ export async function buildDocumentItem(
       description: data.description || undefined,
       createdAt: ctx.createdAt,
     };
-    return { item, fileData };
+    return { item: preserveCollection(ctx, item), fileData };
   }
   if (ctx.editItem && ctx.editItem.type === 'document') {
     const item: DocumentItem = {
@@ -261,7 +278,7 @@ export function buildEmailItem(
     messageUrl,
     createdAt: ctx.createdAt,
   };
-  return { item };
+  return { item: preserveCollection(ctx, item) };
 }
 
 export interface TodoFormData {
@@ -303,5 +320,5 @@ export function buildTodoItem(
     createdAt: ctx.createdAt,
     isTodo: true,
   };
-  return { item };
+  return { item: preserveCollection(ctx, item) };
 }
