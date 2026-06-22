@@ -48,6 +48,11 @@ export default defineConfig({
       'onnxruntime-node': 'onnxruntime-web',
       sharp: 'onnxruntime-web',
     },
+    // Under Vitest, resolve Svelte (and deps) to their browser builds so
+    // components can be mounted with the client runtime (mount/flushSync).
+    // Without this they compile for SSR and `lifecycle_function_unavailable`
+    // is thrown. Scoped to test runs so dev/build resolution is unchanged.
+    ...(process.env.VITEST ? { conditions: ['browser'] } : {}),
   },
   build: {
     // Bump above Vite's default `modules` baseline so top-level `await` is
