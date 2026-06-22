@@ -856,15 +856,17 @@
   }
 
   .accent-swatches {
-    display: flex;
-    gap: 0.4rem;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.5rem;
     padding: 0.25rem 0.5rem 0.5rem;
+    justify-items: center;
   }
 
   .accent-swatch {
-    flex: 1;
+    width: 100%;
     aspect-ratio: 1;
-    max-width: 1.6rem;
+    max-width: 1.5rem;
     border-radius: 50%;
     background: var(--sw);
     border: 2px solid var(--border);

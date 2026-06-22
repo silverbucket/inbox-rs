@@ -9,12 +9,18 @@
 
 export const ACCENTS = [
   'indigo',
-  'forest',
-  'plum',
+  'violet',
+  'blue',
+  'cyan',
   'teal',
-  'slate',
-  'rose',
+  'forest',
   'mustard',
+  'ember',
+  'crimson',
+  'rose',
+  'magenta',
+  'plum',
+  'slate',
   'graphite',
 ] as const;
 
@@ -24,24 +30,36 @@ export type Mode = 'light' | 'dark' | 'system';
 /** Human labels for the settings UI. */
 export const ACCENT_LABELS: Record<Accent, string> = {
   indigo: 'Indigo',
-  forest: 'Forest',
-  plum: 'Plum',
+  violet: 'Violet',
+  blue: 'Blue',
+  cyan: 'Cyan',
   teal: 'Teal',
-  slate: 'Slate',
-  rose: 'Rose',
+  forest: 'Forest',
   mustard: 'Mustard',
+  ember: 'Ember',
+  crimson: 'Crimson',
+  rose: 'Rose',
+  magenta: 'Magenta',
+  plum: 'Plum',
+  slate: 'Slate',
   graphite: 'Graphite',
 };
 
 /** Swatch colours for the picker — kept in sync with the accents in theme-accents.css. */
 export const ACCENT_SWATCHES: Record<Accent, string> = {
   indigo: '#4f46e5',
-  forest: '#3f7d54',
-  plum: '#8a4a6f',
+  violet: '#7c3aed',
+  blue: '#2563eb',
+  cyan: '#0e7490',
   teal: '#2f8079',
-  slate: '#41607f',
-  rose: '#b15775',
+  forest: '#3f7d54',
   mustard: '#8a6a1f',
+  ember: '#c2410c',
+  crimson: '#be123c',
+  rose: '#b15775',
+  magenta: '#a21caf',
+  plum: '#8a4a6f',
+  slate: '#41607f',
   graphite: '#5b6b8c',
 };
 
