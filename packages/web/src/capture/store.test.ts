@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { discoverStorageMock } = vi.hoisted(() => ({
   discoverStorageMock: vi.fn(),
@@ -59,6 +59,10 @@ beforeEach(() => {
   vi.stubGlobal('localStorage', storage);
   vi.stubGlobal('window', { location, history: { replaceState } });
   vi.stubGlobal('crypto', { randomUUID: () => `id-${uuid++}` });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('startConnect', () => {

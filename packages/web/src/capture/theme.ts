@@ -38,8 +38,8 @@ export const ACCENT_SWATCHES: Record<Accent, string> = {
   plum: '#8a4a6f',
   teal: '#2f8079',
   slate: '#41607f',
-  rose: '#b8617a',
-  mustard: '#bf8a2e',
+  rose: '#b15775',
+  mustard: '#8a6a1f',
   graphite: '#5b6b8c',
 };
 

@@ -93,6 +93,10 @@
     window.addEventListener('online', onOnline);
     window.addEventListener('beforeinstallprompt', onInstallPrompt);
     return () => {
+      // Release the mic if we unmount mid-recording.
+      if (recording && mediaRecorder) {
+        for (const track of mediaRecorder.stream.getTracks()) track.stop();
+      }
       window.removeEventListener('online', onOnline);
       window.removeEventListener('beforeinstallprompt', onInstallPrompt);
       if (recordTimer) clearInterval(recordTimer);
@@ -138,6 +142,9 @@
       connectedAddress = config.userAddress;
       const p = pendingCount(history);
       status = p ? `${p} waiting to sync` : 'All synced ✓';
+    } catch (error) {
+      history = getHistory();
+      status = error instanceof Error ? error.message : 'Sync failed';
     } finally {
       syncing = false;
     }
