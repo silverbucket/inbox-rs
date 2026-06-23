@@ -17,8 +17,9 @@
   let { onselect, onaddtodo, onaddtodoincollection }: {
     onselect: (item: InboxItem) => void;
     /** Opens the add-todo modal for richer details and optional filing.
-        Optionally pre-fills the todo title (⌘/Ctrl-Enter from the quick-add). */
-    onaddtodo: (prefillTitle?: string) => void;
+        Optionally pre-fills the todo title (⌘/Ctrl-Enter from the quick-add)
+        and the target collection (mirrors the quick-add's collection select). */
+    onaddtodo: (prefillTitle?: string, collectionId?: string) => void;
     /** Opens the add-todo modal with a specific collection pre-selected.
         Used by the per-row quick-add affordance. Pass `undefined` to target
         an unfiled todo. */
@@ -199,7 +200,7 @@
          ⌘/Ctrl-Enter opens the modal). Mobile: the Fab is position:fixed, a
          floating + circle in the thumb zone. -->
     <div class="page-toolbar">
-      <Fab onclick={() => onaddtodo()} label="New todo" />
+      <Fab onclick={() => onaddtodo(undefined, quickAddCollectionId)} label="New todo" />
     </div>
   {/snippet}
 
@@ -236,7 +237,7 @@
           // the form submit.
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && canCaptureTodo(quickTitle)) {
             e.preventDefault();
-            onaddtodo(quickTitle);
+            onaddtodo(quickTitle, quickAddCollectionId);
             quickTitle = '';
           }
         }}
@@ -375,6 +376,11 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    /* Constrain the whole todo column to one width so the quick-add input
+       always matches the width of the todo rows below it. */
+    width: 100%;
+    max-width: 44rem;
+    margin-inline: auto;
   }
 
   .page-toolbar {
@@ -478,7 +484,7 @@
   }
 
   .quick-add {
-    width: min(100%, 41rem);
+    width: min(100%, 44rem);
     /* Centered (like the inbox capture bar) now that it leads the empty view
        rather than living inside the centered hero. The compact variant below
        overrides to full width. */

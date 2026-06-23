@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { storeItem } = vi.hoisted(() => ({
+const { storeItem, moveItemToCollection } = vi.hoisted(() => ({
   storeItem: vi.fn().mockResolvedValue(undefined),
+  moveItemToCollection: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('./stores', () => ({ storeItem }));
+vi.mock('./stores', () => ({ storeItem, moveItemToCollection }));
 
 import { captureDetected } from './capture';
 
@@ -30,5 +31,16 @@ describe('captureDetected', () => {
   it('is a no-op for empty input', async () => {
     expect(await captureDetected('   ')).toBeNull();
     expect(storeItem).not.toHaveBeenCalled();
+  });
+
+  it('files the item into a collection when a collectionId is given', async () => {
+    const res = await captureDetected('remember the milk', 'col-1');
+    expect(storeItem).toHaveBeenCalledOnce();
+    expect(moveItemToCollection).toHaveBeenCalledWith(res?.item.id, 'col-1');
+  });
+
+  it('does not file into a collection for plain inbox captures', async () => {
+    await captureDetected('remember the milk');
+    expect(moveItemToCollection).not.toHaveBeenCalled();
   });
 });

@@ -250,11 +250,12 @@
     openAdd('audio');
   }
 
-  /** Open the add-todo modal, optionally pre-filling the title (⌘/Ctrl-Enter
-      from the Todos quick-add, mirroring the inbox capture bar). */
-  function openAddTodo(prefillTitle = '') {
+  /** Open the add-todo modal, optionally pre-filling the title and target
+      collection (⌘/Ctrl-Enter or the Fab from the Todos quick-add, so the
+      modal mirrors the quick-add's title + collection selection). */
+  function openAddTodo(prefillTitle = '', collectionId: string | undefined = undefined) {
     editingItem = undefined;
-    preselectedCollectionId = undefined;
+    preselectedCollectionId = collectionId;
     prefillFile = undefined;
     captureSheetOpen = false;
     notePrefillTitle = prefillTitle;
@@ -354,6 +355,7 @@
             </button>
           {:else}
             <CaptureBar
+              focusOnMount
               oncapture={handleQuickCapture}
               onopeneditor={handleOpenEditor}
               onfile={handleFile}

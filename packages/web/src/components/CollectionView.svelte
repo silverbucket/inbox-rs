@@ -19,8 +19,10 @@
   import { slide, fade } from 'svelte/transition';
   import { flip } from 'svelte/animate';
   import { dndzone } from 'svelte-dnd-action';
+  import { captureDetected } from '../lib/capture';
+  import { showToast } from '../lib/toast';
   import InboxCard from './InboxCard.svelte';
-  import AddEntryBar from './AddEntryBar.svelte';
+  import CaptureBar from './CaptureBar.svelte';
   import AddEntryModal from './AddEntryModal.svelte';
   import TodoRow from './TodoRow.svelte';
 
@@ -57,7 +59,42 @@
   const completedExpanded = $derived($appConfig.completedTodosExpanded === true);
 
   let addingType = $state<InboxItemType | null>(null);
+  let prefillTitle = $state('');
+  let prefillFile = $state<File | undefined>(undefined);
   let showMoveMenu = $state(false);
+
+  // References capture bar — mirrors the inbox, but everything it creates is
+  // filed into this collection.
+  async function handleCapture(raw: string) {
+    const res = await captureDetected(raw, collection.id);
+    if (!res) return;
+    const label = res.item.type === 'bookmark' ? 'Saved bookmark' : 'Saved note';
+    showToast(label, {
+      label: 'Undo',
+      run: () => {
+        void deleteItem(res.item.id, res.item);
+      },
+    });
+  }
+
+  function handleOpenEditor(text: string) {
+    prefillFile = undefined;
+    prefillTitle = text;
+    addingType = 'note';
+  }
+
+  function handleCaptureFile(file: File) {
+    prefillTitle = '';
+    prefillFile = file;
+    addingType = file.type.startsWith('image/') ? 'image' : 'document';
+  }
+
+  function handleRecord() {
+    prefillTitle = '';
+    prefillFile = undefined;
+    addingType = 'audio';
+  }
+
   let moveButtonEl = $state<HTMLButtonElement>();
   let menuPos = $state({ top: 0, right: 0 });
 
@@ -263,11 +300,16 @@
       <section class="references-section" aria-label="References in {collection.name}">
         <div class="section-header">
           <h4>References</h4>
-          <!-- Omit 'todo' — the Todos section above owns that flow, and
-               keeping it here would give two disagreeing entry points in
-               the same view. -->
-          <AddEntryBar onadd={(type) => addingType = type} excludeTypes={['todo']} />
         </div>
+        <!-- Same capture input as the inbox; everything it creates is filed
+             into this collection. Todos have their own section above, so
+             ⌘↵ here opens the note editor (not a todo). -->
+        <CaptureBar
+          oncapture={handleCapture}
+          onopeneditor={handleOpenEditor}
+          onfile={handleCaptureFile}
+          onrecord={handleRecord}
+        />
 
         {#if referenceItems.length > 0}
           <div class="grid">
@@ -296,8 +338,10 @@
   <AddEntryModal
     type={addingType}
     collectionId={collection.id}
-    onclose={() => addingType = null}
-    ondelete={async (item) => { await deleteItem(item.id, item); addingType = null; }}
+    {prefillTitle}
+    {prefillFile}
+    onclose={() => { addingType = null; prefillTitle = ''; prefillFile = undefined; }}
+    ondelete={async (item) => { await deleteItem(item.id, item); addingType = null; prefillTitle = ''; prefillFile = undefined; }}
   />
 {/if}
 
@@ -578,16 +622,9 @@
     flex-shrink: 0;
   }
 
-  /* The references header hosts the AddEntryBar directly — give it room to
-     shrink with horizontal scroll so a long button strip doesn't break the
-     layout on narrow screens. */
-  .references-section .section-header {
-    gap: 0.5rem;
-  }
-
-  .references-section .section-header :global(.add-strip) {
-    min-width: 0;
-    flex-shrink: 1;
+  /* Capture bar sits below the References header; give it room above the grid. */
+  .references-section :global(.capture) {
+    margin-bottom: 0.75rem;
   }
 
   .section-empty {
