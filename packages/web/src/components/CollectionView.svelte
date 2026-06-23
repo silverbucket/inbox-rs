@@ -24,6 +24,7 @@
   import InboxCard from './InboxCard.svelte';
   import CaptureBar from './CaptureBar.svelte';
   import AddEntryModal from './AddEntryModal.svelte';
+  import TodoQuickAdd from './TodoQuickAdd.svelte';
   import TodoRow from './TodoRow.svelte';
 
   let { collection, expanded = false, onselect, onedit, ontoggle, isTouchDevice = false }: {
@@ -242,14 +243,14 @@
       <section class="todos-section" aria-label="Todos in {collection.name}">
         <div class="section-header">
           <h4>Todos</h4>
-          <button type="button" class="btn-inline" onclick={() => addingType = 'todo'} title="Add todo" aria-label="Add todo to {collection.name}">
-            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-            Add
-          </button>
         </div>
+        <!-- Same quick-add as the Todos page, filing into this collection (no
+             collection select needed — it's fixed). ⌘↵ opens the full modal. -->
+        <TodoQuickAdd
+          compact
+          fixedCollectionId={collection.id}
+          onopenmodal={(t) => { prefillTitle = t; addingType = 'todo'; }}
+        />
 
         {#if dndOpen.length > 0}
           <ul
@@ -634,24 +635,10 @@
     opacity: 0.75;
   }
 
-  .btn-inline {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    background: none;
-    border: 1px dashed var(--border);
-    border-radius: var(--radius-sm);
-    color: var(--text-muted);
-    font-size: 0.75rem;
-    padding: 0.25rem 0.55rem;
-    cursor: pointer;
-    transition: color 150ms, border-color 150ms;
-    flex-shrink: 0;
-  }
-
-  .btn-inline:hover {
-    color: var(--accent);
-    border-color: var(--accent);
+  /* Inline quick-add (todos) + capture bar (references) sit below their section
+     headers; give them room before the list/grid that follows. */
+  .todos-section :global(.quick-add) {
+    margin-bottom: 0.6rem;
   }
 
   .todo-list {
