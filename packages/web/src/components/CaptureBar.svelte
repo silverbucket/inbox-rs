@@ -1,5 +1,6 @@
 <!-- packages/web/src/components/CaptureBar.svelte -->
 <script lang="ts">
+  import { autofocus } from '../lib/actions';
   import { detectCaptureKind } from '../lib/capture-detect';
   import { modLabel } from '../lib/platform';
 
@@ -58,6 +59,7 @@
       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
     </button>
     <input
+      use:autofocus
       class="text-input"
       type="text"
       placeholder="Paste a link, jot a note, or drop a file…"

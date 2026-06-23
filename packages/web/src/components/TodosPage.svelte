@@ -478,7 +478,7 @@
   }
 
   .quick-add {
-    width: min(100%, 34rem);
+    width: min(100%, 41rem);
     /* Centered (like the inbox capture bar) now that it leads the empty view
        rather than living inside the centered hero. The compact variant below
        overrides to full width. */
