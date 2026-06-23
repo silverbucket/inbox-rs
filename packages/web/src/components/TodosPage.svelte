@@ -184,19 +184,21 @@
 
 <div class="todos-page">
   <!--
-    Always render the page-toolbar so the Fab has a home on desktop (where it
-    renders inline as a labelled pill next to the count). On mobile the Fab
-    is `position: fixed`, so it leaves the toolbar flow entirely — an
-    otherwise-empty toolbar collapses to zero height and nothing shows.
+    Toolbar: count + Fab (the Fab is an inline pill on desktop, position:fixed
+    and out of flow on mobile). Rendered BELOW the quick-add in the populated
+    state — and at the top of the empty hero — so the quick-add input lines up
+    vertically with the inbox's capture bar when switching tabs.
   -->
-  <div class="page-toolbar">
-    {#if openTodos.length > 0}
-      <span class="count-label">
-        {openTodos.length} open
-      </span>
-    {/if}
-    <Fab onclick={onaddtodo} label="New todo" />
-  </div>
+  {#snippet todoToolbar()}
+    <div class="page-toolbar">
+      {#if openTodos.length > 0}
+        <span class="count-label">
+          {openTodos.length} open
+        </span>
+      {/if}
+      <Fab onclick={onaddtodo} label="New todo" />
+    </div>
+  {/snippet}
 
   <!-- Rendered in both empty and populated states. The Fab still handles
        richer flows; this is the keep-it-moving capture path. -->
@@ -261,6 +263,7 @@
   {/snippet}
 
   {#if openTodos.length === 0 && completedTodos.length === 0}
+    {@render todoToolbar()}
     <div class="empty-state" in:fade={{ duration: 180 }}>
       <p class="empty-title">Jot a todo</p>
       {@render quickAddComposer(false)}
@@ -276,6 +279,7 @@
   {:else}
     {@render quickAddComposer(true)}
     <p class="quick-error quick-error--inline" role="status" aria-live="polite">{quickError}</p>
+    {@render todoToolbar()}
     <ul
       class="todo-list" role="list"
       use:dndzone={{
