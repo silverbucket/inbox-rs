@@ -164,7 +164,7 @@
   });
 
   // Lock body scroll when any modal is open (including iOS Safari)
-  const anyModalOpen = $derived(!!viewingItem || !!activeModal || showCollectionForm || showGroupForm);
+  const anyModalOpen = $derived(!!viewingItem || !!activeModal || showCollectionForm || showGroupForm || captureSheetOpen);
   let savedScrollY = 0;
   let wasModalOpen = false;
 
