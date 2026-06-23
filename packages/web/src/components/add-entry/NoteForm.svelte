@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Component } from 'svelte';
   import type { InboxItem } from '@inbox-rs/rs-module';
-  import { autofocus } from '../../lib/actions';
+  import { autofocus, autofocusIf } from '../../lib/actions';
   import {
     type BuildItemFn,
     loadMarkdownEditorComponent,
@@ -14,16 +14,22 @@
 
   let {
     editItem,
+    prefillTitle = '',
     canSubmit = $bindable(false),
     buildItem = $bindable(),
   }: {
     editItem?: InboxItem;
+    prefillTitle?: string;
     canSubmit?: boolean;
     buildItem?: BuildItemFn;
   } = $props();
 
-  let title = $state(editItem?.title ?? '');
-  let body = $state(editItem && 'body' in editItem ? (editItem.body ?? '') : '');
+  // When opened from quick-capture, the typed text seeds the title and the
+  // body gets focus so the user keeps writing the content.
+  let title = $state(editItem?.title ?? prefillTitle);
+  let body = $state(
+    editItem && 'body' in editItem ? (editItem.body ?? '') : '',
+  );
   let description = $state(editItem?.description ?? '');
 
   let editorMode = $state<'visual' | 'write' | 'preview'>('visual');
@@ -117,15 +123,12 @@
 <label class="field">
   <span>Title</span>
   <!--
-    Title is autofocused for the note modal too. The visual editor below is
-    async-loaded and doesn't autofocus on mount, so without this the user
-    opens the modal and lands on no field at all. When in `write` (Markdown)
-    mode the body textarea also has `use:autofocus` and runs later in the
-    DOM, so it wins the focus race and the user lands in the editor —
-    which is what they want once they've explicitly switched to Markdown
-    mode.
+    Title is autofocused for a fresh note so the user lands on a field. But
+    when opened from quick-capture (prefillTitle set) the title is already
+    filled, so we skip autofocusing it and let the body editor take focus
+    instead (see `autofocus` on the visual editor below).
   -->
-  <input use:autofocus type="text" bind:value={title} placeholder="Note title" />
+  <input use:autofocusIf={!prefillTitle} type="text" bind:value={title} placeholder="Note title" />
 </label>
 <div class="field note-editor-field">
   <div class="field-header">
@@ -154,7 +157,7 @@
   </div>
   {#if editorMode === 'visual'}
     {#if MarkdownEditorComponent}
-      <MarkdownEditorComponent bind:value={body} placeholder="Write your note..." />
+      <MarkdownEditorComponent bind:value={body} placeholder="Write your note..." focusOnMount={!!prefillTitle} />
     {:else if markdownEditorLoadError}
       <textarea
         use:autofocus
