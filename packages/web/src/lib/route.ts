@@ -99,3 +99,14 @@ function pathFromPage(page: Page): string {
 export function pageUsesFilters(page: Page): boolean {
   return page === 'todos' || page === 'collections';
 }
+
+/**
+ * Update the URL hash without adding a browser history entry.
+ * Swipe-back / the Back button then leave the app instead of stepping
+ * through prior in-app pages.
+ */
+export function replaceRouteHash(hash: string): void {
+  if (window.location.hash !== hash) {
+    window.history.replaceState(null, '', hash);
+  }
+}

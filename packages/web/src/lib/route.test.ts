@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { formatRoute, pageUsesFilters, parseHash } from './route';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  formatRoute,
+  pageUsesFilters,
+  parseHash,
+  replaceRouteHash,
+} from './route';
 
 describe('parseHash', () => {
   it('returns inbox for empty/root hash', () => {
@@ -118,5 +123,27 @@ describe('pageUsesFilters', () => {
   it('is false for inbox and plugins', () => {
     expect(pageUsesFilters('inbox')).toBe(false);
     expect(pageUsesFilters('plugins')).toBe(false);
+  });
+});
+
+describe('replaceRouteHash', () => {
+  it('calls replaceState when the hash differs', () => {
+    const replaceState = vi.fn();
+    vi.stubGlobal('window', {
+      location: { hash: '#/' },
+      history: { replaceState },
+    });
+    replaceRouteHash('#/todos');
+    expect(replaceState).toHaveBeenCalledWith(null, '', '#/todos');
+  });
+
+  it('skips replaceState when the hash already matches', () => {
+    const replaceState = vi.fn();
+    vi.stubGlobal('window', {
+      location: { hash: '#/todos' },
+      history: { replaceState },
+    });
+    replaceRouteHash('#/todos');
+    expect(replaceState).not.toHaveBeenCalled();
   });
 });

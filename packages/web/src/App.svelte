@@ -15,7 +15,7 @@
     createCollection, storeGroup,
     appConfig, setActiveGroupFilters,
   } from './lib/stores';
-  import { parseHash, formatRoute, pageUsesFilters, type Page, type Route } from './lib/route';
+  import { parseHash, formatRoute, pageUsesFilters, replaceRouteHash, type Page, type Route } from './lib/route';
 
   type LazyComponent = Component<Record<string, unknown>>;
 
@@ -90,7 +90,7 @@
     if (config.activeGroupFilters === undefined) return; // default-all → no param
     const expected = formatRoute({ page: route.page, groupFilters: config.activeGroupFilters });
     if (window.location.hash !== expected) {
-      window.history.replaceState(null, '', expected);
+      replaceRouteHash(expected);
       route = { page: route.page, groupFilters: config.activeGroupFilters };
       lastAppliedFilterHash = `${route.page}::${config.activeGroupFilters.join(',')}`;
     }
@@ -171,7 +171,8 @@
       : { page };
     const hash = formatRoute(target);
     if (window.location.hash !== hash) {
-      window.location.hash = hash;
+      replaceRouteHash(hash);
+      route = target;
     }
   }
 
@@ -250,8 +251,7 @@
 </script>
 
 <ClassicShell {route} {navTo} {openTodoCount} onaddgroup={openGroupForm} bind:userMenu>
-  {#snippet children()}
-    {#if route.page === 'plugins'}
+  {#if route.page === 'plugins'}
       {#if PluginsPageComponent}
         <PluginsPageComponent />
       {/if}
@@ -280,7 +280,6 @@
         {/if}
       {/if}
     {/if}
-  {/snippet}
 </ClassicShell>
 
 {#if viewingItem}
