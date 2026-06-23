@@ -7,14 +7,18 @@
   // biome-ignore lint/style/useImportType: typeof needs the runtime binding
   import UserMenu from './components/UserMenu.svelte';
   import InboxGrid from './components/InboxGrid.svelte';
-  import AddEntryBar from './components/AddEntryBar.svelte';
   import MigrationAlert from './components/MigrationAlert.svelte';
   import ClassicShell from './components/ClassicShell.svelte';
+  import CaptureBar from './components/CaptureBar.svelte';
+  import CaptureSheet from './components/CaptureSheet.svelte';
+  import Toast from './components/Toast.svelte';
   import {
     connected, deleteItem, openTodos, pendingMigrationCount, runAllMigrations,
     createCollection, storeGroup,
     appConfig, setActiveGroupFilters,
   } from './lib/stores';
+  import { captureDetected } from './lib/capture';
+  import { showToast } from './lib/toast';
   import { parseHash, formatRoute, pageUsesFilters, type Page, type Route } from './lib/route';
 
   type LazyComponent = Component<Record<string, unknown>>;
@@ -36,6 +40,11 @@
   // per-row quick-add on the Todos page so the new todo lands in the same
   // collection as the row the user is adding alongside.
   let preselectedCollectionId = $state<string | undefined>(undefined);
+
+  let captureSheetOpen = $state(false);
+  let notePrefill = $state('');
+  const isTouch =
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 600px)').matches;
 
   let route = $state<Route>(parseHash(window.location.hash));
 
@@ -182,6 +191,26 @@
     void loadAddEntryModal();
   }
 
+  async function handleQuickCapture(raw: string) {
+    const res = await captureDetected(raw);
+    if (!res) return;
+    const label = res.item.type === 'bookmark' ? 'Saved bookmark' : 'Saved note';
+    showToast(label, { label: 'Undo', run: () => { void deleteItem(res.item.id, res.item); } });
+  }
+
+  function handleOpenEditor(text: string) {
+    editingItem = undefined;
+    preselectedCollectionId = undefined;
+    notePrefill = text;
+    activeModal = 'note';
+    void loadAddEntryModal();
+  }
+
+  function handlePick(type: InboxItemType) {
+    notePrefill = '';
+    openAdd(type);
+  }
+
   function openAddTodo() {
     openAdd('todo');
   }
@@ -267,7 +296,17 @@
                be added quickly, then optionally filed into a collection later.
                Existing notes can still be converted via `makeTodo` when the
                user is ready to commit. -->
-          <AddEntryBar onadd={openAdd} excludeTypes={['todo']} />
+          {#if isTouch}
+            <button class="capture-trigger" type="button" onclick={() => (captureSheetOpen = true)}>
+              Paste a link, jot a note, or drop a file…
+            </button>
+          {:else}
+            <CaptureBar
+              oncapture={handleQuickCapture}
+              onopeneditor={handleOpenEditor}
+              onpick={handlePick}
+            />
+          {/if}
         </div>
         <InboxGrid onselect={openView} onconnect={openConnectMenu} />
       {:else if route.page === 'todos'}
@@ -295,6 +334,7 @@
       type={activeModal}
       editItem={editingItem}
       collectionId={preselectedCollectionId}
+      prefillBody={notePrefill}
       onclose={closeModal}
       ondelete={async (item: InboxItem) => { await deleteItem(item.id, item); closeModal(); }}
     />
@@ -313,6 +353,15 @@
   {/if}
 {/if}
 
+{#if captureSheetOpen}
+  <CaptureSheet
+    oncapture={handleQuickCapture}
+    onpick={handlePick}
+    onclose={() => (captureSheetOpen = false)}
+  />
+{/if}
+<Toast />
+
 <style>
   /* Inbox add-entry toolbar — the only chrome that lives with the page
      content (rendered into the shell's main slot). All header/footer styling
@@ -323,5 +372,18 @@
     justify-content: center;
     gap: 0.5rem;
     flex-wrap: wrap;
+  }
+
+  .capture-trigger {
+    display: block;
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.85rem;
+    padding: 0.6rem 0.9rem;
+    text-align: left;
+    color: var(--text-muted);
+    font: inherit;
+    cursor: pointer;
   }
 </style>
