@@ -125,11 +125,14 @@
     }
   }
 
-  // Clear a stale error once the user edits the input.
-  $effect(() => {
-    quickTitle;
+  // Clear a stale error once the user edits the input. Driven by the input's
+  // oninput (a real keystroke) rather than a reactive effect on quickTitle —
+  // the effect also read quickError, so setting it re-ran the effect and wiped
+  // the message before it could render. A programmatic clear after a successful
+  // submit must NOT clear the error, so this only fires on genuine edits.
+  function clearStaleError() {
     if (quickError) quickError = '';
-  });
+  }
 </script>
 
 <form
@@ -150,6 +153,7 @@
     aria-label="Todo title"
     disabled={quickSaving}
     use:autofocusIf={focusOnMount}
+    oninput={clearStaleError}
     onfocus={() => (quickFocused = true)}
     onblur={() => (quickFocused = false)}
     onkeydown={(e) => {
