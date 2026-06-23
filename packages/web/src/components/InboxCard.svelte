@@ -35,7 +35,9 @@
       return null;
     }
   });
-  const kindLabel = $derived(bookmarkDomain ?? kind.label);
+  // `||` not `??`: a parsed-but-empty hostname ('' for odd/non-host URLs)
+  // should still fall back to the generic label rather than render blank.
+  const kindLabel = $derived(bookmarkDomain || kind.label);
 
   // Preview text — note body or description, shown beneath the title so each
   // card gives a real sense of its content.
