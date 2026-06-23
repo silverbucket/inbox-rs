@@ -43,4 +43,18 @@ describe('CaptureSheet', () => {
       true,
     );
   });
+
+  it('pressing Escape calls onclose', () => {
+    const onclose = vi.fn();
+    component = mount(CaptureSheet, {
+      target: host,
+      props: { oncapture, onpick: vi.fn(), onclose },
+    });
+    flushSync();
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    flushSync();
+    expect(onclose).toHaveBeenCalledOnce();
+  });
 });

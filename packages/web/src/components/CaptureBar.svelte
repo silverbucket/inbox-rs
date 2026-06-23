@@ -16,12 +16,13 @@
   let value = $state('');
   let focused = $state(false);
   let menuOpen = $state(false);
+  let menuEl = $state<HTMLElement | null>(null);
+  let triggerEl = $state<HTMLButtonElement | null>(null);
   const mod = modLabel();
 
   const detected = $derived(detectCaptureKind(value));
   const enterHint = $derived(
-    detected.kind === 'bookmark' ? 'Save bookmark' :
-    detected.kind === 'note' ? 'Save as note' : '',
+    detected.kind === 'bookmark' ? 'Save bookmark' : 'Save as note',
   );
 
   function onKeydown(e: KeyboardEvent) {
@@ -42,7 +43,22 @@
     menuOpen = false;
     onpick(type);
   }
+
+  function onWindowKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape' && menuOpen) {
+      menuOpen = false;
+    }
+  }
+
+  function onWindowPointerdown(e: PointerEvent) {
+    if (!menuOpen) return;
+    const target = e.target as Node;
+    if (menuEl?.contains(target) || triggerEl?.contains(target)) return;
+    menuOpen = false;
+  }
 </script>
+
+<svelte:window onkeydown={onWindowKeydown} onpointerdown={onWindowPointerdown} />
 
 <div class="capture">
   <div class="bar">
@@ -51,6 +67,7 @@
       type="button"
       aria-label="Add attachment or note"
       aria-expanded={menuOpen}
+      bind:this={triggerEl}
       onclick={() => (menuOpen = !menuOpen)}
     >
       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -72,11 +89,11 @@
     </div>
   {/if}
   {#if menuOpen}
-    <div class="menu" role="menu">
-      <button type="button" role="menuitem" onclick={() => pick('note')}>Note editor</button>
-      <button type="button" role="menuitem" onclick={() => pick('image')}>Image</button>
-      <button type="button" role="menuitem" onclick={() => pick('document')}>File</button>
-      <button type="button" role="menuitem" onclick={() => pick('audio')}>Voice memo</button>
+    <div class="menu" aria-label="Capture options" bind:this={menuEl}>
+      <button type="button" onclick={() => pick('note')}>Note editor</button>
+      <button type="button" onclick={() => pick('image')}>Image</button>
+      <button type="button" onclick={() => pick('document')}>File</button>
+      <button type="button" onclick={() => pick('audio')}>Voice memo</button>
     </div>
   {/if}
 </div>

@@ -23,7 +23,9 @@
   }
 </script>
 
-<div class="sheet" role="dialog" aria-label="Capture">
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape') onclose(); }} />
+
+<div class="sheet" role="dialog" aria-modal="true" aria-label="Capture">
   <header>
     <button class="close" type="button" aria-label="Close" onclick={onclose}>
       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>

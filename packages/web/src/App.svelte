@@ -43,8 +43,20 @@
 
   let captureSheetOpen = $state(false);
   let notePrefill = $state('');
-  const isTouch =
-    typeof window !== 'undefined' && window.matchMedia('(max-width: 600px)').matches;
+  let isTouch = $state(
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 600px)').matches,
+  );
+
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 600px)');
+    isTouch = mq.matches;
+    const onChange = (e: MediaQueryListEvent) => {
+      isTouch = e.matches;
+    };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  });
 
   let route = $state<Route>(parseHash(window.location.hash));
 

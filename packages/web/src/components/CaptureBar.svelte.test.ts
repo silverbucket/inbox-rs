@@ -64,4 +64,40 @@ describe('CaptureBar', () => {
     typeAndKey('   ', {});
     expect(oncapture).not.toHaveBeenCalled();
   });
+
+  it('clicking ⊕ opens the popup and selecting an item calls onpick with the right type', () => {
+    component = mount(CaptureBar, {
+      target: host,
+      props: { oncapture, onopeneditor, onpick },
+    });
+    flushSync();
+    const plusBtn = host.querySelector('.plus') as HTMLButtonElement;
+    plusBtn.click();
+    flushSync();
+    const menuButtons = host.querySelectorAll('.menu button');
+    expect(menuButtons.length).toBeGreaterThan(0);
+    // Click the "Image" button (second item)
+    (menuButtons[1] as HTMLButtonElement).click();
+    flushSync();
+    expect(onpick).toHaveBeenCalledWith('image');
+    // Menu should close after picking
+    expect(host.querySelector('.menu')).toBeNull();
+  });
+
+  it('Escape closes the open popup', () => {
+    component = mount(CaptureBar, {
+      target: host,
+      props: { oncapture, onopeneditor, onpick },
+    });
+    flushSync();
+    const plusBtn = host.querySelector('.plus') as HTMLButtonElement;
+    plusBtn.click();
+    flushSync();
+    expect(host.querySelector('.menu')).not.toBeNull();
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    flushSync();
+    expect(host.querySelector('.menu')).toBeNull();
+  });
 });
