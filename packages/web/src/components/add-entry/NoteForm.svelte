@@ -14,16 +14,20 @@
 
   let {
     editItem,
+    prefillBody = '',
     canSubmit = $bindable(false),
     buildItem = $bindable(),
   }: {
     editItem?: InboxItem;
+    prefillBody?: string;
     canSubmit?: boolean;
     buildItem?: BuildItemFn;
   } = $props();
 
   let title = $state(editItem?.title ?? '');
-  let body = $state(editItem && 'body' in editItem ? (editItem.body ?? '') : '');
+  let body = $state(
+    editItem && 'body' in editItem ? (editItem.body ?? '') : prefillBody,
+  );
   let description = $state(editItem?.description ?? '');
 
   let editorMode = $state<'visual' | 'write' | 'preview'>('visual');

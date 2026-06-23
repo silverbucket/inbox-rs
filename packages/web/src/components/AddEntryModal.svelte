@@ -23,12 +23,14 @@
     type,
     editItem = undefined,
     collectionId = undefined,
+    prefillBody = '',
     onclose,
     ondelete,
   }: {
     type: InboxItemType;
     editItem?: InboxItem;
     collectionId?: string;
+    prefillBody?: string;
     onclose: () => void;
     ondelete?: (item: InboxItem) => void;
   } = $props();
@@ -279,6 +281,7 @@
       {:else if type === 'note'}
         <NoteForm
           {editItem}
+          {prefillBody}
           bind:canSubmit={formCanSubmit}
           bind:buildItem={formBuildItem}
         />
