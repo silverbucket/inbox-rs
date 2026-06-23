@@ -250,8 +250,16 @@
     openAdd('audio');
   }
 
-  function openAddTodo() {
-    openAdd('todo');
+  /** Open the add-todo modal, optionally pre-filling the title (⌘/Ctrl-Enter
+      from the Todos quick-add, mirroring the inbox capture bar). */
+  function openAddTodo(prefillTitle = '') {
+    editingItem = undefined;
+    preselectedCollectionId = undefined;
+    prefillFile = undefined;
+    captureSheetOpen = false;
+    notePrefillTitle = prefillTitle;
+    activeModal = 'todo';
+    void loadAddEntryModal();
   }
 
   /** Open the add-todo modal with a specific collection pre-selected.
@@ -260,6 +268,9 @@
   function openAddTodoInCollection(collectionId: string | undefined) {
     editingItem = undefined;
     preselectedCollectionId = collectionId;
+    prefillFile = undefined;
+    captureSheetOpen = false;
+    notePrefillTitle = '';
     activeModal = 'todo';
     void loadAddEntryModal();
   }

@@ -10,17 +10,20 @@
 
   let {
     editItem,
+    prefillTitle = '',
     canSubmit = $bindable(false),
     buildItem = $bindable(),
   }: {
     editItem?: InboxItem;
+    prefillTitle?: string;
     canSubmit?: boolean;
     buildItem?: BuildItemFn;
   } = $props();
 
   const isEdit = !!editItem;
 
-  let title = $state(editItem?.title ?? '');
+  // Seed from the Todos quick-add when opened via ⌘/Ctrl-Enter.
+  let title = $state(editItem?.title ?? prefillTitle);
   let body = $state(editItem && 'body' in editItem ? (editItem.body ?? '') : '');
   let description = $state(editItem?.description ?? '');
   let completed = $state(

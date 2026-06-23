@@ -10,13 +10,15 @@
   } from '../lib/stores';
   import { canCaptureTodo, makeUnfiledTodo } from '../lib/add-entry-modal';
   import { autofocusIf } from '../lib/actions';
+  import { modLabel } from '../lib/platform';
   import TodoRow from './TodoRow.svelte';
   import Fab from './Fab.svelte';
 
   let { onselect, onaddtodo, onaddtodoincollection }: {
     onselect: (item: InboxItem) => void;
-    /** Opens the add-todo modal for richer details and optional filing. */
-    onaddtodo: () => void;
+    /** Opens the add-todo modal for richer details and optional filing.
+        Optionally pre-fills the todo title (⌘/Ctrl-Enter from the quick-add). */
+    onaddtodo: (prefillTitle?: string) => void;
     /** Opens the add-todo modal with a specific collection pre-selected.
         Used by the per-row quick-add affordance. Pass `undefined` to target
         an unfiled todo. */
@@ -49,6 +51,9 @@
   let quickTitle = $state('');
   let quickSaving = $state(false);
   let quickError = $state('');
+  let quickFocused = $state(false);
+  // Platform-aware modifier label for the focus hint (⌘ on macOS, Ctrl else).
+  const mod = modLabel();
   // Bound from the quick-add input so we can restore focus after a submit
   // — `disabled` toggling during the save blurs the input, and the first
   // todo also remounts the input as the page transitions hero → compact.
@@ -190,13 +195,11 @@
     vertically with the inbox's capture bar when switching tabs.
   -->
   {#snippet todoToolbar()}
+    <!-- Desktop: hidden — capture happens in the input (Enter quick-adds,
+         ⌘/Ctrl-Enter opens the modal). Mobile: the Fab is position:fixed, a
+         floating + circle in the thumb zone. -->
     <div class="page-toolbar">
-      {#if openTodos.length > 0}
-        <span class="count-label">
-          {openTodos.length} open
-        </span>
-      {/if}
-      <Fab onclick={onaddtodo} label="New todo" />
+      <Fab onclick={() => onaddtodo()} label="New todo" />
     </div>
   {/snippet}
 
@@ -225,6 +228,18 @@
         aria-label="Todo title"
         disabled={quickSaving}
         use:autofocusIf={!compact}
+        onfocus={() => (quickFocused = true)}
+        onblur={() => (quickFocused = false)}
+        onkeydown={(e) => {
+          // ⌘/Ctrl-Enter opens the full todo modal pre-filled with the typed
+          // title (mirrors the inbox capture bar); plain Enter quick-adds via
+          // the form submit.
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && canCaptureTodo(quickTitle)) {
+            e.preventDefault();
+            onaddtodo(quickTitle);
+            quickTitle = '';
+          }
+        }}
       />
       <!-- Empty-string sentinel maps to undefined (Unfiled) on save. -->
       <select
@@ -260,12 +275,21 @@
         {quickSaving ? 'Adding...' : 'Add'}
       </button>
     </form>
+    {#if quickFocused && quickTitle.trim()}
+      <div class="quick-hint">
+        <span>↵ Add todo</span>
+        <span class="sep">·</span>
+        <span>{mod}↵ Open editor</span>
+      </div>
+    {/if}
   {/snippet}
 
   {#if openTodos.length === 0 && completedTodos.length === 0}
-    <!-- Lead with the composer so its input lines up vertically with the inbox
-         capture bar; the hero copy and Fab follow beneath it. -->
+    <!-- Lead with the composer so its input lines up with the inbox capture
+         bar. The toolbar's Fab is hidden on desktop (the input + ⌘↵ handle
+         capture) and a floating + circle on mobile. -->
     {@render quickAddComposer(false)}
+    {@render todoToolbar()}
     <!-- Persistent aria-live region — kept in the DOM so screen readers
          reliably announce errors as they appear. Collapses when empty. -->
     <p class="quick-error" role="status" aria-live="polite">{quickError}</p>
@@ -276,11 +300,10 @@
            FAB, so the hint needs to point at it. CSS swaps which line shows. -->
       <p class="empty-hint empty-hint--mobile">Tap + to capture one. Organize it later.</p>
     </div>
-    {@render todoToolbar()}
   {:else}
     {@render quickAddComposer(true)}
-    <p class="quick-error quick-error--inline" role="status" aria-live="polite">{quickError}</p>
     {@render todoToolbar()}
+    <p class="quick-error quick-error--inline" role="status" aria-live="polite">{quickError}</p>
     <ul
       class="todo-list" role="list"
       use:dndzone={{
@@ -361,18 +384,28 @@
     flex-wrap: wrap;
   }
 
-  /* Anchor the Fab (inline on desktop) to the right edge of the toolbar, so
-     the count label reads left-aligned and the primary action sits where
-     the eye finishes scanning the row. On mobile the Fab is position:fixed
-     and out of flow — this margin is a no-op. */
-  .page-toolbar :global(.fab) {
-    margin-left: auto;
+  /* Desktop: no inline New-todo pill — capture lives in the input (Enter to
+     quick-add, ⌘/Ctrl-Enter to open the modal). On mobile the Fab is
+     position:fixed (out of flow), so the floating + circle still shows. */
+  @media (min-width: 769px) {
+    .page-toolbar {
+      display: none;
+    }
   }
 
-  .count-label {
+  /* Focus hint under the quick-add input, mirroring the inbox capture bar. */
+  .quick-hint {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    align-items: center;
+    margin-top: 0.35rem;
     font-size: 0.78rem;
     color: var(--text-muted);
-    opacity: 0.8;
+  }
+
+  .quick-hint .sep {
+    opacity: 0.4;
   }
 
   .todo-list {
@@ -456,9 +489,10 @@
     align-items: center;
   }
 
-  /* Slim variant used above the list when todos already exist. */
+  /* Slim variant used above the list when todos already exist. Stays the same
+     centered width as the empty-state composer (inherits the base width) so
+     the input doesn't jump to full width once a todo is added. */
   .quick-add--compact {
-    width: 100%;
     gap: 0.4rem;
   }
 

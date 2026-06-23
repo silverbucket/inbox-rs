@@ -316,6 +316,7 @@
       {:else if type === 'todo'}
         <TodoForm
           {editItem}
+          {prefillTitle}
           bind:canSubmit={formCanSubmit}
           bind:buildItem={formBuildItem}
         />
