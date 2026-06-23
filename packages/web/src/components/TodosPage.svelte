@@ -120,7 +120,7 @@
     <!-- Lead with the composer so its input lines up with the inbox capture
          bar. The toolbar's Fab is hidden on desktop (the input + ⌘↵ handle
          capture) and a floating + circle on mobile. -->
-    <TodoQuickAdd hideOnMobile onopenmodal={(t, c) => onaddtodo(t, c)} />
+    <TodoQuickAdd hideOnMobile focusOnMount onopenmodal={(t, c) => onaddtodo(t, c)} />
     {@render todoToolbar()}
     <div class="empty-state" in:fade={{ duration: 180 }}>
       <p class="empty-title">Jot a todo</p>
@@ -130,7 +130,7 @@
       <p class="empty-hint empty-hint--mobile">Tap + to capture one. Organize it later.</p>
     </div>
   {:else}
-    <TodoQuickAdd hideOnMobile compact onopenmodal={(t, c) => onaddtodo(t, c)} />
+    <TodoQuickAdd hideOnMobile compact focusOnMount onopenmodal={(t, c) => onaddtodo(t, c)} />
     {@render todoToolbar()}
     <ul
       class="todo-list" role="list"

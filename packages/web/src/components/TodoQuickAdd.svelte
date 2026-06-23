@@ -25,14 +25,18 @@
     fixedCollectionId = undefined,
     compact = false,
     hideOnMobile = false,
+    focusOnMount = false,
     onopenmodal,
   }: {
     /** When set, todos are filed here and the collection select is hidden. */
     fixedCollectionId?: string;
-    /** Slim variant used above an existing list (no autofocus). */
+    /** Slim variant used above an existing list. */
     compact?: boolean;
     /** Hide on mobile — the Todos page has a floating Fab there instead. */
     hideOnMobile?: boolean;
+    /** Focus the input on mount (the Todos page does; the collection view
+        doesn't, to avoid stealing focus when a collection is expanded). */
+    focusOnMount?: boolean;
     /** ⌘/Ctrl-Enter — open the full todo modal pre-filled with the title and
         the resolved target collection. */
     onopenmodal: (
@@ -136,7 +140,7 @@
     placeholder={compact ? 'Add a todo…' : 'What needs doing?'}
     aria-label="Todo title"
     disabled={quickSaving}
-    use:autofocusIf={!compact}
+    use:autofocusIf={focusOnMount}
     onfocus={() => (quickFocused = true)}
     onblur={() => (quickFocused = false)}
     onkeydown={(e) => {
@@ -188,13 +192,14 @@
   </button>
 </form>
 <p class="quick-error" role="status" aria-live="polite">{quickError}</p>
-{#if quickFocused && quickTitle.trim()}
-  <div class="quick-hint">
+<!-- Always rendered with a fixed height so the hint never shifts content. -->
+<div class="quick-hint">
+  {#if quickFocused && quickTitle.trim()}
     <span>↵ Add todo</span>
     <span class="sep">·</span>
     <span>{mod}↵ Open editor</span>
-  </div>
-{/if}
+  {/if}
+</div>
 
 <style>
   .quick-add {
@@ -240,8 +245,8 @@
 
   .quick-add input:focus-visible {
     outline: none;
+    /* Border-only on focus (no glow ring), matching the inbox capture bar. */
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
   }
 
   .quick-add button {
@@ -293,7 +298,6 @@
   .quick-add__collection:focus-visible {
     outline: none;
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
   }
 
   .quick-add--compact .quick-add__collection {
@@ -318,6 +322,8 @@
     justify-content: center;
     gap: 0.5rem;
     align-items: center;
+    /* Fixed height so the hint appearing on focus never shifts content. */
+    min-height: 1.5rem;
     margin-top: 0.35rem;
     font-size: 0.78rem;
     color: var(--text-muted);

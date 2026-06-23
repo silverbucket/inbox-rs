@@ -91,17 +91,19 @@
       tabindex="-1"
     />
   </div>
-  {#if focused && value.trim()}
-    <div class="hint">
+  <!-- Always rendered with a fixed height so the hint appearing on focus
+       never shifts the content below it. -->
+  <div class="hint">
+    {#if focused && value.trim()}
       <span>↵ {enterHint}</span>
       <span class="sep">·</span>
       <span>{mod}↵ Open editor</span>
-    </div>
-  {/if}
+    {/if}
+  </div>
 </div>
 
 <style>
-  .capture { position: relative; max-width: 720px; width: 100%; margin: 0 auto; }
+  .capture { position: relative; width: 100%; }
   .bar {
     display: flex;
     align-items: center;
@@ -143,6 +145,9 @@
   }
   .hint {
     display: flex; gap: 0.5rem; align-items: center;
+    /* Fixed height reserves the space permanently — the hint fading in on
+       focus must not push content below. */
+    min-height: 1.5rem;
     padding: 0.35rem 0.6rem 0;
     font-size: 0.78rem; color: var(--text-muted);
   }
