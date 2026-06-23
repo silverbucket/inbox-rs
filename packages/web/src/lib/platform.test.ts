@@ -2,7 +2,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isMac, modLabel } from './platform';
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  // restoreAllMocks does NOT reset vi.stubGlobal — clear the navigator stub
+  // so it can't leak between tests.
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe('platform', () => {
   it('detects mac via userAgentData.platform', () => {

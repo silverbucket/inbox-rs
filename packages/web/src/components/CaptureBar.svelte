@@ -122,6 +122,8 @@
     flex: 1; min-width: 0;
     border: none; outline: none; background: none;
     font: inherit; color: var(--text);
+    /* Explicit >=1rem so iOS doesn't auto-zoom on focus. */
+    font-size: 1rem;
   }
   .text-input::placeholder { color: var(--text-muted); }
   .file-input {

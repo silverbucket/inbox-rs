@@ -202,6 +202,7 @@
     preselectedCollectionId = undefined;
     notePrefillTitle = '';
     prefillFile = undefined;
+    captureSheetOpen = false;
     activeModal = type;
     void loadAddEntryModal();
   }
@@ -210,13 +211,23 @@
     const res = await captureDetected(raw);
     if (!res) return;
     const label = res.item.type === 'bookmark' ? 'Saved bookmark' : 'Saved note';
-    showToast(label, { label: 'Undo', run: () => { void deleteItem(res.item.id, res.item); } });
+    showToast(label, {
+      label: 'Undo',
+      // Surface a failure rather than silently leaving the item if the delete
+      // rejects (e.g. transient storage error).
+      run: () => {
+        void deleteItem(res.item.id, res.item).catch(() => {
+          showToast("Couldn't undo — open the item to remove it.");
+        });
+      },
+    });
   }
 
   function handleOpenEditor(text: string) {
     editingItem = undefined;
     preselectedCollectionId = undefined;
     prefillFile = undefined;
+    captureSheetOpen = false;
     // The typed text becomes the note title; the editor focuses the body.
     notePrefillTitle = text;
     activeModal = 'note';
@@ -230,6 +241,7 @@
     preselectedCollectionId = undefined;
     notePrefillTitle = '';
     prefillFile = file;
+    captureSheetOpen = false;
     activeModal = file.type.startsWith('image/') ? 'image' : 'document';
     void loadAddEntryModal();
   }
