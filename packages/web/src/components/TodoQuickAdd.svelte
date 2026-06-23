@@ -96,17 +96,26 @@
     if (!canCaptureTodo(quickTitle) || quickSaving) return;
     quickSaving = true;
     quickError = '';
+    // storeItem creates the todo; the move is a second step. Track the boundary
+    // so a move failure doesn't leave the title around to be re-submitted — that
+    // would store a duplicate unfiled todo on retry.
+    let created = false;
     try {
       const todo = makeUnfiledTodo(quickTitle);
       await storeItem(todo);
+      created = true;
+      quickTitle = '';
       // Separate step keeps collection.itemIds in sync, matching AddEntryModal.
       if (targetCollectionId) {
         await moveItemToCollection(todo.id, targetCollectionId);
       }
-      quickTitle = '';
     } catch (error) {
       console.error('Failed to add todo', error);
-      quickError = error instanceof Error ? error.message : 'Failed to add todo';
+      quickError = created
+        ? 'Todo added, but filing it into the collection failed.'
+        : error instanceof Error
+          ? error.message
+          : 'Failed to add todo';
     } finally {
       quickSaving = false;
       // Return focus so the user can keep capturing; tick() lets a hero→compact
@@ -302,7 +311,8 @@
 
   .quick-add--compact .quick-add__collection {
     min-height: 2.25rem;
-    font-size: 0.88rem;
+    /* Keep >=1rem (inherited) so iOS Safari doesn't auto-zoom on focus — the
+       guideline forbids sub-1rem font-size on form controls. */
   }
 
   .quick-error {

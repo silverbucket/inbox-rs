@@ -67,7 +67,15 @@
   // References capture bar — mirrors the inbox, but everything it creates is
   // filed into this collection.
   async function handleCapture(raw: string) {
-    const res = await captureDetected(raw, collection.id);
+    let res: Awaited<ReturnType<typeof captureDetected>>;
+    try {
+      res = await captureDetected(raw, collection.id);
+    } catch (error) {
+      // e.g. the collection was deleted from another device mid-capture.
+      console.error('Failed to capture into collection', error);
+      showToast("Couldn't save — this collection is no longer available.");
+      return;
+    }
     if (!res) return;
     const label = res.item.type === 'bookmark' ? 'Saved bookmark' : 'Saved note';
     showToast(label, {
