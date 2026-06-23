@@ -42,7 +42,8 @@
   let preselectedCollectionId = $state<string | undefined>(undefined);
 
   let captureSheetOpen = $state(false);
-  let notePrefill = $state('');
+  let notePrefillTitle = $state('');
+  let prefillFile = $state<File | undefined>(undefined);
   let isTouch = $state(
     typeof window !== 'undefined' && window.matchMedia('(max-width: 600px)').matches,
   );
@@ -199,6 +200,8 @@
   function openAdd(type: InboxItemType) {
     editingItem = undefined;
     preselectedCollectionId = undefined;
+    notePrefillTitle = '';
+    prefillFile = undefined;
     activeModal = type;
     void loadAddEntryModal();
   }
@@ -213,14 +216,26 @@
   function handleOpenEditor(text: string) {
     editingItem = undefined;
     preselectedCollectionId = undefined;
-    notePrefill = text;
+    prefillFile = undefined;
+    // The typed text becomes the note title; the editor focuses the body.
+    notePrefillTitle = text;
     activeModal = 'note';
     void loadAddEntryModal();
   }
 
-  function handlePick(type: InboxItemType) {
-    notePrefill = '';
-    openAdd(type);
+  // The ⊕ file picker routes by the chosen file's type: images open the image
+  // modal, everything else the document modal — with the file pre-attached.
+  function handleFile(file: File) {
+    editingItem = undefined;
+    preselectedCollectionId = undefined;
+    notePrefillTitle = '';
+    prefillFile = file;
+    activeModal = file.type.startsWith('image/') ? 'image' : 'document';
+    void loadAddEntryModal();
+  }
+
+  function handleRecord() {
+    openAdd('audio');
   }
 
   function openAddTodo() {
@@ -256,6 +271,8 @@
     activeModal = null;
     editingItem = undefined;
     preselectedCollectionId = undefined;
+    notePrefillTitle = '';
+    prefillFile = undefined;
   }
 
   function openConnectMenu() {
@@ -316,7 +333,8 @@
             <CaptureBar
               oncapture={handleQuickCapture}
               onopeneditor={handleOpenEditor}
-              onpick={handlePick}
+              onfile={handleFile}
+              onrecord={handleRecord}
             />
           {/if}
         </div>
@@ -346,7 +364,8 @@
       type={activeModal}
       editItem={editingItem}
       collectionId={preselectedCollectionId}
-      prefillBody={notePrefill}
+      prefillTitle={notePrefillTitle}
+      {prefillFile}
       onclose={closeModal}
       ondelete={async (item: InboxItem) => { await deleteItem(item.id, item); closeModal(); }}
     />
@@ -368,7 +387,8 @@
 {#if captureSheetOpen}
   <CaptureSheet
     oncapture={handleQuickCapture}
-    onpick={handlePick}
+    onfile={handleFile}
+    onrecord={handleRecord}
     onclose={() => (captureSheetOpen = false)}
   />
 {/if}

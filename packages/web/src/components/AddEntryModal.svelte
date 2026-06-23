@@ -23,14 +23,16 @@
     type,
     editItem = undefined,
     collectionId = undefined,
-    prefillBody = '',
+    prefillTitle = '',
+    prefillFile = undefined,
     onclose,
     ondelete,
   }: {
     type: InboxItemType;
     editItem?: InboxItem;
     collectionId?: string;
-    prefillBody?: string;
+    prefillTitle?: string;
+    prefillFile?: File;
     onclose: () => void;
     ondelete?: (item: InboxItem) => void;
   } = $props();
@@ -281,13 +283,14 @@
       {:else if type === 'note'}
         <NoteForm
           {editItem}
-          {prefillBody}
+          {prefillTitle}
           bind:canSubmit={formCanSubmit}
           bind:buildItem={formBuildItem}
         />
       {:else if type === 'image'}
         <ImageForm
           {editItem}
+          {prefillFile}
           bind:canSubmit={formCanSubmit}
           bind:buildItem={formBuildItem}
         />
@@ -300,6 +303,7 @@
       {:else if type === 'document'}
         <DocumentForm
           {editItem}
+          {prefillFile}
           bind:canSubmit={formCanSubmit}
           bind:buildItem={formBuildItem}
         />
@@ -579,6 +583,15 @@
        zoom on file inputs specifically, but the floor applies repo-wide. */
     font-size: 1rem;
     color: var(--text-muted);
+  }
+
+  /* Name of a file pre-attached from the capture bar (the native input can't
+     reflect a programmatically-set file). */
+  .form :global(.picked) {
+    font-size: 0.82rem;
+    color: var(--accent);
+    font-weight: 500;
+    word-break: break-all;
   }
 
   .form :global(.auto-expand) {

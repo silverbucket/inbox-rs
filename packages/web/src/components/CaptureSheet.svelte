@@ -4,15 +4,18 @@
 
   let {
     oncapture,
-    onpick,
+    onfile,
+    onrecord,
     onclose,
   }: {
     oncapture: (raw: string) => void;
-    onpick: (type: 'image' | 'document' | 'audio') => void;
+    onfile: (file: File) => void;
+    onrecord: () => void;
     onclose: () => void;
   } = $props();
 
   let value = $state('');
+  let fileInputEl = $state<HTMLInputElement | null>(null);
   const canSave = $derived(!!value.trim());
 
   function save() {
@@ -20,6 +23,16 @@
     oncapture(value);
     value = '';
     onclose();
+  }
+
+  function onFileChange(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) {
+      onfile(file);
+      onclose();
+    }
   }
 </script>
 
@@ -38,9 +51,22 @@
     placeholder="Paste a link, jot a note…"
   ></textarea>
   <footer>
-    <button type="button" onclick={() => onpick('image')}>Image</button>
-    <button type="button" onclick={() => onpick('document')}>File</button>
-    <button type="button" onclick={() => onpick('audio')}>Voice memo</button>
+    <button class="attach" type="button" onclick={() => fileInputEl?.click()}>
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      Attach file
+    </button>
+    <button class="record" type="button" onclick={onrecord}>
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      Voice memo
+    </button>
+    <input
+      class="file-input"
+      type="file"
+      bind:this={fileInputEl}
+      onchange={onFileChange}
+      aria-hidden="true"
+      tabindex="-1"
+    />
   </footer>
 </div>
 
@@ -85,8 +111,19 @@
     border-top: 1px solid var(--border);
   }
   footer button {
+    display: inline-flex; align-items: center; gap: 0.4rem;
     border: 1px solid var(--border); border-radius: 0.6rem;
     background: var(--surface); color: var(--text);
     padding: 0.5rem 0.85rem; font: inherit; cursor: pointer;
+  }
+  .attach svg, .record svg { width: 16px; height: 16px; }
+  .file-input {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 </style>

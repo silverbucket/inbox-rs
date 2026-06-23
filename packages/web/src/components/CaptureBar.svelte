@@ -6,18 +6,18 @@
   let {
     oncapture,
     onopeneditor,
-    onpick,
+    onfile,
+    onrecord,
   }: {
     oncapture: (raw: string) => void;
     onopeneditor: (text: string) => void;
-    onpick: (type: 'image' | 'document' | 'audio' | 'note') => void;
+    onfile: (file: File) => void;
+    onrecord: () => void;
   } = $props();
 
   let value = $state('');
   let focused = $state(false);
-  let menuOpen = $state(false);
-  let menuEl = $state<HTMLElement | null>(null);
-  let triggerEl = $state<HTMLButtonElement | null>(null);
+  let fileInputEl = $state<HTMLInputElement | null>(null);
   const mod = modLabel();
 
   const detected = $derived(detectCaptureKind(value));
@@ -39,40 +39,26 @@
     value = '';
   }
 
-  function pick(type: 'image' | 'document' | 'audio' | 'note') {
-    menuOpen = false;
-    onpick(type);
-  }
-
-  function onWindowKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape' && menuOpen) {
-      menuOpen = false;
-    }
-  }
-
-  function onWindowPointerdown(e: PointerEvent) {
-    if (!menuOpen) return;
-    const target = e.target as Node;
-    if (menuEl?.contains(target) || triggerEl?.contains(target)) return;
-    menuOpen = false;
+  function onFileChange(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (file) onfile(file);
+    input.value = ''; // let the user re-pick the same file later
   }
 </script>
-
-<svelte:window onkeydown={onWindowKeydown} onpointerdown={onWindowPointerdown} />
 
 <div class="capture">
   <div class="bar">
     <button
-      class="plus"
+      class="icon plus"
       type="button"
-      aria-label="Add attachment or note"
-      aria-expanded={menuOpen}
-      bind:this={triggerEl}
-      onclick={() => (menuOpen = !menuOpen)}
+      aria-label="Attach a file"
+      onclick={() => fileInputEl?.click()}
     >
       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
     </button>
     <input
+      class="text-input"
       type="text"
       placeholder="Paste a link, jot a note, or drop a file…"
       bind:value
@@ -80,20 +66,30 @@
       onfocus={() => (focused = true)}
       onblur={() => (focused = false)}
     />
+    <button
+      class="icon mic"
+      type="button"
+      aria-label="Record a voice memo"
+      onclick={onrecord}
+    >
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    </button>
+    <!-- Routed by the chosen file's type in the parent; visually hidden (not
+         display:none, so Safari still opens it on the ⊕ click). -->
+    <input
+      class="file-input"
+      type="file"
+      bind:this={fileInputEl}
+      onchange={onFileChange}
+      aria-hidden="true"
+      tabindex="-1"
+    />
   </div>
   {#if focused && value.trim()}
     <div class="hint">
       <span>↵ {enterHint}</span>
       <span class="sep">·</span>
       <span>{mod}↵ Open editor</span>
-    </div>
-  {/if}
-  {#if menuOpen}
-    <div class="menu" aria-label="Capture options" bind:this={menuEl}>
-      <button type="button" onclick={() => pick('note')}>Note editor</button>
-      <button type="button" onclick={() => pick('image')}>Image</button>
-      <button type="button" onclick={() => pick('document')}>File</button>
-      <button type="button" onclick={() => pick('audio')}>Voice memo</button>
     </div>
   {/if}
 </div>
@@ -110,43 +106,37 @@
     padding: 0.5rem 0.75rem;
   }
   .bar:focus-within { border-color: var(--accent); }
-  .plus {
+  .icon {
     width: 30px; height: 30px;
     flex-shrink: 0;
     display: inline-flex; align-items: center; justify-content: center;
     border: none; border-radius: 8px;
-    background: var(--accent-subtle); color: var(--accent);
     cursor: pointer;
   }
-  .plus svg { width: 16px; height: 16px; }
-  input {
+  .icon svg { width: 16px; height: 16px; }
+  .plus { background: var(--accent-subtle); color: var(--accent); }
+  .plus:hover { background: var(--accent-subtle-strong); }
+  .mic { background: none; color: var(--text-muted); }
+  .mic:hover { background: var(--surface-hover); color: var(--text); }
+  .text-input {
     flex: 1; min-width: 0;
     border: none; outline: none; background: none;
     font: inherit; color: var(--text);
   }
-  input::placeholder { color: var(--text-muted); }
+  .text-input::placeholder { color: var(--text-muted); }
+  .file-input {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
   .hint {
     display: flex; gap: 0.5rem; align-items: center;
     padding: 0.35rem 0.6rem 0;
     font-size: 0.78rem; color: var(--text-muted);
   }
   .hint .sep { opacity: 0.4; }
-  .menu {
-    position: absolute; top: calc(100% + 0.35rem); left: 0;
-    z-index: 50;
-    display: flex; flex-direction: column;
-    min-width: 12rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 0.6rem;
-    padding: 0.3rem;
-    box-shadow: 0 12px 30px -12px var(--shadow);
-  }
-  .menu button {
-    text-align: left;
-    border: none; background: none;
-    padding: 0.5rem 0.6rem; border-radius: 0.4rem;
-    font: inherit; color: var(--text); cursor: pointer;
-  }
-  .menu button:hover { background: var(--surface-hover); }
 </style>
