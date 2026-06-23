@@ -1,33 +1,22 @@
 <script lang="ts">
   import type { AudioItem } from '@inbox-rs/rs-module';
-  import rs from '../lib/rs';
+  import { blobUrls, connected, loadFileBlobUrl } from '../lib/stores';
+
   let { item }: { item: AudioItem } = $props();
-  let blobUrl = $state<string | null>(null);
-  let loading = $state(true);
-  let error = $state(false);
+  let audioError = $state(false);
 
+  const audioSrc = $derived($blobUrls[item.filePath] || null);
+
+  // Load audio bytes. loadFileBlobUrl fetches from the remote when connected
+  // and the local cache otherwise, so files captured via the capture app still
+  // play. Pass mimeType so the blob is tagged with the clean type from item
+  // metadata rather than whatever the server echoes back (e.g.
+  // `audio/webm; charset=binary` on 5apps). Referencing `$connected` re-runs
+  // this so we retry over the network once a connection is established.
   $effect(() => {
-    loadAudio();
-    return () => {
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-    };
+    void $connected;
+    if (item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
   });
-
-  async function loadAudio() {
-    try {
-      const file = await rs.inbox.getFile(item.filePath);
-      if (file?.data) {
-        if (blobUrl) URL.revokeObjectURL(blobUrl);
-        blobUrl = URL.createObjectURL(new Blob([file.data], { type: item.mimeType }));
-      } else {
-        error = true;
-      }
-    } catch {
-      error = true;
-    } finally {
-      loading = false;
-    }
-  }
 
   function formatDuration(seconds?: number): string {
     if (!seconds) return '';
@@ -43,17 +32,22 @@
     <span class="duration">{formatDuration(item.duration)}</span>
   {/if}
   <div class="player">
-    {#if loading}
-      <p class="status">Loading audio...</p>
-    {:else if error}
+    {#if audioError}
       <p class="status">Failed to load audio</p>
-    {:else if blobUrl}
+    {:else if audioSrc}
       <!-- User-recorded audio has no separate captions track; the
            transcription text (when present) is rendered alongside the player
            in ViewCardModal. The empty <track> just satisfies the lint rule. -->
-      <audio controls src={blobUrl} preload="metadata">
+      <audio
+        controls
+        src={audioSrc}
+        preload="metadata"
+        onerror={() => (audioError = true)}
+      >
         <track kind="captions" />
       </audio>
+    {:else}
+      <p class="status">Loading audio...</p>
     {/if}
   </div>
 </div>
