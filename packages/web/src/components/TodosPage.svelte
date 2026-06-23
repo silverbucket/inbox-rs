@@ -263,19 +263,20 @@
   {/snippet}
 
   {#if openTodos.length === 0 && completedTodos.length === 0}
-    {@render todoToolbar()}
+    <!-- Lead with the composer so its input lines up vertically with the inbox
+         capture bar; the hero copy and Fab follow beneath it. -->
+    {@render quickAddComposer(false)}
+    <!-- Persistent aria-live region — kept in the DOM so screen readers
+         reliably announce errors as they appear. Collapses when empty. -->
+    <p class="quick-error" role="status" aria-live="polite">{quickError}</p>
     <div class="empty-state" in:fade={{ duration: 180 }}>
       <p class="empty-title">Jot a todo</p>
-      {@render quickAddComposer(false)}
       <p class="empty-hint empty-hint--desktop">Capture it now. Organize it later.</p>
       <!-- Mobile: the inline composer is hidden in favour of the floating
            FAB, so the hint needs to point at it. CSS swaps which line shows. -->
       <p class="empty-hint empty-hint--mobile">Tap + to capture one. Organize it later.</p>
-      <!-- Persistent aria-live region — kept in the DOM so screen readers
-           reliably announce errors as they appear. The visually-empty state
-           collapses via the `:empty` selector below. -->
-      <p class="quick-error" role="status" aria-live="polite">{quickError}</p>
     </div>
+    {@render todoToolbar()}
   {:else}
     {@render quickAddComposer(true)}
     <p class="quick-error quick-error--inline" role="status" aria-live="polite">{quickError}</p>
@@ -428,9 +429,10 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-    padding: 3rem 1rem;
+    gap: 0.5rem;
+    /* Sits below the composer now, so it needs only a little breathing room
+       above rather than the full hero offset. */
+    padding: 1.5rem 1rem 1rem;
     text-align: center;
     color: var(--text-muted);
   }
@@ -444,6 +446,10 @@
 
   .quick-add {
     width: min(100%, 34rem);
+    /* Centered (like the inbox capture bar) now that it leads the empty view
+       rather than living inside the centered hero. The compact variant below
+       overrides to full width. */
+    margin-inline: auto;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 0.5rem;
