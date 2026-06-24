@@ -181,7 +181,13 @@
       label: 'Show',
       // Guard against a double-toggle if the group was revealed meanwhile.
       run: () => {
-        if (!get(activeGroupIds).has(gid)) void toggleGroupFilter(gid);
+        if (get(activeGroupIds).has(gid)) return;
+        // A failed config write would otherwise be an unhandled rejection;
+        // tell the user the reveal didn't take so they can retry.
+        void toggleGroupFilter(gid).catch((error) => {
+          console.error('Failed to reveal hidden group', error);
+          showToast('Could not show the group. Please try again.');
+        });
       },
     });
   }

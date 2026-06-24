@@ -337,6 +337,31 @@ describe('TodoQuickAdd', () => {
     expect(toggleGroupFilter).toHaveBeenCalledWith('g-hidden');
   });
 
+  it('surfaces an error toast when the Show action fails to reveal the group', async () => {
+    toggleGroupFilter.mockRejectedValueOnce(new Error('config write failed'));
+    seedHiddenGroupDefault({ visible: false });
+    render();
+    pickCollection('col-h');
+    type('buy milk');
+    submit();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(showToast).toHaveBeenCalledOnce();
+    });
+    const [, action] = showToast.mock.calls[0] as [
+      string,
+      { label: string; run: () => void },
+    ];
+    action.run();
+    expect(toggleGroupFilter).toHaveBeenCalledWith('g-hidden');
+    // The rejected reveal is caught and reported instead of going unhandled.
+    await vi.waitFor(() => {
+      expect(showToast).toHaveBeenLastCalledWith(
+        'Could not show the group. Please try again.',
+      );
+    });
+  });
+
   it('does not toast when filing into a currently visible group', async () => {
     seedHiddenGroupDefault({ visible: true });
     render();
