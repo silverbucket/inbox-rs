@@ -10,15 +10,19 @@
    * pick a destination, persisted per-device.
    */
   import { tick } from 'svelte';
+  import { get } from 'svelte/store';
   import { canCaptureTodo, makeUnfiledTodo } from '../lib/add-entry-modal';
   import { autofocusIf } from '../lib/actions';
   import { modLabel } from '../lib/platform';
+  import { showToast } from '../lib/toast';
   import {
+    activeGroupIds,
     collections,
     groupCollections,
     moveItemToCollection,
     sortedGroups,
     storeItem,
+    toggleGroupFilter,
   } from '../lib/stores';
 
   let {
@@ -76,12 +80,39 @@
     }
   }
   let storedQuickAddId = $state<string | undefined>(readStoredQuickAddId());
-  const quickAddCollectionId = $derived.by(() => {
-    const id = storedQuickAddId;
-    return id && collectionMap[id] ? id : undefined;
-  });
+  // Whether the user has actively chosen a destination in this composer
+  // instance. Distinguishes a deliberate in-session pick (honored verbatim,
+  // even into a hidden group) from the passively-restored default (guarded
+  // below). Resets on remount, so a stale hidden default never silently
+  // reapplies across reloads.
+  let userPicked = $state(false);
+
+  /** True when the collection exists, belongs to a known group, and that group
+   *  is currently filtered out of view — i.e. filing here makes the todo
+   *  vanish from the list. Ungrouped/orphan collections are never hidden. */
+  function isOutOfView(id: string | undefined): boolean {
+    const gid = id ? collectionMap[id]?.groupId : undefined;
+    return !!gid && !!groupMap()[gid] && !$activeGroupIds.has(gid);
+  }
+
+  // The remembered preference, if it still resolves to a real collection.
+  const pickedId = $derived(
+    storedQuickAddId && collectionMap[storedQuickAddId]
+      ? storedQuickAddId
+      : undefined,
+  );
+  // The passive default never targets a hidden group: a plain-Enter add would
+  // file the todo where it can't be seen. Falls back to Unfiled instead.
+  const defaultCollectionId = $derived(
+    pickedId && isOutOfView(pickedId) ? undefined : pickedId,
+  );
+  // Live select value: an explicit in-session pick wins (you may deliberately
+  // file into a hidden group — addQuickTodo surfaces a "Show" toast for that);
+  // otherwise use the guarded default.
+  const quickAddCollectionId = $derived(userPicked ? pickedId : defaultCollectionId);
   function setQuickAddCollection(id: string | undefined) {
     storedQuickAddId = id;
+    userPicked = true;
     try {
       if (id) localStorage.setItem(QUICK_ADD_KEY, id);
       else localStorage.removeItem(QUICK_ADD_KEY);
@@ -91,6 +122,18 @@
   }
 
   const targetCollectionId = $derived(fixedCollectionId ?? quickAddCollectionId);
+
+  // Where plain Enter will file the todo, shown in the hint while composing so
+  // the destination is predictable before submitting. Flags an out-of-view
+  // target so an explicit hidden pick isn't a surprise.
+  const destinationLabel = $derived.by(() => {
+    const id = targetCollectionId;
+    const col = id ? collectionMap[id] : undefined;
+    if (!col) return 'Unfiled';
+    const group = col.groupId ? groupMap()[col.groupId] : undefined;
+    const base = group ? `${group.name} › ${col.name}` : col.name;
+    return isOutOfView(id) ? `${base} (hidden)` : base;
+  });
 
   async function addQuickTodo() {
     if (!canCaptureTodo(quickTitle) || quickSaving) return;
@@ -108,6 +151,7 @@
       // Separate step keeps collection.itemIds in sync, matching AddEntryModal.
       if (targetCollectionId) {
         await moveItemToCollection(todo.id, targetCollectionId);
+        notifyIfOutOfView(targetCollectionId);
       }
     } catch (error) {
       console.error('Failed to add todo', error);
@@ -123,6 +167,23 @@
       await tick();
       quickInputEl?.focus();
     }
+  }
+
+  // After filing into a collection whose group is filtered out of view, the
+  // todo is intact but invisible here. Confirm where it went and offer a
+  // one-tap reveal so it never feels like it vanished — no after-the-fact edit.
+  function notifyIfOutOfView(collectionId: string) {
+    if (!isOutOfView(collectionId)) return;
+    const col = collectionMap[collectionId];
+    const gid = col?.groupId;
+    if (!gid) return;
+    showToast(`Added to ${col.name} — hidden from this view`, {
+      label: 'Show',
+      // Guard against a double-toggle if the group was revealed meanwhile.
+      run: () => {
+        if (!get(activeGroupIds).has(gid)) void toggleGroupFilter(gid);
+      },
+    });
   }
 
   // Clear a stale error once the user edits the input. Driven by the input's
@@ -208,7 +269,7 @@
 <!-- Always rendered with a fixed height so the hint never shifts content. -->
 <div class="quick-hint">
   {#if quickFocused && quickTitle.trim()}
-    <span>↵ Add todo</span>
+    <span>↵ {fixedCollectionId ? 'Add todo' : `Add to ${destinationLabel}`}</span>
     <span class="sep">·</span>
     <span>{mod}↵ Open editor</span>
   {/if}
