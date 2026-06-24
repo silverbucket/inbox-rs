@@ -99,3 +99,13 @@ function pathFromPage(page: Page): string {
 export function pageUsesFilters(page: Page): boolean {
   return page === 'todos' || page === 'collections';
 }
+
+/**
+ * Update the URL hash without adding a browser history entry.
+ * Used when filter pills change so toggling filters does not spam history.
+ */
+export function replaceRouteHash(hash: string): void {
+  if (window.location.hash !== hash) {
+    window.history.replaceState(null, '', hash);
+  }
+}
