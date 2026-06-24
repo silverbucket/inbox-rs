@@ -2045,6 +2045,26 @@ describe('removeItemFromCollection', () => {
     // Should now appear in todoItems (unfiled todos)
     expect(get(todoItems).map((t) => t.id)).toContain('t1');
   });
+
+  it('rolls back the item and collection on persistence error', async () => {
+    const item = makeTodo('t1', { collectionId: 'c1' });
+    const col = { ...makeCollection('c1'), itemIds: ['t1'] };
+
+    items.set({ t1: item });
+    collections.set({ c1: col });
+
+    // The item write succeeds; the follow-up source-collection write fails
+    // mid-flight (delegated through moveItemToCollection).
+    mockInbox.storeCollection.mockRejectedValueOnce(new Error('write failed'));
+
+    await expect(removeItemFromCollection('t1')).rejects.toThrow(
+      'write failed',
+    );
+
+    // Both stores must roll back: the item stays filed in c1 and c1 still lists it.
+    expect(get(items).t1.collectionId).toBe('c1');
+    expect(get(collections).c1.itemIds).toEqual(['t1']);
+  });
 });
 
 describe('reorderCollectionItems', () => {
@@ -2160,5 +2180,16 @@ describe('reorderGroups', () => {
     await reorderGroups(['g2', 'g1']);
 
     expect(get(appConfig).todosGlobalOrder).toEqual(['t1']);
+  });
+
+  it('rolls back groupsOrder on persistence error', async () => {
+    appConfig.set({ groupsOrder: ['g1', 'g2'] });
+    // reorderGroups delegates to updateConfig, which rolls appConfig back
+    // when setConfig rejects.
+    mockInbox.setConfig.mockRejectedValueOnce(new Error('write failed'));
+
+    await expect(reorderGroups(['g2', 'g1'])).rejects.toThrow('write failed');
+
+    expect(get(appConfig).groupsOrder).toEqual(['g1', 'g2']);
   });
 });

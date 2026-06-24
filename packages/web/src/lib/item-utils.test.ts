@@ -1,4 +1,9 @@
-import type { InboxItem, NoteItem, TodoItem } from '@inbox-rs/rs-module';
+import type {
+  EmailItem,
+  InboxItem,
+  NoteItem,
+  TodoItem,
+} from '@inbox-rs/rs-module';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const { storeItem } = vi.hoisted(() => {
@@ -178,6 +183,46 @@ describe('todoNote', () => {
       createdAt: '2026-04-01T00:00:00.000Z',
     };
     expect(todoNote(item)).toBeNull();
+  });
+
+  it('prefers the notes field over body', () => {
+    // EmailItem carries both `notes` and `body`; the lookup chain is
+    // notes → description → body, so notes must win.
+    const item: EmailItem = {
+      id: 'em-1',
+      type: 'email',
+      title: 'Re: lunch',
+      body: 'Body content',
+      notes: 'Notes content',
+      createdAt: '2026-04-01T00:00:00.000Z',
+    };
+    expect(todoNote(item)).toBe('Notes content');
+  });
+
+  it('prefers description over body when both are present', () => {
+    const item: NoteItem = {
+      id: 'note-1',
+      type: 'note',
+      title: 'Note',
+      description: 'Description first',
+      body: 'Body second',
+      createdAt: '2026-04-01T00:00:00.000Z',
+    };
+    expect(todoNote(item)).toBe('Description first');
+  });
+
+  it('returns an empty string when the first line is whitespace-only', () => {
+    // Documents current behavior: the truthiness guard runs on the untrimmed
+    // multi-line value, so a whitespace-only first line trims to '' and is
+    // returned as-is rather than collapsing to null.
+    const item: NoteItem = {
+      id: 'note-1',
+      type: 'note',
+      title: 'Note',
+      body: '   \nsecond line',
+      createdAt: '2026-04-01T00:00:00.000Z',
+    };
+    expect(todoNote(item)).toBe('');
   });
 });
 
