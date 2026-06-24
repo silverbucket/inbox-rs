@@ -6,10 +6,12 @@
 
   let {
     editItem,
+    prefillFile = undefined,
     canSubmit = $bindable(false),
     buildItem = $bindable(),
   }: {
     editItem?: InboxItem;
+    prefillFile?: File;
     canSubmit?: boolean;
     buildItem?: BuildItemFn;
   } = $props();
@@ -22,7 +24,10 @@
 
   let title = $state(editItem?.title ?? '');
   let description = $state(editItem?.description ?? '');
-  let file = $state<File | null>(null);
+  // Seed from a file already chosen in the capture bar's picker, so the modal
+  // opens with it attached (the native input can't be set programmatically —
+  // the selected name is shown below instead).
+  let file = $state<File | null>(prefillFile ?? null);
 
   // Save needs either a freshly picked file or, in edit mode, an already-
   // stored image whose metadata we're updating without replacing the bytes.
@@ -43,7 +48,10 @@
 </script>
 
 <label class="field">
-  <span>{hasExistingFile ? 'Replace image' : 'Image *'}</span>
+  <span>{file ? 'Replace image' : hasExistingFile ? 'Replace image' : 'Image *'}</span>
+  {#if file}
+    <span class="picked">{file.name}</span>
+  {/if}
   <input type="file" accept="image/*" onchange={handleFileChange} />
 </label>
 <label class="field">

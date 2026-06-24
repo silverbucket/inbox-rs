@@ -7,14 +7,18 @@
   // biome-ignore lint/style/useImportType: typeof needs the runtime binding
   import UserMenu from './components/UserMenu.svelte';
   import InboxGrid from './components/InboxGrid.svelte';
-  import AddEntryBar from './components/AddEntryBar.svelte';
   import MigrationAlert from './components/MigrationAlert.svelte';
   import ClassicShell from './components/ClassicShell.svelte';
+  import CaptureBar from './components/CaptureBar.svelte';
+  import CaptureSheet from './components/CaptureSheet.svelte';
+  import Toast from './components/Toast.svelte';
   import {
     connected, deleteItem, openTodos, pendingMigrationCount, runAllMigrations,
     createCollection, storeGroup,
     appConfig, setActiveGroupFilters,
   } from './lib/stores';
+  import { captureDetected } from './lib/capture';
+  import { showToast } from './lib/toast';
   import { parseHash, formatRoute, pageUsesFilters, replaceRouteHash, type Page, type Route } from './lib/route';
 
   type LazyComponent = Component<Record<string, unknown>>;
@@ -36,6 +40,24 @@
   // per-row quick-add on the Todos page so the new todo lands in the same
   // collection as the row the user is adding alongside.
   let preselectedCollectionId = $state<string | undefined>(undefined);
+
+  let captureSheetOpen = $state(false);
+  let notePrefillTitle = $state('');
+  let prefillFile = $state<File | undefined>(undefined);
+  let isTouch = $state(
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 600px)').matches,
+  );
+
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 600px)');
+    isTouch = mq.matches;
+    const onChange = (e: MediaQueryListEvent) => {
+      isTouch = e.matches;
+    };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  });
 
   let route = $state<Route>(parseHash(window.location.hash));
 
@@ -142,7 +164,7 @@
   });
 
   // Lock body scroll when any modal is open (including iOS Safari)
-  const anyModalOpen = $derived(!!viewingItem || !!activeModal || showCollectionForm || showGroupForm);
+  const anyModalOpen = $derived(!!viewingItem || !!activeModal || showCollectionForm || showGroupForm || captureSheetOpen);
   let savedScrollY = 0;
   let wasModalOpen = false;
 
@@ -179,12 +201,67 @@
   function openAdd(type: InboxItemType) {
     editingItem = undefined;
     preselectedCollectionId = undefined;
+    notePrefillTitle = '';
+    prefillFile = undefined;
+    captureSheetOpen = false;
     activeModal = type;
     void loadAddEntryModal();
   }
 
-  function openAddTodo() {
-    openAdd('todo');
+  async function handleQuickCapture(raw: string) {
+    const res = await captureDetected(raw);
+    if (!res) return;
+    const label = res.item.type === 'bookmark' ? 'Saved bookmark' : 'Saved note';
+    showToast(label, {
+      label: 'Undo',
+      // Surface a failure rather than silently leaving the item if the delete
+      // rejects (e.g. transient storage error).
+      run: () => {
+        void deleteItem(res.item.id, res.item).catch(() => {
+          showToast("Couldn't undo — open the item to remove it.");
+        });
+      },
+    });
+  }
+
+  function handleOpenEditor(text: string) {
+    editingItem = undefined;
+    preselectedCollectionId = undefined;
+    prefillFile = undefined;
+    captureSheetOpen = false;
+    // The typed text becomes the note title; the editor focuses the body.
+    notePrefillTitle = text;
+    activeModal = 'note';
+    void loadAddEntryModal();
+  }
+
+  // The ⊕ file picker routes by the chosen file's type: images open the image
+  // modal, everything else the document modal — with the file pre-attached.
+  function handleFile(file: File) {
+    editingItem = undefined;
+    preselectedCollectionId = undefined;
+    notePrefillTitle = '';
+    prefillFile = file;
+    captureSheetOpen = false;
+    activeModal = file.type.startsWith('image/') ? 'image' : 'document';
+    void loadAddEntryModal();
+  }
+
+  function handleRecord() {
+    openAdd('audio');
+  }
+
+  /** Open the add-todo modal, optionally pre-filling the title and target
+      collection (⌘/Ctrl-Enter or the Fab from the Todos quick-add, so the
+      modal mirrors the quick-add's title + collection selection). */
+  function openAddTodo(prefillTitle = '', collectionId: string | undefined = undefined) {
+    editingItem = undefined;
+    preselectedCollectionId = collectionId;
+    prefillFile = undefined;
+    captureSheetOpen = false;
+    notePrefillTitle = prefillTitle;
+    activeModal = 'todo';
+    void loadAddEntryModal();
   }
 
   /** Open the add-todo modal with a specific collection pre-selected.
@@ -193,6 +270,9 @@
   function openAddTodoInCollection(collectionId: string | undefined) {
     editingItem = undefined;
     preselectedCollectionId = collectionId;
+    prefillFile = undefined;
+    captureSheetOpen = false;
+    notePrefillTitle = '';
     activeModal = 'todo';
     void loadAddEntryModal();
   }
@@ -216,6 +296,8 @@
     activeModal = null;
     editingItem = undefined;
     preselectedCollectionId = undefined;
+    notePrefillTitle = '';
+    prefillFile = undefined;
   }
 
   function openConnectMenu() {
@@ -267,7 +349,19 @@
                be added quickly, then optionally filed into a collection later.
                Existing notes can still be converted via `makeTodo` when the
                user is ready to commit. -->
-          <AddEntryBar onadd={openAdd} excludeTypes={['todo']} />
+          {#if isTouch}
+            <button class="capture-trigger" type="button" onclick={() => (captureSheetOpen = true)}>
+              Paste a link, jot a note, or drop a file…
+            </button>
+          {:else}
+            <CaptureBar
+              focusOnMount
+              oncapture={handleQuickCapture}
+              onopeneditor={handleOpenEditor}
+              onfile={handleFile}
+              onrecord={handleRecord}
+            />
+          {/if}
         </div>
         <InboxGrid onselect={openView} onconnect={openConnectMenu} />
       {:else if route.page === 'todos'}
@@ -294,6 +388,8 @@
       type={activeModal}
       editItem={editingItem}
       collectionId={preselectedCollectionId}
+      prefillTitle={notePrefillTitle}
+      {prefillFile}
       onclose={closeModal}
       ondelete={async (item: InboxItem) => { await deleteItem(item.id, item); closeModal(); }}
     />
@@ -312,6 +408,16 @@
   {/if}
 {/if}
 
+{#if captureSheetOpen}
+  <CaptureSheet
+    oncapture={handleQuickCapture}
+    onfile={handleFile}
+    onrecord={handleRecord}
+    onclose={() => (captureSheetOpen = false)}
+  />
+{/if}
+<Toast />
+
 <style>
   /* Inbox add-entry toolbar — the only chrome that lives with the page
      content (rendered into the shell's main slot). All header/footer styling
@@ -322,5 +428,18 @@
     justify-content: center;
     gap: 0.5rem;
     flex-wrap: wrap;
+  }
+
+  .capture-trigger {
+    display: block;
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.85rem;
+    padding: 0.6rem 0.9rem;
+    text-align: left;
+    color: var(--text-muted);
+    font: inherit;
+    cursor: pointer;
   }
 </style>

@@ -12,9 +12,11 @@
   let {
     value = $bindable(''),
     placeholder = 'Write your note...',
+    focusOnMount = false,
   }: {
     value: string;
     placeholder?: string;
+    focusOnMount?: boolean;
   } = $props();
 
   // Bound via `bind:this` below — populated after mount, so the type is
@@ -51,6 +53,7 @@
         CodeBlockAutoIndent,
       ],
       content: value,
+      autofocus: focusOnMount ? 'end' : false,
       onUpdate: ({ editor: e }) => {
         value = e.storage.markdown.getMarkdown();
       },

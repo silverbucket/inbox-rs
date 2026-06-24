@@ -76,7 +76,10 @@ import {
   openTodos,
   orphanCollections,
   pendingMigrationCount,
+  removeItemFromCollection,
+  reorderCollectionItems,
   reorderGroupCollections,
+  reorderGroups,
   reorderTodosGlobal,
   reorderUnfiledTodos,
   setActiveGroupFilters,
@@ -1977,5 +1980,216 @@ describe('load-time collection/group loading', () => {
     expect(get(groups).g1).toBeDefined();
     expect(mockInbox.storeGroup).not.toHaveBeenCalled();
     expect(mockInbox.storeCollection).not.toHaveBeenCalled();
+  });
+});
+
+describe('removeItemFromCollection', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    items.set({});
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('clears collectionId on the item and removes it from the collection itemIds', async () => {
+    const item = makeTodo('t1', { collectionId: 'c1' });
+    const col = { ...makeCollection('c1'), itemIds: ['t1'] };
+
+    items.set({ t1: item });
+    collections.set({ c1: col });
+
+    await removeItemFromCollection('t1');
+
+    expect(get(items).t1.collectionId).toBeUndefined();
+    expect(get(collections).c1.itemIds).toEqual([]);
+    expect(mockInbox.store).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 't1' }),
+    );
+    expect(mockInbox.storeCollection).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'c1', itemIds: [] }),
+    );
+  });
+
+  it('is a no-op when the item does not exist in the store', async () => {
+    collections.set({ c1: { ...makeCollection('c1'), itemIds: [] } });
+
+    await removeItemFromCollection('nonexistent');
+
+    expect(mockInbox.store).not.toHaveBeenCalled();
+    expect(mockInbox.storeCollection).not.toHaveBeenCalled();
+  });
+
+  it('works for an unfiled item (no-op on collections)', async () => {
+    // Item has no collectionId — removing from collection is essentially a no-op
+    // on the collections side but should not throw.
+    const item = makeTodo('t1');
+    items.set({ t1: item });
+
+    await removeItemFromCollection('t1');
+
+    // item.collectionId stays absent and no collection write occurs
+    expect(get(items).t1.collectionId).toBeUndefined();
+    expect(mockInbox.storeCollection).not.toHaveBeenCalled();
+  });
+
+  it('leaves the item visible as an unfiled todo after removal', async () => {
+    const item = makeTodo('t1', { collectionId: 'c1' });
+    const col = { ...makeCollection('c1'), itemIds: ['t1'] };
+
+    items.set({ t1: item });
+    collections.set({ c1: col });
+
+    await removeItemFromCollection('t1');
+
+    // Should now appear in todoItems (unfiled todos)
+    expect(get(todoItems).map((t) => t.id)).toContain('t1');
+  });
+
+  it('rolls back the item and collection on persistence error', async () => {
+    const item = makeTodo('t1', { collectionId: 'c1' });
+    const col = { ...makeCollection('c1'), itemIds: ['t1'] };
+
+    items.set({ t1: item });
+    collections.set({ c1: col });
+
+    // The item write succeeds; the follow-up source-collection write fails
+    // mid-flight (delegated through moveItemToCollection).
+    mockInbox.storeCollection.mockRejectedValueOnce(new Error('write failed'));
+
+    await expect(removeItemFromCollection('t1')).rejects.toThrow(
+      'write failed',
+    );
+
+    // Both stores must roll back: the item stays filed in c1 and c1 still lists it.
+    expect(get(items).t1.collectionId).toBe('c1');
+    expect(get(collections).c1.itemIds).toEqual(['t1']);
+  });
+});
+
+describe('reorderCollectionItems', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    items.set({});
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('updates collection itemIds in the store and persists to storage', async () => {
+    const col = { ...makeCollection('c1'), itemIds: ['t1', 't2', 't3'] };
+    collections.set({ c1: col });
+
+    await reorderCollectionItems('c1', ['t3', 't1', 't2']);
+
+    expect(get(collections).c1.itemIds).toEqual(['t3', 't1', 't2']);
+    expect(mockInbox.storeCollection).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'c1', itemIds: ['t3', 't1', 't2'] }),
+    );
+  });
+
+  it('is a no-op when the collection does not exist', async () => {
+    collections.set({});
+
+    await reorderCollectionItems('missing', ['t1', 't2']);
+
+    expect(mockInbox.storeCollection).not.toHaveBeenCalled();
+  });
+
+  it('accepts an empty itemIds array', async () => {
+    const col = { ...makeCollection('c1'), itemIds: ['t1', 't2'] };
+    collections.set({ c1: col });
+
+    await reorderCollectionItems('c1', []);
+
+    expect(get(collections).c1.itemIds).toEqual([]);
+    expect(mockInbox.storeCollection).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'c1', itemIds: [] }),
+    );
+  });
+
+  it('does not affect other collections', async () => {
+    const c1 = { ...makeCollection('c1'), itemIds: ['t1', 't2'] };
+    const c2 = { ...makeCollection('c2'), itemIds: ['t3', 't4'] };
+    collections.set({ c1, c2 });
+
+    await reorderCollectionItems('c1', ['t2', 't1']);
+
+    expect(get(collections).c1.itemIds).toEqual(['t2', 't1']);
+    expect(get(collections).c2.itemIds).toEqual(['t3', 't4']);
+  });
+
+  it('rolls back store on persistence error', async () => {
+    const col = { ...makeCollection('c1'), itemIds: ['t1', 't2'] };
+    collections.set({ c1: col });
+    mockInbox.storeCollection.mockRejectedValueOnce(new Error('write failed'));
+
+    await expect(reorderCollectionItems('c1', ['t2', 't1'])).rejects.toThrow(
+      'write failed',
+    );
+
+    // Should be rolled back to the original order
+    expect(get(collections).c1.itemIds).toEqual(['t1', 't2']);
+  });
+});
+
+describe('reorderGroups', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('persists the new group order into appConfig.groupsOrder', async () => {
+    groups.set({
+      g1: makeGroup('g1'),
+      g2: makeGroup('g2'),
+      g3: makeGroup('g3'),
+    });
+
+    await reorderGroups(['g3', 'g1', 'g2']);
+
+    expect(get(appConfig).groupsOrder).toEqual(['g3', 'g1', 'g2']);
+    expect(mockInbox.setConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ groupsOrder: ['g3', 'g1', 'g2'] }),
+    );
+  });
+
+  it('overwrites a previous groupsOrder', async () => {
+    appConfig.set({ groupsOrder: ['g1', 'g2'] });
+
+    await reorderGroups(['g2', 'g1']);
+
+    expect(get(appConfig).groupsOrder).toEqual(['g2', 'g1']);
+  });
+
+  it('accepts an empty order array', async () => {
+    appConfig.set({ groupsOrder: ['g1', 'g2'] });
+
+    await reorderGroups([]);
+
+    expect(get(appConfig).groupsOrder).toEqual([]);
+    expect(mockInbox.setConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ groupsOrder: [] }),
+    );
+  });
+
+  it('does not touch other config keys', async () => {
+    appConfig.set({ todosGlobalOrder: ['t1'], groupsOrder: ['g1'] });
+
+    await reorderGroups(['g2', 'g1']);
+
+    expect(get(appConfig).todosGlobalOrder).toEqual(['t1']);
+  });
+
+  it('rolls back groupsOrder on persistence error', async () => {
+    appConfig.set({ groupsOrder: ['g1', 'g2'] });
+    // reorderGroups delegates to updateConfig, which rolls appConfig back
+    // when setConfig rejects.
+    mockInbox.setConfig.mockRejectedValueOnce(new Error('write failed'));
+
+    await expect(reorderGroups(['g2', 'g1'])).rejects.toThrow('write failed');
+
+    expect(get(appConfig).groupsOrder).toEqual(['g1', 'g2']);
   });
 });

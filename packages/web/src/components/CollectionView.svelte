@@ -19,9 +19,12 @@
   import { slide, fade } from 'svelte/transition';
   import { flip } from 'svelte/animate';
   import { dndzone } from 'svelte-dnd-action';
+  import { captureDetected } from '../lib/capture';
+  import { showToast } from '../lib/toast';
   import InboxCard from './InboxCard.svelte';
-  import AddEntryBar from './AddEntryBar.svelte';
+  import CaptureBar from './CaptureBar.svelte';
   import AddEntryModal from './AddEntryModal.svelte';
+  import TodoQuickAdd from './TodoQuickAdd.svelte';
   import TodoRow from './TodoRow.svelte';
 
   let { collection, expanded = false, onselect, onedit, ontoggle, isTouchDevice = false }: {
@@ -57,7 +60,50 @@
   const completedExpanded = $derived($appConfig.completedTodosExpanded === true);
 
   let addingType = $state<InboxItemType | null>(null);
+  let prefillTitle = $state('');
+  let prefillFile = $state<File | undefined>(undefined);
   let showMoveMenu = $state(false);
+
+  // References capture bar — mirrors the inbox, but everything it creates is
+  // filed into this collection.
+  async function handleCapture(raw: string) {
+    let res: Awaited<ReturnType<typeof captureDetected>>;
+    try {
+      res = await captureDetected(raw, collection.id);
+    } catch (error) {
+      // e.g. the collection was deleted from another device mid-capture.
+      console.error('Failed to capture into collection', error);
+      showToast("Couldn't save — this collection is no longer available.");
+      return;
+    }
+    if (!res) return;
+    const label = res.item.type === 'bookmark' ? 'Saved bookmark' : 'Saved note';
+    showToast(label, {
+      label: 'Undo',
+      run: () => {
+        void deleteItem(res.item.id, res.item);
+      },
+    });
+  }
+
+  function handleOpenEditor(text: string) {
+    prefillFile = undefined;
+    prefillTitle = text;
+    addingType = 'note';
+  }
+
+  function handleCaptureFile(file: File) {
+    prefillTitle = '';
+    prefillFile = file;
+    addingType = file.type.startsWith('image/') ? 'image' : 'document';
+  }
+
+  function handleRecord() {
+    prefillTitle = '';
+    prefillFile = undefined;
+    addingType = 'audio';
+  }
+
   let moveButtonEl = $state<HTMLButtonElement>();
   let menuPos = $state({ top: 0, right: 0 });
 
@@ -205,14 +251,14 @@
       <section class="todos-section" aria-label="Todos in {collection.name}">
         <div class="section-header">
           <h4>Todos</h4>
-          <button type="button" class="btn-inline" onclick={() => addingType = 'todo'} title="Add todo" aria-label="Add todo to {collection.name}">
-            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-            Add
-          </button>
         </div>
+        <!-- Same quick-add as the Todos page, filing into this collection (no
+             collection select needed — it's fixed). ⌘↵ opens the full modal. -->
+        <TodoQuickAdd
+          compact
+          fixedCollectionId={collection.id}
+          onopenmodal={(t) => { prefillTitle = t; addingType = 'todo'; }}
+        />
 
         {#if dndOpen.length > 0}
           <ul
@@ -263,11 +309,16 @@
       <section class="references-section" aria-label="References in {collection.name}">
         <div class="section-header">
           <h4>References</h4>
-          <!-- Omit 'todo' — the Todos section above owns that flow, and
-               keeping it here would give two disagreeing entry points in
-               the same view. -->
-          <AddEntryBar onadd={(type) => addingType = type} excludeTypes={['todo']} />
         </div>
+        <!-- Same capture input as the inbox; everything it creates is filed
+             into this collection. Todos have their own section above, so
+             ⌘↵ here opens the note editor (not a todo). -->
+        <CaptureBar
+          oncapture={handleCapture}
+          onopeneditor={handleOpenEditor}
+          onfile={handleCaptureFile}
+          onrecord={handleRecord}
+        />
 
         {#if referenceItems.length > 0}
           <div class="grid">
@@ -296,8 +347,10 @@
   <AddEntryModal
     type={addingType}
     collectionId={collection.id}
-    onclose={() => addingType = null}
-    ondelete={async (item) => { await deleteItem(item.id, item); addingType = null; }}
+    {prefillTitle}
+    {prefillFile}
+    onclose={() => { addingType = null; prefillTitle = ''; prefillFile = undefined; }}
+    ondelete={async (item) => { await deleteItem(item.id, item); addingType = null; prefillTitle = ''; prefillFile = undefined; }}
   />
 {/if}
 
@@ -578,16 +631,9 @@
     flex-shrink: 0;
   }
 
-  /* The references header hosts the AddEntryBar directly — give it room to
-     shrink with horizontal scroll so a long button strip doesn't break the
-     layout on narrow screens. */
-  .references-section .section-header {
-    gap: 0.5rem;
-  }
-
-  .references-section .section-header :global(.add-strip) {
-    min-width: 0;
-    flex-shrink: 1;
+  /* Capture bar sits below the References header; give it room above the grid. */
+  .references-section :global(.capture) {
+    margin-bottom: 0.75rem;
   }
 
   .section-empty {
@@ -597,24 +643,10 @@
     opacity: 0.75;
   }
 
-  .btn-inline {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    background: none;
-    border: 1px dashed var(--border);
-    border-radius: var(--radius-sm);
-    color: var(--text-muted);
-    font-size: 0.75rem;
-    padding: 0.25rem 0.55rem;
-    cursor: pointer;
-    transition: color 150ms, border-color 150ms;
-    flex-shrink: 0;
-  }
-
-  .btn-inline:hover {
-    color: var(--accent);
-    border-color: var(--accent);
+  /* Inline quick-add (todos) + capture bar (references) sit below their section
+     headers; give them room before the list/grid that follows. */
+  .todos-section :global(.quick-add) {
+    margin-bottom: 0.6rem;
   }
 
   .todo-list {

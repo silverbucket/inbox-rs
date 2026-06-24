@@ -81,7 +81,11 @@ export function shouldSubmitAddEntryForm(
 }
 
 /** Props the MarkdownEditor lazy-loaded component expects. */
-export type MarkdownEditorProps = { value: string; placeholder?: string };
+export type MarkdownEditorProps = {
+  value: string;
+  placeholder?: string;
+  focusOnMount?: boolean;
+};
 
 export async function loadMarkdownEditorComponent(): Promise<
   Component<MarkdownEditorProps>

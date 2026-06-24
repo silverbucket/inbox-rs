@@ -6,10 +6,12 @@
 
   let {
     editItem,
+    prefillFile = undefined,
     canSubmit = $bindable(false),
     buildItem = $bindable(),
   }: {
     editItem?: InboxItem;
+    prefillFile?: File;
     canSubmit?: boolean;
     buildItem?: BuildItemFn;
   } = $props();
@@ -22,7 +24,9 @@
 
   let title = $state(editItem?.title ?? '');
   let description = $state(editItem?.description ?? '');
-  let file = $state<File | null>(null);
+  // Seed from a file already chosen in the capture bar's picker (the native
+  // input can't be set programmatically — the name is shown below instead).
+  let file = $state<File | null>(prefillFile ?? null);
 
   $effect(() => {
     canSubmit = !!file || hasExistingFile;
@@ -41,7 +45,10 @@
 </script>
 
 <label class="field">
-  <span>{hasExistingFile ? 'Replace file' : 'File *'}</span>
+  <span>{file || hasExistingFile ? 'Replace file' : 'File *'}</span>
+  {#if file}
+    <span class="picked">{file.name}</span>
+  {/if}
   <input type="file" onchange={handleFileChange} />
 </label>
 <label class="field">
