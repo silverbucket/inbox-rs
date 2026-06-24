@@ -102,8 +102,7 @@ export function pageUsesFilters(page: Page): boolean {
 
 /**
  * Update the URL hash without adding a browser history entry.
- * Swipe-back / the Back button then leave the app instead of stepping
- * through prior in-app pages.
+ * Used when filter pills change so toggling filters does not spam history.
  */
 export function replaceRouteHash(hash: string): void {
   if (window.location.hash !== hash) {

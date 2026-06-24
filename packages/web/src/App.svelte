@@ -20,6 +20,7 @@
   import { captureDetected } from './lib/capture';
   import { showToast } from './lib/toast';
   import { parseHash, formatRoute, pageUsesFilters, replaceRouteHash, type Page, type Route } from './lib/route';
+  import { OverlayStack, type OverlayKind } from './lib/overlay-history';
 
   type LazyComponent = Component<Record<string, unknown>>;
 
@@ -60,6 +61,59 @@
   });
 
   let route = $state<Route>(parseHash(window.location.hash));
+
+  function resetOverlayState() {
+    activeModal = null;
+    editingItem = undefined;
+    viewingItem = null;
+    showCollectionForm = false;
+    showGroupForm = false;
+    captureSheetOpen = false;
+    preselectedCollectionId = undefined;
+    notePrefillTitle = '';
+    prefillFile = undefined;
+  }
+
+  function dismissOverlay(kind: OverlayKind) {
+    switch (kind) {
+      case 'capture-sheet':
+        captureSheetOpen = false;
+        break;
+      case 'view-card':
+        viewingItem = null;
+        break;
+      case 'add-entry':
+        activeModal = null;
+        editingItem = undefined;
+        preselectedCollectionId = undefined;
+        notePrefillTitle = '';
+        prefillFile = undefined;
+        break;
+      case 'collection-form':
+        showCollectionForm = false;
+        break;
+      case 'group-form':
+        showGroupForm = false;
+        break;
+    }
+  }
+
+  const overlayStack = new OverlayStack({ dismiss: dismissOverlay });
+
+  function ensureCaptureSheetClosed() {
+    if (!captureSheetOpen) return;
+    captureSheetOpen = false;
+    overlayStack.drop('capture-sheet');
+  }
+
+  function requestOverlayClose() {
+    overlayStack.requestClose();
+  }
+
+  function openCaptureSheet() {
+    captureSheetOpen = true;
+    overlayStack.open('capture-sheet');
+  }
 
   async function loadAddEntryModal() {
     AddEntryModalComponent ??= (await import('./components/AddEntryModal.svelte')).default as LazyComponent;
@@ -123,16 +177,25 @@
       route = parseHash(window.location.hash);
     };
     syncRoute();
+
+    const onPopstate = () => {
+      if (overlayStack.handlePopstate()) return;
+      syncRoute();
+    };
+
+    window.addEventListener('popstate', onPopstate);
     window.addEventListener('hashchange', syncRoute);
-    return () => window.removeEventListener('hashchange', syncRoute);
+    return () => {
+      window.removeEventListener('popstate', onPopstate);
+      window.removeEventListener('hashchange', syncRoute);
+    };
   });
 
-  // Close modals when navigating
+  // Close overlays when navigating between pages.
   $effect(() => {
     void route.page;
-    activeModal = null;
-    editingItem = undefined;
-    viewingItem = null;
+    overlayStack.abandonAll();
+    resetOverlayState();
   });
 
   $effect(() => {
@@ -193,8 +256,7 @@
       : { page };
     const hash = formatRoute(target);
     if (window.location.hash !== hash) {
-      replaceRouteHash(hash);
-      route = target;
+      window.location.hash = hash;
     }
   }
 
@@ -203,8 +265,9 @@
     preselectedCollectionId = undefined;
     notePrefillTitle = '';
     prefillFile = undefined;
-    captureSheetOpen = false;
+    ensureCaptureSheetClosed();
     activeModal = type;
+    overlayStack.open('add-entry');
     void loadAddEntryModal();
   }
 
@@ -228,10 +291,11 @@
     editingItem = undefined;
     preselectedCollectionId = undefined;
     prefillFile = undefined;
-    captureSheetOpen = false;
+    ensureCaptureSheetClosed();
     // The typed text becomes the note title; the editor focuses the body.
     notePrefillTitle = text;
     activeModal = 'note';
+    overlayStack.open('add-entry');
     void loadAddEntryModal();
   }
 
@@ -242,8 +306,9 @@
     preselectedCollectionId = undefined;
     notePrefillTitle = '';
     prefillFile = file;
-    captureSheetOpen = false;
+    ensureCaptureSheetClosed();
     activeModal = file.type.startsWith('image/') ? 'image' : 'document';
+    overlayStack.open('add-entry');
     void loadAddEntryModal();
   }
 
@@ -258,9 +323,10 @@
     editingItem = undefined;
     preselectedCollectionId = collectionId;
     prefillFile = undefined;
-    captureSheetOpen = false;
+    ensureCaptureSheetClosed();
     notePrefillTitle = prefillTitle;
     activeModal = 'todo';
+    overlayStack.open('add-entry');
     void loadAddEntryModal();
   }
 
@@ -271,33 +337,31 @@
     editingItem = undefined;
     preselectedCollectionId = collectionId;
     prefillFile = undefined;
-    captureSheetOpen = false;
+    ensureCaptureSheetClosed();
     notePrefillTitle = '';
     activeModal = 'todo';
+    overlayStack.open('add-entry');
     void loadAddEntryModal();
   }
 
   function openView(item: InboxItem) {
     viewingItem = item;
+    overlayStack.open('view-card');
     void loadViewCardModal();
   }
 
   function openEditFromView(item: InboxItem) {
-    viewingItem = null;
     editingItem = item;
     activeModal = item.type;
+    overlayStack.open('add-entry');
   }
 
   function closeViewModal() {
-    viewingItem = null;
+    requestOverlayClose();
   }
 
   function closeModal() {
-    activeModal = null;
-    editingItem = undefined;
-    preselectedCollectionId = undefined;
-    notePrefillTitle = '';
-    prefillFile = undefined;
+    requestOverlayClose();
   }
 
   function openConnectMenu() {
@@ -307,7 +371,7 @@
   async function handleCreateCollection(col: Collection) {
     try {
       await createCollection(col);
-      showCollectionForm = false;
+      requestOverlayClose();
     } catch (error) {
       console.error('Failed to create collection', error);
     }
@@ -316,7 +380,7 @@
   async function handleCreateGroup(group: CollectionGroup) {
     try {
       await storeGroup(group);
-      showGroupForm = false;
+      requestOverlayClose();
     } catch (error) {
       console.error('Failed to create group', error);
     }
@@ -324,6 +388,7 @@
 
   function openGroupForm() {
     showGroupForm = true;
+    overlayStack.open('group-form');
     void loadGroupFormModal();
   }
 
@@ -350,7 +415,7 @@
                Existing notes can still be converted via `makeTodo` when the
                user is ready to commit. -->
           {#if isTouch}
-            <button class="capture-trigger" type="button" onclick={() => (captureSheetOpen = true)}>
+            <button class="capture-trigger" type="button" onclick={openCaptureSheet}>
               Paste a link, jot a note, or drop a file…
             </button>
           {:else}
@@ -376,7 +441,7 @@
     {/if}
 </ClassicShell>
 
-{#if viewingItem}
+{#if viewingItem && !activeModal}
   {#if ViewCardModalComponent}
     <ViewCardModalComponent item={viewingItem} onclose={closeViewModal} onedit={openEditFromView} />
   {/if}
@@ -398,13 +463,13 @@
 
 {#if showCollectionForm}
   {#if CollectionFormModalComponent}
-    <CollectionFormModalComponent onclose={() => showCollectionForm = false} onsave={handleCreateCollection} />
+    <CollectionFormModalComponent onclose={requestOverlayClose} onsave={handleCreateCollection} />
   {/if}
 {/if}
 
 {#if showGroupForm}
   {#if GroupFormModalComponent}
-    <GroupFormModalComponent onclose={() => showGroupForm = false} onsave={handleCreateGroup} />
+    <GroupFormModalComponent onclose={requestOverlayClose} onsave={handleCreateGroup} />
   {/if}
 {/if}
 
@@ -413,7 +478,7 @@
     oncapture={handleQuickCapture}
     onfile={handleFile}
     onrecord={handleRecord}
-    onclose={() => (captureSheetOpen = false)}
+    onclose={requestOverlayClose}
   />
 {/if}
 <Toast />
