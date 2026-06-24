@@ -400,12 +400,14 @@
 
   .quick-hint {
     display: flex;
-    justify-content: center;
     gap: 0.5rem;
     align-items: center;
     /* Fixed height so the hint appearing on focus never shifts content. */
-    min-height: 1.5rem;
-    margin-top: 0.35rem;
+    min-height: 1.4rem;
+    margin-top: 0.2rem;
+    /* Left-align under the input's text (matches the input's horizontal
+       padding) so the hint sits beneath what you're typing, not centered. */
+    padding-left: 0.9rem;
     font-size: 0.78rem;
     color: var(--text-muted);
   }
