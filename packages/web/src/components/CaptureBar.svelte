@@ -147,8 +147,11 @@
     display: flex; gap: 0.5rem; align-items: center;
     /* Fixed height reserves the space permanently — the hint fading in on
        focus must not push content below. */
-    min-height: 1.5rem;
-    padding: 0.35rem 0.6rem 0;
+    min-height: 1.4rem;
+    /* Left-align the hint to where the input text starts (past the ⊕ button),
+       so it sits directly under what you're typing rather than at the bar edge.
+       = bar padding-left + plus button width + bar gap. */
+    padding: 0.2rem 0.6rem 0 calc(0.75rem + 30px + 0.6rem);
     font-size: 0.78rem; color: var(--text-muted);
   }
   .hint .sep { opacity: 0.4; }
