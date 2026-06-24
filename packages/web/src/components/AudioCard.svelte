@@ -8,6 +8,16 @@
 
   const audioSrc = $derived($blobUrls[item.filePath] || null);
 
+  // If the source disappears (store revokes the blob URL), drop the stale
+  // element reference and reset playback so the UI doesn't show a pause icon
+  // on the now-disabled button.
+  $effect(() => {
+    if (!audioSrc) {
+      audioEl = null;
+      playing = false;
+    }
+  });
+
   // Load audio bytes. loadFileBlobUrl fetches from the remote when connected
   // and the local cache otherwise, so files captured via the capture app still
   // play. Pass mimeType so the blob is tagged with the clean type from item
