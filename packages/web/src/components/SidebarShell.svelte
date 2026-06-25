@@ -12,7 +12,9 @@
     inactiveCollectionIds,
     toggleGroupFilter,
     toggleCollectionFilter,
+    moveItemToCollection,
   } from '../lib/stores';
+  import { draggingItemId, DRAG_MIME } from '../lib/drag';
 
   let {
     route,
@@ -91,6 +93,35 @@
       await toggleCollectionFilter(col.id);
     } catch (error) {
       console.error('Failed to toggle collection filter', error);
+    }
+  }
+
+  // ── Drag an inbox item onto a collection to file it there. Groups are not
+  // drop targets; collections accept drops even while switched off. ──
+  let dragOverColId = $state<string | null>(null);
+  const dragging = $derived($draggingItemId !== null);
+
+  function onColDragOver(e: DragEvent, col: Collection) {
+    if (!dragging) return; // ignore unrelated drags
+    e.preventDefault(); // allow the drop
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    dragOverColId = col.id;
+  }
+
+  function onColDragLeave(col: Collection) {
+    if (dragOverColId === col.id) dragOverColId = null;
+  }
+
+  async function onColDrop(e: DragEvent, col: Collection) {
+    e.preventDefault();
+    dragOverColId = null;
+    const id = e.dataTransfer?.getData(DRAG_MIME) ?? '';
+    draggingItemId.set(null);
+    if (!id) return;
+    try {
+      await moveItemToCollection(id, col.id);
+    } catch (error) {
+      console.error('Failed to assign item to collection', error);
     }
   }
 </script>
@@ -218,11 +249,16 @@
                         <button
                           class="entity collection-entity"
                           class:inactive={!colActive}
+                          class:drop-target={dragging}
+                          class:drop-over={dragOverColId === col.id}
                           type="button"
                           style="--entity-color: {col.color || group.color || 'var(--accent)'}"
                           aria-pressed={colActive}
                           title={colActive ? `Hide ${col.name}` : `Show ${col.name}`}
                           onclick={() => onToggleCollection(col)}
+                          ondragover={(e) => onColDragOver(e, col)}
+                          ondragleave={() => onColDragLeave(col)}
+                          ondrop={(e) => onColDrop(e, col)}
                         >
                           <span class="dot"></span>
                           <span class="entity-name">{col.name}</span>
@@ -551,6 +587,22 @@
 
   .entity.inactive {
     opacity: 0.45;
+  }
+
+  /* While dragging an item, every collection is a valid drop target — show a
+     dashed ring and restore full opacity (a switched-off collection can still
+     receive a drop). The one under the cursor fills with its colour. */
+  .collection-entity.drop-target {
+    opacity: 1;
+    outline: 1px dashed
+      color-mix(in srgb, var(--entity-color) 55%, var(--border));
+    outline-offset: -1px;
+  }
+
+  .collection-entity.drop-over {
+    background: color-mix(in srgb, var(--entity-color) 22%, var(--surface));
+    outline-style: solid;
+    outline-color: var(--entity-color);
   }
 
   .dot {
