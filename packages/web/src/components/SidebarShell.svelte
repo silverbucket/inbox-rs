@@ -1,10 +1,12 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { get } from 'svelte/store';
   import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
   import UserMenu from './UserMenu.svelte';
   import LogoShield from './LogoShield.svelte';
   import type { Page, Route } from '../lib/route';
   import { appVersion } from '../lib/plugin-downloads.generated';
+  import { autofocus } from '../lib/actions';
   import {
     sortedGroups,
     groupCollections,
@@ -13,8 +15,12 @@
     toggleGroupFilter,
     toggleCollectionFilter,
     moveItemToCollection,
+    createCollection,
+    storeGroup,
+    items,
   } from '../lib/stores';
   import { draggingItemId, DRAG_MIME } from '../lib/drag';
+  import { showToast } from '../lib/toast';
 
   let {
     route,
@@ -32,15 +38,26 @@
     children: Snippet;
   } = $props();
 
-  // Whole-sidebar collapse (rail vs expanded). Local + device-persisted.
   let collapsed = $state(readCollapsed());
-  // Per-group expand/collapse of the collection list underneath each group.
   let expandedGroups = $state<Set<string>>(new Set());
+
+  // Inline creation state — no modal, no page switch.
+  let addingCollectionFor = $state<string | null>(null);
+  let newCollectionName = $state('');
+  let addingGroup = $state(false);
+  let newGroupName = $state('');
+
+  // Drag-to-file state.
+  let dragOverColId = $state<string | null>(null);
+  let justFiledColId = $state<string | null>(null);
+  let springGroupId: string | null = null;
+  let springTimer: ReturnType<typeof setTimeout> | null = null;
 
   const groups = $derived($sortedGroups);
   const grouped = $derived($groupCollections);
   const activeGroups = $derived($activeGroupIds);
   const inactiveCols = $derived($inactiveCollectionIds);
+  const dragging = $derived($draggingItemId !== null);
 
   function readCollapsed(): boolean {
     try {
@@ -66,6 +83,11 @@
     expandedGroups = next;
   }
 
+  function expandGroup(id: string) {
+    if (expandedGroups.has(id)) return;
+    expandedGroups = new Set(expandedGroups).add(id);
+  }
+
   function isActive(page: Page): boolean {
     return route.page === page;
   }
@@ -74,10 +96,15 @@
     return activeGroups.has(group.id);
   }
 
-  // A collection is "on" when its own switch is on AND its group is active.
-  // Toggling the switch only flips the collection's own deny-list entry.
   function isCollectionActive(group: CollectionGroup, col: Collection): boolean {
     return activeGroups.has(group.id) && !inactiveCols.has(col.id);
+  }
+
+  function groupCount(group: CollectionGroup): number {
+    return (grouped[group.id] ?? []).reduce(
+      (n, c) => n + c.itemIds.length,
+      0,
+    );
   }
 
   async function onToggleGroup(group: CollectionGroup) {
@@ -96,14 +123,70 @@
     }
   }
 
-  // ── Drag an inbox item onto a collection to file it there. Groups are not
-  // drop targets; collections accept drops even while switched off. ──
-  let dragOverColId = $state<string | null>(null);
-  const dragging = $derived($draggingItemId !== null);
+  // ── Inline collection creation ──────────────────────────────────────────
+  function startAddCollection(group: CollectionGroup) {
+    expandGroup(group.id);
+    newCollectionName = '';
+    addingCollectionFor = group.id;
+  }
 
+  function cancelAddCollection() {
+    addingCollectionFor = null;
+    newCollectionName = '';
+  }
+
+  async function submitCollection(group: CollectionGroup) {
+    const name = newCollectionName.trim();
+    if (!name) return;
+    try {
+      await createCollection({
+        id: crypto.randomUUID(),
+        name,
+        itemIds: [],
+        createdAt: new Date().toISOString(),
+        color: group.color || '#6366f1',
+        groupId: group.id,
+      });
+      // Keep the field open + cleared so several can be added in a row.
+      newCollectionName = '';
+    } catch (error) {
+      console.error('Failed to create collection', error);
+    }
+  }
+
+  // ── Inline group creation ───────────────────────────────────────────────
+  function startAddGroup() {
+    newGroupName = '';
+    addingGroup = true;
+  }
+
+  function cancelAddGroup() {
+    addingGroup = false;
+    newGroupName = '';
+  }
+
+  async function submitGroup() {
+    const name = newGroupName.trim();
+    if (!name) return;
+    try {
+      await storeGroup({
+        id: crypto.randomUUID(),
+        name,
+        collectionIds: [],
+        createdAt: new Date().toISOString(),
+        color: '#6366f1',
+      });
+      newGroupName = '';
+      addingGroup = false;
+    } catch (error) {
+      console.error('Failed to create group', error);
+    }
+  }
+
+  // ── Drag an inbox item onto a collection to file it ──────────────────────
   function onColDragOver(e: DragEvent, col: Collection) {
-    if (!dragging) return; // ignore unrelated drags
-    e.preventDefault(); // allow the drop
+    if (!dragging) return;
+    e.preventDefault();
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
     dragOverColId = col.id;
   }
@@ -115,14 +198,52 @@
   async function onColDrop(e: DragEvent, col: Collection) {
     e.preventDefault();
     dragOverColId = null;
+    clearSpring();
     const id = e.dataTransfer?.getData(DRAG_MIME) ?? '';
     draggingItemId.set(null);
     if (!id) return;
+    const previousCollectionId = get(items)[id]?.collectionId;
     try {
       await moveItemToCollection(id, col.id);
+      justFiledColId = col.id;
+      setTimeout(() => {
+        if (justFiledColId === col.id) justFiledColId = null;
+      }, 1000);
+      showToast(`Filed in ${col.name}`, {
+        label: 'Undo',
+        run: () => {
+          void moveItemToCollection(id, previousCollectionId).catch(() => {
+            showToast("Couldn't undo — open the item to move it.");
+          });
+        },
+      });
     } catch (error) {
       console.error('Failed to assign item to collection', error);
     }
+  }
+
+  // Spring-loaded groups: hovering a dragged item over a collapsed group
+  // auto-expands it after a beat so you can reach a nested collection without
+  // opening it first. Groups themselves are never drop targets.
+  function clearSpring() {
+    if (springTimer) clearTimeout(springTimer);
+    springTimer = null;
+    springGroupId = null;
+  }
+
+  function onGroupDragOver(group: CollectionGroup) {
+    if (!dragging || expandedGroups.has(group.id)) return;
+    if (springGroupId === group.id) return;
+    clearSpring();
+    springGroupId = group.id;
+    springTimer = setTimeout(() => {
+      expandGroup(group.id);
+      clearSpring();
+    }, 550);
+  }
+
+  function onGroupDragLeave(group: CollectionGroup) {
+    if (springGroupId === group.id) clearSpring();
   }
 </script>
 
@@ -177,33 +298,52 @@
 
 <div class="body" class:sidebar-collapsed={collapsed}>
   {#if route.page !== 'plugins'}
-    <aside class="sidebar" class:collapsed aria-label="Groups and collections">
+    <aside class="sidebar" class:collapsed class:dragging aria-label="Groups and collections">
       {#if collapsed}
-        <button
-          class="rail-expand"
-          type="button"
-          aria-label="Expand sidebar"
-          title="Expand sidebar"
-          onclick={toggleCollapsed}
-        >
-          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </button>
+        <div class="rail">
+          <button
+            class="rail-expand"
+            type="button"
+            aria-label="Expand sidebar"
+            title="Expand sidebar"
+            onclick={toggleCollapsed}
+          >
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+          {#each groups as group (group.id)}
+            {@const groupActive = isGroupActive(group)}
+            <button
+              class="rail-dot"
+              class:inactive={!groupActive}
+              type="button"
+              style="--entity-color: {group.color || 'var(--accent)'}"
+              aria-pressed={groupActive}
+              title={groupActive ? `Hide ${group.name}` : `Show ${group.name}`}
+              onclick={() => onToggleGroup(group)}
+            >
+              <span class="dot"></span>
+            </button>
+          {/each}
+        </div>
       {:else}
+        {#if dragging}
+          <div class="filing">Filing mode — drop on a collection</div>
+        {/if}
         <div class="sidebar-head">
           <span class="sidebar-title">Groups</span>
           <button
-            class="add-group"
+            class="add-group-btn"
             type="button"
-            onclick={onaddgroup}
-            title="Create new group"
-            aria-label="Create new group"
+            onclick={startAddGroup}
+            title="New group"
+            aria-label="New group"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
         </div>
 
-        {#if groups.length === 0}
-          <button type="button" class="empty-cta" onclick={onaddgroup}>
+        {#if groups.length === 0 && !addingGroup}
+          <button type="button" class="empty-cta" onclick={startAddGroup}>
             <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Create your first group
           </button>
@@ -214,7 +354,12 @@
               {@const groupActive = isGroupActive(group)}
               {@const groupOpen = expandedGroups.has(group.id)}
               <div class="group">
-                <div class="group-row">
+                <div
+                  class="group-row"
+                  role="presentation"
+                  ondragover={() => onGroupDragOver(group)}
+                  ondragleave={() => onGroupDragLeave(group)}
+                >
                   <button
                     class="chevron"
                     type="button"
@@ -236,12 +381,22 @@
                   >
                     <span class="dot"></span>
                     <span class="entity-name">{group.name}</span>
+                    <span class="count">{groupCount(group)}</span>
+                  </button>
+                  <button
+                    class="row-add"
+                    type="button"
+                    title={`Add collection to ${group.name}`}
+                    aria-label={`Add collection to ${group.name}`}
+                    onclick={() => startAddCollection(group)}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   </button>
                 </div>
 
                 {#if groupOpen}
                   <div class="collections">
-                    {#if cols.length === 0}
+                    {#if cols.length === 0 && addingCollectionFor !== group.id}
                       <p class="collections-empty">No collections</p>
                     {:else}
                       {#each cols as col (col.id)}
@@ -251,6 +406,7 @@
                           class:inactive={!colActive}
                           class:drop-target={dragging}
                           class:drop-over={dragOverColId === col.id}
+                          class:just-filed={justFiledColId === col.id}
                           type="button"
                           style="--entity-color: {col.color || group.color || 'var(--accent)'}"
                           aria-pressed={colActive}
@@ -262,13 +418,54 @@
                         >
                           <span class="dot"></span>
                           <span class="entity-name">{col.name}</span>
+                          <span class="drop-label">File here</span>
+                          <span class="count">{col.itemIds.length}</span>
                         </button>
                       {/each}
+                    {/if}
+
+                    {#if addingCollectionFor === group.id}
+                      <div class="inline-add">
+                        <span class="dot" style="background: var(--text-muted)"></span>
+                        <input
+                          use:autofocus
+                          bind:value={newCollectionName}
+                          placeholder="Name a collection…"
+                          onkeydown={(e) => {
+                            if (e.key === 'Enter') { e.preventDefault(); void submitCollection(group); }
+                            else if (e.key === 'Escape') { e.preventDefault(); cancelAddCollection(); }
+                          }}
+                          onblur={cancelAddCollection}
+                        />
+                        <span class="inline-hint">↵ add · esc</span>
+                      </div>
                     {/if}
                   </div>
                 {/if}
               </div>
             {/each}
+
+            {#if addingGroup}
+              <div class="inline-add inline-add--group">
+                <span class="dot" style="background: var(--text-muted)"></span>
+                <input
+                  use:autofocus
+                  bind:value={newGroupName}
+                  placeholder="Name a group…"
+                  onkeydown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); void submitGroup(); }
+                    else if (e.key === 'Escape') { e.preventDefault(); cancelAddGroup(); }
+                  }}
+                  onblur={cancelAddGroup}
+                />
+                <span class="inline-hint">↵ add · esc</span>
+              </div>
+            {:else}
+              <button type="button" class="new-group" onclick={startAddGroup}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                New group
+              </button>
+            {/if}
           </div>
         {/if}
       {/if}
@@ -310,7 +507,7 @@
     border: 0;
   }
 
-  /* ── Header (same vocabulary as ClassicShell, minus the filter row) ── */
+  /* ── Header ── */
   header {
     position: sticky;
     top: 0;
@@ -439,12 +636,12 @@
     width: 100%;
     flex: 1;
     display: grid;
-    grid-template-columns: 248px minmax(0, 1fr);
+    grid-template-columns: 268px minmax(0, 1fr);
     align-items: start;
   }
 
   .body.sidebar-collapsed {
-    grid-template-columns: 56px minmax(0, 1fr);
+    grid-template-columns: 60px minmax(0, 1fr);
   }
 
   /* ── Sidebar ── */
@@ -452,15 +649,25 @@
     position: sticky;
     top: 70px;
     align-self: start;
-    padding: 1.25rem 0.75rem 1.25rem 1.25rem;
+    padding: 1rem 0.65rem 1rem 1rem;
     border-right: 1px solid var(--border);
     min-height: calc(100vh - 70px);
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent) 3%, var(--bg)),
+      var(--bg)
+    );
   }
 
   .sidebar.collapsed {
-    padding: 1rem 0.5rem;
+    padding: 0.85rem 0.5rem;
+  }
+
+  .rail {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
   }
 
   .rail-expand {
@@ -469,6 +676,7 @@
     justify-content: center;
     width: 36px;
     height: 36px;
+    margin-bottom: 0.35rem;
     border: 1px solid var(--border);
     border-radius: 0.6rem;
     background: var(--surface);
@@ -481,69 +689,104 @@
     border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
   }
 
+  /* Collapsed rail: a group is a colour circle — full when active, faded when
+     switched off. Click to toggle, same as the expanded row. */
+  .rail-dot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    cursor: pointer;
+    transition: background 150ms;
+  }
+
+  .rail-dot:hover {
+    background: var(--surface-hover);
+  }
+
+  .filing {
+    margin: 0 0.25rem 0.5rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: 0.5rem;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+
   .sidebar-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 0.75rem;
+    padding: 0 0.25rem;
+    margin-bottom: 0.5rem;
   }
 
   .sidebar-title {
-    font-size: 0.72rem;
-    font-weight: 700;
+    font-size: 0.68rem;
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
     color: var(--text-muted);
   }
 
-  .add-group {
+  .add-group-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 26px;
-    height: 26px;
+    width: 24px;
+    height: 24px;
     flex-shrink: 0;
     border-radius: 999px;
-    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border) 65%);
-    background: color-mix(in srgb, var(--accent) 10%, var(--surface) 90%);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border) 70%);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
     color: var(--accent);
     cursor: pointer;
-    transition: background 150ms, border-color 150ms, transform 150ms;
+    transition: background 150ms, transform 150ms;
   }
 
-  .add-group:hover {
-    background: color-mix(in srgb, var(--accent) 22%, var(--surface) 78%);
-    border-color: var(--accent);
+  .add-group-btn:hover {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
     transform: scale(1.05);
   }
 
   .groups {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
+    gap: 0.05rem;
   }
 
   .group-row {
     display: flex;
     align-items: center;
-    gap: 0.1rem;
+    gap: 0.05rem;
+    border-radius: 0.5rem;
+  }
+
+  .group-row:hover {
+    background: var(--surface-hover);
   }
 
   .chevron {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
+    width: 20px;
     height: 28px;
     flex-shrink: 0;
     border: none;
     background: none;
     color: var(--text-muted);
     cursor: pointer;
+    border-radius: 6px;
   }
 
   .chevron svg {
-    transition: transform 150ms ease;
+    transition: transform 160ms ease;
   }
 
   .chevron:disabled {
@@ -551,7 +794,6 @@
     cursor: default;
   }
 
-  /* Shared toggle pill for both groups and collections. */
   .entity {
     flex: 1 1 auto;
     min-width: 0;
@@ -559,9 +801,9 @@
     align-items: center;
     gap: 0.5rem;
     min-height: 1.9rem;
-    padding: 0 0.6rem;
+    padding: 0 0.55rem;
     border: 1px solid transparent;
-    border-radius: 0.55rem;
+    border-radius: 0.5rem;
     background: none;
     color: var(--text);
     font-size: 0.9rem;
@@ -572,7 +814,7 @@
   }
 
   .entity:hover {
-    background: var(--surface-hover, color-mix(in srgb, var(--surface) 70%, var(--bg)));
+    background: var(--surface-hover);
   }
 
   .group-entity {
@@ -582,27 +824,11 @@
   .collection-entity {
     font-weight: 500;
     font-size: 0.86rem;
-    margin-left: 1.4rem;
+    margin-left: 1.55rem;
   }
 
   .entity.inactive {
-    opacity: 0.45;
-  }
-
-  /* While dragging an item, every collection is a valid drop target — show a
-     dashed ring and restore full opacity (a switched-off collection can still
-     receive a drop). The one under the cursor fills with its colour. */
-  .collection-entity.drop-target {
-    opacity: 1;
-    outline: 1px dashed
-      color-mix(in srgb, var(--entity-color) 55%, var(--border));
-    outline-offset: -1px;
-  }
-
-  .collection-entity.drop-over {
-    background: color-mix(in srgb, var(--entity-color) 22%, var(--surface));
-    outline-style: solid;
-    outline-color: var(--entity-color);
+    opacity: 0.42;
   }
 
   .dot {
@@ -613,17 +839,70 @@
     flex-shrink: 0;
   }
 
+  /* Larger dot for the collapsed rail (declared after the base `.dot` so the
+     higher-specificity selector wins without a descending-specificity lint). */
+  .rail-dot .dot {
+    width: 14px;
+    height: 14px;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--entity-color) 18%, transparent);
+  }
+
+  .rail-dot.inactive .dot {
+    opacity: 0.35;
+    box-shadow: none;
+  }
+
   .entity-name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
+  .count {
+    margin-left: auto;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+
+  .group-entity .count {
+    background: var(--surface-hover);
+    border-radius: 999px;
+    padding: 0 0.4rem;
+  }
+
+  /* Reveal the per-group add button on hover only, to keep things quiet. */
+  .row-add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    border-radius: 6px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 150ms, color 150ms, background 150ms;
+  }
+
+  .group-row:hover .row-add,
+  .row-add:focus-visible {
+    opacity: 1;
+  }
+
+  .row-add:hover {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+
   .collections {
     display: flex;
     flex-direction: column;
-    gap: 0.1rem;
-    padding: 0.1rem 0 0.35rem;
+    gap: 0.05rem;
+    padding: 0.05rem 0 0.35rem;
   }
 
   .collections-empty {
@@ -632,6 +911,92 @@
     font-size: 0.8rem;
     color: var(--text-muted);
     font-style: italic;
+  }
+
+  /* ── Drag-to-file affordances ── */
+  .drop-label {
+    display: none;
+    margin-left: auto;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--entity-color);
+  }
+
+  .collection-entity.drop-target {
+    opacity: 1;
+    outline: 1px dashed
+      color-mix(in srgb, var(--entity-color) 55%, var(--border));
+    outline-offset: -1px;
+  }
+
+  .collection-entity.drop-over {
+    background: color-mix(in srgb, var(--entity-color) 20%, var(--surface));
+    outline: 2px solid var(--entity-color);
+    transform: translateX(2px) scale(1.015);
+    box-shadow: 0 4px 14px
+      color-mix(in srgb, var(--entity-color) 35%, transparent);
+  }
+
+  .collection-entity.drop-over .count {
+    display: none;
+  }
+
+  .collection-entity.drop-over .drop-label {
+    display: inline;
+  }
+
+  /* Group rows recede while filing, since you can only drop on collections. */
+  .sidebar.dragging .group-entity {
+    opacity: 0.5;
+  }
+
+  .collection-entity.just-filed {
+    animation: filed-pulse 1s ease;
+  }
+
+  @keyframes filed-pulse {
+    0% {
+      background: color-mix(in srgb, var(--entity-color) 35%, var(--surface));
+    }
+    100% {
+      background: none;
+    }
+  }
+
+  /* ── Inline create input ── */
+  .inline-add {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: 1.55rem;
+    margin-top: 0.1rem;
+    padding: 0.28rem 0.55rem;
+    border: 1px solid var(--accent);
+    border-radius: 0.5rem;
+    background: var(--surface);
+  }
+
+  .inline-add--group {
+    margin-left: 0;
+    margin-top: 0.5rem;
+  }
+
+  .inline-add input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: none;
+    /* Inherit the >=1rem body size — an explicit sub-1rem size would trip the
+       iOS Safari focus-zoom guard (see input-font-size.test.ts). */
+    font: inherit;
+    color: var(--text);
+  }
+
+  .inline-hint {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    white-space: nowrap;
   }
 
   .empty-cta {
@@ -653,6 +1018,28 @@
     border-color: var(--accent);
   }
 
+  .new-group {
+    margin-top: 0.6rem;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    border: 1px dashed var(--border);
+    border-radius: 0.5rem;
+    background: none;
+    color: var(--text-muted);
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 150ms, border-color 150ms;
+  }
+
+  .new-group:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
   /* ── Main ── */
   main {
     padding: 1.5rem;
@@ -663,7 +1050,6 @@
     gap: 1rem;
   }
 
-  /* ── Mobile: collapse the sidebar to a rail by default ── */
   @media (max-width: 768px) {
     .header-inner {
       flex-wrap: wrap;
@@ -688,7 +1074,7 @@
     }
   }
 
-  /* ── Footer (shared with ClassicShell vocabulary) ── */
+  /* ── Footer ── */
   .app-footer {
     border-top: 1px solid var(--border);
     margin-top: 2rem;
