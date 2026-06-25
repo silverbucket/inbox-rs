@@ -1050,6 +1050,9 @@
     gap: 1rem;
   }
 
+  /* Mobile: the sidebar stacks above the content and collapses *vertically* —
+     when collapsed it's hidden entirely (the header toggle re-opens it), rather
+     than shrinking to a side rail that makes no sense in a single column. */
   @media (max-width: 768px) {
     .header-inner {
       flex-wrap: wrap;
@@ -1066,7 +1069,12 @@
       min-height: 0;
       border-right: none;
       border-bottom: 1px solid var(--border);
-      padding: 0.75rem 1rem;
+      padding: 0.85rem 1rem;
+    }
+
+    /* Collapsed on mobile = fully hidden (vertical collapse), not a rail. */
+    .body.sidebar-collapsed .sidebar {
+      display: none;
     }
 
     main {

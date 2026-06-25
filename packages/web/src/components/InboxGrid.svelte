@@ -34,10 +34,12 @@
   </div>
 {:else}
   <div class="status-bar">You've got <span class="status-count">{items.length}</span> {items.length === 1 ? 'thing' : 'things'} waiting</div>
-  <div class="grid">
-    {#each items as item (item.id)}
-      <InboxCard {item} {onselect} />
-    {/each}
+  <div class="grid-wrap">
+    <div class="grid">
+      {#each items as item (item.id)}
+        <InboxCard {item} {onselect} />
+      {/each}
+    </div>
   </div>
 {/if}
 
@@ -67,6 +69,14 @@
     line-height: 1;
   }
 
+  /* Container (not viewport) queries: the masonry column count must track the
+     width actually available to the cards, which changes as the sidebar
+     expands/collapses — otherwise cards overflow (and get clipped by the
+     page's overflow-x:hidden, landing off-screen). */
+  .grid-wrap {
+    container-type: inline-size;
+  }
+
   .grid {
     column-count: 3;
     column-gap: 1rem;
@@ -77,11 +87,11 @@
     margin-bottom: 1rem;
   }
 
-  @media (max-width: 900px) {
+  @container (max-width: 760px) {
     .grid { column-count: 2; }
   }
 
-  @media (max-width: 550px) {
+  @container (max-width: 480px) {
     .grid { column-count: 1; }
   }
 
