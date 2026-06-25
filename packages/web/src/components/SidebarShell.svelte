@@ -1072,9 +1072,21 @@
       padding: 0.85rem 1rem;
     }
 
-    /* Collapsed on mobile = fully hidden (vertical collapse), not a rail. */
-    .body.sidebar-collapsed .sidebar {
-      display: none;
+    /* Collapsed on mobile: the rail runs horizontally across the top (same
+       group circles as the desktop rail, just laid left-to-right instead of
+       top-to-bottom). */
+    .sidebar.collapsed {
+      justify-content: flex-start;
+    }
+
+    .sidebar.collapsed .rail {
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .sidebar.collapsed .rail-expand {
+      margin-bottom: 0;
     }
 
     main {
