@@ -9,6 +9,7 @@
   import InboxGrid from './components/InboxGrid.svelte';
   import MigrationAlert from './components/MigrationAlert.svelte';
   import ClassicShell from './components/ClassicShell.svelte';
+  import SidebarShell from './components/SidebarShell.svelte';
   import CaptureBar from './components/CaptureBar.svelte';
   import CaptureSheet from './components/CaptureSheet.svelte';
   import Toast from './components/Toast.svelte';
@@ -20,6 +21,7 @@
   import { captureDetected } from './lib/capture';
   import { showToast } from './lib/toast';
   import { parseHash, formatRoute, pageUsesFilters, type Page, type Route } from './lib/route';
+  import { layout } from './lib/layout';
 
   type LazyComponent = Component<Record<string, unknown>>;
 
@@ -331,8 +333,7 @@
   const openTodoCount = $derived($openTodos.length);
 </script>
 
-<ClassicShell {route} {navTo} {openTodoCount} onaddgroup={openGroupForm} bind:userMenu>
-  {#snippet children()}
+{#snippet shellBody()}
     {#if route.page === 'plugins'}
       {#if PluginsPageComponent}
         <PluginsPageComponent />
@@ -374,8 +375,17 @@
         {/if}
       {/if}
     {/if}
-  {/snippet}
-</ClassicShell>
+{/snippet}
+
+{#if $layout === 'sidebar'}
+  <SidebarShell {route} {navTo} {openTodoCount} onaddgroup={openGroupForm} bind:userMenu>
+    {#snippet children()}{@render shellBody()}{/snippet}
+  </SidebarShell>
+{:else}
+  <ClassicShell {route} {navTo} {openTodoCount} onaddgroup={openGroupForm} bind:userMenu>
+    {#snippet children()}{@render shellBody()}{/snippet}
+  </ClassicShell>
+{/if}
 
 {#if viewingItem}
   {#if ViewCardModalComponent}

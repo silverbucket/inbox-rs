@@ -11,6 +11,7 @@
     applyAccent,
     isAccent,
   } from '../lib/theme';
+  import { layout, setLayoutPersisted } from '../lib/layout';
 
   type LazyComponent = Component<Record<string, unknown>>;
 
@@ -387,6 +388,37 @@
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
           </svg>
           Dark
+        </button>
+      </div>
+
+      <!-- Layout — device-local, opt-in sidebar shell -->
+      <div class="section-label">Layout</div>
+      <div class="theme-switcher" role="radiogroup" aria-label="Layout">
+        <button type="button"
+          class="theme-option"
+          class:active={$layout === 'classic'}
+          role="radio"
+          aria-checked={$layout === 'classic'}
+          onclick={() => setLayoutPersisted('classic')}
+        >
+          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+            <line x1="3" y1="9" x2="21" y2="9"></line>
+          </svg>
+          Classic
+        </button>
+        <button type="button"
+          class="theme-option"
+          class:active={$layout === 'sidebar'}
+          role="radio"
+          aria-checked={$layout === 'sidebar'}
+          onclick={() => setLayoutPersisted('sidebar')}
+        >
+          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+            <line x1="9" y1="4" x2="9" y2="20"></line>
+          </svg>
+          Sidebar
         </button>
       </div>
 

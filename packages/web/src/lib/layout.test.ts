@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
+import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getLayout, setLayout } from './layout';
+import { getLayout, layout, setLayout, setLayoutPersisted } from './layout';
 
 afterEach(() => {
   localStorage.clear();
@@ -42,5 +43,19 @@ describe('setLayout', () => {
       throw new DOMException('blocked', 'SecurityError');
     });
     expect(() => setLayout('sidebar')).not.toThrow();
+  });
+});
+
+describe('setLayoutPersisted', () => {
+  afterEach(() => setLayoutPersisted('classic'));
+
+  it('updates the reactive store and persists to storage', () => {
+    setLayoutPersisted('sidebar');
+    expect(get(layout)).toBe('sidebar');
+    expect(localStorage.getItem('inbox-rs:layout')).toBe('sidebar');
+
+    setLayoutPersisted('classic');
+    expect(get(layout)).toBe('classic');
+    expect(localStorage.getItem('inbox-rs:layout')).toBe('classic');
   });
 });

@@ -1306,9 +1306,21 @@ export const activeGroupIds = derived(
 );
 
 /**
+ * Collection IDs explicitly switched OFF in the sidebar layout (a deny-list).
+ * A collection is hidden when its id is here, independent of its group's
+ * active state. Stale ids (deleted collections) are harmless — views
+ * intersect this against real collections at read time.
+ */
+export const inactiveCollectionIds = derived(
+  appConfig,
+  ($config) => new Set($config.inactiveCollectionFilters ?? []),
+);
+
+/**
  * Group + collection bundle, in the configured group order, filtered by
  * activeGroupIds. Within each group, collections preserve the configured
- * order from groupCollections.
+ * order from groupCollections, minus any individually switched off via the
+ * sidebar (inactiveCollectionIds).
  *
  */
 export interface VisibleGroupSection {
@@ -1317,16 +1329,20 @@ export interface VisibleGroupSection {
 }
 
 export const visibleGroupedCollections = derived(
-  [sortedGroups, groupCollections, activeGroupIds],
+  [sortedGroups, groupCollections, activeGroupIds, inactiveCollectionIds],
   ([
     $sortedGroups,
     $groupCollections,
     $activeGroupIds,
+    $inactiveCollectionIds,
   ]): VisibleGroupSection[] => {
     const sections: VisibleGroupSection[] = [];
     for (const g of $sortedGroups) {
       if (!$activeGroupIds.has(g.id)) continue;
-      sections.push({ group: g, collections: $groupCollections[g.id] ?? [] });
+      const collections = ($groupCollections[g.id] ?? []).filter(
+        (c) => !$inactiveCollectionIds.has(c.id),
+      );
+      sections.push({ group: g, collections });
     }
     return sections;
   },
@@ -1390,6 +1406,22 @@ export async function setActiveGroupFilters(ids: string[]): Promise<void> {
   await updateConfig({ activeGroupFilters: filtered });
 }
 
+/**
+ * Toggle a single collection's visibility on/off (sidebar layout). Persists to
+ * config as a deny-list entry — see `inactiveCollectionIds`. Independent of the
+ * collection's group filter.
+ */
+export async function toggleCollectionFilter(
+  collectionId: string,
+): Promise<void> {
+  const config = get(appConfig);
+  const current = config.inactiveCollectionFilters ?? [];
+  const next = current.includes(collectionId)
+    ? current.filter((id) => id !== collectionId)
+    : [...current, collectionId];
+  await updateConfig({ inactiveCollectionFilters: next });
+}
+
 // ---- Flat Todos page: all todos across all collections ----
 
 /**
@@ -1412,14 +1444,21 @@ export const openTodos = derived(allTodos, ($allTodos) =>
  * and open todos are mixed — the page splits them at render time.
  */
 export const visibleTodos = derived(
-  [allTodos, collections, activeGroupIds, appConfig],
-  ([$allTodos, $collections, $activeGroupIds, $config]) => {
+  [allTodos, collections, activeGroupIds, inactiveCollectionIds, appConfig],
+  ([
+    $allTodos,
+    $collections,
+    $activeGroupIds,
+    $inactiveCollectionIds,
+    $config,
+  ]) => {
     const filtered = $allTodos.filter((todo) => {
       if (!todo.collectionId) return true;
       const col = $collections[todo.collectionId];
       if (!col) return true;
       if (!col.groupId) return false;
-      return $activeGroupIds.has(col.groupId);
+      if (!$activeGroupIds.has(col.groupId)) return false;
+      return !$inactiveCollectionIds.has(col.id);
     });
 
     return sortWithConfiguredOrder(

@@ -4,6 +4,8 @@
  * 'classic' is the established top-nav layout; 'sidebar' is the opt-in redesign.
  */
 
+import { writable } from 'svelte/store';
+
 export type Layout = 'classic' | 'sidebar';
 
 const LAYOUT_KEY = 'inbox-rs:layout';
@@ -32,4 +34,17 @@ export function setLayout(layout: Layout): void {
   } catch {
     // storage unavailable — selection won't persist across reloads
   }
+}
+
+/**
+ * Reactive current layout. Initialised from storage; `setLayoutPersisted`
+ * updates it so the shell swaps live (no reload) when the user flips the
+ * setting in the UserMenu. Device-local only — never synced.
+ */
+export const layout = writable<Layout>(getLayout());
+
+/** Persist and broadcast a layout change so the active shell swaps live. */
+export function setLayoutPersisted(next: Layout): void {
+  setLayout(next);
+  layout.set(next);
 }
