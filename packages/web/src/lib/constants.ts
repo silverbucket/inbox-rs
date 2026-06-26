@@ -36,3 +36,10 @@ export const PRESET_COLORS = [
   '#a1a1aa',
   '#6b7280',
 ];
+
+/** Pick a random colour from the preset palette. Used as the default for newly
+ *  created groups/collections so we don't always land on the first swatch when
+ *  the user hasn't explicitly chosen one. */
+export function randomPresetColor(): string {
+  return PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)];
+}

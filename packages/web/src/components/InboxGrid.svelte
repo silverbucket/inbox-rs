@@ -166,4 +166,20 @@
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
   }
+
+  /* On mobile the shell stacks the sidebar above the content, so a 50vh
+     vertically-centred empty state floats far below the sidebar with a big
+     void above it. Sit it near the top of the content area instead. */
+  @media (max-width: 768px) {
+    .inbox-zero {
+      min-height: 0;
+      justify-content: flex-start;
+      padding-top: 2.5rem;
+    }
+
+    .zero-glow {
+      top: 2.5rem;
+      transform: translate(-50%, 0);
+    }
+  }
 </style>

@@ -21,6 +21,7 @@
   } from '../lib/stores';
   import { draggingItemId, DRAG_MIME } from '../lib/drag';
   import { showToast } from '../lib/toast';
+  import { randomPresetColor } from '../lib/constants';
 
   let {
     route,
@@ -144,7 +145,7 @@
         name,
         itemIds: [],
         createdAt: new Date().toISOString(),
-        color: group.color || '#6366f1',
+        color: randomPresetColor(),
         groupId: group.id,
       });
       // Keep the field open + cleared so several can be added in a row.
@@ -174,7 +175,7 @@
         name,
         collectionIds: [],
         createdAt: new Date().toISOString(),
-        color: '#6366f1',
+        color: randomPresetColor(),
       });
       newGroupName = '';
       addingGroup = false;
@@ -518,8 +519,6 @@
   }
 
   .header-inner {
-    max-width: 1400px;
-    margin: 0 auto;
     padding: 1rem 1.5rem;
     display: flex;
     align-items: center;
@@ -631,8 +630,6 @@
 
   /* ── Body: sidebar + main ── */
   .body {
-    max-width: 1400px;
-    margin: 0 auto;
     width: 100%;
     flex: 1;
     display: grid;
@@ -1062,6 +1059,11 @@
     .body,
     .body.sidebar-collapsed {
       grid-template-columns: 1fr;
+      /* Single-column rows must hug their content. The body is flex:1 (tall),
+         and a grid's default align-content stretches the auto rows to fill it —
+         which would inflate the sidebar's row and strand dead space below the
+         stacked sidebar before the content. Pack rows to the top instead. */
+      align-content: start;
     }
 
     .sidebar {
@@ -1072,11 +1074,12 @@
       padding: 0.85rem 1rem;
     }
 
-    /* Collapsed on mobile: the rail runs horizontally across the top (same
-       group circles as the desktop rail, just laid left-to-right instead of
-       top-to-bottom). */
+    /* Collapsed on mobile: show just the group-filter circles as a slim strip
+       running left-to-right (instead of the desktop top-to-bottom rail). The
+       header hamburger already handles expand, so the in-rail chevron is
+       redundant here — drop it. */
     .sidebar.collapsed {
-      justify-content: flex-start;
+      padding: 0.5rem 1rem;
     }
 
     .sidebar.collapsed .rail {
@@ -1086,7 +1089,13 @@
     }
 
     .sidebar.collapsed .rail-expand {
-      margin-bottom: 0;
+      display: none;
+    }
+
+    /* With the chevron gone, a collapsed sidebar that has no groups is pure
+       dead space — drop the whole band (the header toggle still reopens it). */
+    .sidebar.collapsed:not(:has(.rail-dot)) {
+      display: none;
     }
 
     main {
@@ -1102,8 +1111,6 @@
   }
 
   .app-footer-inner {
-    max-width: 1400px;
-    margin: 0 auto;
     display: flex;
     align-items: center;
     gap: 0.5rem;
