@@ -3,6 +3,7 @@
   import { get } from 'svelte/store';
   import { sortedGroups, groups, appConfig, updateConfig } from '../lib/stores';
   import EntityFormModal from './EntityFormModal.svelte';
+  import { randomPresetColor } from '../lib/constants';
 
   let { collection = undefined, groupId = undefined, onclose, onsave, ondelete = undefined }: {
     collection?: Collection;
@@ -19,7 +20,7 @@
 
   let name = $state(collection?.name ?? '');
   let description = $state(collection?.description ?? '');
-  let color = $state(collection?.color ?? '#6366f1');
+  let color = $state(collection?.color ?? randomPresetColor());
 
   /**
    * Pick the initial group selection for the picker. Resolution order:

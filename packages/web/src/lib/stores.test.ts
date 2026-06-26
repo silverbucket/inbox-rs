@@ -69,6 +69,7 @@ import {
   deleteItem,
   groupCollections,
   groups,
+  inactiveCollectionIds,
   items,
   loadFileBlobUrl,
   moveCollectionToGroup,
@@ -87,6 +88,7 @@ import {
   storeGroup,
   storeItem,
   todoItems,
+  toggleCollectionFilter,
   toggleGroupFilter,
   userSettings,
   visibleGroupedCollections,
@@ -1216,6 +1218,51 @@ describe('visibleGroupedCollections', () => {
     groups.set({ g1: makeGroup('g1', []) });
     appConfig.set({ activeGroupFilters: [] });
     expect(get(visibleGroupedCollections)).toHaveLength(0);
+  });
+
+  it('hides individual collections switched off via the sidebar', () => {
+    const c1 = makeCollection('c1', 'g1');
+    const c2 = makeCollection('c2', 'g1');
+    collections.set({ c1, c2 });
+    groups.set({ g1: makeGroup('g1', ['c1', 'c2']) });
+    appConfig.set({ inactiveCollectionFilters: ['c1'] });
+
+    const sections = get(visibleGroupedCollections);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].collections.map((c) => c.id)).toEqual(['c2']);
+  });
+});
+
+describe('collection filter (sidebar)', () => {
+  beforeEach(() => {
+    items.set({});
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+    vi.clearAllMocks();
+    mockInbox.setConfig.mockResolvedValue(undefined);
+  });
+
+  it('inactiveCollectionIds reflects the configured deny-list', () => {
+    appConfig.set({ inactiveCollectionFilters: ['c1', 'c2'] });
+    const ids = get(inactiveCollectionIds);
+    expect(ids.has('c1')).toBe(true);
+    expect(ids.has('c2')).toBe(true);
+    expect(ids.has('c3')).toBe(false);
+  });
+
+  it('is empty when no collections are switched off', () => {
+    appConfig.set({});
+    expect(get(inactiveCollectionIds).size).toBe(0);
+  });
+
+  it('toggleCollectionFilter adds then removes an id', async () => {
+    appConfig.set({});
+    await toggleCollectionFilter('c1');
+    expect(get(appConfig).inactiveCollectionFilters).toEqual(['c1']);
+
+    await toggleCollectionFilter('c1');
+    expect(get(appConfig).inactiveCollectionFilters).toEqual([]);
   });
 });
 

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { CollectionGroup } from '@inbox-rs/rs-module';
   import EntityFormModal from './EntityFormModal.svelte';
+  import { randomPresetColor } from '../lib/constants';
 
   let { group = undefined, onclose, onsave, ondelete = undefined }: {
     group?: CollectionGroup;
@@ -10,7 +11,7 @@
   } = $props();
 
   let name = $state(group?.name ?? '');
-  let color = $state(group?.color ?? '#6366f1');
+  let color = $state(group?.color ?? randomPresetColor());
 
   function handleSubmit() {
     if (!name.trim()) return;

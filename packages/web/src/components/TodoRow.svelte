@@ -3,6 +3,7 @@
   import { storeItem } from '../lib/stores';
   import { cleanForStorage } from '../lib/clean-for-storage';
   import { typeIconPath } from '../lib/item-utils';
+  import { draggingItemId, DRAG_MIME } from '../lib/drag';
 
   let { todo, collection, group, onselect, onaddincollection }: {
     todo: InboxItem;
@@ -85,6 +86,21 @@
     onaddincollection?.(quickAddTarget);
   }
 
+  // Drag the collection pill onto a sidebar collection to re-file this todo.
+  // The pill (not the whole row) is the handle so it doesn't fight the
+  // svelte-dnd-action reorder gesture, which owns row-body drags.
+  function onFileDragStart(e: DragEvent) {
+    if (!e.dataTransfer) return;
+    e.dataTransfer.setData(DRAG_MIME, todo.id);
+    e.dataTransfer.setData('text/plain', todo.title || todo.id);
+    e.dataTransfer.effectAllowed = 'move';
+    draggingItemId.set(todo.id);
+  }
+
+  function onFileDragEnd() {
+    draggingItemId.set(null);
+  }
+
   function handleKey(e: KeyboardEvent) {
     const target = e.target as HTMLElement;
     // "+" shortcut triggers quick-add for this row's collection, regardless
@@ -133,10 +149,20 @@
   <!-- The meta block collapses to line 2 on narrow screens via CSS;
        on desktop it sits inline on the right side of the row. -->
   <div class="meta">
-    <span class="collection-pill" title="{collectionName}">
+    <button
+      class="collection-pill"
+      type="button"
+      tabindex="-1"
+      draggable="true"
+      title="Drag to refile · {collectionName}"
+      aria-label="Drag {todo.title} onto a collection to refile it"
+      onpointerdown={(e) => e.stopPropagation()}
+      ondragstart={onFileDragStart}
+      ondragend={onFileDragEnd}
+    >
       <span class="pill-dot"></span>
       <span class="pill-name">{collectionName}</span>
-    </span>
+    </button>
     {#if showTypeIcon}
       <span class="type-pill" title={typeLabel} aria-label={typeLabel}>
         <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -237,6 +263,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
+    font-family: inherit;
     font-size: 0.75rem;
     color: var(--text-muted);
     padding: 0.15rem 0.55rem;
@@ -245,6 +272,18 @@
     border-radius: 999px;
     max-width: 12rem;
     min-width: 0;
+    /* Draggable handle for re-filing (see onFileDragStart). */
+    cursor: grab;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .collection-pill:active {
+    cursor: grabbing;
+  }
+
+  .collection-pill:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 
   .unfiled .collection-pill {

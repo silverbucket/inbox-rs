@@ -112,6 +112,13 @@ export interface AppConfig {
    */
   activeGroupFilters?: string[];
   /**
+   * Collection IDs explicitly toggled OFF in the sidebar layout. A deny-list
+   * (unlike activeGroupFilters' allow-list) so new collections default to
+   * active without needing migration, and so a collection stays visible while
+   * its group is active unless individually switched off.
+   */
+  inactiveCollectionFilters?: string[];
+  /**
    * Ordered list of todo IDs for the flat Todos page. Controls cross-collection
    * drag-sort order on that page only — collection-internal order (used by the
    * Collections page) still lives in `Collection.itemIds`.

@@ -6,8 +6,48 @@
   import AudioCard from './AudioCard.svelte';
   import DocumentCard from './DocumentCard.svelte';
   import EmailCard from './EmailCard.svelte';
+  import { draggingItemId, DRAG_MIME } from '../lib/drag';
 
   let { item, onselect }: { item: InboxItem; onselect: (item: InboxItem) => void } = $props();
+
+  // Drag onto a sidebar collection to file the item there. The id rides in
+  // dataTransfer; the store lets drop targets highlight during the drag.
+  function onDragStart(e: DragEvent) {
+    if (!e.dataTransfer) return;
+    e.dataTransfer.setData(DRAG_MIME, item.id);
+    e.dataTransfer.setData('text/plain', item.title || item.id);
+    e.dataTransfer.effectAllowed = 'move';
+    // Custom drag image: a compact, tilted chip carrying the title + a count
+    // badge (so multi-select can extend this later). Mirrors the sidebar mock.
+    const ghost = document.createElement('div');
+    ghost.textContent = item.title || kind.label;
+    Object.assign(ghost.style, {
+      position: 'fixed',
+      top: '-1000px',
+      left: '-1000px',
+      maxWidth: '240px',
+      padding: '0.45rem 0.65rem',
+      borderRadius: '10px',
+      background: 'var(--surface)',
+      border: '1px solid var(--accent)',
+      color: 'var(--text)',
+      font: '600 0.85rem system-ui, sans-serif',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      boxShadow: '0 12px 30px rgba(20, 20, 40, 0.22)',
+      zIndex: '9999',
+    });
+    document.body.appendChild(ghost);
+    e.dataTransfer.setDragImage(ghost, 14, 14);
+    // Remove once the browser has snapshotted it for the drag cursor.
+    setTimeout(() => ghost.remove(), 0);
+    draggingItemId.set(item.id);
+  }
+
+  function onDragEnd() {
+    draggingItemId.set(null);
+  }
 
   // Stable per-type identity colours (independent of the theme accent so types
   // stay distinguishable under any accent / light or dark mode).
@@ -60,6 +100,9 @@
 </script>
 
 <article class="card" role="button" tabindex="0"
+  draggable="true"
+  ondragstart={onDragStart}
+  ondragend={onDragEnd}
   onclick={(e) => {
     const target = e.target as HTMLElement;
     if (target.closest('a, button, input, audio, video')) return;
