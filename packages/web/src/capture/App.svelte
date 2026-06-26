@@ -34,6 +34,7 @@
 
   let mode = $state<CaptureMode>('note');
   let noteText = $state('');
+  let noteField = $state<HTMLTextAreaElement | null>(null);
   let history = $state<CaptureRecord[]>([]);
   let status = $state('');
   let syncing = $state(false);
@@ -85,6 +86,18 @@
     status = idleStatus();
     void syncNow();
 
+    // Drive the app height from the *visual* viewport so the layout shrinks when
+    // the on-screen keyboard opens, keeping the Send button above it. The layout
+    // viewport (100%/100vh) ignores the keyboard, which otherwise hides Send.
+    const vv = window.visualViewport;
+    const applyViewportHeight = () => {
+      const h = vv ? vv.height : window.innerHeight;
+      document.documentElement.style.setProperty('--app-height', `${h}px`);
+    };
+    applyViewportHeight();
+    vv?.addEventListener('resize', applyViewportHeight);
+    vv?.addEventListener('scroll', applyViewportHeight);
+
     const onOnline = () => void syncNow();
     const onInstallPrompt = (event: Event) => {
       event.preventDefault();
@@ -97,6 +110,8 @@
       if (recording && mediaRecorder) {
         for (const track of mediaRecorder.stream.getTracks()) track.stop();
       }
+      vv?.removeEventListener('resize', applyViewportHeight);
+      vv?.removeEventListener('scroll', applyViewportHeight);
       window.removeEventListener('online', onOnline);
       window.removeEventListener('beforeinstallprompt', onInstallPrompt);
       if (recordTimer) clearInterval(recordTimer);
@@ -116,6 +131,9 @@
     if (mode === 'note') {
       captureNote(noteText);
       noteText = '';
+      // Refocus synchronously (still within the tap gesture) so the keyboard
+      // stays up for rapid write → send → write entry.
+      noteField?.focus();
     } else if (mode === 'voice' && recordedBlob) {
       await captureVoice(recordedBlob, recordDuration);
       clearVoice();
@@ -348,6 +366,7 @@
     {#if mode === 'note'}
       <textarea
         class="field"
+        bind:this={noteField}
         bind:value={noteText}
         use:autofocus
         onkeydown={onNoteKey}
@@ -521,7 +540,7 @@
 
 <style>
   .screen {
-    height: 100%;
+    height: var(--app-height, 100%);
     width: min(100%, 30rem);
     margin: 0 auto;
     display: flex;
