@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "predev": "npm run vendor:transcription-assets && node ../../scripts/gen-plugin-metadata.mjs",
+    "predev": "npm run build --workspace=@inbox-rs/rs-module && npm run vendor:transcription-assets && node ../../scripts/gen-plugin-metadata.mjs",
     "prebuild": "npm run vendor:transcription-assets && node ../../scripts/package-plugins.mjs",
     "build": "vite build",
     "preview": "vite preview",
