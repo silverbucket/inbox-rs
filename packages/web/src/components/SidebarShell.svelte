@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { onDestroy } from 'svelte';
   import { get } from 'svelte/store';
   import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
   import UserMenu from './UserMenu.svelte';
@@ -231,6 +232,11 @@
     springTimer = null;
     springGroupId = null;
   }
+
+  // A drag hovering a collapsed group when the shell is torn down (e.g. layout
+  // switch to Classic) would otherwise leave the pending timer to fire
+  // expandGroup on a destroyed instance.
+  onDestroy(clearSpring);
 
   function onGroupDragOver(group: CollectionGroup) {
     if (!dragging || expandedGroups.has(group.id)) return;
