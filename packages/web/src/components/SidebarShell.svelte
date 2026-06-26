@@ -1057,9 +1057,37 @@
      when collapsed it's hidden entirely (the header toggle re-opens it), rather
      than shrinking to a side rail that makes no sense in a single column. */
   @media (max-width: 768px) {
+    /* Flex-wrap would let the user menu spill onto its own line below the nav on
+       narrow screens. Use a grid instead (like ClassicShell): toggle, brand and
+       the user menu share the top row; the nav spans a full second row. */
     .header-inner {
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      grid-template-rows: auto auto;
+      gap: 0.5rem 0.75rem;
+      align-items: center;
       padding: 0.75rem 1rem;
+    }
+
+    .sidebar-toggle {
+      grid-column: 1;
+      grid-row: 1;
+    }
+
+    .brand {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    .header-right {
+      grid-column: 3;
+      grid-row: 1;
+    }
+
+    .header-nav {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      justify-content: center;
     }
 
     .body,
