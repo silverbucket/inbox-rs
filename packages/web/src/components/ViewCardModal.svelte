@@ -309,7 +309,7 @@
   // for those structural reads.
   const description = $derived(item.description);
   const hasFile = $derived(
-    'filePath' in item && !!(item as Record<string, unknown>).filePath,
+    'filePath' in item && !!(item as unknown as Record<string, unknown>).filePath,
   );
 
   /**
@@ -466,8 +466,8 @@
     {#if hasFile}
       <div class="share-row">
         <ShareButton
-          filePath={(item as Record<string, unknown>).filePath as string}
-          mimeType={(item as Record<string, unknown>).mimeType as
+          filePath={(item as unknown as Record<string, unknown>).filePath as string}
+          mimeType={(item as unknown as Record<string, unknown>).mimeType as
             | string
             | undefined}
           filename={item.title || undefined}
