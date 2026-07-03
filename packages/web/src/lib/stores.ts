@@ -409,6 +409,7 @@ rs.on('disconnected', () => {
     }
   }
   blobUrls.set({});
+  blobLruOrder.length = 0;
   pendingBlobLoads.clear();
   revokedBlobPaths.clear();
 
@@ -712,6 +713,47 @@ export const collectionItems = derived(
 /** Incremented on full blob URL revocation (e.g. disconnect) to invalidate in-flight loads. */
 let blobLoadGeneration = 0;
 const pendingBlobLoads = new Map<string, number>();
+
+/**
+ * Cap on how many blob URLs stay alive at once. Each entry pins the file's
+ * full bytes in memory, and nothing else ever revokes them during a session —
+ * a long browse through a media-heavy inbox would otherwise accumulate
+ * hundreds of MB. Evicted paths simply reload on next view (cheap: the bytes
+ * stay in the RS local cache, only the in-memory Blob is dropped). The cap is
+ * generous enough that anything on screen — including the Lightbox's current
+ * image — is effectively never the eviction victim.
+ */
+const BLOB_CACHE_MAX = 150;
+/** filePaths in least-recently-used order (most recent last). */
+const blobLruOrder: string[] = [];
+
+function touchBlobLru(filePath: string) {
+  const i = blobLruOrder.indexOf(filePath);
+  if (i >= 0) blobLruOrder.splice(i, 1);
+  blobLruOrder.push(filePath);
+  while (blobLruOrder.length > BLOB_CACHE_MAX) {
+    const evict = blobLruOrder.shift();
+    if (!evict) break;
+    const url = get(blobUrls)[evict];
+    if (url) {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // ignore
+      }
+      blobUrls.update((current) => {
+        const next = { ...current };
+        delete next[evict];
+        return next;
+      });
+    }
+  }
+}
+
+function dropBlobLru(filePath: string) {
+  const i = blobLruOrder.indexOf(filePath);
+  if (i >= 0) blobLruOrder.splice(i, 1);
+}
 /** Paths for which we have explicitly revoked (via deleteItem) so in-flight loads don't re-insert. */
 const revokedBlobPaths = new Set<string>();
 
@@ -729,18 +771,37 @@ async function resolveFileBlobUrl(
   filePath: string,
   mimeType?: string,
 ): Promise<string | null> {
-  if (get(connected)) {
-    const url = await fetchFileBlobUrl(filePath, mimeType);
-    if (url) return url;
-  }
+  // Cache first: file paths are UUID-based and immutable, so a local copy can
+  // never be stale. Reading the remote first (the previous order) re-downloaded
+  // every visible file on every page load even though the bytes were already —
+  // or about to be — in the local cache.
   const inbox = getInbox();
-  if (!inbox) return null;
-  const cached = await inbox.getFile(filePath);
-  if (!cached?.data) return null;
-  const blob = new Blob([cached.data], {
-    type: cached.mimeType || mimeType || '',
-  });
-  return URL.createObjectURL(blob);
+  if (inbox) {
+    try {
+      const cached = await inbox.getFile(filePath);
+      if (cached?.data) {
+        // Prefer the caller's mimeType, and strip any `; charset=...` suffix
+        // from the cached type — files pulled from the remote by the sync
+        // layer can carry 5apps' `; charset=binary` echo, which Chrome
+        // refuses to render as an <img> blob.
+        const cleanType =
+          mimeType?.trim() ||
+          (cached.mimeType || '').split(';')[0].trim() ||
+          '';
+        const blob = new Blob([cached.data], { type: cleanType });
+        return URL.createObjectURL(blob);
+      }
+    } catch {
+      // fall through to the network path
+    }
+  }
+  // Not cached yet (e.g. captured on another device and not viewed here) —
+  // fetch over authenticated HTTP. The bytes land in the SEEN cache via the
+  // sync layer the next time RS reads the node; subsequent loads are local.
+  if (get(connected)) {
+    return fetchFileBlobUrl(filePath, mimeType);
+  }
+  return null;
 }
 
 /**
@@ -778,6 +839,7 @@ export function loadFileBlobUrl(filePath: string, mimeType?: string): void {
       const old = get(blobUrls)[filePath];
       if (old) URL.revokeObjectURL(old);
       blobUrls.update((current) => ({ ...current, [filePath]: url }));
+      touchBlobLru(filePath);
     })
     .finally(() => {
       if (pendingBlobLoads.get(filePath) === gen) {
@@ -801,6 +863,7 @@ export async function storeItem(item: InboxItem, fileData?: ArrayBuffer) {
       ...current,
       [item.filePath as string]: url,
     }));
+    touchBlobLru(item.filePath as string);
   }
   rawItems.update((current) => ({
     ...current,
@@ -835,6 +898,7 @@ export async function deleteItem(id: string, item?: InboxItem) {
         return next;
       });
     }
+    dropBlobLru(filePath);
     // Also drop any in-flight load for this specific file (no global gen bump needed).
     pendingBlobLoads.delete(filePath);
     // Mark as revoked so any concurrent in-flight load for this exact path is ignored on resolution.

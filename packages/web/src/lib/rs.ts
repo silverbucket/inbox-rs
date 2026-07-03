@@ -336,6 +336,17 @@ const rs = new RemoteStorage({
 rs.access.claim('inbox', 'rw');
 rs.access.claim('shares', 'rw');
 rs.caching.enable('/inbox/');
+// Binaries on demand: the parent ALL strategy would make sync proactively
+// download EVERY file under /inbox/files/ to every device — gigabytes for a
+// media-heavy inbox, and duplicated bandwidth since cards fetch bytes anyway.
+// SEEN caches a file after the app first reads or writes it, so offline
+// capture still lands in the local cache and viewed files stay available
+// offline, but never-viewed files aren't pulled down. Nested caching rules
+// override the parent by longest-prefix match. Metadata (items/, collections/,
+// groups/, config/) keeps ALL and remains fully offline.
+// NOTE: caching strategies are not persisted — this must run on every init,
+// before the first sync (it does: module scope, ahead of any connect).
+rs.caching.set('/inbox/files/', 'SEEN');
 
 /**
  * Fetch a file from an RS server using Authorization header and return a blob URL.

@@ -1,10 +1,13 @@
 <script lang="ts">
+  import { inview } from '../lib/actions';
   import type { AudioItem } from '@inbox-rs/rs-module';
   import { blobUrls, connected, loadFileBlobUrl } from '../lib/stores';
 
   let { item }: { item: AudioItem } = $props();
   let audioEl = $state<HTMLAudioElement | null>(null);
   let playing = $state(false);
+  // Fetch bytes only once the card approaches the viewport.
+  let entered = $state(false);
 
   const audioSrc = $derived($blobUrls[item.filePath] || null);
 
@@ -26,7 +29,7 @@
   // this so we retry over the network once a connection is established.
   $effect(() => {
     void $connected;
-    if (item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
+    if (entered && item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
   });
 
   // Decorative waveform bars derived deterministically from the item id, so
@@ -60,7 +63,7 @@
   }
 </script>
 
-<div class="audio">
+<div class="audio" use:inview={() => { entered = true; }}>
   <h3 class="title">{item.title || 'Voice memo'}</h3>
   <div class="voice">
     <button
