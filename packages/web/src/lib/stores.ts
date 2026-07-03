@@ -15,6 +15,17 @@ function getInbox() {
   return rs.inbox;
 }
 
+/**
+ * Like getInbox(), but throws a descriptive error instead of letting callers
+ * hit a TypeError on undefined. Used by write paths so a failed module
+ * registration surfaces as a clear message rather than a crash mid-operation.
+ */
+function requireInbox() {
+  const inbox = getInbox();
+  if (!inbox) throw new Error('Inbox storage module is not available');
+  return inbox;
+}
+
 /** Blob URLs for files that were just uploaded (available before remote sync completes) */
 export const blobUrls = writable<Record<string, string>>({});
 
@@ -130,10 +141,11 @@ async function loadEntities<T extends { id: string }>(
   store: Writable<Record<string, T>>,
   arrayField?: keyof T,
 ): Promise<boolean> {
-  const inbox = getInbox();
-  if (!inbox) return false;
+  // Callers pass arrow functions that close over the module themselves; the
+  // guard only ensures the module registered before we invoke them.
+  if (!getInbox()) return false;
   try {
-    const all = await fetchAll.call(inbox);
+    const all = await fetchAll();
     const valid: Record<string, T> = {};
     for (const [key, raw] of Object.entries(all)) {
       if (raw && typeof raw === 'object' && 'id' in raw && (raw as T).id) {
@@ -610,7 +622,9 @@ function sortWithConfiguredOrder<T extends { id: string }>(
     ? new Map(order.map((id, index) => [id, index]))
     : undefined;
 
-  return entities.sort((a, b) => {
+  // Sort a copy — callers hold references to the arrays they pass in, and an
+  // in-place sort here is an easy source of accidental store mutation.
+  return [...entities].sort((a, b) => {
     if (orderIndex) {
       const aIndex = orderIndex.get(a.id);
       const bIndex = orderIndex.get(b.id);
@@ -659,11 +673,10 @@ export const todoItems = derived([items, appConfig], ([$items, $config]) => {
   const all = Object.values($items).filter(
     (i) => (i.isTodo || i.type === 'todo') && !i.collectionId,
   );
-  const open = all.filter((i) => !i.completed);
   const completed = all.filter((i) => i.completed);
 
-  sortWithConfiguredOrder(
-    open,
+  const open = sortWithConfiguredOrder(
+    all.filter((i) => !i.completed),
     $config.todosGlobalOrder,
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
@@ -776,7 +789,7 @@ export function loadFileBlobUrl(filePath: string, mimeType?: string): void {
 // ---- Item operations ----
 
 export async function storeItem(item: InboxItem, fileData?: ArrayBuffer) {
-  const inbox = getInbox();
+  const inbox = requireInbox();
   const cleanItem = cleanForStorage(item);
   await inbox.store(cleanItem, fileData);
   if (fileData && 'filePath' in item && item.filePath && 'mimeType' in item) {
@@ -797,7 +810,7 @@ export async function storeItem(item: InboxItem, fileData?: ArrayBuffer) {
 }
 
 export async function deleteItem(id: string, item?: InboxItem) {
-  const inbox = getInbox();
+  const inbox = requireInbox();
   await inbox.remove(id, item);
 
   // Revoke and remove any associated blob URL to prevent memory leaks.
@@ -853,7 +866,7 @@ export async function deleteItem(id: string, item?: InboxItem) {
 // ---- Collection operations ----
 
 export async function storeCollection(collection: Collection) {
-  const inbox = getInbox();
+  const inbox = requireInbox();
   const clean = cleanForStorage(collection);
   await inbox.storeCollection(clean);
   collections.update((current) => ({ ...current, [clean.id]: clean }));
@@ -872,7 +885,7 @@ export async function storeCollection(collection: Collection) {
  * placement.
  */
 export async function deleteCollection(id: string): Promise<boolean> {
-  const inbox = getInbox();
+  const inbox = requireInbox();
   const collection = get(collections)[id];
   if (!collection) return false;
 
@@ -906,7 +919,7 @@ export async function moveItemToCollection(
   itemId: string,
   collectionId: string | undefined,
 ) {
-  const inbox = getInbox();
+  const inbox = requireInbox();
 
   // Validate target collection exists
   if (collectionId && !get(collections)[collectionId]) {
@@ -1011,7 +1024,7 @@ export async function reorderCollectionItems(
   collectionId: string,
   newItemIds: string[],
 ) {
-  const inbox = getInbox();
+  const inbox = requireInbox();
   const prevCollections = get(collections);
   collections.update((current) => {
     const col = current[collectionId];
@@ -1073,7 +1086,7 @@ export const groupCollections = derived(
 );
 
 export async function storeGroup(group: CollectionGroup) {
-  const inbox = getInbox();
+  const inbox = requireInbox();
   const clean = cleanForStorage(group);
   const isNew = !get(groups)[clean.id];
   await inbox.storeGroup(clean);
@@ -1091,7 +1104,7 @@ export async function storeGroup(group: CollectionGroup) {
 }
 
 export async function deleteGroup(id: string): Promise<boolean> {
-  const inbox = getInbox();
+  const inbox = requireInbox();
   const currentGroups = get(groups);
   const group = currentGroups[id];
 
@@ -1130,7 +1143,7 @@ export async function moveCollectionToGroup(
   collectionId: string,
   groupId: string,
 ) {
-  const inbox = getInbox();
+  const inbox = requireInbox();
   if (!groupId || !get(groups)[groupId]) {
     throw new Error(`Cannot move collection to missing group: ${groupId}`);
   }
@@ -1226,7 +1239,7 @@ export async function reorderGroupCollections(
   groupId: string,
   newCollectionIds: string[],
 ) {
-  const inbox = getInbox();
+  const inbox = requireInbox();
   const prevGroups = get(groups);
   groups.update((current) => {
     const grp = current[groupId];
