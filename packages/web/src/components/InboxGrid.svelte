@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
+  import { inview } from '../lib/actions';
   import { connected, sortedItems } from '../lib/stores';
   import InboxCard from './InboxCard.svelte';
 
@@ -12,6 +13,17 @@
   } = $props();
   const items = $derived($sortedItems);
 
+  // Incremental rendering: mount cards in pages of PAGE as the user scrolls,
+  // instead of all at once. At a few thousand items, mounting every card up
+  // front means thousands of components (and, for media cards, thousands of
+  // queued fetches) before first paint. The sentinel below grows the window
+  // when it approaches the viewport. The count is monotonic within a mount —
+  // shrinking it on filter changes would yank the scroll position out from
+  // under the user; a filtered list simply shows up to the already-earned
+  // window. The status bar always reflects the true total.
+  const PAGE = 60;
+  let visibleCount = $state(PAGE);
+  const visibleItems = $derived(items.slice(0, visibleCount));
 </script>
 
 {#if items.length === 0}
@@ -36,10 +48,23 @@
   <div class="status-bar">You've got <span class="status-count">{items.length}</span> {items.length === 1 ? 'thing' : 'things'} waiting</div>
   <div class="grid-wrap">
     <div class="grid">
-      {#each items as item (item.id)}
+      {#each visibleItems as item (item.id)}
         <InboxCard {item} {onselect} />
       {/each}
     </div>
+    {#if visibleCount < items.length}
+      <!-- Keyed so a fresh sentinel (and a fresh IntersectionObserver) mounts
+           for each window size; the action fires once and disconnects. -->
+      {#key visibleCount}
+        <div
+          class="load-sentinel"
+          aria-hidden="true"
+          use:inview={() => {
+            visibleCount = Math.min(visibleCount + PAGE, items.length);
+          }}
+        ></div>
+      {/key}
+    {/if}
   </div>
 {/if}
 
@@ -85,6 +110,12 @@
   .grid > :global(*) {
     break-inside: avoid;
     margin-bottom: 1rem;
+  }
+
+  /* Tall enough that the 400px inview rootMargin triggers the next page well
+     before the user reaches the end of the rendered cards. */
+  .load-sentinel {
+    height: 1px;
   }
 
   @container (max-width: 760px) {
