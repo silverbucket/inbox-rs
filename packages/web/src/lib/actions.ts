@@ -45,3 +45,37 @@ export function autofocus(node: HTMLElement) {
 export function autofocusIf(node: HTMLElement, enabled: boolean) {
   if (enabled) requestAnimationFrame(() => node.focus());
 }
+
+/**
+ * Run `onEnter` once when the bound element first approaches the viewport.
+ *
+ * Used to gate expensive work (binary fetches for card media) on visibility,
+ * so opening a large inbox doesn't kick off a fetch for every image at once.
+ * The 400px rootMargin starts loading a little before the element scrolls
+ * into view, so media is usually ready by the time it's visible.
+ *
+ * Falls back to firing immediately when IntersectionObserver is unavailable
+ * (very old browsers, some test environments).
+ *
+ * Example:
+ * ```svelte
+ * <div use:inview={() => loadFileBlobUrl(item.filePath, item.mimeType)}>
+ * ```
+ */
+export function inview(node: HTMLElement, onEnter: () => void) {
+  if (typeof IntersectionObserver === 'undefined') {
+    onEnter();
+    return {};
+  }
+  const io = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        onEnter();
+        io.disconnect();
+      }
+    },
+    { rootMargin: '400px' },
+  );
+  io.observe(node);
+  return { destroy: () => io.disconnect() };
+}

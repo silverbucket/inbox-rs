@@ -1,22 +1,33 @@
 <script lang="ts">
+  import { inview } from '../lib/actions';
   import type { ImageItem } from '@inbox-rs/rs-module';
   import { blobUrls, connected, loadFileBlobUrl } from '../lib/stores';
   import Lightbox from './Lightbox.svelte';
 
   let { item }: { item: ImageItem } = $props();
   let showLightbox = $state(false);
+  // Only start fetching bytes once the card approaches the viewport (see the
+  // inview action) — otherwise opening a large inbox fires a fetch for every
+  // image at once.
+  let entered = $state(false);
 
   const imageSrc = $derived($blobUrls[item.filePath] || null);
 
-  // Load the image bytes. loadFileBlobUrl fetches from the remote when
-  // connected and the local cache otherwise, so files captured while offline
-  // still render. Pass mimeType so the blob is tagged as `image/jpeg` rather
-  // than whatever the server echoes back (e.g. `image/jpeg; charset=binary` on
-  // 5apps, which Chrome refuses to render). Referencing `$connected` re-runs
-  // this so we retry over the network once a connection is established.
+  // Load the image bytes once visible. loadFileBlobUrl reads the local cache
+  // first (file paths are immutable) and falls back to the remote, so files
+  // captured while offline still render. Pass mimeType so the blob is tagged
+  // as `image/jpeg` rather than whatever the server echoes back (e.g.
+  // `image/jpeg; charset=binary` on 5apps, which Chrome refuses to render).
+  // Referencing `$connected` re-runs this so we retry over the network once a
+  // connection is established. Reading `$blobUrls[item.filePath]` also re-runs
+  // it when the LRU cache evicts this path (blobUrls entry deleted), so a card
+  // that scrolled out and lost its blob reloads instead of going blank — the
+  // `inview` observer is one-shot, so `entered` alone never fires again.
   $effect(() => {
     void $connected;
-    if (item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
+    if (entered && item.filePath && !$blobUrls[item.filePath]) {
+      loadFileBlobUrl(item.filePath, item.mimeType);
+    }
   });
 </script>
 
@@ -26,11 +37,13 @@
   {/if}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="image-wrapper" onclick={(e) => { e.stopPropagation(); if (imageSrc) showLightbox = true; }}>
+  <div class="image-wrapper" use:inview={() => { entered = true; }} onclick={(e) => { e.stopPropagation(); if (imageSrc) showLightbox = true; }}>
     {#if imageSrc}
       <img
         src={imageSrc}
         alt={item.title || 'Image'}
+        loading="lazy"
+        decoding="async"
         onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
       />
     {:else}

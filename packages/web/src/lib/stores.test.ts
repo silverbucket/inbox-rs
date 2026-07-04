@@ -270,6 +270,11 @@ describe('loadFileBlobUrl', () => {
     loadFileBlobUrl('files/photo.jpg');
     loadFileBlobUrl('files/photo.jpg');
 
+    // The loader checks the local cache first (async), so the network fetch
+    // fires a microtask later — wait for it, then confirm it only fired once.
+    await vi.waitFor(() => {
+      expect(mockFetchFileBlobUrl).toHaveBeenCalled();
+    });
     expect(mockFetchFileBlobUrl).toHaveBeenCalledTimes(1);
 
     resolveFirst('blob:test/deduped');

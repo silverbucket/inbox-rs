@@ -1,10 +1,13 @@
 <script lang="ts">
+  import { inview } from '../lib/actions';
   import type { BookmarkItem } from '@inbox-rs/rs-module';
   import { blobUrls, connected, loadFileBlobUrl } from '../lib/stores';
   import Lightbox from './Lightbox.svelte';
 
   let { item }: { item: BookmarkItem } = $props();
   let showLightbox = $state(false);
+  // Fetch bytes only once the card approaches the viewport.
+  let entered = $state(false);
 
   const imageSrc = $derived(
     (item.filePath ? ($blobUrls[item.filePath] || null) : null) || item.ogImage || null
@@ -15,14 +18,19 @@
   // with the clean type from item metadata rather than the server's
   // Content-Type (which on 5apps carries the `; charset=binary` suffix that
   // Chrome won't render as <img>). Referencing `$connected` retries over the
-  // network once a connection is established.
+  // network once a connection is established; reading `$blobUrls[item.filePath]`
+  // re-runs it when the LRU cache evicts this path, so an evicted card reloads
+  // on scroll-back instead of going blank (the `inview` observer is one-shot,
+  // so `entered` alone never fires again).
   $effect(() => {
     void $connected;
-    if (item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
+    if (entered && item.filePath && !$blobUrls[item.filePath]) {
+      loadFileBlobUrl(item.filePath, item.mimeType);
+    }
   });
 </script>
 
-<div class="bookmark">
+<div class="bookmark" use:inview={() => { entered = true; }}>
   {#if imageSrc}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -31,6 +39,8 @@
         class="og-image"
         src={imageSrc}
         alt=""
+        loading="lazy"
+        decoding="async"
         onerror={(e) => (e.currentTarget as HTMLImageElement).style.display = 'none'}
       />
     </div>
