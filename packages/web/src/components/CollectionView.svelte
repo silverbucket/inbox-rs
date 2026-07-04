@@ -19,7 +19,7 @@
   import { slide, fade } from 'svelte/transition';
   import { flip } from 'svelte/animate';
   import { dndzone } from 'svelte-dnd-action';
-  import { captureDetected } from '../lib/capture';
+  import { captureDetected, captureFile } from '../lib/capture';
   import { showToast } from '../lib/toast';
   import InboxCard from './InboxCard.svelte';
   import CaptureBar from './CaptureBar.svelte';
@@ -96,6 +96,33 @@
     prefillTitle = '';
     prefillFile = file;
     addingType = file.type.startsWith('image/') ? 'image' : 'document';
+  }
+
+  // Drop/paste onto the bar: store the file directly into this collection,
+  // with the same Undo as a text capture.
+  async function handleFileCaptureDirect(file: File, caption = '') {
+    let res: Awaited<ReturnType<typeof captureFile>>;
+    try {
+      res = await captureFile(file, caption, collection.id);
+    } catch (error) {
+      console.error('Failed to capture file into collection', error);
+      showToast("Couldn't save — this collection is no longer available.");
+      return;
+    }
+    if (!res) return;
+    const label = res.item.type === 'image' ? 'Saved image' : 'Saved file';
+    showToast(label, {
+      label: 'Undo',
+      run: () => {
+        void deleteItem(res.item.id, res.item);
+      },
+    });
+  }
+
+  function notifyExtraFiles(ignored: number) {
+    showToast(
+      `Captured the first file — ignored ${ignored} other${ignored === 1 ? '' : 's'}.`,
+    );
   }
 
   function handleRecord() {
@@ -317,6 +344,8 @@
           oncapture={handleCapture}
           onopeneditor={handleOpenEditor}
           onfile={handleCaptureFile}
+          onfilecapture={handleFileCaptureDirect}
+          onextrafiles={notifyExtraFiles}
           onrecord={handleRecord}
         />
 

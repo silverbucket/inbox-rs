@@ -1,6 +1,11 @@
 import type { InboxItem } from '@inbox-rs/rs-module';
 import { get } from 'svelte/store';
-import { buildBookmarkItem, buildNoteItem } from './build-item';
+import {
+  buildBookmarkItem,
+  buildDocumentItem,
+  buildImageItem,
+  buildNoteItem,
+} from './build-item';
 import { detectCaptureKind } from './capture-detect';
 import { collections, moveItemToCollection, storeItem } from './stores';
 
@@ -35,6 +40,39 @@ export async function captureDetected(
       : buildNoteItem(ctx, { title: '', body: detected.body, description: '' });
 
   await storeItem(built.item);
+  if (collectionId) {
+    await moveItemToCollection(built.item.id, collectionId);
+  }
+  return { item: built.item };
+}
+
+/** Build and store a dropped/pasted file directly — the chrome-less counterpart
+ *  to the ⊕ picker, which opens the full form. Images become image items,
+ *  everything else a document item. An optional caption becomes the title
+ *  (the builders fall back to the filename when it's blank). Returns the
+ *  created item so the caller can offer Undo. */
+export async function captureFile(
+  file: File,
+  caption = '',
+  collectionId?: string,
+): Promise<{ item: InboxItem } | null> {
+  const ctx = { id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+  const title = caption.trim();
+
+  // Mirror captureDetected: validate the destination before storing so a
+  // missing collection fails up front rather than silently orphaning the item
+  // in the Inbox (moveItemToCollection no-ops for a missing collection).
+  if (collectionId && !get(collections)[collectionId]) {
+    throw new Error('Target collection no longer exists');
+  }
+
+  const built = file.type.startsWith('image/')
+    ? await buildImageItem(ctx, { title, description: '', file })
+    : await buildDocumentItem(ctx, { title, description: '', file });
+  // The builders only return null without a file; we always pass one.
+  if (!built) return null;
+
+  await storeItem(built.item, built.fileData, built.thumbData);
   if (collectionId) {
     await moveItemToCollection(built.item.id, collectionId);
   }

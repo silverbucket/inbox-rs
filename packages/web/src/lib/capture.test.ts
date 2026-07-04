@@ -19,7 +19,7 @@ const { storeItem, moveItemToCollection, collections } = vi.hoisted(() => {
 });
 vi.mock('./stores', () => ({ storeItem, moveItemToCollection, collections }));
 
-import { captureDetected } from './capture';
+import { captureFile, captureDetected } from './capture';
 
 afterEach(() => vi.clearAllMocks());
 
@@ -61,6 +61,45 @@ describe('captureDetected', () => {
       captureDetected('remember the milk', 'gone'),
     ).rejects.toThrow();
     // Nothing stored or filed — no orphaned item left in the Inbox.
+    expect(storeItem).not.toHaveBeenCalled();
+    expect(moveItemToCollection).not.toHaveBeenCalled();
+  });
+});
+
+describe('captureFile', () => {
+  it('stores an image item for an image file, defaulting the title to the name', async () => {
+    const file = new File(['x'], 'sunset.png', { type: 'image/png' });
+    const res = await captureFile(file);
+    expect(res?.item.type).toBe('image');
+    expect(res?.item.title).toBe('sunset.png');
+    expect(storeItem).toHaveBeenCalledOnce();
+    // The binary payload is passed alongside the metadata item.
+    expect(storeItem.mock.calls[0][1]).toBeInstanceOf(ArrayBuffer);
+  });
+
+  it('stores a document item for a non-image file', async () => {
+    const file = new File(['x'], 'report.pdf', { type: 'application/pdf' });
+    const res = await captureFile(file);
+    expect(res?.item.type).toBe('document');
+    expect(res?.item.title).toBe('report.pdf');
+    expect(storeItem).toHaveBeenCalledOnce();
+  });
+
+  it('uses a caption as the item title when given', async () => {
+    const file = new File(['x'], 'sunset.png', { type: 'image/png' });
+    const res = await captureFile(file, '  Golden hour  ');
+    expect(res?.item.title).toBe('Golden hour');
+  });
+
+  it('files the item into a collection when a collectionId is given', async () => {
+    const file = new File(['x'], 'sunset.png', { type: 'image/png' });
+    const res = await captureFile(file, '', 'col-1');
+    expect(moveItemToCollection).toHaveBeenCalledWith(res?.item.id, 'col-1');
+  });
+
+  it('throws before storing when the target collection no longer exists', async () => {
+    const file = new File(['x'], 'sunset.png', { type: 'image/png' });
+    await expect(captureFile(file, '', 'gone')).rejects.toThrow();
     expect(storeItem).not.toHaveBeenCalled();
     expect(moveItemToCollection).not.toHaveBeenCalled();
   });
