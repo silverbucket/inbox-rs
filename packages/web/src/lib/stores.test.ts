@@ -136,6 +136,15 @@ function emitModuleChange(event: {
   if (onChangeHandler) onChangeHandler({ origin: 'remote', ...event });
 }
 
+/**
+ * Item change events are batched (50ms window) before they hit the stores —
+ * see the queueItemChange buffer in stores.ts. Await this after
+ * emitModuleChange for `items/` paths to observe the applied state.
+ */
+async function flushItemChangeBatch() {
+  await new Promise((resolve) => setTimeout(resolve, 60));
+}
+
 /** Backwards-compat: single-handler lookup for events with one handler (e.g. 'connected') */
 const rsHandlers = new Proxy({} as Record<string, (...args: any[]) => any>, {
   get: (_target, prop: string) => {
@@ -871,7 +880,7 @@ describe('per-item change handling', () => {
     appConfig.set({});
   });
 
-  it('adds an incoming item to the store', () => {
+  it('adds an incoming item to the store', async () => {
     const item = {
       id: 'i1',
       type: 'note',
@@ -879,12 +888,13 @@ describe('per-item change handling', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
     };
     emitModuleChange({ relativePath: 'items/i1', newValue: item });
+    await flushItemChangeBatch();
 
     expect(get(items).i1).toBeDefined();
     expect(get(items).i1.title).toBe('Test');
   });
 
-  it('removes a deleted item from the store', () => {
+  it('removes a deleted item from the store', async () => {
     items.set({
       i1: {
         id: 'i1',
@@ -899,6 +909,7 @@ describe('per-item change handling', () => {
       newValue: undefined,
       oldValue: { id: 'i1' },
     });
+    await flushItemChangeBatch();
 
     expect(get(items).i1).toBeUndefined();
   });
@@ -955,7 +966,7 @@ describe('per-item change handling', () => {
     expect(get(items).i1).toBeUndefined();
   });
 
-  it('handles multiple incoming items without calling getAll', () => {
+  it('handles multiple incoming items without calling getAll', async () => {
     for (let i = 0; i < 5; i++) {
       emitModuleChange({
         relativePath: `items/i${i}`,
@@ -967,6 +978,7 @@ describe('per-item change handling', () => {
         },
       });
     }
+    await flushItemChangeBatch();
 
     expect(Object.keys(get(items))).toHaveLength(5);
     expect(mockInbox.getAll).not.toHaveBeenCalled();

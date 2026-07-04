@@ -57,13 +57,25 @@ function stripMigrationVersion<T>(doc: T): T {
   return rest as T;
 }
 
+/**
+ * Memoized per document *reference*: `rawItems` entries are replaced (not
+ * mutated) whenever an item changes, so identity is a safe cache key. Without
+ * this, the derived count below re-runs migrateDocument + two JSON.stringify
+ * passes over EVERY item on EVERY change event — during a first sync of N
+ * items that's O(N²) (~9M ops at 3k items) and freezes the UI.
+ */
+const migrationCheckCache = new WeakMap<object, boolean>();
+
 function requiresContentMigration(doc: object): boolean {
+  const cached = migrationCheckCache.get(doc);
+  if (cached !== undefined) return cached;
   const migrated = migrator.migrateDocument('items', doc as InboxItem);
-  if (migrated === doc) return false;
-  return (
+  const result =
+    migrated !== doc &&
     JSON.stringify(stripMigrationVersion(migrated)) !==
-    JSON.stringify(stripMigrationVersion(doc))
-  );
+      JSON.stringify(stripMigrationVersion(doc));
+  migrationCheckCache.set(doc, result);
+  return result;
 }
 
 /** Count only docs whose non-version content would actually change under migration */
@@ -471,6 +483,47 @@ if (inboxRef) {
     relativePath?: string;
     newValue?: unknown;
   };
+  // Item change events are buffered and flushed as ONE store update per
+  // window. RS fires a separate `change` event for every item a sync cycle
+  // delivers; applying each one individually spreads the whole `items`
+  // record and re-runs every derived store (sortedItems sort, collectionItems
+  // rebuild, migration recount) per event — O(N²) during a bulk sync. A 50ms
+  // window coalesces a sync burst into a handful of updates while staying
+  // imperceptible for a single incoming change. Collections/groups/config
+  // change rarely and are still applied immediately below.
+  const pendingItemChanges = new Map<string, object | null>(); // null = delete
+  let itemFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function flushItemChanges() {
+    itemFlushTimer = null;
+    if (pendingItemChanges.size === 0) return;
+    const batch = new Map(pendingItemChanges);
+    pendingItemChanges.clear();
+    rawItems.update((current) => {
+      const next = { ...current };
+      for (const [key, value] of batch) {
+        if (value) next[key] = value;
+        else delete next[key];
+      }
+      return next;
+    });
+    items.update((current) => {
+      const next = { ...current };
+      for (const [key, value] of batch) {
+        if (value) next[key] = normalizeLoadedItem(value);
+        else delete next[key];
+      }
+      return next;
+    });
+  }
+
+  function queueItemChange(key: string, value: object | null) {
+    pendingItemChanges.set(key, value);
+    if (itemFlushTimer === null) {
+      itemFlushTimer = setTimeout(flushItemChanges, 50);
+    }
+  }
+
   inboxRef.onChange((rawEvent: unknown) => {
     const event = rawEvent as ChangeEvent;
     if (!event || event.origin === 'window') return;
@@ -479,24 +532,11 @@ if (inboxRef) {
 
     if (path.startsWith('items/')) {
       const key = path.slice('items/'.length);
-      if (value && typeof value === 'object' && value.id) {
+      if (value && typeof value === 'object' && 'id' in value) {
         if (key !== (value as { id: string }).id) return;
-        rawItems.update((current) => ({ ...current, [key]: value as object }));
-        items.update((current) => ({
-          ...current,
-          [key]: normalizeLoadedItem(value as object),
-        }));
+        queueItemChange(key, value);
       } else if (!value) {
-        rawItems.update((current) => {
-          const next = { ...current };
-          delete next[key];
-          return next;
-        });
-        items.update((current) => {
-          const next = { ...current };
-          delete next[key];
-          return next;
-        });
+        queueItemChange(key, null);
       }
     } else if (path.startsWith('collections/')) {
       const key = path.slice('collections/'.length);
