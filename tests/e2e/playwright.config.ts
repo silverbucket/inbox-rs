@@ -65,6 +65,19 @@ export default defineConfig({
         ...devices['Pixel 5'],
       },
     },
+    {
+      // iPhone 13 runs Playwright's WebKit build — the same engine that ships
+      // in iOS Safari. It's the closest automatable proxy for a real iPhone
+      // (there is no true iOS simulator in headless CI), and it's what guards
+      // image rendering on the platform users actually reported blank cards
+      // on. Requires the WebKit browser: `playwright install --with-deps
+      // webkit` (the chromium-only `test:install` script doesn't cover it).
+      name: 'mobile-webkit',
+      testDir: './mobile',
+      use: {
+        ...devices['iPhone 13'],
+      },
+    },
   ],
   webServer: [
     {

@@ -1,7 +1,12 @@
 <script lang="ts">
   import { inview } from '../lib/actions';
   import type { ImageItem } from '@inbox-rs/rs-module';
-  import { blobUrls, connected, loadFileBlobUrl } from '../lib/stores';
+  import {
+    blobLoadFailures,
+    blobUrls,
+    connected,
+    loadFileBlobUrl,
+  } from '../lib/stores';
   import Lightbox from './Lightbox.svelte';
 
   let { item }: { item: ImageItem } = $props();
@@ -14,9 +19,20 @@
   // Grid cards prefer the downscaled thumbnail; the Lightbox always gets the
   // original. Items captured by clients that don't generate thumbnails have
   // no thumbPath and fall back to the full file.
-  const displayPath = $derived(item.thumbPath || item.filePath);
+  //
+  // If the thumbnail itself can't be loaded — it was never uploaded, or its
+  // best-effort upload failed, so the remote 404s — fall back to the full
+  // image rather than leaving the card blank. `blobLoadFailures` only records
+  // genuine online failures, so this never fires just because the thumb is
+  // still in flight.
+  const thumbFailed = $derived(
+    !!item.thumbPath && $blobLoadFailures.has(item.thumbPath),
+  );
+  const displayPath = $derived(
+    item.thumbPath && !thumbFailed ? item.thumbPath : item.filePath,
+  );
   const displayMime = $derived(
-    item.thumbPath ? item.thumbMimeType : item.mimeType,
+    item.thumbPath && !thumbFailed ? item.thumbMimeType : item.mimeType,
   );
   const imageSrc = $derived($blobUrls[displayPath] || null);
   // Lightbox shows the original at full resolution — kick off its load when

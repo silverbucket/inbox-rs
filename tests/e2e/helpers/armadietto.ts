@@ -189,3 +189,52 @@ export async function putInboxItem(
     );
   }
 }
+
+/**
+ * Write a single binary file directly to RS, bypassing the web app.
+ *
+ * Targets `PUT /storage/<user>/inbox/<path>`, the same location the
+ * rs-module's `storeFile(...)` writes to (image bytes live under
+ * `files/<id>.<ext>`, thumbnails under `files/<id>.thumb.jpg`). Pairing
+ * this with `putInboxItem` lets a test stage an image that exists *only*
+ * on the server — never in any browser's local cache — which is exactly
+ * the state a brand-new device (e.g. a phone that captured nothing) sees.
+ *
+ * The device that captured an image always has its bytes in local
+ * IndexedDB, so it renders regardless of whether the upload reached the
+ * server. Only a fresh device actually exercises the authenticated
+ * `fetchFileWithAuth` GET path — so seeding via the server (not the UI)
+ * is the only way to test that path honestly.
+ */
+export async function putInboxFile(
+  user: RsUser,
+  token: string,
+  options: {
+    path: string;
+    body: ArrayBuffer | Uint8Array;
+    contentType: string;
+  },
+): Promise<void> {
+  const { path, body, contentType } = options;
+  if (!path.startsWith('files/')) {
+    throw new Error(`inbox file path must start with "files/": ${path}`);
+  }
+  const r = await fetch(
+    `${ARMADIETTO_ORIGIN}/storage/${user.username}/inbox/${path}`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': contentType,
+      },
+      body,
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    },
+  );
+  if (r.status !== 200 && r.status !== 201) {
+    const text = await r.text().catch(() => '');
+    throw new Error(
+      `PUT /inbox/${path} for ${user.username} failed: HTTP ${r.status} — ${text.slice(0, 200)}`,
+    );
+  }
+}
