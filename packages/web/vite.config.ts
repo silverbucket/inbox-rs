@@ -59,7 +59,8 @@ export default defineConfig({
         ],
         runtimeCaching: [
           {
-            urlPattern: /\/assets\/(transformers|MarkdownEditor)-[^/]*\.(js|css)$/,
+            urlPattern:
+              /\/assets\/(transformers|MarkdownEditor)-[^/]*\.(js|css)$/,
             handler: 'CacheFirst',
             options: {
               cacheName: 'lazy-chunks',
