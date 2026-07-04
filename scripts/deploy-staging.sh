@@ -29,9 +29,10 @@ git pull --ff-only
 git remote add 5apps-staging "$STAGING_REMOTE_URL" 2>/dev/null \
   || git remote set-url 5apps-staging "$STAGING_REMOTE_URL"
 
-# ── 4. Build. ─────────────────────────────────────────────────────────────────
+# ── 4. Build. STAGING_BUILD=1 turns on sourcemaps + the __STAGING__ debug flag
+#       (see packages/web/vite.config.ts). ──────────────────────────────────────
 npm install
-npm run build
+STAGING_BUILD=1 npm run build
 
 # ── 5. Deploy to staging via a throwaway branch (dist/ never lands on origin) ─
 DEPLOY_BRANCH="staging-deploy/${BRANCH//\//-}"

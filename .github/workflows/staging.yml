@@ -53,6 +53,10 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Build web app
+        # STAGING_BUILD=1 turns on sourcemaps + the __STAGING__ debug flag
+        # (see packages/web/vite.config.ts).
+        env:
+          STAGING_BUILD: '1'
         run: npm run build
 
       - name: Setup SSH for 5apps
