@@ -19,10 +19,15 @@
   // as `image/jpeg` rather than whatever the server echoes back (e.g.
   // `image/jpeg; charset=binary` on 5apps, which Chrome refuses to render).
   // Referencing `$connected` re-runs this so we retry over the network once a
-  // connection is established.
+  // connection is established. Reading `$blobUrls[item.filePath]` also re-runs
+  // it when the LRU cache evicts this path (blobUrls entry deleted), so a card
+  // that scrolled out and lost its blob reloads instead of going blank — the
+  // `inview` observer is one-shot, so `entered` alone never fires again.
   $effect(() => {
     void $connected;
-    if (entered && item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
+    if (entered && item.filePath && !$blobUrls[item.filePath]) {
+      loadFileBlobUrl(item.filePath, item.mimeType);
+    }
   });
 </script>
 

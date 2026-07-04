@@ -18,10 +18,15 @@
   // with the clean type from item metadata rather than the server's
   // Content-Type (which on 5apps carries the `; charset=binary` suffix that
   // Chrome won't render as <img>). Referencing `$connected` retries over the
-  // network once a connection is established.
+  // network once a connection is established; reading `$blobUrls[item.filePath]`
+  // re-runs it when the LRU cache evicts this path, so an evicted card reloads
+  // on scroll-back instead of going blank (the `inview` observer is one-shot,
+  // so `entered` alone never fires again).
   $effect(() => {
     void $connected;
-    if (entered && item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
+    if (entered && item.filePath && !$blobUrls[item.filePath]) {
+      loadFileBlobUrl(item.filePath, item.mimeType);
+    }
   });
 </script>
 

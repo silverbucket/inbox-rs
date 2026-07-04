@@ -26,10 +26,15 @@
   // play. Pass mimeType so the blob is tagged with the clean type from item
   // metadata rather than whatever the server echoes back (e.g.
   // `audio/webm; charset=binary` on 5apps). Referencing `$connected` re-runs
-  // this so we retry over the network once a connection is established.
+  // this so we retry over the network once a connection is established; reading
+  // `$blobUrls[item.filePath]` re-runs it when the LRU cache evicts this path,
+  // so an evicted card reloads on scroll-back instead of losing playback (the
+  // `inview` observer is one-shot, so `entered` alone never fires again).
   $effect(() => {
     void $connected;
-    if (entered && item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
+    if (entered && item.filePath && !$blobUrls[item.filePath]) {
+      loadFileBlobUrl(item.filePath, item.mimeType);
+    }
   });
 
   // Decorative waveform bars derived deterministically from the item id, so
