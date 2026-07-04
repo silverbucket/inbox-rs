@@ -25,6 +25,33 @@ jobs:
       - name: Biome (lint, format, organize imports)
         run: npx biome ci
 
+  typecheck:
+    name: Typecheck (web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      # svelte-check loads svelte.config.js, which pulls in Vite/rollup —
+      # same optional-deps workaround as the build job.
+      - run: npm install @rollup/rollup-linux-x64-gnu --no-save
+
+      - run: npm run build --workspace=@inbox-rs/rs-module
+
+      # svelte-check needs the generated plugin-downloads module that the web
+      # app imports; it's produced by the dev/build hooks, not by `npm ci`.
+      # Generate it directly (lightweight — reads package.json versions only).
+      - name: Generate plugin metadata
+        run: node scripts/gen-plugin-metadata.mjs
+
+      - name: svelte-check (app code)
+        run: npm run check --workspace=@inbox-rs/web
+
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -48,6 +75,9 @@ jobs:
             ${{ runner.os }}-transcription-assets-
 
       - run: npm run build
+
+      - name: Precache budget guard
+        run: npm run check:precache --workspace=@inbox-rs/web
 
       # Stash the built web app so the e2e job doesn't pay for a second
       # cold build — Vite + plugin packaging is the slow step here.

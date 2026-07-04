@@ -13,7 +13,12 @@
   } from '../lib/theme';
   import { layout, setLayoutPersisted } from '../lib/layout';
 
-  type LazyComponent = Component<Record<string, unknown>>;
+  // Typed with the modal's exports so `bind:this` yields the handle we call
+  // (startExport/promptImport) instead of an untyped instance.
+  type LazyComponent = Component<
+    Record<string, unknown>,
+    { startExport: () => void; promptImport: (file: File) => void }
+  >;
 
   let open = $state(false);
   let inputAddress = $state('');
@@ -28,7 +33,7 @@
   let fileInputEl = $state<HTMLInputElement | null>(null);
 
   async function loadImportExportModal() {
-    ImportExportModalComponent ??= (await import('./ImportExportModal.svelte')).default as LazyComponent;
+    ImportExportModalComponent ??= (await import('./ImportExportModal.svelte')).default as unknown as LazyComponent;
   }
 
   // Theme: synced settings take priority, localStorage is the offline fallback

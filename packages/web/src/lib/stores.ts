@@ -210,7 +210,7 @@ function normalizeLoadedItem(item: object): InboxItem {
       body: wrapCodeBlock(body, language),
     } as InboxItem;
   }
-  return candidate as InboxItem;
+  return candidate as unknown as InboxItem;
 }
 
 async function loadItems() {
@@ -553,7 +553,7 @@ if (inboxRef) {
       }
     } else if (path.startsWith('collections/')) {
       const key = path.slice('collections/'.length);
-      if (value && typeof value === 'object' && value.id) {
+      if (value && typeof value === 'object' && 'id' in value) {
         const col = value as Collection;
         // Normalize itemIds — may be missing if written by another client
         collections.update((current) => ({
@@ -572,7 +572,7 @@ if (inboxRef) {
       }
     } else if (path.startsWith('groups/')) {
       const key = path.slice('groups/'.length);
-      if (value && typeof value === 'object' && value.id) {
+      if (value && typeof value === 'object' && 'id' in value) {
         const grp = value as CollectionGroup;
         // Normalize collectionIds — may be missing if written by another client
         groups.update((current) => ({

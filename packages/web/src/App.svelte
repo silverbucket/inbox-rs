@@ -2,10 +2,6 @@
   import type { Component } from 'svelte';
   import { onMount } from 'svelte';
   import type { InboxItemType, InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
-  // Value import (not `import type`): the bound ref below is typed via
-  // `InstanceType<typeof UserMenu>`, and `typeof` needs the value binding.
-  // biome-ignore lint/style/useImportType: typeof needs the runtime binding
-  import UserMenu from './components/UserMenu.svelte';
   import InboxGrid from './components/InboxGrid.svelte';
   import MigrationAlert from './components/MigrationAlert.svelte';
   import ClassicShell from './components/ClassicShell.svelte';
@@ -24,13 +20,16 @@
   import { layout } from './lib/layout';
 
   type LazyComponent = Component<Record<string, unknown>>;
+  // Svelte 5 components are functions, not classes — InstanceType<> doesn't
+  // apply. bind:this yields the component's exports, so type the handle.
+  type UserMenuHandle = { openConnectMenu: () => Promise<void> };
 
   let activeModal = $state<InboxItemType | null>(null);
   let editingItem = $state<InboxItem | undefined>(undefined);
   let viewingItem = $state<InboxItem | null>(null);
   let showCollectionForm = $state(false);
   let showGroupForm = $state(false);
-  let userMenu = $state<InstanceType<typeof UserMenu> | null>(null);
+  let userMenu = $state<UserMenuHandle | null>(null);
   let AddEntryModalComponent = $state<LazyComponent | null>(null);
   let ViewCardModalComponent = $state<LazyComponent | null>(null);
   let PluginsPageComponent = $state<LazyComponent | null>(null);
