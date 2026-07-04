@@ -365,10 +365,7 @@ export async function fetchFileWithAuth(
   try {
     // Encode each segment: paths are UUID-based today, but anything with a
     // space, '#', '?', or non-ASCII would otherwise fail silently (null).
-    const encodedPath = path
-      .split('/')
-      .map(encodeURIComponent)
-      .join('/');
+    const encodedPath = path.split('/').map(encodeURIComponent).join('/');
     const url = `${href}/inbox/${encodedPath}`;
     const resp = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
