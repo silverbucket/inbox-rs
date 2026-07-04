@@ -87,6 +87,26 @@
     status = idleStatus();
     void syncNow();
 
+    // Web Share Target: the OS share sheet lands here as
+    // /capture/?title=…&text=…&url=…. Prefill the note composer and scrub the
+    // params from the address bar so a reload doesn't re-prefill. These keys
+    // never collide with the OAuth callback (access_token/error), which
+    // finishConnectFromRedirect has already consumed above.
+    const shareParams = new URLSearchParams(window.location.search);
+    const sharedParts = [
+      shareParams.get('title'),
+      shareParams.get('text'),
+      shareParams.get('url'),
+    ].filter((part): part is string => !!part?.trim());
+    if (sharedParts.length > 0) {
+      mode = 'note';
+      noteText = noteText
+        ? `${noteText}\n${sharedParts.join('\n')}`
+        : sharedParts.join('\n');
+      window.history.replaceState(null, '', window.location.pathname);
+      requestAnimationFrame(() => noteField?.focus());
+    }
+
     // Drive the app height from the *visual* viewport so the layout shrinks when
     // the on-screen keyboard opens, keeping the Send button above it. The layout
     // viewport (100%/100vh) ignores the keyboard, which otherwise hides Send.
