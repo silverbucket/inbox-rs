@@ -890,6 +890,48 @@ export async function storeItem(
   items.update((current) => ({ ...current, [cleanItem.id]: cleanItem }));
 }
 
+/**
+ * Revoke and forget a single stored file's in-memory blob URL, and clear its
+ * LRU / in-flight / revoked bookkeeping. Shared by deleteItem and removeFile.
+ */
+function releaseBlobPath(path: string) {
+  const existing = get(blobUrls)[path];
+  if (existing) {
+    try {
+      URL.revokeObjectURL(existing);
+    } catch {
+      // ignore
+    }
+    blobUrls.update((current) => {
+      const next = { ...current };
+      delete next[path];
+      return next;
+    });
+  }
+  dropBlobLru(path);
+  // Drop any in-flight load for this specific file (no global gen bump needed).
+  pendingBlobLoads.delete(path);
+  // Mark as revoked so a concurrent in-flight load for this exact path is
+  // ignored on resolution.
+  revokedBlobPaths.add(path);
+}
+
+/**
+ * Delete a single stored file by path (e.g. an orphaned thumbnail left behind
+ * when an image edit produced no new thumbnail) and release its blob URL.
+ * Best-effort: a storage failure is logged, not thrown, so it never fails the
+ * surrounding save.
+ */
+export async function removeFile(path: string) {
+  if (!path) return;
+  try {
+    await requireInbox().removeFile(path);
+  } catch (e) {
+    console.error('[inbox] removeFile failed:', path, e);
+  }
+  releaseBlobPath(path);
+}
+
 export async function deleteItem(id: string, item?: InboxItem) {
   const inbox = requireInbox();
   await inbox.remove(id, item);
@@ -908,24 +950,7 @@ export async function deleteItem(id: string, item?: InboxItem) {
     asFileItem?.thumbPath || stored?.thumbPath,
   ]) {
     if (typeof path !== 'string' || !path) continue;
-    const existing = get(blobUrls)[path];
-    if (existing) {
-      try {
-        URL.revokeObjectURL(existing);
-      } catch {
-        // ignore
-      }
-      blobUrls.update((current) => {
-        const next = { ...current };
-        delete next[path];
-        return next;
-      });
-    }
-    dropBlobLru(path);
-    // Also drop any in-flight load for this specific file (no global gen bump needed).
-    pendingBlobLoads.delete(path);
-    // Mark as revoked so any concurrent in-flight load for this exact path is ignored on resolution.
-    revokedBlobPaths.add(path);
+    releaseBlobPath(path);
   }
 
   rawItems.update((current) => {

@@ -86,6 +86,8 @@ export interface InboxModuleExports {
     thumbData?: ArrayBuffer,
   ): Promise<void>;
   remove(id: string, item?: InboxItem): Promise<void>;
+  /** Delete a single stored file by path (e.g. an orphaned thumbnail). */
+  removeFile(path: string): Promise<void>;
   getFile(
     path: string,
   ): Promise<{ data: ArrayBuffer; mimeType: string } | undefined>;
@@ -277,6 +279,10 @@ const InboxModule = {
           if (item && 'thumbPath' in item && item.thumbPath) {
             await privateClient.remove(item.thumbPath);
           }
+        },
+
+        async removeFile(path: string): Promise<void> {
+          await privateClient.remove(path);
         },
 
         async getFile(

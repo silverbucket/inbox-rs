@@ -18,6 +18,7 @@ const { mockRs, mockInbox } = vi.hoisted(() => {
     onChange: vi.fn(),
     store: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
+    removeFile: vi.fn().mockResolvedValue(undefined),
     getFile: vi.fn().mockResolvedValue(undefined),
     storeCollection: vi.fn().mockResolvedValue(undefined),
     removeCollection: vi.fn().mockResolvedValue(undefined),

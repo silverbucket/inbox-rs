@@ -132,6 +132,15 @@ export async function buildImageItem(
     const thumbPath = thumb
       ? existingThumbPath || `files/${ctx.id}.thumb.jpg`
       : undefined;
+    // If an edit drops the thumbnail (new bytes can't be downscaled) or moves
+    // it to a different path, the old thumb file is no longer referenced by
+    // anything — flag it for the caller to delete so it doesn't linger in
+    // storage. When the thumb is regenerated at the same path it's simply
+    // overwritten, so there's nothing to remove.
+    const removePaths =
+      existingThumbPath && existingThumbPath !== thumbPath
+        ? [existingThumbPath]
+        : undefined;
     const item: ImageItem = {
       id: ctx.id,
       type: 'image',
@@ -147,6 +156,7 @@ export async function buildImageItem(
       item: preserveCollection(ctx, item),
       fileData,
       thumbData: thumb?.data,
+      ...(removePaths ? { removePaths } : {}),
     };
   }
   if (ctx.editItem && ctx.editItem.type === 'image') {
