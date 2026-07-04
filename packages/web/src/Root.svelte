@@ -2,6 +2,7 @@
   import type { Component } from 'svelte';
   import { onMount } from 'svelte';
   import LogoShield from './components/LogoShield.svelte';
+  import StagingBadge from './components/StagingBadge.svelte';
 
   let FullApp = $state<Component | null>(null);
   let failed = $state(false);
@@ -17,6 +18,8 @@
       });
   });
 </script>
+
+<StagingBadge />
 
 {#if FullApp}
   <FullApp />

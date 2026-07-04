@@ -1,0 +1,88 @@
+name: Deploy to Staging
+
+# Secondary publishing method: builds an arbitrary branch and deploys just the
+# web app's dist/ to the staging 5apps site (inbox-staging.5apps.com).
+#
+# Unlike release.yml this does NOT bump versions, tag, push to origin, or cut a
+# GitHub Release — it only builds the selected branch and ships the built
+# artifacts to the staging remote. Nothing about origin/master is touched.
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to build and deploy to staging
+        required: true
+        type: string
+        default: master
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+          # Full history is required — `git subtree split` walks the whole
+          # commit graph, so a shallow clone (checkout's default fetch-depth: 1)
+          # would break the deploy.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm install @rollup/rollup-linux-x64-gnu --no-save
+
+      - name: Restore transcription asset cache
+        uses: actions/cache@v4
+        with:
+          path: packages/web/public/ml
+          key: ${{ runner.os }}-transcription-assets-${{ hashFiles('scripts/vendor-transcription-assets.mjs', 'package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-transcription-assets-
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Build web app
+        # STAGING_BUILD=1 turns on sourcemaps + the __STAGING__ debug flag
+        # (see packages/web/vite.config.ts).
+        env:
+          STAGING_BUILD: '1'
+        run: npm run build
+
+      - name: Setup SSH for 5apps
+        env:
+          FIVEAPPS_DEPLOY_KEY: ${{ secrets.FIVEAPPS_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$FIVEAPPS_DEPLOY_KEY" > ~/.ssh/5apps_key
+          chmod 600 ~/.ssh/5apps_key
+          ssh-keyscan -H 5apps.com >> ~/.ssh/known_hosts
+          echo -e "Host 5apps.com\n  IdentityFile ~/.ssh/5apps_key" >> ~/.ssh/config
+
+      - name: Deploy to 5apps staging
+        # Force-add build artifacts onto a throwaway deploy branch, extract just
+        # the dist/ subtree, and push that to the staging remote. The deploy
+        # commit is never pushed to origin.
+        env:
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          git remote add 5apps-staging git@5apps.com:silverbucket_inbox-rs-staging.git 2>/dev/null \
+            || git remote set-url 5apps-staging git@5apps.com:silverbucket_inbox-rs-staging.git
+
+          # Throwaway branch for the deploy commit so nothing local is pushed to origin.
+          git checkout -b "staging-deploy/${{ github.run_id }}"
+          git add packages/web/dist -f
+          git commit -m "deploy ${BRANCH} to staging [skip ci]"
+
+          SPLIT_SHA=$(git subtree split --prefix=packages/web/dist)
+          git push 5apps-staging "$SPLIT_SHA":refs/heads/master --force
