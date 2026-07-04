@@ -244,10 +244,15 @@ const InboxModule = {
         },
 
         async remove(id: string, item?: InboxItem): Promise<void> {
+          // Metadata first, then the binary. If the second call fails
+          // (network drop mid-operation), the failure mode is an orphaned,
+          // invisible file — harmless and reclaimable. The previous order
+          // (file first) could strand an item whose file was already gone:
+          // a permanently broken card in every client.
+          await privateClient.remove(`items/${id}`);
           if (item && 'filePath' in item && item.filePath) {
             await privateClient.remove(item.filePath);
           }
-          await privateClient.remove(`items/${id}`);
         },
 
         async getFile(
