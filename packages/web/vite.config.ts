@@ -37,8 +37,41 @@ export default defineConfig({
         ],
         cleanupOutdatedCaches: true,
         navigateFallback: '/index.html',
+        // The quick-capture app is its own shell (capture/index.html). Without
+        // this, any /capture/ navigation that isn't an exact precache match
+        // (query params from OAuth redirects or a future share_target, sub-
+        // paths) falls through to the MAIN app's index.html and boots the
+        // wrong app inside the capture PWA window.
+        navigateFallbackDenylist: [/^\/capture\//],
         globPatterns: ['**/*.{js,css,html,png,svg,webmanifest,wasm}'],
-        globIgnores: ['ml/**/*'],
+        globIgnores: [
+          'ml/**/*',
+          // Lazy-only heavyweights (~1.4 MB minified combined). They're
+          // dynamic-imported and most sessions never execute them, yet
+          // precaching forces every visitor to download them on install and
+          // re-download on every release (content hashes change). Excluding
+          // them cuts the precache from ~2.2 MB to ~0.85 MB; the runtime
+          // CacheFirst route below still makes them offline-available after
+          // first use (hashed filenames are immutable, so CacheFirst is safe).
+          'assets/transformers-*.js',
+          'assets/MarkdownEditor-*.js',
+          'assets/MarkdownEditor-*.css',
+        ],
+        runtimeCaching: [
+          {
+            urlPattern:
+              /\/assets\/(transformers|MarkdownEditor)-[^/]*\.(js|css)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'lazy-chunks',
+              expiration: {
+                maxEntries: 12,
+                maxAgeSeconds: 60 * 60 * 24 * 60, // 60 days
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
     }),
   ],
