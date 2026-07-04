@@ -10,6 +10,7 @@ import {
   extractTokenFromRedirect,
   type RSConfig,
 } from '@inbox-rs/rs-module/runtime';
+import { generateThumbnail, THUMB_MIME_TYPE } from '../lib/thumbnail';
 
 /** The three ways to capture. Maps to inbox item types note / audio / image. */
 export type CaptureMode = 'note' | 'voice' | 'image';
@@ -31,6 +32,8 @@ export type CaptureRecord = {
   lastError?: string;
   item: InboxItem;
   hasBlob: boolean;
+  /** A generated thumbnail is queued in IndexedDB under `<id>:thumb`. */
+  hasThumb?: boolean;
 };
 
 const CONFIG_KEY = 'inbox-rs-capture:config';
@@ -192,18 +195,35 @@ export function captureNote(text: string): CaptureRecord {
 export async function captureImage(file: File): Promise<CaptureRecord> {
   const id = crypto.randomUUID();
   const ext = extFromName(file.name) || extFromMime(file.type) || '.jpg';
+  // Best-effort thumbnail (null when the source is already small or can't be
+  // decoded); queued alongside the original and uploaded on flush.
+  const thumb = await generateThumbnail(file);
   const item: ImageItem = {
     id,
     type: 'image',
     title: file.name || 'Photo',
     filePath: `files/${id}${ext}`,
     mimeType: file.type || 'image/jpeg',
+    thumbPath: thumb ? `files/${id}.thumb.jpg` : undefined,
+    thumbMimeType: thumb ? THUMB_MIME_TYPE : undefined,
     createdAt: new Date().toISOString(),
   };
   await putBlob(id, file);
+  if (thumb) {
+    await putBlob(
+      thumbKey(id),
+      new Blob([thumb.data], { type: thumb.mimeType }),
+    );
+  }
   const record = newRecord(id, 'image', file.name || 'Photo', item, true);
-  prepend(record);
-  return record;
+  const withThumb: CaptureRecord = { ...record, hasThumb: !!thumb };
+  prepend(withThumb);
+  return withThumb;
+}
+
+/** IndexedDB key for a capture's queued thumbnail bytes. */
+function thumbKey(id: string): string {
+  return `${id}:thumb`;
 }
 
 /** Queue a voice memo for delivery; the binary is held in IndexedDB. */
@@ -257,12 +277,16 @@ export async function flushQueue(
     saveHistory(records);
     try {
       const fileData = entry.hasBlob ? await getBlobBytes(entry.id) : undefined;
-      await rs.store(entry.item, fileData);
+      const thumbData = entry.hasThumb
+        ? await getBlobBytes(thumbKey(entry.id))
+        : undefined;
+      await rs.store(entry.item, fileData, thumbData);
       records = patch(records, entry.id, {
         status: 'synced',
         lastError: undefined,
       });
       if (entry.hasBlob) await deleteBlob(entry.id);
+      if (entry.hasThumb) await deleteBlob(thumbKey(entry.id));
     } catch (error) {
       records = patch(records, entry.id, {
         status: 'failed',
@@ -279,6 +303,7 @@ export async function removeRecord(id: string): Promise<CaptureRecord[]> {
   const records = getHistory().filter((r) => r.id !== id);
   saveHistory(records);
   await deleteBlob(id);
+  await deleteBlob(thumbKey(id));
   return records;
 }
 

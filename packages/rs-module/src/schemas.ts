@@ -63,6 +63,8 @@ export const imageMetaSchema = {
     filePath: { type: 'string' },
     mimeType: { type: 'string' },
     sourceUrl: { type: 'string' },
+    thumbPath: { type: 'string' },
+    thumbMimeType: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
     ...collectionFields,

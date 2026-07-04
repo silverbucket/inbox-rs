@@ -42,6 +42,14 @@ export interface ImageItem extends InboxItemBase {
   filePath: string;
   mimeType: string;
   sourceUrl?: string; // original URL the image was saved from
+  /**
+   * Optional downscaled preview stored alongside the original (grid cards
+   * load this; the lightbox loads filePath). Absent on items captured by
+   * clients that don't generate thumbnails — consumers must fall back to
+   * filePath.
+   */
+  thumbPath?: string;
+  thumbMimeType?: string;
 }
 
 export interface AudioItem extends InboxItemBase {

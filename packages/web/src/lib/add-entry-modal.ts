@@ -23,6 +23,8 @@ export interface BuildItemContext {
 export interface BuildItemResult {
   item: InboxItem;
   fileData?: ArrayBuffer;
+  /** Downscaled preview bytes for image items (see lib/thumbnail.ts). */
+  thumbData?: ArrayBuffer;
 }
 
 /**

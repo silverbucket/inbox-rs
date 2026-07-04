@@ -540,7 +540,7 @@ describe('todoItems ordering', () => {
 
     await storeItem(todo);
 
-    expect(mockInbox.store).toHaveBeenCalledWith(todo, undefined);
+    expect(mockInbox.store).toHaveBeenCalledWith(todo, undefined, undefined);
     expect(get(items).quick).toMatchObject({
       id: 'quick',
       title: 'Quick thought',

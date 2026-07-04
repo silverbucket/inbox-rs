@@ -80,7 +80,11 @@ export type {
 export interface InboxModuleExports {
   getAll(): Promise<Record<string, InboxItem>>;
   getById(id: string): Promise<InboxItem | undefined>;
-  store(item: InboxItem, fileData?: ArrayBuffer): Promise<void>;
+  store(
+    item: InboxItem,
+    fileData?: ArrayBuffer,
+    thumbData?: ArrayBuffer,
+  ): Promise<void>;
   remove(id: string, item?: InboxItem): Promise<void>;
   getFile(
     path: string,
@@ -214,7 +218,11 @@ const InboxModule = {
           return item;
         },
 
-        async store(item: InboxItem, fileData?: ArrayBuffer): Promise<void> {
+        async store(
+          item: InboxItem,
+          fileData?: ArrayBuffer,
+          thumbData?: ArrayBuffer,
+        ): Promise<void> {
           // Stamp new items with the current migration version so they aren't
           // flagged as needing migration by getPending().
           if (item._migrateVersion === undefined) {
@@ -236,6 +244,19 @@ const InboxModule = {
               fileData,
             );
           }
+          if (
+            thumbData &&
+            'thumbPath' in item &&
+            item.thumbPath &&
+            'thumbMimeType' in item &&
+            item.thumbMimeType
+          ) {
+            await privateClient.storeFile(
+              item.thumbMimeType,
+              item.thumbPath,
+              thumbData,
+            );
+          }
           await privateClient.storeObject(
             schemaAlias(item.type),
             `items/${item.id}`,
@@ -252,6 +273,9 @@ const InboxModule = {
           await privateClient.remove(`items/${id}`);
           if (item && 'filePath' in item && item.filePath) {
             await privateClient.remove(item.filePath);
+          }
+          if (item && 'thumbPath' in item && item.thumbPath) {
+            await privateClient.remove(item.thumbPath);
           }
         },
 

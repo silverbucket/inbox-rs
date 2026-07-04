@@ -11,7 +11,18 @@
   // image at once.
   let entered = $state(false);
 
-  const imageSrc = $derived($blobUrls[item.filePath] || null);
+  // Grid cards prefer the downscaled thumbnail; the Lightbox always gets the
+  // original. Items captured by clients that don't generate thumbnails have
+  // no thumbPath and fall back to the full file.
+  const displayPath = $derived(item.thumbPath || item.filePath);
+  const displayMime = $derived(
+    item.thumbPath ? item.thumbMimeType : item.mimeType,
+  );
+  const imageSrc = $derived($blobUrls[displayPath] || null);
+  // Lightbox shows the original at full resolution — kick off its load when
+  // opened and show the thumbnail as a progressive placeholder until the
+  // original's blob URL lands.
+  const fullSrc = $derived($blobUrls[item.filePath] || imageSrc);
 
   // Load the image bytes once visible. loadFileBlobUrl reads the local cache
   // first (file paths are immutable) and falls back to the remote, so files
@@ -19,13 +30,21 @@
   // as `image/jpeg` rather than whatever the server echoes back (e.g.
   // `image/jpeg; charset=binary` on 5apps, which Chrome refuses to render).
   // Referencing `$connected` re-runs this so we retry over the network once a
-  // connection is established. Reading `$blobUrls[item.filePath]` also re-runs
-  // it when the LRU cache evicts this path (blobUrls entry deleted), so a card
+  // connection is established. Reading `$blobUrls[displayPath]` also re-runs it
+  // when the LRU cache evicts this path (blobUrls entry deleted), so a card
   // that scrolled out and lost its blob reloads instead of going blank — the
   // `inview` observer is one-shot, so `entered` alone never fires again.
   $effect(() => {
     void $connected;
-    if (entered && item.filePath && !$blobUrls[item.filePath]) {
+    if (entered && displayPath && !$blobUrls[displayPath]) {
+      loadFileBlobUrl(displayPath, displayMime);
+    }
+  });
+
+  // Lightbox needs the original; re-fetch if it was never loaded or got
+  // evicted (guard on `$blobUrls[item.filePath]` for the same eviction reason).
+  $effect(() => {
+    if (showLightbox && item.filePath && !$blobUrls[item.filePath]) {
       loadFileBlobUrl(item.filePath, item.mimeType);
     }
   });
@@ -51,7 +70,7 @@
     {/if}
   </div>
   {#if showLightbox && imageSrc}
-    <Lightbox src={imageSrc} alt={item.title || 'Image'} onclose={() => showLightbox = false} filePath={item.filePath} mimeType={item.mimeType} filename={item.title || undefined} />
+    <Lightbox src={fullSrc || imageSrc} alt={item.title || 'Image'} onclose={() => showLightbox = false} filePath={item.filePath} mimeType={item.mimeType} filename={item.title || undefined} />
   {/if}
   {#if item.sourceUrl}
     <a class="source-link" href={item.sourceUrl} target="_blank" rel="noopener noreferrer">

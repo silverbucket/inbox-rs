@@ -26,6 +26,7 @@ import type {
   TodoItem,
 } from '@inbox-rs/rs-module';
 import { type BuildItemResult, getFileExtension } from './add-entry-modal';
+import { generateThumbnail, THUMB_MIME_TYPE } from './thumbnail';
 
 export interface BuildContext {
   id: string;
@@ -122,16 +123,31 @@ export async function buildImageItem(
     const ext = getFileExtension(data.file.name);
     const filePath = existingPath || `files/${ctx.id}${ext}`;
     const fileData = await data.file.arrayBuffer();
+    // Best-effort thumbnail for grid cards (null when the original is already
+    // small or the browser can't decode it — consumers fall back to filePath).
+    // On edit, reuse the existing thumb path so replaced bytes overwrite it.
+    const existingThumbPath =
+      ctx.editItem?.type === 'image' ? ctx.editItem.thumbPath : undefined;
+    const thumb = await generateThumbnail(data.file);
+    const thumbPath = thumb
+      ? existingThumbPath || `files/${ctx.id}.thumb.jpg`
+      : undefined;
     const item: ImageItem = {
       id: ctx.id,
       type: 'image',
       title: data.title || data.file.name,
       filePath,
       mimeType: data.file.type,
+      thumbPath,
+      thumbMimeType: thumb ? THUMB_MIME_TYPE : undefined,
       description: data.description || undefined,
       createdAt: ctx.createdAt,
     };
-    return { item: preserveCollection(ctx, item), fileData };
+    return {
+      item: preserveCollection(ctx, item),
+      fileData,
+      thumbData: thumb?.data,
+    };
   }
   if (ctx.editItem && ctx.editItem.type === 'image') {
     const item: ImageItem = {

@@ -196,7 +196,7 @@
         : new Date().toISOString();
       const result = await formBuildItem({ id, createdAt, isEdit, editItem });
       if (!result) return;
-      const { item, fileData } = result;
+      const { item, fileData, thumbData } = result;
 
       // Preserve todo fields when editing non-todo types (converted items).
       // For actual todo types, the form's completed checkbox is the source
@@ -212,7 +212,7 @@
       //   undefined + todo        → unfiled todo (no collectionId, no fake
       //                              collection/group written)
       //   real id                 → assign via moveItemToCollection after storage
-      await storeItem(item, fileData);
+      await storeItem(item, fileData, thumbData);
       if (selectedCollectionId && !isEdit) {
         await moveItemToCollection(item.id, selectedCollectionId);
       }
