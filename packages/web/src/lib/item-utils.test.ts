@@ -211,10 +211,10 @@ describe('todoNote', () => {
     expect(todoNote(item)).toBe('Description first');
   });
 
-  it('returns an empty string when the first line is whitespace-only', () => {
-    // Documents current behavior: the truthiness guard runs on the untrimmed
-    // multi-line value, so a whitespace-only first line trims to '' and is
-    // returned as-is rather than collapsing to null.
+  it('returns null when the first line is whitespace-only', () => {
+    // A whitespace-only first line has nothing to show, so it collapses to
+    // null (consistent with the empty/absent cases) rather than rendering a
+    // blank note row in todo tiles.
     const item: NoteItem = {
       id: 'note-1',
       type: 'note',
@@ -222,7 +222,7 @@ describe('todoNote', () => {
       body: '   \nsecond line',
       createdAt: '2026-04-01T00:00:00.000Z',
     };
-    expect(todoNote(item)).toBe('');
+    expect(todoNote(item)).toBeNull();
   });
 });
 

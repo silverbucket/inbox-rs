@@ -68,6 +68,11 @@ export function todoNote(item: InboxItem): string | null {
     item.description ||
     ('body' in item ? (r.body as string | undefined) : null);
   if (!notes) return null;
+  // Trim the first line *before* deciding there's nothing to show — the guard
+  // above runs on the full (possibly multi-line) value, so an input whose
+  // first line is only whitespace (e.g. `'   \nsecond'`) would otherwise
+  // return '' and render a blank note row in todo tiles.
   const firstLine = notes.split('\n')[0].trim();
+  if (!firstLine) return null;
   return firstLine.length > 80 ? `${firstLine.slice(0, 80)}...` : firstLine;
 }
