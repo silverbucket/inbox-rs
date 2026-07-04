@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "playwright test",
-    "test:install": "playwright install --with-deps chromium",
+    "test:install": "playwright install --with-deps chromium webkit",
     "report": "playwright show-report"
   },
   "dependencies": {

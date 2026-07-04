@@ -29,6 +29,35 @@ function requireInbox() {
 /** Blob URLs for files that were just uploaded (available before remote sync completes) */
 export const blobUrls = writable<Record<string, string>>({});
 
+/**
+ * File paths whose bytes could not be loaded while *connected* — i.e. the
+ * remote returned no usable file (a 404, or a fetch error) and there was no
+ * local copy either. Distinct from "not loaded yet": a path only lands here
+ * after a genuine online failure. Grid cards use it to fall back from a
+ * missing thumbnail to the full image (see ImageCard), so a thumb that was
+ * never uploaded — or failed its best-effort upload — doesn't leave a
+ * permanently blank card when the original image is perfectly fetchable.
+ */
+export const blobLoadFailures = writable<Set<string>>(new Set());
+
+function markBlobLoadFailed(filePath: string) {
+  blobLoadFailures.update((s) => {
+    if (s.has(filePath)) return s;
+    const next = new Set(s);
+    next.add(filePath);
+    return next;
+  });
+}
+
+function clearBlobLoadFailed(filePath: string) {
+  blobLoadFailures.update((s) => {
+    if (!s.has(filePath)) return s;
+    const next = new Set(s);
+    next.delete(filePath);
+    return next;
+  });
+}
+
 export const connected = writable(false);
 export const syncing = writable(false);
 
@@ -771,10 +800,27 @@ async function resolveFileBlobUrl(
   filePath: string,
   mimeType?: string,
 ): Promise<string | null> {
-  // Cache first: file paths are UUID-based and immutable, so a local copy can
-  // never be stale. Reading the remote first (the previous order) re-downloaded
-  // every visible file on every page load even though the bytes were already —
-  // or about to be — in the local cache.
+  // Network first when connected. We deliberately do NOT read remoteStorage's
+  // local cache before the remote for binaries: remotestorage.js's sync layer
+  // corrupts a *remotely-fetched* binary body by running it through a
+  // non-fatal UTF-8 decode, so bytes like 0x89 (a PNG's first byte) come back
+  // as U+FFFD (0xFD) with the length shifted. The loss is not recoverable
+  // (`recoverLegacyBinaryStringEncoding` only reverses the lossless legacy
+  // shapes), so a device that never *wrote* the file itself — i.e. any device
+  // other than the one that captured it — would render a broken image from
+  // cache. `fetchFileWithAuth` reads the raw response bytes and is always
+  // faithful. The extra fetch is deduped within a session by the in-memory
+  // `blobUrls` LRU cache, so a given path is only fetched once per session.
+  if (get(connected)) {
+    const url = await fetchFileBlobUrl(filePath, mimeType);
+    if (url) return url;
+  }
+  // Offline, or the remote 404'd because the file was captured on this device
+  // and hasn't synced yet: read the local cache, where `store()` writes the
+  // bytes regardless of connection state. This copy is faithful because *we*
+  // wrote the raw ArrayBuffer into it — it never went through the sync layer's
+  // corrupting decode. Without this fallback, offline-captured files would
+  // vanish on reload even though their bytes are sitting in the cache.
   const inbox = getInbox();
   if (inbox) {
     try {
@@ -792,14 +838,8 @@ async function resolveFileBlobUrl(
         return URL.createObjectURL(blob);
       }
     } catch {
-      // fall through to the network path
+      // No cached copy either — give up (returns null → placeholder).
     }
-  }
-  // Not cached yet (e.g. captured on another device and not viewed here) —
-  // fetch over authenticated HTTP. The bytes land in the SEEN cache via the
-  // sync layer the next time RS reads the node; subsequent loads are local.
-  if (get(connected)) {
-    return fetchFileBlobUrl(filePath, mimeType);
   }
   return null;
 }
@@ -823,7 +863,15 @@ export function loadFileBlobUrl(filePath: string, mimeType?: string): void {
   pendingBlobLoads.set(filePath, gen);
   resolveFileBlobUrl(filePath, mimeType)
     .then((url) => {
-      if (!url) return;
+      if (!url) {
+        // A null result while connected is a genuine failure (remote 404 or
+        // fetch error, and no local copy) — record it so grid cards can fall
+        // back from a missing thumbnail to the full image. While offline it
+        // just means "not available yet"; the `$connected` re-run retries.
+        if (get(connected)) markBlobLoadFailed(filePath);
+        return;
+      }
+      clearBlobLoadFailed(filePath);
       // Ignore (and revoke) results that are stale due to disconnect, delete, etc.
       if (
         pendingBlobLoads.get(filePath) !== gen ||
