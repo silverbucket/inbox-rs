@@ -43,6 +43,12 @@ jobs:
 
       - run: npm run build --workspace=@inbox-rs/rs-module
 
+      # svelte-check needs the generated plugin-downloads module that the web
+      # app imports; it's produced by the dev/build hooks, not by `npm ci`.
+      # Generate it directly (lightweight — reads package.json versions only).
+      - name: Generate plugin metadata
+        run: node scripts/gen-plugin-metadata.mjs
+
       - name: svelte-check (app code)
         run: npm run check --workspace=@inbox-rs/web
 
