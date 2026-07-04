@@ -55,7 +55,7 @@
       content: value,
       autofocus: focusOnMount ? 'end' : false,
       onUpdate: ({ editor: e }) => {
-        value = e.storage.markdown.getMarkdown();
+        value = (e.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown();
       },
       editorProps: {
         attributes: {
@@ -75,7 +75,7 @@
       return;
     }
 
-    const currentMd = editor.storage.markdown.getMarkdown();
+    const currentMd = (editor.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown();
     if (currentMd !== value) {
       editor.commands.setContent(value);
     }

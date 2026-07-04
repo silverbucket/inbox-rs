@@ -6,6 +6,9 @@
   import { pageUsesFilters, type Page, type Route } from '../lib/route';
   import { appVersion } from '../lib/plugin-downloads.generated';
 
+  // bind:this on a Svelte 5 component yields its exports, not a class instance.
+  type UserMenuHandle = { openConnectMenu: () => Promise<void> };
+
   let {
     route,
     navTo,
@@ -18,7 +21,7 @@
     navTo: (page: Page) => void;
     openTodoCount: number;
     onaddgroup: () => void;
-    userMenu?: InstanceType<typeof UserMenu> | null;
+    userMenu?: UserMenuHandle | null;
     children: Snippet;
   } = $props();
 

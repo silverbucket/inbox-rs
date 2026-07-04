@@ -62,7 +62,7 @@ export function todoNote(item: InboxItem): string | null {
   // Reach into optional fields that don't exist on every variant of
   // InboxItem. A Record cast keeps the expression readable without
   // sprinkling `any` through the lookups.
-  const r = item as Record<string, unknown>;
+  const r = item as unknown as Record<string, unknown>;
   const notes =
     ('notes' in item ? (r.notes as string | undefined) : null) ||
     item.description ||

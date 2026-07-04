@@ -9,20 +9,20 @@
   } = $props();
 
   const existingUrl = $derived(getSharedUrl(filePath));
-  let state = $state<'idle' | 'sharing' | 'done' | 'error'>('idle');
+  let shareState = $state<'idle' | 'sharing' | 'done' | 'error'>('idle');
   let publicUrl = $state('');
   let copied = $state(false);
   let verified = $state(false);
 
   $effect(() => {
-    if (existingUrl && state === 'idle' && !verified) {
+    if (existingUrl && shareState === 'idle' && !verified) {
       publicUrl = existingUrl;
-      state = 'done';
+      shareState = 'done';
       verified = true;
       verifySharedUrl(filePath).then((live) => {
-        if (!live && state === 'done') {
+        if (!live && shareState === 'done') {
           publicUrl = '';
-          state = 'idle';
+          shareState = 'idle';
         }
       });
     }
@@ -39,8 +39,8 @@
   }
 
   async function share() {
-    if (state === 'sharing') return;
-    state = 'sharing';
+    if (shareState === 'sharing') return;
+    shareState = 'sharing';
 
     try {
       const shares = rs.shares;
@@ -64,12 +64,12 @@
 
       const shareUrl = remote.href + filePutPath;
       publicUrl = shareUrl;
-      state = 'done';
+      shareState = 'done';
       saveSharedUrl(filePath, shareUrl);
     } catch (e) {
       console.error('Sharesome save failed:', e);
-      state = 'error';
-      setTimeout(() => { state = 'idle'; }, 2000);
+      shareState = 'error';
+      setTimeout(() => { shareState = 'idle'; }, 2000);
     }
   }
 
@@ -80,7 +80,7 @@
   }
 </script>
 
-{#if state === 'done'}
+{#if shareState === 'done'}
   <div class="share-result">
     <span class="saved-indicator">
       <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -100,11 +100,11 @@
       type="button"
       class="btn-share"
       onclick={share}
-      disabled={state === 'sharing'}
+      disabled={shareState === 'sharing'}
     >
-      {#if state === 'sharing'}
+      {#if shareState === 'sharing'}
         Saving...
-      {:else if state === 'error'}
+      {:else if shareState === 'error'}
         Failed
       {:else}
         Sharesome

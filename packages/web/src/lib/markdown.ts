@@ -1,7 +1,12 @@
+import type { Config as DOMPurifyConfig } from 'dompurify';
 import DOMPurify from 'dompurify';
+import type { LanguageFn } from 'highlight.js';
 import hljs from 'highlight.js/lib/core';
 import { Marked } from 'marked';
 
+// `satisfies` keeps the literal checked against DOMPurify's Config while
+// avoiding `as const`, whose readonly arrays don't satisfy Config's mutable
+// string[] fields under typechecking.
 const MARKDOWN_SANITIZE_OPTIONS = {
   USE_PROFILES: { html: true },
   FORBID_TAGS: [
@@ -29,9 +34,12 @@ const MARKDOWN_SANITIZE_OPTIONS = {
     'base',
   ],
   FORBID_ATTR: ['style'],
-} as const;
+} satisfies DOMPurifyConfig;
 
-export const langModules: Record<string, () => Promise<unknown>> = {
+export const langModules: Record<
+  string,
+  () => Promise<{ default: LanguageFn }>
+> = {
   javascript: () => import('highlight.js/lib/languages/javascript'),
   typescript: () => import('highlight.js/lib/languages/typescript'),
   python: () => import('highlight.js/lib/languages/python'),
