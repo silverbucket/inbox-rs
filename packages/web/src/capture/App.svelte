@@ -26,6 +26,7 @@
     initTheme,
     type Mode,
   } from './theme';
+  import StagingBadge from '../components/StagingBadge.svelte';
 
   type BeforeInstallPromptEvent = Event & {
     prompt: () => Promise<void>;
@@ -299,6 +300,8 @@
     });
   }
 </script>
+
+<StagingBadge />
 
 <main class="screen">
   <header class="topbar">

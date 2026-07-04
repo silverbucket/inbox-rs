@@ -10,6 +10,11 @@ const { version } = JSON.parse(
   readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8'),
 );
 
+// Staging builds (STAGING_BUILD=1, set by the staging deploy paths) emit
+// sourcemaps and flip __STAGING__ so the app can surface extra debugging
+// help. Production builds leave both off — nothing here changes for them.
+const isStaging = process.env.STAGING_BUILD === '1';
+
 export default defineConfig({
   plugins: [
     svelte(),
@@ -54,7 +59,8 @@ export default defineConfig({
         ],
         runtimeCaching: [
           {
-            urlPattern: /\/assets\/(transformers|MarkdownEditor)-[^/]*\.(js|css)$/,
+            urlPattern:
+              /\/assets\/(transformers|MarkdownEditor)-[^/]*\.(js|css)$/,
             handler: 'CacheFirst',
             options: {
               cacheName: 'lazy-chunks',
@@ -71,6 +77,7 @@ export default defineConfig({
   ],
   define: {
     __APP_VERSION__: JSON.stringify(version),
+    __STAGING__: JSON.stringify(isStaging),
   },
   server: {
     port: 5173,
@@ -93,6 +100,9 @@ export default defineConfig({
     // 89 / Firefox 89 / Safari 15 — all 2021 baselines, well below our
     // supported floor.
     target: ['chrome89', 'edge89', 'firefox89', 'safari15'],
+    // Emit full external sourcemaps for staging so runtime errors map back to
+    // original TypeScript/Svelte. Off for production to keep source private.
+    sourcemap: isStaging,
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, 'index.html'),
