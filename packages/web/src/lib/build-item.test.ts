@@ -310,6 +310,55 @@ describe('buildImageItem', () => {
       description: 'a new caption',
     });
   });
+
+  // In jsdom there's no createImageBitmap, so generateThumbnail resolves to
+  // null — the same path a real replacement that can't be downscaled takes.
+  it('flags the previous thumbnail for removal when a replacement yields no thumb', async () => {
+    const editItem: ImageItem = {
+      id: 'img-1',
+      type: 'image',
+      title: 'Old',
+      filePath: 'files/img-1.png',
+      mimeType: 'image/png',
+      thumbPath: 'files/img-1.thumb.jpg',
+      thumbMimeType: 'image/jpeg',
+      createdAt: '2026-04-29T08:00:00.000Z',
+    };
+    const replacement = new File(['xyz'], 'replacement.jpg', {
+      type: 'image/jpeg',
+    });
+
+    const result = await buildImageItem(ctx({ id: 'img-1', editItem }), {
+      title: '',
+      description: '',
+      file: replacement,
+    });
+
+    expect((result?.item as ImageItem).thumbPath).toBeUndefined();
+    expect(result?.removePaths).toEqual(['files/img-1.thumb.jpg']);
+  });
+
+  it('does not flag removal when the edited image had no previous thumbnail', async () => {
+    const editItem: ImageItem = {
+      id: 'img-1',
+      type: 'image',
+      title: 'Old',
+      filePath: 'files/img-1.png',
+      mimeType: 'image/png',
+      createdAt: '2026-04-29T08:00:00.000Z',
+    };
+    const replacement = new File(['xyz'], 'replacement.jpg', {
+      type: 'image/jpeg',
+    });
+
+    const result = await buildImageItem(ctx({ id: 'img-1', editItem }), {
+      title: '',
+      description: '',
+      file: replacement,
+    });
+
+    expect(result?.removePaths).toBeUndefined();
+  });
 });
 
 describe('buildAudioItem', () => {

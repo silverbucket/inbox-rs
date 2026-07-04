@@ -23,6 +23,14 @@ export interface BuildItemContext {
 export interface BuildItemResult {
   item: InboxItem;
   fileData?: ArrayBuffer;
+  /** Downscaled preview bytes for image items (see lib/thumbnail.ts). */
+  thumbData?: ArrayBuffer;
+  /**
+   * Storage paths orphaned by this build that the caller should delete after
+   * saving — e.g. an edited image whose replacement bytes yielded no thumbnail
+   * leaves the previous `*.thumb.jpg` unreferenced.
+   */
+  removePaths?: string[];
 }
 
 /**

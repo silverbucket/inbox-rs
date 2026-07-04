@@ -269,11 +269,21 @@ export class DirectRS {
    * `filePath`/`mimeType`, the file is uploaded first, then the item metadata.
    */
   async store(
-    item: { id: string; filePath?: string; mimeType?: string },
+    item: {
+      id: string;
+      filePath?: string;
+      mimeType?: string;
+      thumbPath?: string;
+      thumbMimeType?: string;
+    },
     fileData?: ArrayBuffer,
+    thumbData?: ArrayBuffer,
   ): Promise<void> {
     if (fileData && item.filePath && item.mimeType) {
       await this.storeFile(item.filePath, fileData, item.mimeType);
+    }
+    if (thumbData && item.thumbPath && item.thumbMimeType) {
+      await this.storeFile(item.thumbPath, thumbData, item.thumbMimeType);
     }
     await this.storeObject(`items/${item.id}`, item);
   }

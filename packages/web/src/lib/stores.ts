@@ -850,10 +850,14 @@ export function loadFileBlobUrl(filePath: string, mimeType?: string): void {
 
 // ---- Item operations ----
 
-export async function storeItem(item: InboxItem, fileData?: ArrayBuffer) {
+export async function storeItem(
+  item: InboxItem,
+  fileData?: ArrayBuffer,
+  thumbData?: ArrayBuffer,
+) {
   const inbox = requireInbox();
   const cleanItem = cleanForStorage(item);
-  await inbox.store(cleanItem, fileData);
+  await inbox.store(cleanItem, fileData, thumbData);
   if (fileData && 'filePath' in item && item.filePath && 'mimeType' in item) {
     const blob = new Blob([fileData], {
       type: (item as { mimeType?: string }).mimeType,
@@ -865,6 +869,20 @@ export async function storeItem(item: InboxItem, fileData?: ArrayBuffer) {
     }));
     touchBlobLru(item.filePath as string);
   }
+  // Register the freshly generated thumbnail too, so the grid card shows it
+  // immediately without a round trip through the loader.
+  if (thumbData && 'thumbPath' in item && item.thumbPath) {
+    const url = URL.createObjectURL(
+      new Blob([thumbData], {
+        type: (item as { thumbMimeType?: string }).thumbMimeType,
+      }),
+    );
+    blobUrls.update((current) => ({
+      ...current,
+      [item.thumbPath as string]: url,
+    }));
+    touchBlobLru(item.thumbPath as string);
+  }
   rawItems.update((current) => ({
     ...current,
     [cleanItem.id]: cleanItem as object,
@@ -872,37 +890,67 @@ export async function storeItem(item: InboxItem, fileData?: ArrayBuffer) {
   items.update((current) => ({ ...current, [cleanItem.id]: cleanItem }));
 }
 
+/**
+ * Revoke and forget a single stored file's in-memory blob URL, and clear its
+ * LRU / in-flight / revoked bookkeeping. Shared by deleteItem and removeFile.
+ */
+function releaseBlobPath(path: string) {
+  const existing = get(blobUrls)[path];
+  if (existing) {
+    try {
+      URL.revokeObjectURL(existing);
+    } catch {
+      // ignore
+    }
+    blobUrls.update((current) => {
+      const next = { ...current };
+      delete next[path];
+      return next;
+    });
+  }
+  dropBlobLru(path);
+  // Drop any in-flight load for this specific file (no global gen bump needed).
+  pendingBlobLoads.delete(path);
+  // Mark as revoked so a concurrent in-flight load for this exact path is
+  // ignored on resolution.
+  revokedBlobPaths.add(path);
+}
+
+/**
+ * Delete a single stored file by path (e.g. an orphaned thumbnail left behind
+ * when an image edit produced no new thumbnail) and release its blob URL.
+ * Best-effort: a storage failure is logged, not thrown, so it never fails the
+ * surrounding save.
+ */
+export async function removeFile(path: string) {
+  if (!path) return;
+  try {
+    await requireInbox().removeFile(path);
+  } catch (e) {
+    console.error('[inbox] removeFile failed:', path, e);
+  }
+  releaseBlobPath(path);
+}
+
 export async function deleteItem(id: string, item?: InboxItem) {
   const inbox = requireInbox();
   await inbox.remove(id, item);
 
-  // Revoke and remove any associated blob URL to prevent memory leaks.
-  // All current callers pass the full item; we also do a defensive lookup.
-  const filePath =
-    (item && 'filePath' in item && (item as { filePath?: string }).filePath) ||
-    (get(items)[id] &&
-      'filePath' in get(items)[id] &&
-      (get(items)[id] as { filePath?: string }).filePath);
-
-  if (typeof filePath === 'string' && filePath) {
-    const existing = get(blobUrls)[filePath];
-    if (existing) {
-      try {
-        URL.revokeObjectURL(existing);
-      } catch {
-        // ignore
-      }
-      blobUrls.update((current) => {
-        const next = { ...current };
-        delete next[filePath];
-        return next;
-      });
-    }
-    dropBlobLru(filePath);
-    // Also drop any in-flight load for this specific file (no global gen bump needed).
-    pendingBlobLoads.delete(filePath);
-    // Mark as revoked so any concurrent in-flight load for this exact path is ignored on resolution.
-    revokedBlobPaths.add(filePath);
+  // Revoke and remove any associated blob URLs (original + thumbnail) to
+  // prevent memory leaks. All current callers pass the full item; we also do
+  // a defensive lookup.
+  const stored = get(items)[id] as
+    | { filePath?: string; thumbPath?: string }
+    | undefined;
+  const asFileItem = item as
+    | { filePath?: string; thumbPath?: string }
+    | undefined;
+  for (const path of [
+    asFileItem?.filePath || stored?.filePath,
+    asFileItem?.thumbPath || stored?.thumbPath,
+  ]) {
+    if (typeof path !== 'string' || !path) continue;
+    releaseBlobPath(path);
   }
 
   rawItems.update((current) => {

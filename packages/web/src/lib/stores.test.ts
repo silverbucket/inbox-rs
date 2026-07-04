@@ -18,6 +18,7 @@ const { mockRs, mockInbox } = vi.hoisted(() => {
     onChange: vi.fn(),
     store: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
+    removeFile: vi.fn().mockResolvedValue(undefined),
     getFile: vi.fn().mockResolvedValue(undefined),
     storeCollection: vi.fn().mockResolvedValue(undefined),
     removeCollection: vi.fn().mockResolvedValue(undefined),
@@ -540,7 +541,7 @@ describe('todoItems ordering', () => {
 
     await storeItem(todo);
 
-    expect(mockInbox.store).toHaveBeenCalledWith(todo, undefined);
+    expect(mockInbox.store).toHaveBeenCalledWith(todo, undefined, undefined);
     expect(get(items).quick).toMatchObject({
       id: 'quick',
       title: 'Quick thought',
