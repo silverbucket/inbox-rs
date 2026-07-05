@@ -415,7 +415,11 @@
               e.preventDefault();
               feedDragOver = true;
             }}
-            ondragleave={() => (feedDragOver = false)}
+            ondragleave={(e) => {
+              // Ignore leaves onto child cards so the highlight doesn't flicker.
+              if ((e.currentTarget as Node).contains(e.relatedTarget as Node | null)) return;
+              feedDragOver = false;
+            }}
             ondrop={(e) => {
               feedDragOver = false;
               handleFeedDrop(e);

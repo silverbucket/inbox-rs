@@ -32,6 +32,7 @@
   let value = $state('');
   let focused = $state(false);
   let fileInputEl = $state<HTMLInputElement | null>(null);
+  let textInputEl = $state<HTMLInputElement | null>(null);
   // A file dropped or pasted onto the bar, staged as a chip until Enter
   // confirms it (Escape or the chip's ✕ discards).
   let pendingFile = $state<File | null>(null);
@@ -77,13 +78,14 @@
     value = '';
   }
 
-  /** Take the first file from a drop/paste, stage it, and report any extras.
-      Returns true when a file was staged. */
-  function stageFiles(files: FileList | null | undefined): boolean {
-    if (!files || files.length === 0) return false;
+  /** Stage the first of `files`, report any extras, and focus the input so
+      Enter/Escape and caption-typing work immediately (a drop doesn't focus
+      the input on its own). */
+  function stageFiles(files: File[]) {
+    if (files.length === 0) return;
     pendingFile = files[0];
     if (files.length > 1) onextrafiles?.(files.length - 1);
-    return true;
+    textInputEl?.focus();
   }
 
   function onPaste(e: ClipboardEvent) {
@@ -93,8 +95,7 @@
     );
     if (imageFiles.length === 0) return;
     e.preventDefault();
-    pendingFile = imageFiles[0];
-    if (imageFiles.length > 1) onextrafiles?.(imageFiles.length - 1);
+    stageFiles(imageFiles);
   }
 
   function onDragOver(e: DragEvent) {
@@ -104,11 +105,19 @@
     dragOver = true;
   }
 
+  // dragleave also fires when the cursor crosses onto a child (button, chip,
+  // input); ignore those so the highlight doesn't flicker — only clear when the
+  // pointer actually leaves the bar.
+  function onDragLeave(e: DragEvent) {
+    if ((e.currentTarget as Node).contains(e.relatedTarget as Node | null)) return;
+    dragOver = false;
+  }
+
   function onDrop(e: DragEvent) {
     if (!e.dataTransfer?.types.includes('Files')) return;
     e.preventDefault();
     dragOver = false;
-    stageFiles(e.dataTransfer.files);
+    stageFiles(Array.from(e.dataTransfer.files));
   }
 
   function onFileChange(e: Event) {
@@ -125,7 +134,7 @@
     class:drag-over={dragOver}
     role="group"
     ondragover={onDragOver}
-    ondragleave={() => (dragOver = false)}
+    ondragleave={onDragLeave}
     ondrop={onDrop}
   >
     <button
@@ -157,6 +166,7 @@
       </span>
     {/if}
     <input
+      bind:this={textInputEl}
       use:autofocusIf={focusOnMount}
       class="text-input"
       type="text"

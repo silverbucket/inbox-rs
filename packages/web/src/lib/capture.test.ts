@@ -19,7 +19,7 @@ const { storeItem, moveItemToCollection, collections } = vi.hoisted(() => {
 });
 vi.mock('./stores', () => ({ storeItem, moveItemToCollection, collections }));
 
-import { captureFile, captureDetected } from './capture';
+import { captureDetected, captureFile } from './capture';
 
 afterEach(() => vi.clearAllMocks());
 

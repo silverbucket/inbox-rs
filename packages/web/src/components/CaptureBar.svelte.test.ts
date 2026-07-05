@@ -127,6 +127,12 @@ describe('CaptureBar', () => {
     expect(onfilecapture).not.toHaveBeenCalled();
   });
 
+  it('focuses the input after a drop so Enter/Escape and captions work', () => {
+    render();
+    dropFiles([new File(['x'], 'photo.png', { type: 'image/png' })]);
+    expect(document.activeElement).toBe(host.querySelector('.text-input'));
+  });
+
   it('Enter confirms a staged file with the typed caption', () => {
     render();
     const file = new File(['x'], 'photo.png', { type: 'image/png' });
@@ -135,7 +141,9 @@ describe('CaptureBar', () => {
     expect(onfilecapture).toHaveBeenCalledWith(file, 'a nice sunset');
     // The chip and text clear after confirming.
     expect(host.querySelector('.chip')).toBeNull();
-    expect((host.querySelector('.text-input') as HTMLInputElement).value).toBe('');
+    expect((host.querySelector('.text-input') as HTMLInputElement).value).toBe(
+      '',
+    );
     // A staged file must not also fire a text capture.
     expect(oncapture).not.toHaveBeenCalled();
   });
