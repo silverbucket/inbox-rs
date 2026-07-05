@@ -14,7 +14,7 @@
     createCollection, storeGroup,
     appConfig, setActiveGroupFilters,
   } from './lib/stores';
-  import { captureDetected } from './lib/capture';
+  import { captureDetected, captureFile } from './lib/capture';
   import { showToast } from './lib/toast';
   import { parseHash, formatRoute, pageUsesFilters, type Page, type Route } from './lib/route';
   import { layout } from './lib/layout';
@@ -48,6 +48,8 @@
   let isTouch = $state(
     typeof window !== 'undefined' && window.matchMedia('(max-width: 600px)').matches,
   );
+  // Highlights the inbox feed while a file is dragged over it (desktop only).
+  let feedDragOver = $state(false);
 
   $effect(() => {
     if (typeof window === 'undefined') return;
@@ -224,6 +226,40 @@
     });
   }
 
+  // Drop/paste onto the bar or inbox feed: store the file directly (no form),
+  // mirroring the text quick-capture Undo. `deleteItem` removes the file and
+  // thumbnail bytes too, so Undo leaves nothing orphaned.
+  async function handleFileCapture(file: File, caption = '') {
+    const res = await captureFile(file, caption);
+    if (!res) return;
+    const label = res.item.type === 'image' ? 'Saved image' : 'Saved file';
+    showToast(label, {
+      label: 'Undo',
+      run: () => {
+        void deleteItem(res.item.id, res.item).catch(() => {
+          showToast("Couldn't undo — open the item to remove it.");
+        });
+      },
+    });
+  }
+
+  // A multi-file drop captures only the first; tell the user the rest were
+  // skipped so nothing is silently dropped.
+  function notifyExtraFiles(ignored: number) {
+    showToast(
+      `Captured the first file — ignored ${ignored} other${ignored === 1 ? '' : 's'}.`,
+    );
+  }
+
+  function handleFeedDrop(e: DragEvent) {
+    if (!e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    if (files.length === 0) return;
+    void handleFileCapture(files[0]);
+    if (files.length > 1) notifyExtraFiles(files.length - 1);
+  }
+
   function handleOpenEditor(text: string) {
     editingItem = undefined;
     preselectedCollectionId = undefined;
@@ -359,11 +395,39 @@
               oncapture={handleQuickCapture}
               onopeneditor={handleOpenEditor}
               onfile={handleFile}
+              onfilecapture={handleFileCapture}
+              onextrafiles={notifyExtraFiles}
               onrecord={handleRecord}
             />
           {/if}
         </div>
-        <InboxGrid onselect={openView} onconnect={openConnectMenu} />
+        {#if isTouch}
+          <InboxGrid onselect={openView} onconnect={openConnectMenu} />
+        {:else}
+          <!-- Desktop: dropping a file anywhere on the feed captures it
+               directly (the bar handles its own drops separately). -->
+          <div
+            class="feed-dropzone"
+            class:drag-over={feedDragOver}
+            role="group"
+            ondragover={(e) => {
+              if (!e.dataTransfer?.types.includes('Files')) return;
+              e.preventDefault();
+              feedDragOver = true;
+            }}
+            ondragleave={(e) => {
+              // Ignore leaves onto child cards so the highlight doesn't flicker.
+              if ((e.currentTarget as Node).contains(e.relatedTarget as Node | null)) return;
+              feedDragOver = false;
+            }}
+            ondrop={(e) => {
+              feedDragOver = false;
+              handleFeedDrop(e);
+            }}
+          >
+            <InboxGrid onselect={openView} onconnect={openConnectMenu} />
+          </div>
+        {/if}
       {:else if route.page === 'todos'}
         {#if TodosPageComponent}
           <TodosPageComponent onselect={openView} onaddtodo={openAddTodo} onaddtodoincollection={openAddTodoInCollection} />
@@ -432,6 +496,19 @@
   /* Inbox add-entry toolbar — the only chrome that lives with the page
      content (rendered into the shell's main slot). All header/footer styling
      belongs to the shell component. */
+  /* Wraps the inbox feed so a file dragged anywhere over it can be dropped.
+     A dashed accent outline appears on drag-over; no layout shift (the
+     outline draws outside the box). */
+  .feed-dropzone {
+    border-radius: 0.85rem;
+    outline: 2px dashed transparent;
+    outline-offset: 4px;
+    transition: outline-color 0.12s ease;
+  }
+  .feed-dropzone.drag-over {
+    outline-color: var(--accent);
+  }
+
   .page-toolbar {
     display: flex;
     align-items: center;
