@@ -37,6 +37,37 @@ test('plugins page loads when disconnected', async ({ page, webOrigin }) => {
   await expect(downloads).toHaveClass(/active/);
 });
 
+test('plugins page spans the full width in the sidebar layout', async ({
+  page,
+  webOrigin,
+}) => {
+  // Regression: SidebarShell omits the sidebar on the plugins route, but the
+  // body grid used to keep its 268px sidebar track — squeezing the whole page
+  // into that narrow first column with the rest of the viewport empty.
+  await page.addInitScript(() =>
+    localStorage.setItem('inbox-rs:layout', 'sidebar'),
+  );
+  await page.goto(`${webOrigin}/#/plugins`);
+  await page.waitForLoadState('networkidle');
+
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error('viewport must be set for this test');
+
+  const main = page.locator('main');
+  await expect(main).toBeVisible();
+  const mainBox = await main.boundingBox();
+  expect(mainBox, 'main must be laid out').not.toBeNull();
+  expect(mainBox!.width).toBeGreaterThan(viewport.width * 0.9);
+
+  // The download cards are the densest content — if the grid regresses they
+  // collapse and overlap, so pin a sane minimum width on the first card too.
+  const card = page.locator('.download-card').first();
+  await expect(card).toBeVisible();
+  const cardBox = await card.boundingBox();
+  expect(cardBox, 'download card must be laid out').not.toBeNull();
+  expect(cardBox!.width).toBeGreaterThan(viewport.width * 0.3);
+});
+
 test('nav buttons swap routes when connected', async ({
   connectedPage,
   webOrigin,
