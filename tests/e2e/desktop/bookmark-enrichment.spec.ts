@@ -91,23 +91,29 @@ test('a captured link is enriched with fetched title, description and image', as
         name: 'Example',
         description: 'An illustrative example page',
         image: [{ url: 'https://example.com/og.png', width: '1200' }],
-        favicon: 'https://example.com/favicon.ico',
+        favicon: 'https://example.com/site-icon.png',
         url,
       }),
     ),
   );
-  // Serve real image bytes for the og:image URL — the card hides broken
-  // images via `onerror`, so the visibility assertion needs a loadable src.
-  await connectedPage.route('https://example.com/og.png', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'image/png',
-      body: Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-        'base64',
-      ),
-    }),
-  );
+  // Serve real image bytes for the og:image and favicon URLs — the card
+  // hides broken images via `onerror`, so the visibility assertions need
+  // loadable sources.
+  for (const mediaUrl of [
+    'https://example.com/og.png',
+    'https://example.com/site-icon.png',
+  ]) {
+    await connectedPage.route(mediaUrl, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'image/png',
+        body: Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+          'base64',
+        ),
+      }),
+    );
+  }
 
   await connectedPage.goto(webOrigin);
   await connectedPage.waitForLoadState('networkidle');
@@ -130,6 +136,13 @@ test('a captured link is enriched with fetched title, description and image', as
   ).toBeVisible();
   await expect(
     connectedPage.locator('img[src="https://example.com/og.png"]'),
+  ).toBeVisible();
+  // The fetched favicon decorates the card's kind icon in place of the
+  // generic bookmark glyph.
+  await expect(
+    connectedPage.locator(
+      'img.kind-favicon[src="https://example.com/site-icon.png"]',
+    ),
   ).toBeVisible();
 
   assertNoConsoleErrors(log);
