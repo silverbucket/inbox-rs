@@ -145,9 +145,17 @@
     return () => window.removeEventListener('hashchange', syncRoute);
   });
 
-  // Close modals when navigating
+  // Close modals when navigating to a *different* page. `route` is
+  // reassigned wholesale on every hashchange — including same-page ones,
+  // like the async hashchange from a nav click landing after a modal was
+  // opened, or the filter-sync effect rewriting the hash. Keying this
+  // effect on the object would close modals on all of those (a real race:
+  // attach a file right after clicking Inbox and the modal dies as the
+  // stale hashchange arrives). The $derived memoizes on the page *value*,
+  // so this only fires when the user actually lands on another page.
+  const routePage = $derived(route.page);
   $effect(() => {
-    void route.page;
+    void routePage;
     activeModal = null;
     editingItem = undefined;
     viewingItem = null;
