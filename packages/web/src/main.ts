@@ -1,6 +1,11 @@
 import { mount } from 'svelte';
+import { installPreloadErrorReload } from './lib/preload-error';
 import { type Accent, applyTheme, isAccent, type Mode } from './lib/theme';
 import Root from './Root.svelte';
+
+// A tab left open across a release can no longer fetch its lazy chunks —
+// reload once to pick up the fresh shell (see lib/preload-error.ts).
+installPreloadErrorReload();
 
 // Apply the stored theme (accent + light/dark) before mount to avoid a flash.
 // Mode is reconciled with synced UserSettings once connected (see UserMenu);

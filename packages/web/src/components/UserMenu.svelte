@@ -12,6 +12,7 @@
     isAccent,
   } from '../lib/theme';
   import { layout, setLayoutPersisted } from '../lib/layout';
+  import { showToast } from '../lib/toast';
 
   // Typed with the modal's exports so `bind:this` yields the handle we call
   // (startExport/promptImport) instead of an untyped instance.
@@ -32,8 +33,17 @@
   let importExportOpen = $state(false);
   let fileInputEl = $state<HTMLInputElement | null>(null);
 
+  // Catch failed chunk fetches (stale tab after a deploy, flaky network) so
+  // Export/Import doesn't fail silently — the callers' optional-chained calls
+  // then no-op. A deploy-invalidated chunk also triggers a one-shot reload via
+  // vite:preloadError (see main.ts).
   async function loadImportExportModal() {
-    ImportExportModalComponent ??= (await import('./ImportExportModal.svelte')).default as unknown as LazyComponent;
+    try {
+      ImportExportModalComponent ??= (await import('./ImportExportModal.svelte')).default as unknown as LazyComponent;
+    } catch (error) {
+      console.error('Failed to load import/export modal', error);
+      showToast("Couldn't load that view — reload the app and try again.");
+    }
   }
 
   // Theme: synced settings take priority, localStorage is the offline fallback
