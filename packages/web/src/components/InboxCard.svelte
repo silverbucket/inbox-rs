@@ -79,6 +79,27 @@
   // should still fall back to the generic label rather than render blank.
   const kindLabel = $derived(bookmarkDomain || kind.label);
 
+  // The site's favicon decorates bookmark cards in place of the generic
+  // bookmark glyph. Resolved against the bookmark URL because older items
+  // (and some servers) carry a relative icon path; a failed load falls
+  // back to the glyph. The failure is scoped to the URL that failed — a
+  // later enrichment pass can replace a broken favicon, and the new URL
+  // deserves a fresh attempt.
+  let failedFaviconUrl = $state<string | null>(null);
+  const bookmarkFavicon = $derived.by(() => {
+    if (item.type !== 'bookmark' || !('favicon' in item) || !item.favicon) {
+      return null;
+    }
+    try {
+      const resolved = new URL(item.favicon, (item as { url: string }).url);
+      return resolved.protocol === 'http:' || resolved.protocol === 'https:'
+        ? resolved.href
+        : null;
+    } catch {
+      return null;
+    }
+  });
+
   // Preview text — note body or description, shown beneath the title so each
   // card gives a real sense of its content.
   const cardNotes = $derived(
@@ -117,7 +138,30 @@
         {#if item.type === 'note'}
           <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
         {:else if item.type === 'bookmark'}
-          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+          {#if bookmarkFavicon && bookmarkFavicon !== failedFaviconUrl}
+            <img
+              class="kind-favicon"
+              src={bookmarkFavicon}
+              alt=""
+              width="14"
+              height="14"
+              loading="lazy"
+              decoding="async"
+              onerror={(e) => {
+                // Detaching an img mid-load (an item update can swap the
+                // if-block) aborts the fetch and fires `error` on the
+                // detached node. Only a *connected* img that fails should
+                // fall back to the glyph — an abort must not latch the
+                // failure and suppress the favicon after it returns.
+                const img = e.currentTarget as HTMLImageElement;
+                if (img.isConnected) {
+                  failedFaviconUrl = img.src;
+                }
+              }}
+            />
+          {:else}
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+          {/if}
         {:else if item.type === 'image'}
           <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
         {:else if item.type === 'audio'}
@@ -199,6 +243,13 @@
   .kind-ic svg {
     width: 14px;
     height: 14px;
+  }
+
+  .kind-ic .kind-favicon {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    object-fit: contain;
   }
 
   .kind-label {
