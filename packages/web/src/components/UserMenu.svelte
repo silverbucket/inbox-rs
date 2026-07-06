@@ -182,8 +182,15 @@
   // self-hosters point at their own Sockethub. Synced via user settings.
   const linkPreviewsOn = $derived($userSettings.linkPreviews !== false);
   let sockethubUrlInput = $state('');
+  let sockethubUrlEditing = $state(false);
+  // Re-sync from settings only while the field isn't focused — the store
+  // emits on every settings change (theme, abbreviation, remote sync from
+  // another device), and an unconditional sync would clobber keystrokes
+  // mid-edit. On blur, saveSockethubUrl runs before the flag flips back, so
+  // the re-sync lands on the value that was just saved.
   $effect(() => {
-    sockethubUrlInput = $userSettings.sockethubUrl ?? '';
+    const synced = $userSettings.sockethubUrl ?? '';
+    if (!sockethubUrlEditing) sockethubUrlInput = synced;
   });
 
   function setLinkPreviews(on: boolean) {
@@ -211,7 +218,10 @@
           `Updated ${summary.updated} of ${summary.total} bookmark${summary.total === 1 ? '' : 's'}${failures}`,
         );
       }
-    });
+      // enrichAllBookmarks swallows per-item failures, so this only guards
+      // against that contract changing — better a toast than an unhandled
+      // rejection.
+    }).catch(() => showToast('Failed to fetch link previews'));
   }
 
   async function handleExport() {
@@ -380,7 +390,7 @@
             </svg>
             Fetch Link Previews
             {#if $bulkEnrichProgress}
-              <span class="menu-hint"
+              <span class="menu-hint" aria-live="polite"
                 >{$bulkEnrichProgress.done}/{$bulkEnrichProgress.total}</span
               >
             {/if}
@@ -426,7 +436,11 @@
               bind:value={sockethubUrlInput}
               placeholder={DEFAULT_SOCKETHUB_ENDPOINT}
               aria-label="Sockethub endpoint"
-              onblur={saveSockethubUrl}
+              onfocus={() => (sockethubUrlEditing = true)}
+              onblur={() => {
+                saveSockethubUrl();
+                sockethubUrlEditing = false;
+              }}
             />
           </form>
         {/if}

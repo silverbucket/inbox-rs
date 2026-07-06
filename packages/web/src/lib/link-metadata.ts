@@ -108,7 +108,13 @@ export function normalizeMetadata(
       baseUrl,
     ),
   };
-  return meta.title || meta.description || meta.image || meta.siteName
+  // A resolved favicon alone still counts — plenty of pages have no OG
+  // tags but a conventional /favicon.ico, and the card UI renders it.
+  return meta.title ||
+    meta.description ||
+    meta.image ||
+    meta.siteName ||
+    meta.favicon
     ? meta
     : null;
 }

@@ -190,10 +190,9 @@ test('a failed metadata fetch leaves the capture intact and the view card offers
   // the card's centre, which can land on the inner title link (a click
   // the card handler deliberately ignores) depending on font metrics —
   // that's exactly what happened on CI. Enter always hits the handler.
-  await connectedPage
-    .getByRole('button', { name: new RegExp(url) })
-    .first()
-    .press('Enter');
+  // A string name substring-matches, so the URL's dots stay literal
+  // (new RegExp(url) would treat them as metacharacters).
+  await connectedPage.getByRole('button', { name: url }).first().press('Enter');
   const dialog = connectedPage.getByRole('dialog');
   await expect(dialog).toBeVisible({ timeout: 10_000 });
 

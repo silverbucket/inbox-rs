@@ -128,12 +128,18 @@ describe('normalizeMetadata', () => {
     });
   });
 
+  it('keeps favicon-only metadata — pages without OG tags still have icons', () => {
+    expect(
+      normalizeMetadata({ favicon: '/favicon.ico' }, 'https://example.com'),
+    ).toMatchObject({ favicon: 'https://example.com/favicon.ico' });
+  });
+
   it('returns null when nothing usable is present', () => {
     expect(normalizeMetadata(undefined)).toBeNull();
     expect(normalizeMetadata('nope')).toBeNull();
     expect(normalizeMetadata({})).toBeNull();
     expect(normalizeMetadata({ type: 'message', url: 'https://x' })).toBeNull();
-    // A favicon alone isn't a preview.
+    // A relative favicon with no base URL can't be resolved — nothing left.
     expect(normalizeMetadata({ favicon: '/f.ico' })).toBeNull();
   });
 });
