@@ -262,16 +262,18 @@
 
 <header>
   <div class="header-inner">
-    <button
-      class="sidebar-toggle"
-      type="button"
-      aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-      aria-pressed={!collapsed}
-      title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-      onclick={toggleCollapsed}
-    >
-      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-    </button>
+    {#if !noSidebar}
+      <button
+        class="sidebar-toggle"
+        type="button"
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        aria-pressed={!collapsed}
+        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        onclick={toggleCollapsed}
+      >
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    {/if}
     <div class="brand">
       <a class="brand-link" href="#/">
         <h1 class="sr-only">Inbox RS</h1>
