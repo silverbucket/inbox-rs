@@ -15,6 +15,7 @@
     appConfig, setActiveGroupFilters,
   } from './lib/stores';
   import { captureDetected, captureFile } from './lib/capture';
+  import { loadLazy } from './lib/lazy-load';
   import { showToast } from './lib/toast';
   import { parseHash, formatRoute, pageUsesFilters, type Page, type Route } from './lib/route';
   import { layout } from './lib/layout';
@@ -64,32 +65,46 @@
 
   let route = $state<Route>(parseHash(window.location.hash));
 
+  // A failed lazy load must never leave a modal "open" with no UI — the
+  // onerror callbacks undo the state that summoned it (see lib/lazy-load.ts).
   async function loadAddEntryModal() {
-    AddEntryModalComponent ??= (await import('./components/AddEntryModal.svelte')).default as LazyComponent;
+    AddEntryModalComponent ??= await loadLazy<LazyComponent>(
+      () => import('./components/AddEntryModal.svelte'),
+      closeModal,
+    );
   }
 
   async function loadViewCardModal() {
-    ViewCardModalComponent ??= (await import('./components/ViewCardModal.svelte')).default as LazyComponent;
+    ViewCardModalComponent ??= await loadLazy<LazyComponent>(
+      () => import('./components/ViewCardModal.svelte'),
+      () => { viewingItem = null; },
+    );
   }
 
   async function loadPluginsPage() {
-    PluginsPageComponent ??= (await import('./components/PluginsPage.svelte')).default as LazyComponent;
+    PluginsPageComponent ??= await loadLazy<LazyComponent>(() => import('./components/PluginsPage.svelte'));
   }
 
   async function loadTodosPage() {
-    TodosPageComponent ??= (await import('./components/TodosPage.svelte')).default as LazyComponent;
+    TodosPageComponent ??= await loadLazy<LazyComponent>(() => import('./components/TodosPage.svelte'));
   }
 
   async function loadCollectionsPage() {
-    CollectionsPageComponent ??= (await import('./components/CollectionsPage.svelte')).default as LazyComponent;
+    CollectionsPageComponent ??= await loadLazy<LazyComponent>(() => import('./components/CollectionsPage.svelte'));
   }
 
   async function loadCollectionFormModal() {
-    CollectionFormModalComponent ??= (await import('./components/CollectionFormModal.svelte')).default as LazyComponent;
+    CollectionFormModalComponent ??= await loadLazy<LazyComponent>(
+      () => import('./components/CollectionFormModal.svelte'),
+      () => { showCollectionForm = false; },
+    );
   }
 
   async function loadGroupFormModal() {
-    GroupFormModalComponent ??= (await import('./components/GroupFormModal.svelte')).default as LazyComponent;
+    GroupFormModalComponent ??= await loadLazy<LazyComponent>(
+      () => import('./components/GroupFormModal.svelte'),
+      () => { showGroupForm = false; },
+    );
   }
 
   // ---- Route ↔ filter sync ----
@@ -166,8 +181,17 @@
     if (showGroupForm) void loadGroupFormModal();
   });
 
-  // Lock body scroll when any modal is open (including iOS Safari)
-  const anyModalOpen = $derived(!!viewingItem || !!activeModal || showCollectionForm || showGroupForm || captureSheetOpen);
+  // Lock body scroll when any modal is open (including iOS Safari). Each
+  // lazy-loaded modal counts only once its component is available — the same
+  // condition that renders it — so the lock can never engage for a modal that
+  // isn't on screen (e.g. its chunk failed to load).
+  const anyModalOpen = $derived(
+    !!(viewingItem && ViewCardModalComponent)
+    || !!(activeModal && AddEntryModalComponent)
+    || (showCollectionForm && !!CollectionFormModalComponent)
+    || (showGroupForm && !!GroupFormModalComponent)
+    || captureSheetOpen,
+  );
   let savedScrollY = 0;
   let wasModalOpen = false;
 

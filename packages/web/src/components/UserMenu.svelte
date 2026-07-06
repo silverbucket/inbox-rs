@@ -12,6 +12,7 @@
     isAccent,
   } from '../lib/theme';
   import { layout, setLayoutPersisted } from '../lib/layout';
+  import { loadLazy } from '../lib/lazy-load';
 
   // Typed with the modal's exports so `bind:this` yields the handle we call
   // (startExport/promptImport) instead of an untyped instance.
@@ -32,8 +33,10 @@
   let importExportOpen = $state(false);
   let fileInputEl = $state<HTMLInputElement | null>(null);
 
+  // On a failed chunk fetch, loadLazy toasts and the callers' optional-chained
+  // calls no-op — Export/Import doesn't fail silently or leave state dangling.
   async function loadImportExportModal() {
-    ImportExportModalComponent ??= (await import('./ImportExportModal.svelte')).default as unknown as LazyComponent;
+    ImportExportModalComponent ??= await loadLazy<LazyComponent>(() => import('./ImportExportModal.svelte'));
   }
 
   // Theme: synced settings take priority, localStorage is the offline fallback
