@@ -82,8 +82,10 @@
   // The site's favicon decorates bookmark cards in place of the generic
   // bookmark glyph. Resolved against the bookmark URL because older items
   // (and some servers) carry a relative icon path; a failed load falls
-  // back to the glyph.
-  let faviconFailed = $state(false);
+  // back to the glyph. The failure is scoped to the URL that failed — a
+  // later enrichment pass can replace a broken favicon, and the new URL
+  // deserves a fresh attempt.
+  let failedFaviconUrl = $state<string | null>(null);
   const bookmarkFavicon = $derived.by(() => {
     if (item.type !== 'bookmark' || !('favicon' in item) || !item.favicon) {
       return null;
@@ -136,7 +138,7 @@
         {#if item.type === 'note'}
           <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
         {:else if item.type === 'bookmark'}
-          {#if bookmarkFavicon && !faviconFailed}
+          {#if bookmarkFavicon && bookmarkFavicon !== failedFaviconUrl}
             <img
               class="kind-favicon"
               src={bookmarkFavicon}
@@ -151,8 +153,9 @@
                 // detached node. Only a *connected* img that fails should
                 // fall back to the glyph — an abort must not latch the
                 // failure and suppress the favicon after it returns.
-                if ((e.currentTarget as HTMLImageElement).isConnected) {
-                  faviconFailed = true;
+                const img = e.currentTarget as HTMLImageElement;
+                if (img.isConnected) {
+                  failedFaviconUrl = img.src;
                 }
               }}
             />

@@ -85,6 +85,28 @@ describe('InboxCard bookmark favicon decorator', () => {
     expect(host.querySelector('.kind-ic svg')).not.toBeNull();
   });
 
+  it('retries when a later update replaces a failed favicon with a new URL', () => {
+    // The failure latch is scoped to the URL that failed — a subsequent
+    // enrichment pass can correct a broken favicon, and the replacement
+    // deserves a fresh attempt.
+    const props = $state({
+      item: bookmark({ favicon: 'https://example.com/broken.ico' }),
+      onselect: () => {},
+    });
+    component = mount(InboxCard, { target: host, props });
+    flushSync();
+    const img = host.querySelector('img.kind-favicon') as HTMLImageElement;
+    img.dispatchEvent(new Event('error')); // genuine failure while connected
+    flushSync();
+    expect(host.querySelector('img.kind-favicon')).toBeNull();
+
+    props.item = bookmark({ favicon: 'https://example.com/fixed.ico' });
+    flushSync();
+    const retry = host.querySelector('img.kind-favicon') as HTMLImageElement;
+    expect(retry).not.toBeNull();
+    expect(retry?.src).toBe('https://example.com/fixed.ico');
+  });
+
   it('drops non-http(s) favicons', () => {
     mountCard(bookmark({ favicon: 'javascript:alert(1)' }));
     expect(host.querySelector('img.kind-favicon')).toBeNull();
