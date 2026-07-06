@@ -1,11 +1,39 @@
 <script lang="ts">
   import type { BookmarkItem } from '@inbox-rs/rs-module';
-  import { blobUrls, connected, loadFileBlobUrl } from '../../lib/stores';
+  import { enrichBookmark, needsEnrichment } from '../../lib/enrich';
+  import {
+    blobUrls,
+    connected,
+    loadFileBlobUrl,
+    userSettings,
+  } from '../../lib/stores';
   import Lightbox from '../Lightbox.svelte';
 
   let { item, titleId }: { item: BookmarkItem; titleId: string } = $props();
 
   let showLightbox = $state(false);
+  let fetchingPreview = $state(false);
+  let previewStatus = $state<'' | 'error' | 'none'>('');
+
+  // Fetch the page's metadata on demand for bookmarks saved before this
+  // feature (or whose auto-fetch failed). Mirrors AudioView's transcribe
+  // flow — the parent's `{#key item.id}` remount makes state resets and
+  // stale-promise guards unnecessary.
+  async function handleFetchPreview() {
+    fetchingPreview = true;
+    previewStatus = '';
+    try {
+      const result = await enrichBookmark(item);
+      // The enriched fields flow back reactively through the items store;
+      // only "nothing new" needs an explicit signal.
+      if (result === 'none') previewStatus = 'none';
+    } catch (e) {
+      console.warn('Metadata fetch failed:', e);
+      previewStatus = 'error';
+    } finally {
+      fetchingPreview = false;
+    }
+  }
 
   function getDomain(url: string): string {
     try {
@@ -72,6 +100,20 @@
     />
   {/if}
   <span class="domain">{item.siteName || getDomain(item.url)}</span>
+  {#if fetchingPreview}
+    <span class="status-text">Fetching preview…</span>
+  {:else if previewStatus === 'error'}
+    <span class="status-text">Couldn't fetch preview</span>
+    <button type="button" class="btn-action" onclick={handleFetchPreview}
+      >Retry</button
+    >
+  {:else if previewStatus === 'none'}
+    <span class="status-text">No preview available</span>
+  {:else if $userSettings.linkPreviews !== false && needsEnrichment(item)}
+    <button type="button" class="btn-action" onclick={handleFetchPreview}
+      >Fetch preview</button
+    >
+  {/if}
 </div>
 
 {#if imageSrc}

@@ -10,7 +10,7 @@
   import CaptureSheet from './components/CaptureSheet.svelte';
   import Toast from './components/Toast.svelte';
   import {
-    connected, deleteItem, openTodos, pendingMigrationCount, runAllMigrations,
+    connected, deleteItem, items, openTodos, pendingMigrationCount, runAllMigrations,
     createCollection, storeGroup,
     appConfig, setActiveGroupFilters,
   } from './lib/stores';
@@ -476,7 +476,14 @@
 
 {#if viewingItem}
   {#if ViewCardModalComponent}
-    <ViewCardModalComponent item={viewingItem} onclose={closeViewModal} onedit={openEditFromView} />
+    <!--
+      Prefer the live copy from the items store so background updates —
+      metadata enrichment, transcription, remote sync — appear in the open
+      modal instead of the stale snapshot taken when it was opened. The
+      snapshot fallback covers the moment an item is deleted elsewhere
+      while the modal is closing.
+    -->
+    <ViewCardModalComponent item={$items[viewingItem.id] ?? viewingItem} onclose={closeViewModal} onedit={openEditFromView} />
   {/if}
 {/if}
 

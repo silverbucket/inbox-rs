@@ -12,6 +12,7 @@
     shouldShowCollectionPicker,
     shouldSubmitAddEntryForm,
   } from '../lib/add-entry-modal';
+  import { enrichBookmark, needsEnrichment } from '../lib/enrich';
   import BookmarkForm from './add-entry/BookmarkForm.svelte';
   import NoteForm from './add-entry/NoteForm.svelte';
   import ImageForm from './add-entry/ImageForm.svelte';
@@ -221,6 +222,13 @@
       }
       if (selectedCollectionId && !isEdit) {
         await moveItemToCollection(item.id, selectedCollectionId);
+      }
+      // Fill blank bookmark fields (title, description, preview image) from
+      // the page's metadata in the background. New items only — an edit is
+      // the user deliberately setting fields, and the view card offers a
+      // manual fetch for older bookmarks.
+      if (!isEdit && item.type === 'bookmark' && needsEnrichment(item)) {
+        void enrichBookmark(item).catch(() => {});
       }
       onclose();
     } catch (e) {

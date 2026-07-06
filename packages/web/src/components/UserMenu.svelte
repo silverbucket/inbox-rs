@@ -2,7 +2,10 @@
   import type { Component } from 'svelte';
   import { tick } from 'svelte';
   import rs from '../lib/rs';
+  import { bulkEnrichProgress, enrichAllBookmarks } from '../lib/enrich';
+  import { DEFAULT_SOCKETHUB_ENDPOINT } from '../lib/link-metadata';
   import { connected, syncing, userAddress, userSettings, updateUserSettings } from '../lib/stores';
+  import { showToast } from '../lib/toast';
   import {
     type Accent,
     ACCENT_LABELS,
@@ -175,6 +178,52 @@
     editingAbbrev = false;
   }
 
+  // Link previews: on unless explicitly disabled; the endpoint input lets
+  // self-hosters point at their own Sockethub. Synced via user settings.
+  const linkPreviewsOn = $derived($userSettings.linkPreviews !== false);
+  let sockethubUrlInput = $state('');
+  let sockethubUrlEditing = $state(false);
+  // Re-sync from settings only while the field isn't focused — the store
+  // emits on every settings change (theme, abbreviation, remote sync from
+  // another device), and an unconditional sync would clobber keystrokes
+  // mid-edit. On blur, saveSockethubUrl runs before the flag flips back, so
+  // the re-sync lands on the value that was just saved.
+  $effect(() => {
+    const synced = $userSettings.sockethubUrl ?? '';
+    if (!sockethubUrlEditing) sockethubUrlInput = synced;
+  });
+
+  function setLinkPreviews(on: boolean) {
+    // Store only the off state; undefined means the default (on).
+    void updateUserSettings({ linkPreviews: on ? undefined : false });
+  }
+
+  function saveSockethubUrl() {
+    const val = sockethubUrlInput.trim();
+    if (val === ($userSettings.sockethubUrl ?? '')) return;
+    void updateUserSettings({ sockethubUrl: val || undefined });
+  }
+
+  // Backfill metadata (title, description, preview image) for bookmarks
+  // saved before enrichment existed. Runs in the background — the menu can
+  // close, progress shows on the menu item, and a toast reports the result.
+  function handleFetchPreviews() {
+    void enrichAllBookmarks().then((summary) => {
+      if (!summary) return;
+      if (summary.total === 0) {
+        showToast('All bookmarks already have previews');
+      } else {
+        const failures = summary.failed ? ` (${summary.failed} failed)` : '';
+        showToast(
+          `Updated ${summary.updated} of ${summary.total} bookmark${summary.total === 1 ? '' : 's'}${failures}`,
+        );
+      }
+      // enrichAllBookmarks swallows per-item failures, so this only guards
+      // against that contract changing — better a toast than an unhandled
+      // rejection.
+    }).catch(() => showToast('Failed to fetch link previews'));
+  }
+
   async function handleExport() {
     open = false;
     await loadImportExportModal();
@@ -326,6 +375,27 @@
           Import Data
           <span class="menu-hint">.zip</span>
         </button>
+        {#if linkPreviewsOn}
+          <button
+            type="button"
+            class="menu-item"
+            role="menuitem"
+            onclick={handleFetchPreviews}
+            disabled={!!$bulkEnrichProgress}
+          >
+            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+            Fetch Link Previews
+            {#if $bulkEnrichProgress}
+              <span class="menu-hint" aria-live="polite"
+                >{$bulkEnrichProgress.done}/{$bulkEnrichProgress.total}</span
+              >
+            {/if}
+          </button>
+        {/if}
         <input
           bind:this={fileInputEl}
           type="file"
@@ -333,6 +403,47 @@
           style="display: none"
           onchange={handleFileSelected}
         />
+
+        <div class="divider"></div>
+
+        <!-- Link previews — synced setting; endpoint is for self-hosters -->
+        <div class="section-label">Link previews</div>
+        <div class="theme-switcher" role="group" aria-label="Link previews">
+          <button type="button"
+            class="theme-option"
+            class:active={linkPreviewsOn}
+            aria-pressed={linkPreviewsOn}
+            onclick={() => setLinkPreviews(true)}
+          >
+            On
+          </button>
+          <button type="button"
+            class="theme-option"
+            class:active={!linkPreviewsOn}
+            aria-pressed={!linkPreviewsOn}
+            onclick={() => setLinkPreviews(false)}
+          >
+            Off
+          </button>
+        </div>
+        {#if linkPreviewsOn}
+          <form
+            class="connect-form"
+            onsubmit={(e) => { e.preventDefault(); saveSockethubUrl(); }}
+          >
+            <input
+              type="url"
+              bind:value={sockethubUrlInput}
+              placeholder={DEFAULT_SOCKETHUB_ENDPOINT}
+              aria-label="Sockethub endpoint"
+              onfocus={() => (sockethubUrlEditing = true)}
+              onblur={() => {
+                saveSockethubUrl();
+                sockethubUrlEditing = false;
+              }}
+            />
+          </form>
+        {/if}
       {/if}
 
       <div class="divider"></div>

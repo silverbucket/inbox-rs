@@ -37,9 +37,8 @@
 </script>
 
 <p class="info-note">
-  Metadata fetching is not yet available in the web app. Use the browser
-  extension to auto-fill bookmark details. Sockethub integration is planned
-  for a future release.
+  Fields left blank are filled automatically from the page's metadata
+  (title, description, preview image) after saving.
 </p>
 <label class="field">
   <span>URL *</span>
