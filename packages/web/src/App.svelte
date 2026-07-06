@@ -15,6 +15,7 @@
     appConfig, setActiveGroupFilters,
   } from './lib/stores';
   import { captureDetected, captureFile } from './lib/capture';
+  import { loadLazy } from './lib/lazy-load';
   import { showToast } from './lib/toast';
   import { parseHash, formatRoute, pageUsesFilters, type Page, type Route } from './lib/route';
   import { layout } from './lib/layout';
@@ -64,59 +65,43 @@
 
   let route = $state<Route>(parseHash(window.location.hash));
 
-  // A failed chunk fetch (stale tab after a deploy, flaky network) must never
-  // leave a modal "open" with no UI — undo the state that summoned it and tell
-  // the user. In production a deploy-invalidated chunk also triggers a one-shot
-  // reload via vite:preloadError (see main.ts); this catch covers the rest.
-  async function loadLazy(
-    importer: () => Promise<{ default: unknown }>,
-    onerror?: () => void,
-  ): Promise<LazyComponent | null> {
-    try {
-      return (await importer()).default as LazyComponent;
-    } catch (error) {
-      console.error('Failed to load lazy component', error);
-      onerror?.();
-      showToast("Couldn't load that view — reload the app and try again.");
-      return null;
-    }
-  }
-
+  // A failed lazy load must never leave a modal "open" with no UI — the
+  // onerror callbacks undo the state that summoned it (see lib/lazy-load.ts).
   async function loadAddEntryModal() {
-    AddEntryModalComponent ??= await loadLazy(
+    AddEntryModalComponent ??= await loadLazy<LazyComponent>(
       () => import('./components/AddEntryModal.svelte'),
       closeModal,
     );
   }
 
   async function loadViewCardModal() {
-    ViewCardModalComponent ??= await loadLazy(
+    ViewCardModalComponent ??= await loadLazy<LazyComponent>(
       () => import('./components/ViewCardModal.svelte'),
       () => { viewingItem = null; },
     );
   }
 
   async function loadPluginsPage() {
-    PluginsPageComponent ??= await loadLazy(() => import('./components/PluginsPage.svelte'));
+    PluginsPageComponent ??= await loadLazy<LazyComponent>(() => import('./components/PluginsPage.svelte'));
   }
 
   async function loadTodosPage() {
-    TodosPageComponent ??= await loadLazy(() => import('./components/TodosPage.svelte'));
+    TodosPageComponent ??= await loadLazy<LazyComponent>(() => import('./components/TodosPage.svelte'));
   }
 
   async function loadCollectionsPage() {
-    CollectionsPageComponent ??= await loadLazy(() => import('./components/CollectionsPage.svelte'));
+    CollectionsPageComponent ??= await loadLazy<LazyComponent>(() => import('./components/CollectionsPage.svelte'));
   }
 
   async function loadCollectionFormModal() {
-    CollectionFormModalComponent ??= await loadLazy(
+    CollectionFormModalComponent ??= await loadLazy<LazyComponent>(
       () => import('./components/CollectionFormModal.svelte'),
       () => { showCollectionForm = false; },
     );
   }
 
   async function loadGroupFormModal() {
-    GroupFormModalComponent ??= await loadLazy(
+    GroupFormModalComponent ??= await loadLazy<LazyComponent>(
       () => import('./components/GroupFormModal.svelte'),
       () => { showGroupForm = false; },
     );
