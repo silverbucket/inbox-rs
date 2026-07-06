@@ -155,6 +155,8 @@ export const userSettingsSchema = {
   properties: {
     abbreviation: { type: 'string' },
     theme: { type: 'string', enum: ['system', 'light', 'dark'] },
+    linkPreviews: { type: 'boolean' },
+    sockethubUrl: { type: 'string' },
   },
 };
 

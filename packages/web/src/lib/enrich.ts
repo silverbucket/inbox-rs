@@ -12,8 +12,22 @@
 
 import type { BookmarkItem, InboxItem } from '@inbox-rs/rs-module';
 import { get, writable } from 'svelte/store';
-import { fetchLinkMetadata, type LinkMetadata } from './link-metadata';
-import { items, storeItem } from './stores';
+import {
+  DEFAULT_SOCKETHUB_ENDPOINT,
+  fetchLinkMetadata,
+  type LinkMetadata,
+} from './link-metadata';
+import { items, storeItem, userSettings } from './stores';
+
+/** Link previews are on unless the user turned them off. */
+export function linkPreviewsEnabled(): boolean {
+  return get(userSettings).linkPreviews !== false;
+}
+
+/** The user's own Sockethub endpoint when set, else the app default. */
+function resolveSockethubEndpoint(): string {
+  return get(userSettings).sockethubUrl?.trim() || DEFAULT_SOCKETHUB_ENDPOINT;
+}
 
 /** True when a fetch could still add something to this bookmark. */
 export function needsEnrichment(item: BookmarkItem): boolean {
@@ -73,8 +87,8 @@ export function applyLinkMetadata(
 export async function enrichBookmark(
   item: BookmarkItem,
 ): Promise<'updated' | 'none'> {
-  if (!navigator.onLine) return 'none';
-  const meta = await fetchLinkMetadata(item.url);
+  if (!linkPreviewsEnabled() || !navigator.onLine) return 'none';
+  const meta = await fetchLinkMetadata(item.url, resolveSockethubEndpoint());
   if (!meta) return 'none';
   // Re-read the live item: the user may have edited it during the fetch,
   // and merging into the *current* fields keeps their changes protected.
@@ -130,9 +144,7 @@ export async function enrichAllBookmarks(): Promise<{
         } catch {
           failed++;
         }
-        bulkEnrichProgress.update((p) =>
-          p ? { ...p, done: p.done + 1 } : p,
-        );
+        bulkEnrichProgress.update((p) => (p ? { ...p, done: p.done + 1 } : p));
       }
     };
     await Promise.all(

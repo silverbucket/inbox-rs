@@ -3,21 +3,33 @@ import type { BookmarkItem } from '@inbox-rs/rs-module';
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { fetchLinkMetadata, storeItem, itemsMap } = vi.hoisted(() => {
+const { fetchLinkMetadata, storeItem, itemsMap, settings } = vi.hoisted(() => {
   const map: Record<string, unknown> = {};
   return {
     fetchLinkMetadata: vi.fn(),
     storeItem: vi.fn().mockResolvedValue(undefined),
     itemsMap: map,
+    settings: {} as Record<string, unknown>,
   };
 });
-vi.mock('./link-metadata', () => ({ fetchLinkMetadata }));
+vi.mock('./link-metadata', async (importOriginal) => ({
+  // Keep the real DEFAULT_SOCKETHUB_ENDPOINT so endpoint-resolution
+  // assertions run against the actual default.
+  ...(await importOriginal<typeof import('./link-metadata')>()),
+  fetchLinkMetadata,
+}));
+// Minimal readable-store stubs so `get(...)` resolves synchronously.
 vi.mock('./stores', () => ({
   storeItem,
-  // Minimal readable-store stub so `get(items)` resolves synchronously.
   items: {
     subscribe: (run: (value: unknown) => void) => {
       run(itemsMap);
+      return () => {};
+    },
+  },
+  userSettings: {
+    subscribe: (run: (value: unknown) => void) => {
+      run(settings);
       return () => {};
     },
   },
@@ -45,6 +57,7 @@ function bookmark(overrides: Partial<BookmarkItem> = {}): BookmarkItem {
 afterEach(() => {
   vi.clearAllMocks();
   for (const key of Object.keys(itemsMap)) delete itemsMap[key];
+  for (const key of Object.keys(settings)) delete settings[key];
 });
 
 describe('needsEnrichment', () => {
@@ -134,6 +147,33 @@ describe('enrichBookmark', () => {
     });
   });
 
+  it('is a no-op when the user disabled link previews', async () => {
+    settings.linkPreviews = false;
+    const item = bookmark();
+    itemsMap[item.id] = item;
+    await expect(enrichBookmark(item)).resolves.toBe('none');
+    expect(fetchLinkMetadata).not.toHaveBeenCalled();
+  });
+
+  it('uses the default endpoint unless the user configured their own', async () => {
+    const item = bookmark();
+    itemsMap[item.id] = item;
+    fetchLinkMetadata.mockResolvedValue(null);
+
+    await enrichBookmark(item);
+    expect(fetchLinkMetadata).toHaveBeenLastCalledWith(
+      item.url,
+      'https://sockethub.silverbucket.net/sockethub-http',
+    );
+
+    settings.sockethubUrl = 'https://my.sockethub/sockethub-http';
+    await enrichBookmark(item);
+    expect(fetchLinkMetadata).toHaveBeenLastCalledWith(
+      item.url,
+      'https://my.sockethub/sockethub-http',
+    );
+  });
+
   it('does not resurrect an item deleted during the fetch', async () => {
     fetchLinkMetadata.mockResolvedValue({ title: 'Example' });
     await expect(enrichBookmark(bookmark())).resolves.toBe('none');
@@ -197,7 +237,7 @@ describe('enrichAllBookmarks', () => {
       total: 1,
     });
     expect(fetchLinkMetadata).toHaveBeenCalledOnce();
-    expect(fetchLinkMetadata).toHaveBeenCalledWith('https://example.com');
+    expect(fetchLinkMetadata.mock.calls[0][0]).toBe('https://example.com');
     // Progress is cleared when the pass finishes.
     expect(get(bulkEnrichProgress)).toBeNull();
   });

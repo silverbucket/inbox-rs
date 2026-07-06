@@ -105,6 +105,12 @@ export type InboxItem =
 export interface UserSettings {
   abbreviation?: string;
   theme?: 'system' | 'light' | 'dark';
+  /** Fetch link metadata (title/description/preview image) for bookmarks.
+   *  Undefined means enabled. */
+  linkPreviews?: boolean;
+  /** Sockethub HTTP actions endpoint used for link-metadata fetching.
+   *  Undefined/empty means the app's default server. */
+  sockethubUrl?: string;
 }
 
 export interface AppConfig {

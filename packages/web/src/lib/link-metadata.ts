@@ -15,7 +15,13 @@
  * actions, with `httpActions: { enabled: true }` in its config.
  */
 
-export const SOCKETHUB_HTTP_ENDPOINT =
+/**
+ * Default Sockethub HTTP actions endpoint. Overridable per build via
+ * VITE_SOCKETHUB_URL and per user via the `sockethubUrl` user setting
+ * (see resolveSockethubEndpoint in enrich.ts).
+ */
+export const DEFAULT_SOCKETHUB_ENDPOINT: string =
+  import.meta.env?.VITE_SOCKETHUB_URL ||
   'https://sockethub.silverbucket.net/sockethub-http';
 
 /**
@@ -45,13 +51,42 @@ function asNonEmptyString(value: unknown): string | undefined {
 }
 
 /**
- * Shape a metadata-platform response object into LinkMetadata. The platform
- * documents `title`/`description`/`image`; site name and favicon are read
- * defensively under the names open-graph-scraper based servers use, since
- * Sockethub versions differ in what they pass through. Returns null when
- * the response carries nothing usable.
+ * Resolve a possibly-relative media URL against the fetched page and keep
+ * only http(s) results — servers echo whatever the page's tags contain
+ * (`/favicon.ico`, protocol-relative paths, or junk schemes), and these
+ * values end up in `<img src>` attributes.
  */
-export function normalizeMetadata(object: unknown): LinkMetadata | null {
+function asHttpUrl(
+  value: string | undefined,
+  baseUrl?: string,
+): string | undefined {
+  if (!value) return undefined;
+  try {
+    const resolved = new URL(value, baseUrl);
+    if (resolved.protocol === 'http:' || resolved.protocol === 'https:') {
+      return resolved.href;
+    }
+  } catch {
+    // Unparseable even against the base — drop it.
+  }
+  return undefined;
+}
+
+/**
+ * Shape a metadata-platform response object into LinkMetadata. Verified
+ * against a live server, the object looks like:
+ *
+ *   { type: 'page', title, name, description, favicon,
+ *     image: [{ url, width, height, alt }], url, ... }
+ *
+ * where `name` carries the og:site_name. `siteName`/`site_name`/`icon`
+ * are read as fallbacks for other server versions. Returns null when the
+ * response carries nothing usable.
+ */
+export function normalizeMetadata(
+  object: unknown,
+  baseUrl?: string,
+): LinkMetadata | null {
   if (!object || typeof object !== 'object') return null;
   const o = object as Record<string, unknown>;
   // `image` may arrive as a plain URL string or an object/array of
@@ -61,11 +96,17 @@ export function normalizeMetadata(object: unknown): LinkMetadata | null {
     asNonEmptyString(rawImage) ??
     asNonEmptyString((rawImage as Record<string, unknown> | undefined)?.url);
   const meta: LinkMetadata = {
-    title: asNonEmptyString(o.title) ?? asNonEmptyString(o.name),
+    title: asNonEmptyString(o.title),
     description: asNonEmptyString(o.description) ?? asNonEmptyString(o.summary),
-    image,
-    siteName: asNonEmptyString(o.siteName) ?? asNonEmptyString(o.site_name),
-    favicon: asNonEmptyString(o.favicon) ?? asNonEmptyString(o.icon),
+    image: asHttpUrl(image, baseUrl),
+    siteName:
+      asNonEmptyString(o.siteName) ??
+      asNonEmptyString(o.site_name) ??
+      asNonEmptyString(o.name),
+    favicon: asHttpUrl(
+      asNonEmptyString(o.favicon) ?? asNonEmptyString(o.icon),
+      baseUrl,
+    ),
   };
   return meta.title || meta.description || meta.image || meta.siteName
     ? meta
@@ -79,8 +120,9 @@ export function normalizeMetadata(object: unknown): LinkMetadata | null {
  */
 export async function fetchLinkMetadata(
   url: string,
+  endpoint: string = DEFAULT_SOCKETHUB_ENDPOINT,
 ): Promise<LinkMetadata | null> {
-  const res = await fetch(SOCKETHUB_HTTP_ENDPOINT, {
+  const res = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -90,7 +132,8 @@ export async function fetchLinkMetadata(
     body: JSON.stringify({
       '@context': METADATA_CONTEXT,
       type: 'fetch',
-      actor: { id: url },
+      // Schema validation requires a typed actor; URLs are `website`.
+      actor: { id: url, type: 'website' },
     }),
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
@@ -112,7 +155,7 @@ export async function fetchLinkMetadata(
     if (typeof p.error === 'string' && p.error) {
       throw new Error(p.error);
     }
-    return normalizeMetadata(p.object);
+    return normalizeMetadata(p.object, url);
   }
   return null;
 }

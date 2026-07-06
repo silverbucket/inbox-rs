@@ -35,12 +35,14 @@ function ndjson(lines: unknown[]): {
   return {
     status: 200,
     contentType: 'application/x-ndjson',
-    body: lines.map((l) => JSON.stringify(l)).join('\n') + '\n',
+    body: `${lines.map((l) => JSON.stringify(l)).join('\n')}\n`,
   };
 }
 
 function metadataResult(url: string, object: Record<string, unknown>) {
-  return ndjson([{ type: 'fetch', actor: { id: url }, object }]);
+  return ndjson([
+    { type: 'fetch', actor: { id: url, type: 'website' }, object },
+  ]);
 }
 
 test.use({ serviceWorkers: 'block' });
@@ -81,11 +83,15 @@ test('a captured link is enriched with fetched title, description and image', as
   const url = 'https://example.com';
   await connectedPage.route(SOCKETHUB_GLOB, (route) =>
     route.fulfill(
+      // Mirrors the live server's response shape: object type `page`,
+      // site name in `name`, image as an array of media descriptors.
       metadataResult(url, {
-        type: 'message',
+        type: 'page',
         title: 'Example Domain',
+        name: 'Example',
         description: 'An illustrative example page',
-        image: 'https://example.com/og.png',
+        image: [{ url: 'https://example.com/og.png', width: '1200' }],
+        favicon: 'https://example.com/favicon.ico',
         url,
       }),
     ),
@@ -172,7 +178,7 @@ test('a failed metadata fetch leaves the capture intact and the view card offers
   await connectedPage.route(SOCKETHUB_GLOB, (route) =>
     route.fulfill(
       metadataResult(url, {
-        type: 'message',
+        type: 'page',
         title: 'Example Org',
         description: 'Recovered metadata',
         url,
@@ -180,11 +186,14 @@ test('a failed metadata fetch leaves the capture intact and the view card offers
     ),
   );
 
-  // Click the card body (not the title link) to open the view modal.
+  // Open the view modal with keyboard activation. A mouse click aims at
+  // the card's centre, which can land on the inner title link (a click
+  // the card handler deliberately ignores) depending on font metrics —
+  // that's exactly what happened on CI. Enter always hits the handler.
   await connectedPage
     .getByRole('button', { name: new RegExp(url) })
     .first()
-    .click();
+    .press('Enter');
   const dialog = connectedPage.getByRole('dialog');
   await expect(dialog).toBeVisible({ timeout: 10_000 });
 

@@ -1,7 +1,12 @@
 <script lang="ts">
   import type { BookmarkItem } from '@inbox-rs/rs-module';
   import { enrichBookmark, needsEnrichment } from '../../lib/enrich';
-  import { blobUrls, connected, loadFileBlobUrl } from '../../lib/stores';
+  import {
+    blobUrls,
+    connected,
+    loadFileBlobUrl,
+    userSettings,
+  } from '../../lib/stores';
   import Lightbox from '../Lightbox.svelte';
 
   let { item, titleId }: { item: BookmarkItem; titleId: string } = $props();
@@ -104,7 +109,7 @@
     >
   {:else if previewStatus === 'none'}
     <span class="status-text">No preview available</span>
-  {:else if needsEnrichment(item)}
+  {:else if $userSettings.linkPreviews !== false && needsEnrichment(item)}
     <button type="button" class="btn-action" onclick={handleFetchPreview}
       >Fetch preview</button
     >
