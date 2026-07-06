@@ -19,6 +19,11 @@ const { storeItem, moveItemToCollection, collections } = vi.hoisted(() => {
 });
 vi.mock('./stores', () => ({ storeItem, moveItemToCollection, collections }));
 
+const { enrichBookmark } = vi.hoisted(() => ({
+  enrichBookmark: vi.fn().mockResolvedValue('updated'),
+}));
+vi.mock('./enrich', () => ({ enrichBookmark }));
+
 import { captureDetected, captureFile } from './capture';
 
 afterEach(() => vi.clearAllMocks());
@@ -31,6 +36,24 @@ describe('captureDetected', () => {
     expect((storeItem.mock.calls[0][0] as { url: string }).url).toBe(
       'https://example.com',
     );
+  });
+
+  it('kicks off background metadata enrichment for bookmarks', async () => {
+    const res = await captureDetected('https://example.com');
+    expect(enrichBookmark).toHaveBeenCalledOnce();
+    expect(enrichBookmark).toHaveBeenCalledWith(res?.item);
+  });
+
+  it('does not swallow the capture when enrichment fails', async () => {
+    enrichBookmark.mockRejectedValueOnce(new Error('metadata server down'));
+    const res = await captureDetected('https://example.com');
+    expect(res?.item.type).toBe('bookmark');
+    expect(storeItem).toHaveBeenCalledOnce();
+  });
+
+  it('does not attempt enrichment for notes', async () => {
+    await captureDetected('remember the milk');
+    expect(enrichBookmark).not.toHaveBeenCalled();
   });
 
   it('stores a note for text, preserving the body', async () => {

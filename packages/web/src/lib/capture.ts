@@ -7,6 +7,7 @@ import {
   buildNoteItem,
 } from './build-item';
 import { detectCaptureKind } from './capture-detect';
+import { enrichBookmark } from './enrich';
 import { collections, moveItemToCollection, storeItem } from './stores';
 
 /** Detect, build and store a quick capture. Returns the created item so the
@@ -42,6 +43,12 @@ export async function captureDetected(
   await storeItem(built.item);
   if (collectionId) {
     await moveItemToCollection(built.item.id, collectionId);
+  }
+  // Fill the bookmark's title/description/preview image from the page's
+  // metadata in the background — the capture itself must never wait on
+  // (or fail because of) the metadata server.
+  if (built.item.type === 'bookmark') {
+    void enrichBookmark(built.item).catch(() => {});
   }
   return { item: built.item };
 }

@@ -2,7 +2,9 @@
   import type { Component } from 'svelte';
   import { tick } from 'svelte';
   import rs from '../lib/rs';
+  import { bulkEnrichProgress, enrichAllBookmarks } from '../lib/enrich';
   import { connected, syncing, userAddress, userSettings, updateUserSettings } from '../lib/stores';
+  import { showToast } from '../lib/toast';
   import {
     type Accent,
     ACCENT_LABELS,
@@ -175,6 +177,23 @@
     editingAbbrev = false;
   }
 
+  // Backfill metadata (title, description, preview image) for bookmarks
+  // saved before enrichment existed. Runs in the background — the menu can
+  // close, progress shows on the menu item, and a toast reports the result.
+  function handleFetchPreviews() {
+    void enrichAllBookmarks().then((summary) => {
+      if (!summary) return;
+      if (summary.total === 0) {
+        showToast('All bookmarks already have previews');
+      } else {
+        const failures = summary.failed ? ` (${summary.failed} failed)` : '';
+        showToast(
+          `Updated ${summary.updated} of ${summary.total} bookmark${summary.total === 1 ? '' : 's'}${failures}`,
+        );
+      }
+    });
+  }
+
   async function handleExport() {
     open = false;
     await loadImportExportModal();
@@ -325,6 +344,25 @@
           </svg>
           Import Data
           <span class="menu-hint">.zip</span>
+        </button>
+        <button
+          type="button"
+          class="menu-item"
+          role="menuitem"
+          onclick={handleFetchPreviews}
+          disabled={!!$bulkEnrichProgress}
+        >
+          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <polyline points="21 15 16 10 5 21"></polyline>
+          </svg>
+          Fetch Link Previews
+          {#if $bulkEnrichProgress}
+            <span class="menu-hint"
+              >{$bulkEnrichProgress.done}/{$bulkEnrichProgress.total}</span
+            >
+          {/if}
         </button>
         <input
           bind:this={fileInputEl}
