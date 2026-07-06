@@ -63,6 +63,9 @@
   const activeGroups = $derived($activeGroupIds);
   const inactiveCols = $derived($inactiveCollectionIds);
   const dragging = $derived($draggingItemId !== null);
+  // The plugins/Downloads page has no groups to filter — the sidebar is
+  // omitted entirely and the body grid must collapse to a single column.
+  const noSidebar = $derived(route.page === 'plugins');
 
   function readCollapsed(): boolean {
     try {
@@ -259,16 +262,18 @@
 
 <header>
   <div class="header-inner">
-    <button
-      class="sidebar-toggle"
-      type="button"
-      aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-      aria-pressed={!collapsed}
-      title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-      onclick={toggleCollapsed}
-    >
-      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-    </button>
+    {#if !noSidebar}
+      <button
+        class="sidebar-toggle"
+        type="button"
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        aria-pressed={!collapsed}
+        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        onclick={toggleCollapsed}
+      >
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    {/if}
     <div class="brand">
       <a class="brand-link" href="#/">
         <h1 class="sr-only">Inbox RS</h1>
@@ -306,8 +311,8 @@
   </div>
 </header>
 
-<div class="body" class:sidebar-collapsed={collapsed}>
-  {#if route.page !== 'plugins'}
+<div class="body" class:sidebar-collapsed={collapsed} class:no-sidebar={noSidebar}>
+  {#if !noSidebar}
     <aside class="sidebar" class:collapsed class:dragging aria-label="Groups and collections">
       {#if collapsed}
         <div class="rail">
@@ -648,6 +653,13 @@
 
   .body.sidebar-collapsed {
     grid-template-columns: 60px minmax(0, 1fr);
+  }
+
+  /* No sidebar rendered (plugins page): without this, <main> would land in
+     the narrow first track and squeeze the whole page against the left edge. */
+  .body.no-sidebar,
+  .body.no-sidebar.sidebar-collapsed {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   /* ── Sidebar ── */
