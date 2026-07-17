@@ -1650,6 +1650,33 @@ export const openTodos = derived(allTodos, ($allTodos) =>
   $allTodos.filter((t) => !t.completed),
 );
 
+/** Todos the user has starred as "focused" (independent of completion). */
+export const focusedTodos = derived(allTodos, ($allTodos) =>
+  $allTodos.filter((t) => t.focused),
+);
+
+/**
+ * Focused, still-open todos — what the nav badge counts. A badge over the
+ * user's own short-list of starred todos is actionable; a global open-todo
+ * total is not (it can't be driven to zero and ignores the current view).
+ */
+export const focusedOpenTodos = derived(focusedTodos, ($focusedTodos) =>
+  $focusedTodos.filter((t) => !t.completed),
+);
+
+/**
+ * Toggle a todo's "focus" star and persist. Focus is a lightweight per-todo
+ * flag, orthogonal to completion. Mirrors the complete-toggle pattern: build a
+ * rewritten item and hand it to `storeItem` (which updates the `items` store);
+ * on failure the row reverts because its prop is unchanged.
+ */
+export async function toggleTodoFocus(id: string): Promise<void> {
+  const item = get(items)[id];
+  if (!item) return;
+  const updated = { ...item, isTodo: true, focused: !item.focused };
+  await storeItem(cleanForStorage(updated) as InboxItem);
+}
+
 /**
  * Todos visible on the flat Todos page. Unfiled todos are always visible;
  * filed todos honour the group-filter row. Sorted by `todosGlobalOrder`; ids

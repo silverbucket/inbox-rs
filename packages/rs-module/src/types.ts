@@ -18,6 +18,7 @@ export interface InboxItemBase {
   isTodo?: boolean;
   completed?: boolean;
   completedAt?: string;
+  focused?: boolean; // starred as a "focus" todo — independent of completion
   collectionId?: string; // undefined = Inbox for refs, unfiled for todos
 }
 

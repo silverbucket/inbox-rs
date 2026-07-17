@@ -30,14 +30,14 @@
   let {
     route,
     navTo,
-    openTodoCount,
+    focusedTodoCount,
     onaddgroup,
     userMenu = $bindable(null),
     children,
   }: {
     route: Route;
     navTo: (page: Page) => void;
-    openTodoCount: number;
+    focusedTodoCount: number;
     onaddgroup: () => void;
     userMenu?: UserMenuHandle | null;
     children: Snippet;
@@ -294,8 +294,11 @@
         onclick={() => navTo('todos')}
       >
         Todos
-        {#if openTodoCount > 0}
-          <span class="nav-badge">{openTodoCount}</span>
+        {#if focusedTodoCount > 0}
+          <span
+            class="nav-badge"
+            title="{focusedTodoCount} focused {focusedTodoCount === 1 ? 'todo' : 'todos'}"
+          >{focusedTodoCount}</span>
         {/if}
       </button>
       <button

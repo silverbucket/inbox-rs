@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
-  import { storeItem } from '../lib/stores';
+  import { storeItem, toggleTodoFocus } from '../lib/stores';
   import { cleanForStorage } from '../lib/clean-for-storage';
   import { typeIconPath } from '../lib/item-utils';
   import { draggingItemId, DRAG_MIME } from '../lib/drag';
@@ -69,6 +69,16 @@
     } catch (err) {
       console.error('Failed to update todo:', err);
       // Checkbox reverts on next render because the `todo` prop is unchanged
+    }
+  }
+
+  async function toggleFocus(e: Event) {
+    e.stopPropagation();
+    try {
+      await toggleTodoFocus(todo.id);
+    } catch (err) {
+      console.error('Failed to toggle todo focus:', err);
+      // Star reverts on next render because the `todo` prop is unchanged
     }
   }
 
@@ -174,6 +184,22 @@
       <span class="date" title={createdTitle}>{createdLabel}</span>
     {/if}
   </div>
+
+  <!-- Focus star: mark a todo as part of your short-list. Filled when focused
+       (always visible so the state is scannable); a faint outline otherwise,
+       revealed on row hover/focus so unfocused rows stay uncluttered. -->
+  <button type="button"
+    class="btn-focus"
+    class:is-focused={todo.focused}
+    onclick={toggleFocus}
+    aria-pressed={!!todo.focused}
+    aria-label="{todo.focused ? 'Unfocus' : 'Focus'} {todo.title}"
+    title={todo.focused ? 'Focused — click to unfocus' : 'Focus this todo'}
+  >
+    <svg width="16" height="16" viewBox="0 0 24 24" fill={todo.focused ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+    </svg>
+  </button>
 
   {#if onaddincollection}
     <!-- Hover/focus-reveal quick-add: creates a new todo in this row's
@@ -329,6 +355,58 @@
     white-space: nowrap;
   }
 
+  /* Focus star. Unfocused: faint and hover-revealed like the quick-add, so
+     rows stay clean. Focused: always visible in the accent colour so the
+     short-list is scannable at rest. */
+  .btn-focus {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    border-radius: 999px;
+    color: var(--text-muted);
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity 150ms, color 150ms, transform 150ms;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .todo-row:hover .btn-focus,
+  .todo-row:focus-within .btn-focus {
+    opacity: 0.55;
+  }
+
+  .btn-focus:hover {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+
+  .btn-focus:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Focused rows always show a filled accent star, regardless of hover. */
+  .btn-focus.is-focused,
+  .todo-row:hover .btn-focus.is-focused,
+  .todo-row:focus-within .btn-focus.is-focused {
+    color: var(--accent);
+    opacity: 1;
+  }
+
+  /* Touch devices have no hover: keep the star visible so it's reachable. */
+  @media (hover: none) {
+    .btn-focus {
+      opacity: 0.55;
+    }
+  }
+
   /* Quick-add button: revealed on hover or keyboard focus anywhere in the row
      (mirrors the pattern in GroupSection / CollectionView). Tinted with the
      collection colour to reinforce the "this adds here" mental model. */
@@ -381,7 +459,7 @@
   @media (max-width: 600px) {
     .todo-row {
       display: grid;
-      grid-template-columns: auto 1fr;
+      grid-template-columns: auto 1fr auto;
       grid-template-rows: auto auto;
       column-gap: 0.6rem;
       row-gap: 0.25rem;
@@ -399,6 +477,15 @@
       grid-column: 2;
       grid-row: 1;
       font-size: 0.9rem;
+    }
+
+    /* Star sits top-right of the 2-line row; kept visible since narrow is
+       typically touch. */
+    .btn-focus {
+      grid-column: 3;
+      grid-row: 1 / span 2;
+      align-self: center;
+      opacity: 0.55;
     }
 
     .meta {

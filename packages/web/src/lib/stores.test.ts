@@ -68,6 +68,8 @@ import {
   deleteCollection,
   deleteGroup,
   deleteItem,
+  focusedOpenTodos,
+  focusedTodos,
   groupCollections,
   groups,
   inactiveCollectionIds,
@@ -91,6 +93,7 @@ import {
   todoItems,
   toggleCollectionFilter,
   toggleGroupFilter,
+  toggleTodoFocus,
   userSettings,
   visibleGroupedCollections,
   visibleTodos,
@@ -1767,6 +1770,58 @@ describe('allTodos / openTodos', () => {
     });
 
     expect(get(openTodos).map((t) => t.id)).toEqual(['open']);
+  });
+});
+
+describe('focus (star) todos', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    items.set({});
+    appConfig.set({});
+  });
+
+  it('focusedTodos returns only starred todos', () => {
+    items.set({
+      a: makeTodo('a', { focused: true }),
+      b: makeTodo('b'),
+      c: makeTodo('c', { focused: true, completed: true }),
+    });
+
+    expect(
+      get(focusedTodos)
+        .map((t) => t.id)
+        .sort(),
+    ).toEqual(['a', 'c']);
+  });
+
+  it('focusedOpenTodos excludes completed starred todos (the nav badge set)', () => {
+    items.set({
+      a: makeTodo('a', { focused: true }),
+      b: makeTodo('b'), // not focused
+      c: makeTodo('c', { focused: true, completed: true }), // focused but done
+    });
+
+    expect(get(focusedOpenTodos).map((t) => t.id)).toEqual(['a']);
+  });
+
+  it('toggleTodoFocus flips the flag and persists', async () => {
+    items.set({ t1: makeTodo('t1') });
+
+    await toggleTodoFocus('t1');
+    expect(get(items).t1.focused).toBe(true);
+    expect(get(items).t1.isTodo).toBe(true);
+    expect(mockInbox.store).toHaveBeenCalledTimes(1);
+    const stored = mockInbox.store.mock.calls[0][0] as InboxItem;
+    expect(stored.focused).toBe(true);
+
+    await toggleTodoFocus('t1');
+    expect(get(items).t1.focused).toBe(false);
+  });
+
+  it('toggleTodoFocus is a no-op for an unknown id', async () => {
+    items.set({});
+    await toggleTodoFocus('missing');
+    expect(mockInbox.store).not.toHaveBeenCalled();
   });
 });
 

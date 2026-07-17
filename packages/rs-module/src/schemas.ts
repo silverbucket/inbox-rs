@@ -3,6 +3,7 @@ const todoFields = {
   isTodo: { type: 'boolean' },
   completed: { type: 'boolean' },
   completedAt: { type: 'string' },
+  focused: { type: 'boolean' },
 };
 
 // Shared collection field — any item can belong to a collection.
@@ -184,6 +185,7 @@ export const todoSchema = {
     body: { type: 'string' },
     completed: { type: 'boolean' },
     completedAt: { type: 'string' },
+    focused: { type: 'boolean' },
     createdAt: { type: 'string' },
     ...collectionFields,
     ...migrateFields,
