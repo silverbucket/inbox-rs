@@ -15,6 +15,7 @@
     inactiveCollectionIds,
     toggleGroupFilter,
     toggleCollectionFilter,
+    enableCollectionFilter,
     moveItemToCollection,
     createCollection,
     storeGroup,
@@ -123,9 +124,16 @@
     }
   }
 
-  async function onToggleCollection(col: Collection) {
+  async function onToggleCollection(group: CollectionGroup, col: Collection) {
     try {
-      await toggleCollectionFilter(col.id);
+      if (isCollectionActive(group, col)) {
+        // Currently visible → hide it (deny-list).
+        await toggleCollectionFilter(col.id);
+      } else {
+        // Hidden → reveal it, activating the parent group if needed. When the
+        // group was off, this shows only this collection (see the store fn).
+        await enableCollectionFilter(col.id);
+      }
     } catch (error) {
       console.error('Failed to toggle collection filter', error);
     }
@@ -426,7 +434,7 @@
                           style="--entity-color: {col.color || group.color || 'var(--accent)'}"
                           aria-pressed={colActive}
                           title={colActive ? `Hide ${col.name}` : `Show ${col.name}`}
-                          onclick={() => onToggleCollection(col)}
+                          onclick={() => onToggleCollection(group, col)}
                           ondragover={(e) => onColDragOver(e, col)}
                           ondragleave={() => onColDragLeave(col)}
                           ondrop={(e) => onColDrop(e, col)}

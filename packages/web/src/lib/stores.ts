@@ -1586,15 +1586,40 @@ export const orphanCollections = derived(
  * Toggle a group's filter on/off. Persists to config.
  * If activeGroupFilters was undefined (default-all), this materializes the
  * current set first, then flips the requested id.
+ *
+ * When *activating* a group, any per-collection hides (the deny-list) for that
+ * group's collections are cleared, so "show this group" always reveals all of
+ * its collections. This keeps the two sidebar gestures coherent: the group
+ * toggle means "show everything in this group", while clicking an individual
+ * collection (`enableCollectionFilter`) means "show just this one". Without
+ * this, siblings hidden by an earlier exclusive collection-enable would stay
+ * hidden even after re-enabling the group.
  */
 export async function toggleGroupFilter(groupId: string): Promise<void> {
   const config = get(appConfig);
   const allGroupIds = get(sortedGroups).map((g) => g.id);
   const current = config.activeGroupFilters ?? allGroupIds;
-  const next = current.includes(groupId)
-    ? current.filter((id) => id !== groupId)
-    : [...current, groupId];
-  await updateConfig({ activeGroupFilters: next });
+  const activating = !current.includes(groupId);
+  const next = activating
+    ? [...current, groupId]
+    : current.filter((id) => id !== groupId);
+
+  const patch: Partial<AppConfig> = { activeGroupFilters: next };
+
+  if (activating) {
+    const deny = config.inactiveCollectionFilters;
+    if (deny && deny.length > 0) {
+      const groupColIds = new Set(
+        (get(groupCollections)[groupId] ?? []).map((c) => c.id),
+      );
+      const nextDeny = deny.filter((id) => !groupColIds.has(id));
+      if (nextDeny.length !== deny.length) {
+        patch.inactiveCollectionFilters = nextDeny;
+      }
+    }
+  }
+
+  await updateConfig(patch);
 }
 
 /** Set the active group filter list to exactly these IDs. Persists to config.
@@ -1633,6 +1658,48 @@ export async function toggleCollectionFilter(
     ? current.filter((id) => id !== collectionId)
     : [...current, collectionId];
   await updateConfig({ inactiveCollectionFilters: next });
+}
+
+/**
+ * Enable a single collection directly from the sidebar, making it visible even
+ * when its parent group is currently switched off.
+ *
+ * - If the parent group was already active, this is a plain additive reveal:
+ *   the collection is removed from the deny-list; siblings are untouched.
+ * - If the parent group was NOT active, this is an *exclusive* enable: the
+ *   group is activated and every other collection in it is deny-listed, so
+ *   only the clicked collection shows. This spares the user from enabling the
+ *   whole group and then hiding each sibling by hand — the point of the
+ *   gesture. `toggleGroupFilter` clears these hides again on the next group
+ *   activation, so "show the whole group" remains one click away.
+ *
+ * A collection with no `groupId` (orphan) is simply un-hidden.
+ */
+export async function enableCollectionFilter(
+  collectionId: string,
+): Promise<void> {
+  const config = get(appConfig);
+  const groupId = get(collections)[collectionId]?.groupId;
+  const allGroupIds = get(sortedGroups).map((g) => g.id);
+  const currentGroups = config.activeGroupFilters ?? allGroupIds;
+  const groupActive = groupId ? currentGroups.includes(groupId) : true;
+
+  const patch: Partial<AppConfig> = {};
+  const deny = new Set(config.inactiveCollectionFilters ?? []);
+
+  if (groupId && !groupActive) {
+    // Activate the group and show only this collection.
+    patch.activeGroupFilters = [...currentGroups, groupId];
+    for (const col of get(groupCollections)[groupId] ?? []) {
+      if (col.id !== collectionId) deny.add(col.id);
+    }
+  }
+  // Always reveal the clicked collection (covers the group-already-active and
+  // orphan cases, and guards against it being missing from the group list).
+  deny.delete(collectionId);
+
+  patch.inactiveCollectionFilters = Array.from(deny);
+  await updateConfig(patch);
 }
 
 // ---- Flat Todos page: all todos across all collections ----
