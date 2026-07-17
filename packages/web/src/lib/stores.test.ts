@@ -93,6 +93,7 @@ import {
   toggleGroupFilter,
   userSettings,
   visibleGroupedCollections,
+  visibleOpenTodos,
   visibleTodos,
 } from './stores';
 
@@ -1842,6 +1843,52 @@ describe('visibleTodos', () => {
     appConfig.set({ todosGlobalOrder: ['t2'] });
 
     expect(get(visibleTodos).map((t) => t.id)).toEqual(['t2', 't3', 't1']);
+  });
+});
+
+describe('visibleOpenTodos (nav badge count)', () => {
+  beforeEach(() => {
+    items.set({});
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('excludes completed todos from the visible set', () => {
+    items.set({
+      open: makeTodo('open'),
+      done: makeTodo('done', { completed: true }),
+    });
+
+    expect(get(visibleOpenTodos).map((t) => t.id)).toEqual(['open']);
+  });
+
+  it('counts only todos in the focused group, matching the Todos page', () => {
+    items.set({
+      c1: makeTodo('c1', { collectionId: 'col-active' }),
+      c2: makeTodo('c2', { collectionId: 'col-hidden' }),
+      done: makeTodo('done', {
+        collectionId: 'col-active',
+        completed: true,
+      }),
+      unfiled: makeTodo('unfiled'),
+    });
+    collections.set({
+      'col-active': makeCollection('col-active', 'g-active'),
+      'col-hidden': makeCollection('col-hidden', 'g-hidden'),
+    });
+    groups.set({
+      'g-active': makeGroup('g-active', ['col-active']),
+      'g-hidden': makeGroup('g-hidden', ['col-hidden']),
+    });
+    // Focus only g-active: the hidden group's open todo must not be counted.
+    appConfig.set({ activeGroupFilters: ['g-active'] });
+
+    const ids = get(visibleOpenTodos)
+      .map((t) => t.id)
+      .sort();
+    // c1 (focused) + unfiled (always visible); c2 hidden, done completed.
+    expect(ids).toEqual(['c1', 'unfiled']);
   });
 });
 

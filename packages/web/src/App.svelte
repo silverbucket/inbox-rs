@@ -10,7 +10,7 @@
   import CaptureSheet from './components/CaptureSheet.svelte';
   import Toast from './components/Toast.svelte';
   import {
-    connected, deleteItem, items, openTodos, pendingMigrationCount, runAllMigrations,
+    connected, deleteItem, items, visibleOpenTodos, pendingMigrationCount, runAllMigrations,
     createCollection, storeGroup,
     appConfig, setActiveGroupFilters,
   } from './lib/stores';
@@ -396,8 +396,9 @@
   }
 
   // Surface a small badge with open todo count next to the Todos nav item.
-  // Counts every open todo so the badge matches the flat Todos page.
-  const openTodoCount = $derived($openTodos.length);
+  // Counts open todos within the current group/collection focus, so the badge
+  // matches what the flat Todos page actually shows.
+  const openTodoCount = $derived($visibleOpenTodos.length);
 </script>
 
 {#snippet shellBody()}
