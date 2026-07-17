@@ -10,7 +10,7 @@
   import CaptureSheet from './components/CaptureSheet.svelte';
   import Toast from './components/Toast.svelte';
   import {
-    connected, deleteItem, items, visibleOpenTodos, pendingMigrationCount, runAllMigrations,
+    connected, deleteItem, items, visibleOpenTodos, openTodos, pendingMigrationCount, runAllMigrations,
     createCollection, storeGroup,
     appConfig, setActiveGroupFilters,
   } from './lib/stores';
@@ -395,10 +395,12 @@
     void loadGroupFormModal();
   }
 
-  // Surface a small badge with open todo count next to the Todos nav item.
-  // Counts open todos within the current group/collection focus, so the badge
-  // matches what the flat Todos page actually shows.
-  const openTodoCount = $derived($visibleOpenTodos.length);
+  // Todos nav badge. Primary count = open todos within the current
+  // group/collection focus (matches the flat Todos page). Secondary =
+  // total incomplete todos everywhere, shown greyed when it exceeds the
+  // in-view count so a filtered view still hints at what's hidden.
+  const viewTodoCount = $derived($visibleOpenTodos.length);
+  const totalTodoCount = $derived($openTodos.length);
 </script>
 
 {#snippet shellBody()}
@@ -474,11 +476,11 @@
 {/snippet}
 
 {#if $layout === 'sidebar'}
-  <SidebarShell {route} {navTo} {openTodoCount} onaddgroup={openGroupForm} bind:userMenu>
+  <SidebarShell {route} {navTo} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} bind:userMenu>
     {#snippet children()}{@render shellBody()}{/snippet}
   </SidebarShell>
 {:else}
-  <ClassicShell {route} {navTo} {openTodoCount} onaddgroup={openGroupForm} bind:userMenu>
+  <ClassicShell {route} {navTo} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} bind:userMenu>
     {#snippet children()}{@render shellBody()}{/snippet}
   </ClassicShell>
 {/if}
