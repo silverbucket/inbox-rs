@@ -68,6 +68,7 @@ import {
   deleteCollection,
   deleteGroup,
   deleteItem,
+  enableCollectionFilter,
   groupCollections,
   groups,
   inactiveCollectionIds,
@@ -1588,6 +1589,112 @@ describe('toggleGroupFilter', () => {
     await toggleGroupFilter('g2');
 
     expect(get(appConfig).activeGroupFilters).toEqual(['g1', 'g2']);
+  });
+
+  it('clears the group’s collection hides when activating it', async () => {
+    collections.set({
+      c1: makeCollection('c1', 'g2'),
+      c2: makeCollection('c2', 'g2'),
+      c3: makeCollection('c3', 'g1'),
+    });
+    groups.set({
+      g1: makeGroup('g1', ['c3']),
+      g2: makeGroup('g2', ['c1', 'c2']),
+    });
+    // g2 is off; c1/c2 (its collections) and c3 (another group) are hidden.
+    appConfig.set({
+      activeGroupFilters: ['g1'],
+      inactiveCollectionFilters: ['c1', 'c2', 'c3'],
+    });
+
+    await toggleGroupFilter('g2');
+
+    expect(get(appConfig).activeGroupFilters).toEqual(['g1', 'g2']);
+    // c1/c2 revealed; c3 (belongs to another group) untouched.
+    expect(get(appConfig).inactiveCollectionFilters).toEqual(['c3']);
+  });
+
+  it('leaves the deny-list alone when deactivating a group', async () => {
+    collections.set({ c1: makeCollection('c1', 'g1') });
+    groups.set({ g1: makeGroup('g1', ['c1']) });
+    appConfig.set({
+      activeGroupFilters: ['g1'],
+      inactiveCollectionFilters: ['c1'],
+    });
+
+    await toggleGroupFilter('g1');
+
+    expect(get(appConfig).activeGroupFilters).toEqual([]);
+    expect(get(appConfig).inactiveCollectionFilters).toEqual(['c1']);
+  });
+});
+
+describe('enableCollectionFilter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('activates the parent group and shows only the clicked collection', async () => {
+    collections.set({
+      c1: makeCollection('c1', 'g1'),
+      c2: makeCollection('c2', 'g1'),
+      c3: makeCollection('c3', 'g1'),
+    });
+    groups.set({ g1: makeGroup('g1', ['c1', 'c2', 'c3']) });
+    // g1 is off (only g2-less world here) → group inactive.
+    appConfig.set({ activeGroupFilters: [] });
+
+    await enableCollectionFilter('c2');
+
+    expect(get(appConfig).activeGroupFilters).toEqual(['g1']);
+    // Siblings hidden, c2 visible.
+    expect(get(appConfig).inactiveCollectionFilters?.sort()).toEqual([
+      'c1',
+      'c3',
+    ]);
+  });
+
+  it('additively reveals a collection when its group is already active', async () => {
+    collections.set({
+      c1: makeCollection('c1', 'g1'),
+      c2: makeCollection('c2', 'g1'),
+    });
+    groups.set({ g1: makeGroup('g1', ['c1', 'c2']) });
+    appConfig.set({
+      activeGroupFilters: ['g1'],
+      inactiveCollectionFilters: ['c2'],
+    });
+
+    await enableCollectionFilter('c2');
+
+    // Group unchanged; c2 un-hidden; siblings untouched.
+    expect(get(appConfig).activeGroupFilters).toEqual(['g1']);
+    expect(get(appConfig).inactiveCollectionFilters).toEqual([]);
+  });
+
+  it('reveals a collection under a default-all (undefined) group filter', async () => {
+    collections.set({ c1: makeCollection('c1', 'g1') });
+    groups.set({ g1: makeGroup('g1', ['c1']) });
+    appConfig.set({ inactiveCollectionFilters: ['c1'] });
+
+    await enableCollectionFilter('c1');
+
+    // Default-all means the group is already active — no materialization.
+    expect(get(appConfig).activeGroupFilters).toBeUndefined();
+    expect(get(appConfig).inactiveCollectionFilters).toEqual([]);
+  });
+
+  it('just un-hides an orphan collection (no group)', async () => {
+    collections.set({ c1: makeCollection('c1') });
+    appConfig.set({ inactiveCollectionFilters: ['c1'] });
+
+    await enableCollectionFilter('c1');
+
+    expect(get(appConfig).activeGroupFilters).toBeUndefined();
+    expect(get(appConfig).inactiveCollectionFilters).toEqual([]);
   });
 });
 
