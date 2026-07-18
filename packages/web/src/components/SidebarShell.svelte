@@ -31,14 +31,18 @@
   let {
     route,
     navTo,
-    openTodoCount,
+    viewTodoCount,
+    totalTodoCount,
     onaddgroup,
     userMenu = $bindable(null),
     children,
   }: {
     route: Route;
     navTo: (page: Page) => void;
-    openTodoCount: number;
+    /** Open todos within the current group/collection focus (primary badge). */
+    viewTodoCount: number;
+    /** Total incomplete todos everywhere (greyed secondary badge). */
+    totalTodoCount: number;
     onaddgroup: () => void;
     userMenu?: UserMenuHandle | null;
     children: Snippet;
@@ -302,8 +306,11 @@
         onclick={() => navTo('todos')}
       >
         Todos
-        {#if openTodoCount > 0}
-          <span class="nav-badge">{openTodoCount}</span>
+        {#if viewTodoCount > 0}
+          <span class="nav-badge">{viewTodoCount}</span>
+        {/if}
+        {#if totalTodoCount > viewTodoCount}
+          <span class="nav-badge-total" title="{totalTodoCount} incomplete todos in total">{totalTodoCount}</span>
         {/if}
       </button>
       <button
@@ -639,6 +646,16 @@
     align-items: center;
     justify-content: center;
     padding: 0 5px;
+    line-height: 1;
+  }
+
+  /* Greyed total-incomplete count, shown after the accent pill when the
+     current view hides some todos. Muted so it reads as secondary. */
+  .nav-badge-total {
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-left: 3px;
     line-height: 1;
   }
 

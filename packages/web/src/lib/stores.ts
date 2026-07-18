@@ -1751,6 +1751,16 @@ export const visibleTodos = derived(
 );
 
 /**
+ * Open todos within the current group/collection focus — exactly the set the
+ * Todos page shows as "open". This is what the nav badge counts, so the badge
+ * matches the list the user actually sees. Filtering to a group shrinks both
+ * together, instead of the badge stubbornly reporting a global total.
+ */
+export const visibleOpenTodos = derived(visibleTodos, ($visibleTodos) =>
+  $visibleTodos.filter((t) => !t.completed),
+);
+
+/**
  * Persist a new order for todos on the flat Todos page. Only stores the ids
  * the caller passed — any todos that appear later fall back to createdAt
  * ordering via `sortWithConfiguredOrder`.
