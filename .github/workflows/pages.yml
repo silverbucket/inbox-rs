@@ -1,0 +1,75 @@
+name: Deploy to GitHub Pages
+
+# Builds the web app from `main` and publishes it to GitHub Pages. This is
+# separate from release.yml (which deploys the production site to 5apps on
+# a manual version bump) — Pages tracks `main` directly so it's always a
+# live preview of the latest commit.
+#
+# One-time setup required in the repo: Settings > Pages > Build and
+# deployment > Source: "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deployment may run at a time; don't cancel one that's
+# already publishing so a slow run can't get replaced mid-upload by a
+# newer one and leave Pages half-updated.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm install @rollup/rollup-linux-x64-gnu --no-save
+
+      - name: Restore transcription asset cache
+        uses: actions/cache@v4
+        with:
+          path: packages/web/public/ml
+          key: ${{ runner.os }}-transcription-assets-${{ hashFiles('scripts/vendor-transcription-assets.mjs', 'package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-transcription-assets-
+
+      - name: Build web app
+        # Project Pages sites are served from /<repo>/, not the domain root,
+        # so asset/HTML references and the PWA precache manifest need that
+        # base baked in (see packages/web/vite.config.ts).
+        env:
+          GH_PAGES_BASE: /${{ github.event.repository.name }}/
+        run: npm run build
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: packages/web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
