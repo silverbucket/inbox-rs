@@ -22,6 +22,21 @@ export interface CollectionSuggestion {
   reason: SuggestionReason;
 }
 
+/**
+ * The thing being filed. Structurally satisfied by any InboxItem, but also
+ * by a lightweight stand-in for items that don't exist yet (AddEntryModal
+ * picks a destination before the item is built).
+ */
+export interface FilingSubject {
+  id?: string;
+  type?: string;
+  title: string;
+  description?: string;
+  url?: string;
+  collectionId?: string;
+  isTodo?: boolean;
+}
+
 const RECENT_KEY = 'inbox-rs:recent-collections';
 const RECENT_MAX = 12;
 export const SUGGESTION_MAX = 3;
@@ -62,10 +77,8 @@ function domainOf(url: string): string | null {
   }
 }
 
-function itemDomain(item: InboxItem): string | null {
-  return 'url' in item && typeof item.url === 'string'
-    ? domainOf(item.url)
-    : null;
+function itemDomain(item: FilingSubject): string | null {
+  return typeof item.url === 'string' ? domainOf(item.url) : null;
 }
 
 /**
@@ -94,7 +107,7 @@ function nameMatches(name: string, text: string): boolean {
  * it already lives is a no-op).
  */
 export function suggestCollections(
-  item: InboxItem,
+  item: FilingSubject,
   collections: Collection[],
   allItems: Record<string, InboxItem>,
   recentIds: string[],

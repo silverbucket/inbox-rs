@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Collection, InboxItem } from '@inbox-rs/rs-module';
+  import type { Collection } from '@inbox-rs/rs-module';
   import { get } from 'svelte/store';
   import {
     appConfig,
@@ -13,6 +13,7 @@
   import {
     getRecentCollectionIds,
     suggestCollections,
+    type FilingSubject,
     type SuggestionReason,
   } from '../lib/collection-suggest';
   import { autofocusIf } from '../lib/actions';
@@ -24,7 +25,8 @@
     onpick,
     onclose,
   }: {
-    item: InboxItem;
+    /** Any InboxItem, or a lightweight subject for not-yet-saved items. */
+    item: FilingSubject;
     /**
      * 'move' — re-file the card; shows Inbox/Unfile when it's already filed.
      * 'todo' — choosing where a converted todo lands; always offers Unfiled.

@@ -13,6 +13,8 @@
     shouldSubmitAddEntryForm,
   } from '../lib/add-entry-modal';
   import { enrichBookmark, needsEnrichment } from '../lib/enrich';
+  import type { FilingSubject } from '../lib/collection-suggest';
+  import CollectionPicker from './CollectionPicker.svelte';
   import BookmarkForm from './add-entry/BookmarkForm.svelte';
   import NoteForm from './add-entry/NoteForm.svelte';
   import ImageForm from './add-entry/ImageForm.svelte';
@@ -56,13 +58,6 @@
   // means Inbox.
   let selectedCollectionId = $state<string | undefined>(collectionId);
   let collectionPickerOpen = $state(false);
-  let collectionPickerEl = $state<HTMLDivElement>();
-  let collectionPickerTriggerEl = $state<HTMLButtonElement>();
-  // Collection dropdown menu position, computed when opened. Positioned
-  // with `position: fixed` so it escapes the modal's `overflow: hidden`
-  // (note modal) and the modal's rounded border clipping (other modals).
-  // Flips upward when there's no room below.
-  let pickerMenuStyle = $state('');
   // For refs, `undefined` means Inbox. For todos, `undefined` means unfiled:
   // no collectionId is written, and the todo stays available to organize
   // later without creating any synthetic group or collection.
@@ -119,73 +114,24 @@
     email: 'Edit Email',
   };
 
-  $effect(() => {
-    if (!collectionPickerOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (collectionPickerEl && !collectionPickerEl.contains(e.target as Node))
-        collectionPickerOpen = false;
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') collectionPickerOpen = false;
-    };
-    // Re-position on resize/scroll so the fixed-position menu stays anchored
-    // to the trigger — the modal content can scroll behind it, and on mobile
-    // the viewport can change on orientation / keyboard appearance.
-    const reposition = () => positionPickerMenu();
-    document.addEventListener('mousedown', onDoc);
-    document.addEventListener('keydown', onKey);
-    window.addEventListener('resize', reposition);
-    window.addEventListener('scroll', reposition, true);
-    return () => {
-      document.removeEventListener('mousedown', onDoc);
-      document.removeEventListener('keydown', onKey);
-      window.removeEventListener('resize', reposition);
-      window.removeEventListener('scroll', reposition, true);
-    };
-  });
-
   function selectCollection(id: string | undefined) {
     selectedCollectionId = id;
     collectionPickerOpen = false;
   }
 
   /**
-   * Compute the dropdown menu position relative to the trigger using
-   * viewport coordinates. We render the menu with `position: fixed` so it
-   * escapes the modal's clipping contexts (overflow: hidden on the note
-   * modal, rounded border on others) and can always extend past the modal.
-   * If there's not enough room below the trigger for the menu (max 320px),
-   * flip it to open upward.
+   * What the CollectionPicker files. The item doesn't exist yet, so this is
+   * a lightweight subject: no title/url means content-based suggestions
+   * degrade gracefully to recency, and `collectionId` reflects the pending
+   * selection so the picker excludes it from the list and offers the
+   * Inbox/Unfiled row to clear it.
    */
-  function positionPickerMenu() {
-    if (!collectionPickerTriggerEl) return;
-    const rect = collectionPickerTriggerEl.getBoundingClientRect();
-    const viewportHeight = window.innerHeight;
-    const menuMaxHeight = 320;
-    const gap = 4;
-    const spaceBelow = viewportHeight - rect.bottom - gap;
-    const spaceAbove = rect.top - gap;
-    const preferUp =
-      spaceBelow < Math.min(menuMaxHeight, 200) && spaceAbove > spaceBelow;
-    const maxHeight = Math.max(
-      120,
-      Math.min(menuMaxHeight, preferUp ? spaceAbove : spaceBelow),
-    );
-    const left = rect.left;
-    const width = rect.width;
-    if (preferUp) {
-      const bottom = viewportHeight - rect.top + gap;
-      pickerMenuStyle = `left: ${left}px; width: ${width}px; bottom: ${bottom}px; max-height: ${maxHeight}px;`;
-    } else {
-      const top = rect.bottom + gap;
-      pickerMenuStyle = `left: ${left}px; width: ${width}px; top: ${top}px; max-height: ${maxHeight}px;`;
-    }
-  }
-
-  function togglePicker() {
-    if (!collectionPickerOpen) positionPickerMenu();
-    collectionPickerOpen = !collectionPickerOpen;
-  }
+  const pickerSubject = $derived<FilingSubject>({
+    id: editItem?.id,
+    title: '',
+    collectionId: selectedCollectionId,
+    isTodo: isTodoType,
+  });
 
   async function handleSubmit() {
     if (!formBuildItem || !formCanSubmit) return;
@@ -339,102 +285,30 @@
       {#if showCollectionPicker}
         <div class="field">
           <span>{isTodoType ? 'File in' : 'Collection'}</span>
-          <div class="dest-wrapper" bind:this={collectionPickerEl}>
-            <button
-              type="button"
-              class="dest-trigger"
-              bind:this={collectionPickerTriggerEl}
-              onclick={togglePicker}
-              aria-haspopup="listbox"
-              aria-expanded={collectionPickerOpen}
+          <button
+            type="button"
+            class="dest-trigger"
+            onclick={() => (collectionPickerOpen = true)}
+            aria-haspopup="dialog"
+            aria-expanded={collectionPickerOpen}
+          >
+            <span class="dest-label">{collectionLabel}</span>
+            <svg
+              aria-hidden="true"
+              class="dest-chevron"
+              class:open={collectionPickerOpen}
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
             >
-              <span class="dest-label">{collectionLabel}</span>
-              <svg
-                aria-hidden="true"
-                class="dest-chevron"
-                class:open={collectionPickerOpen}
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </button>
-            {#if collectionPickerOpen}
-              <div
-                class="dest-menu"
-                role="listbox"
-                aria-label="Destination"
-                style={pickerMenuStyle}
-              >
-                <!--
-                  Default non-collection destination. For refs this is Inbox;
-                  for todos this is unfiled so they can be organized later.
-                -->
-                {#if isTodoType}
-                  <button
-                    type="button"
-                    class="dest-item"
-                    class:selected={selectedCollectionId === undefined}
-                    onclick={() => selectCollection(undefined)}
-                  >
-                    <span
-                      class="dest-dot"
-                      style="background: #9ca3af"
-                      aria-hidden="true"
-                    ></span>
-                    Unfiled
-                  </button>
-                {:else if !isTodoType}
-                  <button
-                    type="button"
-                    class="dest-item"
-                    class:selected={selectedCollectionId === undefined}
-                    onclick={() => selectCollection(undefined)}
-                  >
-                    <span class="dest-dot inbox" aria-hidden="true"></span>
-                    {noCollectionLabel}
-                  </button>
-                {/if}
-                {#each $sortedGroups as group (group.id)}
-                  {@const cols = $groupCollections[group.id] ?? []}
-                  {#if cols.length > 0}
-                    <div
-                      class="dest-group-label"
-                      style="--group-color: {group.color || 'var(--accent)'}"
-                    >
-                      <span
-                        class="dest-dot"
-                        style="background: var(--group-color)"
-                        aria-hidden="true"
-                      ></span>
-                      {group.name}
-                    </div>
-                    {#each cols as col (col.id)}
-                      <button
-                        type="button"
-                        class="dest-item nested"
-                        class:selected={selectedCollectionId === col.id}
-                        onclick={() => selectCollection(col.id)}
-                      >
-                        <span
-                          class="dest-dot"
-                          style="background: {col.color || 'var(--accent)'}"
-                          aria-hidden="true"
-                        ></span>
-                        {col.name}
-                      </button>
-                    {/each}
-                  {/if}
-                {/each}
-              </div>
-            {/if}
-          </div>
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
         </div>
       {/if}
 
@@ -480,6 +354,15 @@
         </button>
       </div>
     </div>
+
+    {#if collectionPickerOpen}
+      <CollectionPicker
+        item={pickerSubject}
+        mode={isTodoType ? 'todo' : 'move'}
+        onpick={selectCollection}
+        onclose={() => (collectionPickerOpen = false)}
+      />
+    {/if}
   </div>
 </div>
 
@@ -955,10 +838,6 @@
     cursor: default;
   }
 
-  .dest-wrapper {
-    position: relative;
-  }
-
   .dest-trigger {
     display: inline-flex;
     align-items: center;
@@ -998,78 +877,5 @@
 
   .dest-chevron.open {
     transform: rotate(180deg);
-  }
-
-  /*
-   * Fixed positioning (set dynamically via inline style) lets the menu
-   * escape the modal's clipping contexts — the note modal sets
-   * `overflow: hidden` on the form, and the modal frame's rounded corners
-   * visually clip dropdowns that extend past the modal edge. A higher
-   * z-index than the overlay (200) keeps the menu on top of the modal.
-   */
-  .dest-menu {
-    position: fixed;
-    z-index: 250;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
-    padding: 0.3rem;
-    overflow-y: auto;
-  }
-
-  .dest-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    width: 100%;
-    background: none;
-    border: none;
-    padding: 0.4rem 0.55rem;
-    border-radius: var(--radius-sm);
-    color: var(--text);
-    font-size: 0.85rem;
-    font-family: inherit;
-    cursor: pointer;
-    text-align: left;
-    transition: background 0.12s;
-  }
-
-  .dest-item:hover {
-    background: var(--bg);
-  }
-
-  .dest-item.selected {
-    background: color-mix(in srgb, var(--accent) 14%, var(--surface) 86%);
-    color: var(--accent);
-    font-weight: 600;
-  }
-
-  .dest-item.nested {
-    padding-left: 1.5rem;
-  }
-
-  .dest-group-label {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.45rem 0.55rem 0.2rem;
-    color: var(--text-muted);
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
-  .dest-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    background: var(--accent);
-  }
-
-  .dest-dot.inbox {
-    background: var(--accent);
   }
 </style>
