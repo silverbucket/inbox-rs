@@ -16,17 +16,25 @@
     editItem,
     prefillTitle = '',
     canSubmit = $bindable(false),
+    draftTitle = $bindable(''),
     buildItem = $bindable(),
   }: {
     editItem?: InboxItem;
     prefillTitle?: string;
     canSubmit?: boolean;
+    draftTitle?: string;
     buildItem?: BuildItemFn;
   } = $props();
 
   // When opened from quick-capture, the typed text seeds the title and the
   // body gets focus so the user keeps writing the content.
   let title = $state(editItem?.title ?? prefillTitle);
+
+  // Mirror the draft title up to the shell so the filing picker can
+  // surface name-match suggestions for the not-yet-saved item.
+  $effect(() => {
+    draftTitle = title;
+  });
   let body = $state(
     editItem && 'body' in editItem ? (editItem.body ?? '') : '',
   );

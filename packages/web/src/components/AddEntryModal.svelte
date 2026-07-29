@@ -12,7 +12,15 @@
     shouldShowCollectionPicker,
     shouldSubmitAddEntryForm,
   } from '../lib/add-entry-modal';
+  import { get } from 'svelte/store';
+  import { collections } from '../lib/stores';
   import { enrichBookmark, needsEnrichment } from '../lib/enrich';
+  import {
+    getRecentCollectionIds,
+    recordCollectionUse,
+    type FilingSubject,
+  } from '../lib/collection-suggest';
+  import CollectionPicker from './CollectionPicker.svelte';
   import BookmarkForm from './add-entry/BookmarkForm.svelte';
   import NoteForm from './add-entry/NoteForm.svelte';
   import ImageForm from './add-entry/ImageForm.svelte';
@@ -48,21 +56,34 @@
   // reads `formCanSubmit` to gate the action button.
   let formCanSubmit = $state(false);
   let formBuildItem = $state<BuildItemFn | undefined>(undefined);
+  // Live draft fields mirrored up from the per-type forms — they feed the
+  // filing picker's content-match suggestions before the item exists.
+  let draftTitle = $state('');
+  let draftUrl = $state('');
 
-  // Initial destination for new items: honour the caller's explicit
-  // `collectionId` prop (e.g. a collection quick-add button), otherwise leave
-  // unset. For todos, unset means "unfiled" — we deliberately don't
-  // auto-select organization so capture stays frictionless. For refs, unset
-  // means Inbox.
-  let selectedCollectionId = $state<string | undefined>(collectionId);
+  /**
+   * Initial destination for new items, in priority order:
+   *   1. The caller's explicit `collectionId` prop (e.g. a collection
+   *      quick-add button) — that context is authoritative.
+   *   2. The most recent filing target that still exists — repeat captures
+   *      usually file to the same place, and the meta strip's Inbox/Unfiled
+   *      reset makes escaping the default one click.
+   *   3. Unset: Inbox for refs, unfiled for todos.
+   * Edit mode never shows the destination field, so it always starts unset.
+   */
+  function rememberedDestination(): string | undefined {
+    if (isEdit) return undefined;
+    const cols = get(collections);
+    for (const id of getRecentCollectionIds()) {
+      if (cols[id]) return id;
+    }
+    return undefined;
+  }
+
+  let selectedCollectionId = $state<string | undefined>(
+    collectionId ?? rememberedDestination(),
+  );
   let collectionPickerOpen = $state(false);
-  let collectionPickerEl = $state<HTMLDivElement>();
-  let collectionPickerTriggerEl = $state<HTMLButtonElement>();
-  // Collection dropdown menu position, computed when opened. Positioned
-  // with `position: fixed` so it escapes the modal's `overflow: hidden`
-  // (note modal) and the modal's rounded border clipping (other modals).
-  // Flips upward when there's no room below.
-  let pickerMenuStyle = $state('');
   // For refs, `undefined` means Inbox. For todos, `undefined` means unfiled:
   // no collectionId is written, and the todo stays available to organize
   // later without creating any synthetic group or collection.
@@ -70,17 +91,29 @@
   const noCollectionLabel = 'Inbox';
 
   // `undefined` is the non-collection sentinel: Inbox for refs, unfiled for
-  // todos.
-  const collectionLabel = $derived.by(() => {
-    if (selectedCollectionId === undefined) {
-      return isTodoType ? 'Unfiled' : noCollectionLabel;
+  // todos. Resolved to display parts so the trigger chip can mirror the card
+  // view's location styling (colored dot + group-colored prefix).
+  const selectedLocation = $derived.by(() => {
+    if (selectedCollectionId !== undefined) {
+      for (const group of $sortedGroups) {
+        const cols = $groupCollections[group.id] ?? [];
+        const found = cols.find((c) => c.id === selectedCollectionId);
+        if (found) {
+          return {
+            name: found.name,
+            color: found.color || '#6366f1',
+            groupName: group.name,
+            groupColor: group.color || 'var(--accent)',
+          };
+        }
+      }
     }
-    for (const group of $sortedGroups) {
-      const cols = $groupCollections[group.id] ?? [];
-      const found = cols.find((c) => c.id === selectedCollectionId);
-      if (found) return found.name;
-    }
-    return isTodoType ? 'Unfiled' : noCollectionLabel;
+    return {
+      name: isTodoType ? 'Unfiled' : noCollectionLabel,
+      color: '#9ca3af',
+      groupName: undefined,
+      groupColor: undefined,
+    };
   });
 
   // Whether the user has any real grouped collections at all. Todo capture
@@ -119,73 +152,26 @@
     email: 'Edit Email',
   };
 
-  $effect(() => {
-    if (!collectionPickerOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (collectionPickerEl && !collectionPickerEl.contains(e.target as Node))
-        collectionPickerOpen = false;
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') collectionPickerOpen = false;
-    };
-    // Re-position on resize/scroll so the fixed-position menu stays anchored
-    // to the trigger — the modal content can scroll behind it, and on mobile
-    // the viewport can change on orientation / keyboard appearance.
-    const reposition = () => positionPickerMenu();
-    document.addEventListener('mousedown', onDoc);
-    document.addEventListener('keydown', onKey);
-    window.addEventListener('resize', reposition);
-    window.addEventListener('scroll', reposition, true);
-    return () => {
-      document.removeEventListener('mousedown', onDoc);
-      document.removeEventListener('keydown', onKey);
-      window.removeEventListener('resize', reposition);
-      window.removeEventListener('scroll', reposition, true);
-    };
-  });
-
   function selectCollection(id: string | undefined) {
     selectedCollectionId = id;
     collectionPickerOpen = false;
   }
 
   /**
-   * Compute the dropdown menu position relative to the trigger using
-   * viewport coordinates. We render the menu with `position: fixed` so it
-   * escapes the modal's clipping contexts (overflow: hidden on the note
-   * modal, rounded border on others) and can always extend past the modal.
-   * If there's not enough room below the trigger for the menu (max 320px),
-   * flip it to open upward.
+   * What the CollectionPicker files. The item doesn't exist yet, so this is
+   * a lightweight subject built from the live draft fields — the typed
+   * title/URL feed name- and site-match suggestions; with nothing typed yet
+   * they degrade gracefully to recency. `collectionId` reflects the pending
+   * selection so the picker excludes it from the list and offers the
+   * Inbox/Unfiled row to clear it.
    */
-  function positionPickerMenu() {
-    if (!collectionPickerTriggerEl) return;
-    const rect = collectionPickerTriggerEl.getBoundingClientRect();
-    const viewportHeight = window.innerHeight;
-    const menuMaxHeight = 320;
-    const gap = 4;
-    const spaceBelow = viewportHeight - rect.bottom - gap;
-    const spaceAbove = rect.top - gap;
-    const preferUp =
-      spaceBelow < Math.min(menuMaxHeight, 200) && spaceAbove > spaceBelow;
-    const maxHeight = Math.max(
-      120,
-      Math.min(menuMaxHeight, preferUp ? spaceAbove : spaceBelow),
-    );
-    const left = rect.left;
-    const width = rect.width;
-    if (preferUp) {
-      const bottom = viewportHeight - rect.top + gap;
-      pickerMenuStyle = `left: ${left}px; width: ${width}px; bottom: ${bottom}px; max-height: ${maxHeight}px;`;
-    } else {
-      const top = rect.bottom + gap;
-      pickerMenuStyle = `left: ${left}px; width: ${width}px; top: ${top}px; max-height: ${maxHeight}px;`;
-    }
-  }
-
-  function togglePicker() {
-    if (!collectionPickerOpen) positionPickerMenu();
-    collectionPickerOpen = !collectionPickerOpen;
-  }
+  const pickerSubject = $derived<FilingSubject>({
+    id: editItem?.id,
+    title: draftTitle,
+    url: draftUrl || undefined,
+    collectionId: selectedCollectionId,
+    isTodo: isTodoType,
+  });
 
   async function handleSubmit() {
     if (!formBuildItem || !formCanSubmit) return;
@@ -222,6 +208,9 @@
       }
       if (selectedCollectionId && !isEdit) {
         await moveItemToCollection(item.id, selectedCollectionId);
+        // Feed the recency signal so the next capture defaults here and the
+        // picker's Suggested block stays honest.
+        recordCollectionUse(selectedCollectionId);
       }
       // Fill blank bookmark fields (title, description, preview image) from
       // the page's metadata in the background. New items only — an edit is
@@ -293,6 +282,8 @@
           {editItem}
           bind:canSubmit={formCanSubmit}
           bind:buildItem={formBuildItem}
+          bind:draftTitle
+          bind:draftUrl
         />
       {:else if type === 'note'}
         <NoteForm
@@ -300,6 +291,7 @@
           {prefillTitle}
           bind:canSubmit={formCanSubmit}
           bind:buildItem={formBuildItem}
+          bind:draftTitle
         />
       {:else if type === 'image'}
         <ImageForm
@@ -307,12 +299,14 @@
           {prefillFile}
           bind:canSubmit={formCanSubmit}
           bind:buildItem={formBuildItem}
+          bind:draftTitle
         />
       {:else if type === 'audio'}
         <AudioForm
           {editItem}
           bind:canSubmit={formCanSubmit}
           bind:buildItem={formBuildItem}
+          bind:draftTitle
         />
       {:else if type === 'document'}
         <DocumentForm
@@ -320,12 +314,14 @@
           {prefillFile}
           bind:canSubmit={formCanSubmit}
           bind:buildItem={formBuildItem}
+          bind:draftTitle
         />
       {:else if type === 'email'}
         <EmailForm
           {editItem}
           bind:canSubmit={formCanSubmit}
           bind:buildItem={formBuildItem}
+          bind:draftTitle
         />
       {:else if type === 'todo'}
         <TodoForm
@@ -333,109 +329,76 @@
           {prefillTitle}
           bind:canSubmit={formCanSubmit}
           bind:buildItem={formBuildItem}
+          bind:draftTitle
         />
       {/if}
 
       {#if showCollectionPicker}
-        <div class="field">
-          <span>{isTodoType ? 'File in' : 'Collection'}</span>
-          <div class="dest-wrapper" bind:this={collectionPickerEl}>
+        <!-- Mirrors the card view's filing zone exactly: meta-strip location
+             row + full-width filing primary. A new item's location is
+             Inbox/Unfiled until saved, so the same language applies. -->
+        <div class="meta-strip">
+          <span class="meta-item">
+            <span
+              class="loc-dot"
+              style="background: {selectedLocation.color}"
+              aria-hidden="true"
+            ></span>
+            {#if selectedLocation.groupName}
+              <span class="meta-group" style="color: {selectedLocation.groupColor}"
+                >{selectedLocation.groupName}</span
+              >
+              <span aria-hidden="true">·</span>
+            {/if}
+            {selectedLocation.name}
+          </span>
+          {#if selectedCollectionId !== undefined}
             <button
               type="button"
-              class="dest-trigger"
-              bind:this={collectionPickerTriggerEl}
-              onclick={togglePicker}
-              aria-haspopup="listbox"
-              aria-expanded={collectionPickerOpen}
+              class="btn-reset"
+              onclick={() => (selectedCollectionId = undefined)}
             >
-              <span class="dest-label">{collectionLabel}</span>
               <svg
                 aria-hidden="true"
-                class="dest-chevron"
-                class:open={collectionPickerOpen}
                 width="12"
                 height="12"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                stroke-width="2.5"
+                stroke-width="2"
                 stroke-linecap="round"
                 stroke-linejoin="round"
               >
-                <polyline points="6 9 12 15 18 9"></polyline>
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
               </svg>
+              {isTodoType ? 'Unfiled' : 'Inbox'}
             </button>
-            {#if collectionPickerOpen}
-              <div
-                class="dest-menu"
-                role="listbox"
-                aria-label="Destination"
-                style={pickerMenuStyle}
-              >
-                <!--
-                  Default non-collection destination. For refs this is Inbox;
-                  for todos this is unfiled so they can be organized later.
-                -->
-                {#if isTodoType}
-                  <button
-                    type="button"
-                    class="dest-item"
-                    class:selected={selectedCollectionId === undefined}
-                    onclick={() => selectCollection(undefined)}
-                  >
-                    <span
-                      class="dest-dot"
-                      style="background: #9ca3af"
-                      aria-hidden="true"
-                    ></span>
-                    Unfiled
-                  </button>
-                {:else if !isTodoType}
-                  <button
-                    type="button"
-                    class="dest-item"
-                    class:selected={selectedCollectionId === undefined}
-                    onclick={() => selectCollection(undefined)}
-                  >
-                    <span class="dest-dot inbox" aria-hidden="true"></span>
-                    {noCollectionLabel}
-                  </button>
-                {/if}
-                {#each $sortedGroups as group (group.id)}
-                  {@const cols = $groupCollections[group.id] ?? []}
-                  {#if cols.length > 0}
-                    <div
-                      class="dest-group-label"
-                      style="--group-color: {group.color || 'var(--accent)'}"
-                    >
-                      <span
-                        class="dest-dot"
-                        style="background: var(--group-color)"
-                        aria-hidden="true"
-                      ></span>
-                      {group.name}
-                    </div>
-                    {#each cols as col (col.id)}
-                      <button
-                        type="button"
-                        class="dest-item nested"
-                        class:selected={selectedCollectionId === col.id}
-                        onclick={() => selectCollection(col.id)}
-                      >
-                        <span
-                          class="dest-dot"
-                          style="background: {col.color || 'var(--accent)'}"
-                          aria-hidden="true"
-                        ></span>
-                        {col.name}
-                      </button>
-                    {/each}
-                  {/if}
-                {/each}
-              </div>
-            {/if}
-          </div>
+          {/if}
         </div>
+        <button
+          type="button"
+          class="btn-file"
+          onclick={() => (collectionPickerOpen = true)}
+          aria-haspopup="dialog"
+          aria-expanded={collectionPickerOpen}
+        >
+          <svg
+            aria-hidden="true"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+            ></path>
+          </svg>
+          {selectedCollectionId ? 'Move to collection…' : 'File into collection…'}
+        </button>
       {/if}
 
       {#if error}
@@ -480,6 +443,15 @@
         </button>
       </div>
     </div>
+
+    {#if collectionPickerOpen}
+      <CollectionPicker
+        item={pickerSubject}
+        mode={isTodoType ? 'todo' : 'move'}
+        onpick={selectCollection}
+        onclose={() => (collectionPickerOpen = false)}
+      />
+    {/if}
   </div>
 </div>
 
@@ -955,121 +927,80 @@
     cursor: default;
   }
 
-  .dest-wrapper {
-    position: relative;
-  }
-
-  .dest-trigger {
-    display: inline-flex;
+  /* Filing zone — same visual language as ViewCardModal's meta strip +
+     filing primary, so filing looks identical whether the item exists yet
+     or not. */
+  .meta-strip {
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem;
-    width: 100%;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 0.5rem 0.75rem;
-    color: var(--text);
-    font-size: 0.85rem;
-    font-family: inherit;
-    cursor: pointer;
-    transition: border-color 0.15s;
-    white-space: nowrap;
+    gap: 0.9rem;
+    margin-top: 0.25rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-muted);
   }
 
-  .dest-trigger:hover {
-    border-color: var(--accent);
-  }
-
-  .dest-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 0.85rem;
-    color: var(--text);
-    font-weight: 400;
-  }
-
-  .dest-chevron {
-    transition: transform 150ms;
-    flex-shrink: 0;
-    opacity: 0.7;
-  }
-
-  .dest-chevron.open {
-    transform: rotate(180deg);
-  }
-
-  /*
-   * Fixed positioning (set dynamically via inline style) lets the menu
-   * escape the modal's clipping contexts — the note modal sets
-   * `overflow: hidden` on the form, and the modal frame's rounded corners
-   * visually clip dropdowns that extend past the modal edge. A higher
-   * z-index than the overlay (200) keeps the menu on top of the modal.
-   */
-  .dest-menu {
-    position: fixed;
-    z-index: 250;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
-    padding: 0.3rem;
-    overflow-y: auto;
-  }
-
-  .dest-item {
-    display: flex;
+  /* One-click escape from the remembered destination. */
+  .btn-reset {
+    display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    width: 100%;
+    gap: 0.3rem;
     background: none;
     border: none;
-    padding: 0.4rem 0.55rem;
-    border-radius: var(--radius-sm);
-    color: var(--text);
-    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
     font-family: inherit;
+    padding: 0.15rem 0.4rem;
+    border-radius: var(--radius-sm);
     cursor: pointer;
-    text-align: left;
-    transition: background 0.12s;
+    transition: color 0.15s, background 0.15s;
   }
 
-  .dest-item:hover {
-    background: var(--bg);
+  .btn-reset:hover {
+    color: var(--text);
+    background: var(--surface-tint);
   }
 
-  .dest-item.selected {
-    background: color-mix(in srgb, var(--accent) 14%, var(--surface) 86%);
-    color: var(--accent);
-    font-weight: 600;
-  }
-
-  .dest-item.nested {
-    padding-left: 1.5rem;
-  }
-
-  .dest-group-label {
+  .meta-item {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.45rem 0.55rem 0.2rem;
-    color: var(--text-muted);
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    gap: 0.35rem;
   }
 
-  .dest-dot {
-    width: 8px;
-    height: 8px;
+  .loc-dot {
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
     flex-shrink: 0;
-    background: var(--accent);
   }
 
-  .dest-dot.inbox {
+  .meta-group {
+    font-weight: 600;
+  }
+
+  .btn-file {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    width: 100%;
+    margin-top: 0.85rem;
     background: var(--accent);
+    border: none;
+    color: white;
+    padding: 0.6rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+
+  .btn-file:hover {
+    opacity: 0.9;
   }
 </style>

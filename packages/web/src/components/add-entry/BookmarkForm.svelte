@@ -7,15 +7,26 @@
   let {
     editItem,
     canSubmit = $bindable(false),
+    draftTitle = $bindable(''),
+    draftUrl = $bindable(''),
     buildItem = $bindable(),
   }: {
     editItem?: InboxItem;
     canSubmit?: boolean;
+    draftTitle?: string;
+    draftUrl?: string;
     buildItem?: BuildItemFn;
   } = $props();
 
   let url = $state(editItem && 'url' in editItem ? editItem.url : '');
   let title = $state(editItem?.title ?? '');
+
+  // Mirror the draft fields up to the shell so the filing picker can
+  // surface name/site-match suggestions for the not-yet-saved item.
+  $effect(() => {
+    draftTitle = title;
+    draftUrl = url;
+  });
   let description = $state(editItem?.description ?? '');
 
   // The URL field is the only required input — title falls back to the URL

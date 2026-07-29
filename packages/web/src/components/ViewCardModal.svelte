@@ -1,14 +1,16 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
   import type { InboxItem } from '@inbox-rs/rs-module';
   import {
+    collections,
     deleteItem,
-    storeItem,
-    sortedGroups,
-    groupCollections,
+    groups,
     moveItemToCollection,
+    storeItem,
   } from '../lib/stores';
+  import { recordCollectionUse } from '../lib/collection-suggest';
+  import { showToast } from '../lib/toast';
   import ShareButton from './ShareButton.svelte';
+  import CollectionPicker from './CollectionPicker.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
   import BookmarkView from './view-card/BookmarkView.svelte';
   import NoteView from './view-card/NoteView.svelte';
@@ -32,27 +34,14 @@
 
   let showDelete = $state(false);
   let deleting = $state(false);
-  let showMoveMenu = $state(false);
-  let moveButtonEl = $state<HTMLButtonElement | null>(null);
-  let dropdownStyle = $state('');
 
-  // "Make Todo" can file into a collection when one exists. Without a
-  // collection choice, converted todos stay unfiled and appear on the Todos
-  // page without creating any organization.
-  let showMakeTodoMenu = $state(false);
-  let makeTodoButtonEl = $state<HTMLButtonElement | null>(null);
-  let makeTodoDropdownStyle = $state('');
+  // One CollectionPicker serves both flows: re-filing the card ('move') and
+  // choosing where a converted todo lands ('todo').
+  let showPicker = $state(false);
+  let pickerMode = $state<'move' | 'todo'>('move');
 
   let convertingTodo = $state(false);
-  // Surface conversion failures inline. Both Make-Todo paths share this so
-  // either flow can announce its error in the same dropdown.
-  let convertError = $state('');
   let convertingRef = $state(false);
-
-  onDestroy(() => {
-    removeMoveMenuListeners();
-    removeMakeTodoMenuListeners();
-  });
 
   async function handleDelete() {
     deleting = true;
@@ -65,7 +54,6 @@
   /** Promote the current item to an unfiled todo. */
   async function convertToUnfiledTodo() {
     convertingTodo = true;
-    convertError = '';
     try {
       const { completedAt: _, ...rest } = item;
       await moveItemToCollection(item.id, undefined);
@@ -79,12 +67,11 @@
       };
       delete updated.collectionId;
       await storeItem(updated as unknown as InboxItem);
-      closeMakeTodoMenu();
+      showPicker = false;
       onclose();
     } catch (error) {
       console.error('Failed to convert to unfiled todo', error);
-      convertError =
-        error instanceof Error ? error.message : 'Failed to convert to todo';
+      showToast('Failed to convert to todo');
     } finally {
       convertingTodo = false;
     }
@@ -93,7 +80,6 @@
   /** Promote the current item to a todo and file it into the chosen collection. */
   async function convertToTodoInCollection(collectionId: string) {
     convertingTodo = true;
-    convertError = '';
     try {
       // Snapshot the rest of the item BEFORE we do any writes — once we move
       // the item, the store reflects the new collectionId and the prop might
@@ -117,12 +103,12 @@
         collectionId,
       };
       await storeItem(updated as InboxItem);
-      closeMakeTodoMenu();
+      recordCollectionUse(collectionId);
+      showPicker = false;
       onclose();
     } catch (error) {
       console.error('Failed to convert to todo', error);
-      convertError =
-        error instanceof Error ? error.message : 'Failed to convert to todo';
+      showToast('Failed to convert to todo');
     } finally {
       convertingTodo = false;
     }
@@ -153,143 +139,41 @@
   const canMakeTodo = $derived(item.type !== 'todo' && !item.isTodo);
   const canMakeRef = $derived(item.isTodo || item.type === 'todo');
 
-  function toggleMoveMenu() {
-    // Only one picker can be open at a time — close Make Todo if it's open
-    // so the overlays don't stack.
-    if (showMakeTodoMenu) closeMakeTodoMenu();
-    showMoveMenu = !showMoveMenu;
-    if (showMoveMenu) {
-      updateDropdownPosition();
-      window.addEventListener('scroll', handleMoveMenuScroll, true);
-      window.addEventListener('resize', closeMoveMenu);
-      window.addEventListener('keydown', handleMoveMenuKeydown);
-    } else {
-      removeMoveMenuListeners();
-    }
+  function openMovePicker() {
+    pickerMode = 'move';
+    showPicker = true;
   }
 
-  function handleMoveMenuScroll(event: Event) {
-    const target = event.target;
-    if (target instanceof Element && target.closest('.move-dropdown')) return;
-    closeMoveMenu();
+  function openMakeTodoPicker() {
+    pickerMode = 'todo';
+    showPicker = true;
   }
 
-  function handleMoveMenuKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') closeMoveMenu();
-  }
-
-  function closeMoveMenu() {
-    showMoveMenu = false;
-    removeMoveMenuListeners();
-  }
-
-  function removeMoveMenuListeners() {
-    window.removeEventListener('scroll', handleMoveMenuScroll, true);
-    window.removeEventListener('resize', closeMoveMenu);
-    window.removeEventListener('keydown', handleMoveMenuKeydown);
-  }
-
-  // ── Make Todo menu ─────────────────────────────────────────────────────
-  // Mirrors the Move menu pattern so the two dropdowns feel identical.
-  // Kept as a parallel menu (rather than collapsed into a single generic
-  // picker) to keep the option list semantics crystal clear.
-
-  function toggleMakeTodoMenu() {
-    if (showMoveMenu) closeMoveMenu();
-    showMakeTodoMenu = !showMakeTodoMenu;
-    if (showMakeTodoMenu) {
-      updateMakeTodoDropdownPosition();
-      window.addEventListener('scroll', handleMakeTodoMenuScroll, true);
-      window.addEventListener('resize', closeMakeTodoMenu);
-      window.addEventListener('keydown', handleMakeTodoMenuKeydown);
-    } else {
-      removeMakeTodoMenuListeners();
-    }
-  }
-
-  function handleMakeTodoMenuScroll(event: Event) {
-    const target = event.target;
-    if (target instanceof Element && target.closest('.make-todo-dropdown'))
+  /** Route the picker's choice to the flow that opened it. */
+  function handlePick(collectionId: string | undefined) {
+    if (pickerMode === 'todo') {
+      // Conversion closes the picker + modal itself on success so a failure
+      // can leave both open for a retry.
+      if (collectionId) {
+        void convertToTodoInCollection(collectionId);
+      } else {
+        void convertToUnfiledTodo();
+      }
       return;
-    closeMakeTodoMenu();
-  }
-
-  function handleMakeTodoMenuKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') closeMakeTodoMenu();
-  }
-
-  function closeMakeTodoMenu() {
-    showMakeTodoMenu = false;
-    removeMakeTodoMenuListeners();
-  }
-
-  function removeMakeTodoMenuListeners() {
-    window.removeEventListener('scroll', handleMakeTodoMenuScroll, true);
-    window.removeEventListener('resize', closeMakeTodoMenu);
-    window.removeEventListener('keydown', handleMakeTodoMenuKeydown);
-  }
-
-  function updateMakeTodoDropdownPosition() {
-    if (!makeTodoButtonEl) return;
-    const rect = makeTodoButtonEl.getBoundingClientRect();
-    const spaceAbove = rect.top;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const dropdownMaxHeight = 280;
-    const viewportPadding = 16;
-    const gap = 6;
-
-    const openUpward = spaceAbove > spaceBelow;
-    const available = openUpward ? spaceAbove : spaceBelow;
-    const maxHeight = Math.max(
-      0,
-      Math.min(available - viewportPadding, dropdownMaxHeight),
-    );
-
-    const dropdownWidth = Math.min(280, window.innerWidth - viewportPadding * 2);
-    // Anchor to the right edge of the button so the picker doesn't drift off
-    // the right side of the modal on tight layouts — Make Todo lives on the
-    // right side of the header.
-    const right = window.innerWidth - rect.right;
-    const clampedRight = Math.max(
-      viewportPadding,
-      Math.min(right, window.innerWidth - dropdownWidth - viewportPadding),
-    );
-
-    if (openUpward) {
-      makeTodoDropdownStyle = `bottom: ${window.innerHeight - rect.top + gap}px; right: ${clampedRight}px; max-height: ${maxHeight}px;`;
-    } else {
-      makeTodoDropdownStyle = `top: ${rect.bottom + gap}px; right: ${clampedRight}px; max-height: ${maxHeight}px;`;
     }
-  }
-
-  function updateDropdownPosition() {
-    if (!moveButtonEl) return;
-    const rect = moveButtonEl.getBoundingClientRect();
-    const spaceAbove = rect.top;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const dropdownMaxHeight = 240;
-    const viewportPadding = 16;
-    const gap = 4;
-
-    const openUpward = spaceAbove > spaceBelow;
-    const available = openUpward ? spaceAbove : spaceBelow;
-    const maxHeight = Math.max(
-      0,
-      Math.min(available - viewportPadding, dropdownMaxHeight),
-    );
-
-    // Clamp horizontal position using max possible rendered width
-    const dropdownWidth = Math.min(280, window.innerWidth - viewportPadding * 2);
-    const left = Math.max(
-      viewportPadding,
-      Math.min(rect.left, window.innerWidth - dropdownWidth - viewportPadding),
-    );
-
-    if (openUpward) {
-      dropdownStyle = `bottom: ${window.innerHeight - rect.top + gap}px; left: ${left}px; max-height: ${maxHeight}px;`;
-    } else {
-      dropdownStyle = `top: ${rect.bottom + gap}px; left: ${left}px; max-height: ${maxHeight}px;`;
-    }
+    showPicker = false;
+    // Close only once the move settles — a failure leaves the card open (with
+    // a toast) so the user can retry, matching the todo-conversion branches.
+    // The write is a local-first IndexedDB store, so the await is cheap.
+    moveItemToCollection(item.id, collectionId)
+      .then(() => {
+        if (collectionId) recordCollectionUse(collectionId);
+        onclose();
+      })
+      .catch((e) => {
+        console.error('Move failed:', e);
+        showToast('Move failed');
+      });
   }
 
   function formatDate(iso: string): string {
@@ -312,6 +196,45 @@
     'filePath' in item && !!(item as unknown as Record<string, unknown>).filePath,
   );
 
+  // ── Meta strip ─────────────────────────────────────────────────────────
+
+  const isTodoish = $derived(item.isTodo || item.type === 'todo');
+
+  /** Current home resolved to display parts (name, dot color, parent group). */
+  const location = $derived.by(() => {
+    const col = item.collectionId ? $collections[item.collectionId] : undefined;
+    if (!col) {
+      return {
+        label: isTodoish ? 'Unfiled' : 'Inbox',
+        color: '#9ca3af',
+        group: undefined,
+      };
+    }
+    return {
+      label: col.name,
+      color: col.color || '#6366f1',
+      group: col.groupId ? $groups[col.groupId] : undefined,
+    };
+  });
+
+  const wordCount = $derived.by(() => {
+    if (!('body' in item)) return 0;
+    const body = (item as unknown as Record<string, unknown>).body;
+    if (typeof body !== 'string') return 0;
+    const trimmed = body.trim();
+    return trimmed ? trimmed.split(/\s+/).length : 0;
+  });
+
+  /** "Open · 3d" for pending todos, "Done" once completed. */
+  const todoStatus = $derived.by(() => {
+    if (!isTodoish) return '';
+    if (item.completed) return 'Done';
+    const days = Math.floor(
+      (Date.now() - new Date(item.createdAt).getTime()) / 86_400_000,
+    );
+    return days < 1 ? 'Open · today' : `Open · ${days}d`;
+  });
+
   /**
    * Window-level Escape handler. Defers to nested overlays when any are open
    * so Escape peels one layer at a time instead of collapsing the stack:
@@ -319,9 +242,8 @@
    *   - DeleteConfirm, Lightbox: they register their own window handlers and
    *     will close themselves. We only need to keep *this* modal open so the
    *     user isn't unexpectedly dumped back to the card list.
-   *   - Move / Make-Todo menus: they already close themselves via their own
-   *     document-level escape listeners — we still early-return so both don't
-   *     close simultaneously.
+   *   - CollectionPicker: it closes itself via its own window escape
+   *     listener — we early-return so both layers don't close at once.
    *
    * Since `<svelte:window>` listeners fire in registration order, this outer
    * listener is registered first (parent mounts before children) and runs
@@ -330,7 +252,7 @@
    */
   function handleWindowEscape(e: KeyboardEvent) {
     if (e.key !== 'Escape') return;
-    if (showDelete || showMoveMenu || showMakeTodoMenu) return;
+    if (showDelete || showPicker) return;
     onclose();
   }
 </script>
@@ -350,21 +272,18 @@
     <div class="modal-header">
       <span class="type-badge">{item.type}</span>
       <time class="date">{formatDate(item.createdAt)}</time>
-      {#if canMakeTodo}
+      <div class="header-actions">
         <button
           type="button"
-          class="btn-todo btn-todo-top"
-          class:open={showMakeTodoMenu}
-          bind:this={makeTodoButtonEl}
-          disabled={convertingTodo}
-          onclick={toggleMakeTodoMenu}
-          aria-haspopup="listbox"
-          aria-expanded={showMakeTodoMenu}
+          class="icon-btn icon-btn-danger"
+          title="Delete"
+          aria-label="Delete"
+          onclick={() => (showDelete = true)}
         >
           <svg
             aria-hidden="true"
-            width="14"
-            height="14"
+            width="16"
+            height="16"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -372,39 +291,23 @@
             stroke-linecap="round"
             stroke-linejoin="round"
           >
-            <polyline points="9 11 12 14 22 4"></polyline>
-            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path
+              d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
             ></path>
           </svg>
-          Make Todo
-          <svg
-            aria-hidden="true"
-            class="caret"
-            class:open={showMakeTodoMenu}
-            width="10"
-            height="10"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
         </button>
-      {/if}
-      {#if canMakeRef}
         <button
           type="button"
-          class="btn-todo btn-todo-top"
-          disabled={convertingRef}
-          onclick={convertToReference}
+          class="icon-btn"
+          title="Close"
+          aria-label="Close"
+          onclick={onclose}
         >
           <svg
             aria-hidden="true"
-            width="14"
-            height="14"
+            width="17"
+            height="17"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -412,13 +315,11 @@
             stroke-linecap="round"
             stroke-linejoin="round"
           >
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
-            ></path>
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
           </svg>
-          Make Reference
         </button>
-      {/if}
+      </div>
     </div>
 
     <!--
@@ -475,37 +376,25 @@
       </div>
     {/if}
 
-    <div class="actions">
-      <button type="button" class="btn-delete" onclick={() => (showDelete = true)}>
-        <svg
-          aria-hidden="true"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path
-            d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-          ></path>
-        </svg>
-        Delete
-      </button>
-      <div class="move-container">
-        <button
-          type="button"
-          class="btn-move"
-          bind:this={moveButtonEl}
-          onclick={toggleMoveMenu}
-        >
+    <div class="meta-strip">
+      <span class="meta-item">
+        <span class="loc-dot" style="background: {location.color}"></span>
+        {#if location.group}
+          <span
+            class="meta-group"
+            style="color: {location.group.color || 'var(--accent)'}"
+            >{location.group.name}</span
+          >
+          <span aria-hidden="true">·</span>
+        {/if}
+        {location.label}
+      </span>
+      {#if wordCount > 0}
+        <span class="meta-item">
           <svg
             aria-hidden="true"
-            width="14"
-            height="14"
+            width="13"
+            height="13"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -513,16 +402,120 @@
             stroke-linecap="round"
             stroke-linejoin="round"
           >
-            <rect x="3" y="3" width="7" height="7"></rect>
-            <rect x="14" y="3" width="7" height="7"></rect>
-            <rect x="3" y="14" width="7" height="7"></rect>
-            <rect x="14" y="14" width="7" height="7"></rect>
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
           </svg>
-          {item.collectionId ? 'Move' : 'Collect'}
+          {wordCount}
+          {wordCount === 1 ? 'word' : 'words'}
+        </span>
+      {/if}
+      {#if todoStatus}
+        <span class="meta-item">
+          <svg
+            aria-hidden="true"
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          {todoStatus}
+        </span>
+      {/if}
+    </div>
+
+    <button type="button" class="btn-file" onclick={openMovePicker}>
+      <svg
+        aria-hidden="true"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+        ></path>
+      </svg>
+      {item.collectionId ? 'Move to collection…' : 'File into collection…'}
+    </button>
+
+    <div class="action-list">
+      {#if canMakeTodo}
+        <button
+          type="button"
+          class="action-row"
+          disabled={convertingTodo}
+          onclick={openMakeTodoPicker}
+        >
+          <svg
+            aria-hidden="true"
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="9 11 12 14 22 4"></polyline>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"
+            ></path>
+          </svg>
+          Make a todo
         </button>
-      </div>
-      <button type="button" class="btn-cancel" onclick={onclose}>Close</button>
-      <button type="button" class="btn-edit" onclick={() => onedit(item)}>Edit</button>
+      {/if}
+      {#if canMakeRef}
+        <button
+          type="button"
+          class="action-row"
+          disabled={convertingRef}
+          onclick={convertToReference}
+        >
+          <svg
+            aria-hidden="true"
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
+            ></path>
+          </svg>
+          Make a reference
+        </button>
+      {/if}
+      <button type="button" class="action-row" onclick={() => onedit(item)}>
+        <svg
+          aria-hidden="true"
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 20h9"></path>
+          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+        </svg>
+        Edit
+      </button>
     </div>
 
     {#if showDelete}
@@ -533,117 +526,13 @@
       />
     {/if}
 
-    {#if showMakeTodoMenu}
-      <button
-        type="button"
-        class="move-backdrop"
-        tabindex="-1"
-        aria-label="Close make todo menu"
-        onclick={() => closeMakeTodoMenu()}
-      ></button>
-      <div
-        class="move-dropdown make-todo-dropdown"
-        style={makeTodoDropdownStyle}
-        role="listbox"
-        aria-label="Choose a collection for this todo"
-      >
-        <div class="picker-title">File todo</div>
-        {#if convertError}
-          <p class="move-error" role="status" aria-live="polite">
-            {convertError}
-          </p>
-        {/if}
-        <button
-          type="button"
-          class="move-option"
-          onclick={convertToUnfiledTodo}
-          disabled={convertingTodo}
-        >
-          <span class="move-dot" style="background: #9ca3af"></span>
-          Unfiled
-        </button>
-        {#if $sortedGroups.some((g) => ($groupCollections[g.id] ?? []).length > 0)}
-          <div class="move-divider"></div>
-        {/if}
-        {#each $sortedGroups as group (group.id)}
-          {#each $groupCollections[group.id] ?? [] as col (col.id)}
-            <button
-              type="button"
-              class="move-option"
-              onclick={() => convertToTodoInCollection(col.id)}
-              disabled={convertingTodo}
-            >
-              <span
-                class="move-dot"
-                style="background: {col.color || '#6366f1'}"
-              ></span>
-              <span
-                class="move-group-prefix"
-                style="color: {group.color || 'var(--accent)'}">{group.name}</span
-              > : {col.name}
-            </button>
-          {/each}
-        {/each}
-      </div>
-    {/if}
-
-    {#if showMoveMenu}
-      <button
-        type="button"
-        class="move-backdrop"
-        tabindex="-1"
-        aria-label="Close move menu"
-        onclick={() => closeMoveMenu()}
-      ></button>
-      <div class="move-dropdown" style={dropdownStyle}>
-        {#if item.collectionId}
-          <button
-            type="button"
-            class="move-option"
-            onclick={() => {
-              moveItemToCollection(item.id, undefined).catch((e) =>
-                console.error('Move failed:', e),
-              );
-              closeMoveMenu();
-              onclose();
-            }}
-          >
-            <span class="move-dot" style="background: #9ca3af"></span>
-            {item.isTodo || item.type === 'todo' ? 'Unfile' : 'Inbox'}
-          </button>
-          <div class="move-divider"></div>
-        {/if}
-        {#each $sortedGroups as group (group.id)}
-          {#each $groupCollections[group.id] ?? [] as col (col.id)}
-            {#if col.id !== item.collectionId}
-              <button
-                type="button"
-                class="move-option"
-                onclick={() => {
-                  moveItemToCollection(item.id, col.id).catch((e) =>
-                    console.error('Move failed:', e),
-                  );
-                  closeMoveMenu();
-                  onclose();
-                }}
-              >
-                <span
-                  class="move-dot"
-                  style="background: {col.color || '#6366f1'}"
-                ></span>
-                <span
-                  class="move-group-prefix"
-                  style="color: {group.color || 'var(--accent)'}"
-                  >{group.name}</span
-                > : {col.name}
-              </button>
-            {/if}
-          {/each}
-        {/each}
-        {#if $sortedGroups.every((g) => ($groupCollections[g.id] ?? []).every((col) => col.id === item.collectionId))}
-          <div class="move-empty">No collections</div>
-        {/if}
-      </div>
+    {#if showPicker}
+      <CollectionPicker
+        {item}
+        mode={pickerMode}
+        onpick={handlePick}
+        onclose={() => (showPicker = false)}
+      />
     {/if}
   </div>
 </div>
@@ -984,220 +873,128 @@
     border-top: 1px solid var(--border);
   }
 
-  .actions {
+  /* ── Header icons ─────────────────────── */
+
+  .header-actions {
+    margin-left: auto;
     display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
+    gap: 0.25rem;
+  }
+
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    display: grid;
+    place-items: center;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .icon-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+  }
+
+  .icon-btn-danger:hover {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
+  }
+
+  /* ── Meta strip ───────────────────────── */
+
+  .meta-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.9rem;
     margin-top: 1rem;
     padding-top: 0.75rem;
     border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-muted);
   }
 
-  .btn-delete {
-    margin-right: auto;
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--danger, #ef4444);
-    padding: 0.45rem 0.75rem;
-    border-radius: var(--radius-sm);
-    font-size: 0.8rem;
-    cursor: pointer;
+  .meta-item {
     display: flex;
     align-items: center;
     gap: 0.35rem;
-    transition: background 0.15s, border-color 0.15s;
   }
 
-  .btn-delete:hover {
-    background: color-mix(in srgb, var(--danger) 10%, transparent 90%);
-    border-color: var(--danger, #ef4444);
-  }
-
-  .btn-todo {
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    padding: 0.45rem 0.75rem;
-    border-radius: var(--radius-sm);
-    font-size: 0.8rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    transition: color 0.15s, border-color 0.15s;
-  }
-
-  .btn-todo:hover {
-    color: var(--accent);
-    border-color: var(--accent);
-  }
-
-  .btn-todo:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-
-  .btn-todo.open {
-    color: var(--accent);
-    border-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 10%, transparent 90%);
-  }
-
-  .btn-todo .caret {
-    opacity: 0.7;
-    transition: transform 150ms ease;
-  }
-
-  .btn-todo .caret.open {
-    transform: rotate(180deg);
-  }
-
-  .btn-todo-top {
-    margin-left: auto;
-  }
-
-  .btn-cancel {
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    padding: 0.45rem 1rem;
-    border-radius: var(--radius-sm);
-    font-size: 0.85rem;
-    cursor: pointer;
-  }
-
-  .btn-cancel:hover {
-    border-color: var(--text-muted);
-  }
-
-  .btn-edit {
-    background: var(--accent);
-    border: none;
-    color: white;
-    padding: 0.45rem 1rem;
-    border-radius: var(--radius-sm);
-    font-size: 0.85rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: opacity 0.15s;
-  }
-
-  .btn-edit:hover {
-    opacity: 0.9;
-  }
-
-  .move-container {
-    position: relative;
-  }
-
-  .btn-move {
-    background: none;
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    padding: 0.45rem 0.75rem;
-    border-radius: var(--radius-sm);
-    font-size: 0.8rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    transition: color 0.15s, border-color 0.15s;
-  }
-
-  .btn-move:hover {
-    color: var(--accent);
-    border-color: var(--accent);
-  }
-
-  .move-dropdown {
-    position: fixed;
-    min-width: 200px;
-    max-width: 280px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 0.3rem;
-    z-index: 300;
-    box-shadow: 0 8px 24px var(--shadow);
-    overflow-y: auto;
-  }
-
-  /*
-   * Make Todo picker — sized a touch wider so the group : collection
-   * double label doesn't wrap awkwardly when users have long names.
-   */
-  .make-todo-dropdown {
-    min-width: 240px;
-  }
-
-  .picker-title {
-    padding: 0.35rem 0.55rem 0.4rem;
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 0.25rem;
-  }
-
-  .move-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 250;
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: default;
-  }
-
-  .move-option {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    width: 100%;
-    padding: 0.4rem 0.5rem;
-    border: none;
-    background: none;
-    color: var(--text);
-    font-size: 0.8rem;
-    cursor: pointer;
-    border-radius: 4px;
-    text-align: left;
-  }
-
-  .move-option:hover {
-    background: var(--accent-subtler);
-  }
-
-  .move-dot {
-    width: 8px;
-    height: 8px;
+  .loc-dot {
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
     flex-shrink: 0;
   }
 
-  .move-group-prefix {
+  .meta-group {
     font-weight: 600;
-    font-size: 0.78rem;
   }
 
-  .move-divider {
-    height: 1px;
-    background: var(--border);
-    margin: 0.2rem 0;
+  /* ── Primary filing action ────────────── */
+
+  .btn-file {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    width: 100%;
+    margin-top: 0.85rem;
+    background: var(--accent);
+    border: none;
+    color: white;
+    padding: 0.6rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: opacity 0.15s;
   }
 
-  .move-empty {
-    padding: 0.4rem 0.5rem;
-    font-size: 0.8rem;
+  .btn-file:hover {
+    opacity: 0.9;
+  }
+
+  /* ── Secondary action list ────────────── */
+
+  .action-list {
+    display: flex;
+    flex-direction: column;
+    margin-top: 0.5rem;
+  }
+
+  .action-row {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    width: 100%;
+    padding: 0.55rem 0.5rem;
+    border: none;
+    background: none;
+    color: var(--text);
+    font-size: 0.85rem;
+    font-family: inherit;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    text-align: left;
+    transition: background 0.15s;
+  }
+
+  .action-row:hover {
+    background: var(--accent-subtler);
+  }
+
+  .action-row:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .action-row svg {
     color: var(--text-muted);
-  }
-
-  .move-error {
-    margin: 0 0.2rem 0.4rem;
-    padding: 0.4rem 0.5rem;
-    font-size: 0.8rem;
-    color: var(--danger);
+    flex-shrink: 0;
   }
 </style>

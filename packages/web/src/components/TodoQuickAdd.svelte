@@ -15,10 +15,11 @@
   import { autofocusIf } from '../lib/actions';
   import { modLabel } from '../lib/platform';
   import { showToast } from '../lib/toast';
+  import type { FilingSubject } from '../lib/collection-suggest';
+  import CollectionPicker from './CollectionPicker.svelte';
   import {
     activeGroupIds,
     collections,
-    groupCollections,
     moveItemToCollection,
     sortedGroups,
     storeItem,
@@ -62,11 +63,6 @@
     for (const g of $sortedGroups) out[g.id] = g;
     return out;
   });
-  const ungroupedCollections = $derived(
-    Object.values(collectionMap).filter(
-      (c) => !c.groupId || !groupMap()[c.groupId],
-    ),
-  );
 
   // Per-device quick-add destination (hidden when a fixed collection is given).
   // localStorage rather than synced config so a stale remote copy can't clobber
@@ -122,6 +118,32 @@
   }
 
   const targetCollectionId = $derived(fixedCollectionId ?? quickAddCollectionId);
+
+  // ── Destination picker (shared CollectionPicker, chip trigger) ─────────
+  let pickerOpen = $state(false);
+
+  /** Chip display parts for the current quick-add destination. */
+  const chip = $derived.by(() => {
+    const col = quickAddCollectionId
+      ? collectionMap[quickAddCollectionId]
+      : undefined;
+    if (!col) return { name: 'Unfiled', color: '#9ca3af' };
+    return { name: col.name, color: col.color || '#6366f1' };
+  });
+
+  /** What the picker files: the composed title feeds name-match suggestions. */
+  const pickerSubject = $derived<FilingSubject>({
+    title: quickTitle,
+    collectionId: quickAddCollectionId,
+    isTodo: true,
+  });
+
+  function handlePick(id: string | undefined) {
+    setQuickAddCollection(id);
+    pickerOpen = false;
+    // Hand focus back to the title so capture flow isn't interrupted.
+    quickInputEl?.focus();
+  }
 
   // Where plain Enter will file the todo, shown in the hint while composing so
   // the destination is predictable before submitting. Flags an out-of-view
@@ -236,36 +258,36 @@
     }}
   />
   {#if !fixedCollectionId}
-    <!-- Empty-string sentinel maps to undefined (Unfiled) on save. -->
-    <select
+    <button
+      type="button"
       class="quick-add__collection"
       aria-label="File into collection"
-      value={quickAddCollectionId ?? ''}
+      aria-haspopup="dialog"
+      aria-expanded={pickerOpen}
       disabled={quickSaving}
-      onchange={(e) => {
-        const v = (e.currentTarget as HTMLSelectElement).value;
-        setQuickAddCollection(v === '' ? undefined : v);
-      }}
+      onclick={() => (pickerOpen = true)}
     >
-      <option value="">Unfiled</option>
-      {#each $sortedGroups as group (group.id)}
-        {@const cols = $groupCollections[group.id] ?? []}
-        {#if cols.length > 0}
-          <optgroup label={group.name}>
-            {#each cols as col (col.id)}
-              <option value={col.id}>{col.name}</option>
-            {/each}
-          </optgroup>
-        {/if}
-      {/each}
-      {#if ungroupedCollections.length > 0}
-        <optgroup label="Other">
-          {#each ungroupedCollections as col (col.id)}
-            <option value={col.id}>{col.name}</option>
-          {/each}
-        </optgroup>
-      {/if}
-    </select>
+      <span
+        class="chip-dot"
+        style="background: {chip.color}"
+        aria-hidden="true"
+      ></span>
+      <span class="chip-name">{chip.name}</span>
+      <svg
+        aria-hidden="true"
+        class="chip-chevron"
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+    </button>
   {/if}
   <button type="submit" disabled={!canCaptureTodo(quickTitle) || quickSaving}>
     {quickSaving ? 'Adding...' : 'Add'}
@@ -280,6 +302,15 @@
     <span>{mod}↵ Open editor</span>
   {/if}
 </div>
+
+{#if pickerOpen}
+  <CollectionPicker
+    item={pickerSubject}
+    mode="todo"
+    onpick={handlePick}
+    onclose={() => (pickerOpen = false)}
+  />
+{/if}
 
 <style>
   .quick-add {
@@ -359,28 +390,62 @@
     cursor: not-allowed;
   }
 
-  /* Capped width so long names truncate via the native control instead of
-     pushing the Add button off-screen. */
-  .quick-add__collection {
+  /* Chip-style trigger for the shared CollectionPicker — same box as the
+     old native select, but speaks the app's location language (colored dot
+     + name). Capped width so long names truncate instead of pushing the
+     Add button off-screen. Selector carries the `button` element so it
+     out-specifies the `.quick-add button` submit styling above (accent
+     fill, hover lift) that would otherwise swallow the chip. */
+  .quick-add button.quick-add__collection {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
     min-height: 2.75rem;
     max-width: 12rem;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--surface);
     color: var(--text);
-    padding: 0 0.6rem;
+    padding: 0 0.7rem;
     font: inherit;
+    font-weight: 400;
     cursor: pointer;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
     transition: border-color 150ms, box-shadow 150ms;
   }
 
-  .quick-add__collection:focus-visible {
+  .quick-add button.quick-add__collection:hover:not(:disabled) {
+    border-color: var(--accent);
+    transform: none;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+
+  .quick-add button.quick-add__collection:focus-visible {
     outline: none;
     border-color: var(--accent);
   }
 
-  .quick-add--compact .quick-add__collection {
+  .chip-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .chip-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chip-chevron {
+    flex-shrink: 0;
+    opacity: 0.6;
+    color: var(--text-muted);
+  }
+
+  .quick-add--compact button.quick-add__collection {
     min-height: 2.25rem;
     /* Keep >=1rem (inherited) so iOS Safari doesn't auto-zoom on focus — the
        guideline forbids sub-1rem font-size on form controls. */

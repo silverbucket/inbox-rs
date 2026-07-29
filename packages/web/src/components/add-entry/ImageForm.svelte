@@ -8,11 +8,13 @@
     editItem,
     prefillFile = undefined,
     canSubmit = $bindable(false),
+    draftTitle = $bindable(''),
     buildItem = $bindable(),
   }: {
     editItem?: InboxItem;
     prefillFile?: File;
     canSubmit?: boolean;
+    draftTitle?: string;
     buildItem?: BuildItemFn;
   } = $props();
 
@@ -23,6 +25,12 @@
   );
 
   let title = $state(editItem?.title ?? '');
+
+  // Mirror the draft title up to the shell so the filing picker can
+  // surface name-match suggestions for the not-yet-saved item.
+  $effect(() => {
+    draftTitle = title;
+  });
   let description = $state(editItem?.description ?? '');
   // Seed from a file already chosen in the capture bar's picker, so the modal
   // opens with it attached (the native input can't be set programmatically —
