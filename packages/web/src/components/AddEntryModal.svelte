@@ -295,43 +295,48 @@
       {/if}
 
       {#if showCollectionPicker}
-        <div class="field dest-field">
-          <span>File in</span>
-          <button
-            type="button"
-            class="loc-chip"
-            onclick={() => (collectionPickerOpen = true)}
-            aria-haspopup="dialog"
-            aria-expanded={collectionPickerOpen}
-          >
+        <!-- Mirrors the card view's filing zone exactly: meta-strip location
+             row + full-width filing primary. A new item's location is
+             Inbox/Unfiled until saved, so the same language applies. -->
+        <div class="meta-strip">
+          <span class="meta-item">
             <span
               class="loc-dot"
               style="background: {selectedLocation.color}"
               aria-hidden="true"
             ></span>
             {#if selectedLocation.groupName}
-              <span class="loc-group" style="color: {selectedLocation.groupColor}"
+              <span class="meta-group" style="color: {selectedLocation.groupColor}"
                 >{selectedLocation.groupName}</span
               >
-              <span class="loc-sep" aria-hidden="true">·</span>
+              <span aria-hidden="true">·</span>
             {/if}
-            <span class="loc-name">{selectedLocation.name}</span>
-            <svg
-              aria-hidden="true"
-              class="loc-chevron"
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
-          </button>
+            {selectedLocation.name}
+          </span>
         </div>
+        <button
+          type="button"
+          class="btn-file"
+          onclick={() => (collectionPickerOpen = true)}
+          aria-haspopup="dialog"
+          aria-expanded={collectionPickerOpen}
+        >
+          <svg
+            aria-hidden="true"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+            ></path>
+          </svg>
+          {selectedCollectionId ? 'Move to collection…' : 'File into collection…'}
+        </button>
       {/if}
 
       {#if error}
@@ -860,32 +865,24 @@
     cursor: default;
   }
 
-  /* Location chip — mirrors the card view's meta-strip location styling:
-     a pill with the collection's colored dot and group-colored prefix,
-     rather than a form select. Opens the CollectionPicker. */
-  .dest-field {
-    align-items: flex-start;
+  /* Filing zone — same visual language as ViewCardModal's meta strip +
+     filing primary, so filing looks identical whether the item exists yet
+     or not. */
+  .meta-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.9rem;
+    margin-top: 0.25rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-muted);
   }
 
-  .loc-chip {
-    display: inline-flex;
+  .meta-item {
+    display: flex;
     align-items: center;
-    gap: 0.45rem;
-    background: var(--surface-tint);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 0.35rem 0.85rem;
-    color: var(--text);
-    font-size: 0.85rem;
-    font-family: inherit;
-    cursor: pointer;
-    transition: border-color 0.15s, background 0.15s;
-    max-width: 100%;
-  }
-
-  .loc-chip:hover {
-    border-color: var(--accent);
-    background: var(--accent-subtler);
+    gap: 0.35rem;
   }
 
   .loc-dot {
@@ -895,24 +892,30 @@
     flex-shrink: 0;
   }
 
-  .loc-group {
+  .meta-group {
     font-weight: 600;
-    flex-shrink: 0;
   }
 
-  .loc-sep {
-    color: var(--text-muted);
+  .btn-file {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    width: 100%;
+    margin-top: 0.85rem;
+    background: var(--accent);
+    border: none;
+    color: white;
+    padding: 0.6rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: opacity 0.15s;
   }
 
-  .loc-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .loc-chevron {
-    flex-shrink: 0;
-    opacity: 0.6;
-    color: var(--text-muted);
+  .btn-file:hover {
+    opacity: 0.9;
   }
 </style>
