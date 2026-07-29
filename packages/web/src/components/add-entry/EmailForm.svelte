@@ -7,14 +7,22 @@
   let {
     editItem,
     canSubmit = $bindable(false),
+    draftTitle = $bindable(''),
     buildItem = $bindable(),
   }: {
     editItem?: InboxItem;
     canSubmit?: boolean;
+    draftTitle?: string;
     buildItem?: BuildItemFn;
   } = $props();
 
   let title = $state(editItem?.title ?? '');
+
+  // Mirror the draft title up to the shell so the filing picker can
+  // surface name-match suggestions for the not-yet-saved item.
+  $effect(() => {
+    draftTitle = title;
+  });
   let body = $state(editItem && 'body' in editItem ? (editItem.body ?? '') : '');
   let from = $state(editItem && 'from' in editItem ? (editItem.from ?? '') : '');
   let notes = $state(editItem && 'notes' in editItem ? (editItem.notes ?? '') : '');

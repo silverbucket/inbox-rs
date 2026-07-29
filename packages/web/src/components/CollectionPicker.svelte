@@ -231,7 +231,11 @@
           }}
         />
         {#if $sortedGroups.length > 0}
-          <select class="create-select" bind:value={createGroupId}>
+          <select
+            class="create-select"
+            aria-label="Group"
+            bind:value={createGroupId}
+          >
             {#each $sortedGroups as g (g.id)}
               <option value={g.id}>{g.name}</option>
             {/each}
@@ -582,18 +586,6 @@
     flex-shrink: 0;
   }
 
-  @media (prefers-color-scheme: light) {
-    :global(:root:not([data-theme='dark'])) .reason,
-    :global(:root:not([data-theme='dark'])) .group-label.suggested {
-      color: #b45309;
-    }
-  }
-
-  :global(:root[data-theme='light']) .reason,
-  :global(:root[data-theme='light']) .group-label.suggested {
-    color: #b45309;
-  }
-
   .group-label {
     display: flex;
     align-items: center;
@@ -608,6 +600,18 @@
 
   .group-label.suggested {
     color: #f59e0b;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :global(:root:not([data-theme='dark'])) .reason,
+    :global(:root:not([data-theme='dark'])) .group-label.suggested {
+      color: #b45309;
+    }
+  }
+
+  :global(:root[data-theme='light']) .reason,
+  :global(:root[data-theme='light']) .group-label.suggested {
+    color: #b45309;
   }
 
   .rule {

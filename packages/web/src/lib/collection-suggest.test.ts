@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import type { Collection, InboxItem } from '@inbox-rs/rs-module';
+import { describe, expect, it } from 'vitest';
 import { suggestCollections } from './collection-suggest';
 
 function col(id: string, name: string, itemIds: string[] = []): Collection {

@@ -56,6 +56,10 @@
   // reads `formCanSubmit` to gate the action button.
   let formCanSubmit = $state(false);
   let formBuildItem = $state<BuildItemFn | undefined>(undefined);
+  // Live draft fields mirrored up from the per-type forms — they feed the
+  // filing picker's content-match suggestions before the item exists.
+  let draftTitle = $state('');
+  let draftUrl = $state('');
 
   /**
    * Initial destination for new items, in priority order:
@@ -155,14 +159,16 @@
 
   /**
    * What the CollectionPicker files. The item doesn't exist yet, so this is
-   * a lightweight subject: no title/url means content-based suggestions
-   * degrade gracefully to recency, and `collectionId` reflects the pending
+   * a lightweight subject built from the live draft fields — the typed
+   * title/URL feed name- and site-match suggestions; with nothing typed yet
+   * they degrade gracefully to recency. `collectionId` reflects the pending
    * selection so the picker excludes it from the list and offers the
    * Inbox/Unfiled row to clear it.
    */
   const pickerSubject = $derived<FilingSubject>({
     id: editItem?.id,
-    title: '',
+    title: draftTitle,
+    url: draftUrl || undefined,
     collectionId: selectedCollectionId,
     isTodo: isTodoType,
   });
@@ -276,6 +282,8 @@
           {editItem}
           bind:canSubmit={formCanSubmit}
           bind:buildItem={formBuildItem}
+          bind:draftTitle
+          bind:draftUrl
         />
       {:else if type === 'note'}
         <NoteForm
@@ -283,6 +291,7 @@
           {prefillTitle}
           bind:canSubmit={formCanSubmit}
           bind:buildItem={formBuildItem}
+          bind:draftTitle
         />
       {:else if type === 'image'}
         <ImageForm
@@ -290,12 +299,14 @@
           {prefillFile}
           bind:canSubmit={formCanSubmit}
           bind:buildItem={formBuildItem}
+          bind:draftTitle
         />
       {:else if type === 'audio'}
         <AudioForm
           {editItem}
           bind:canSubmit={formCanSubmit}
           bind:buildItem={formBuildItem}
+          bind:draftTitle
         />
       {:else if type === 'document'}
         <DocumentForm
@@ -303,12 +314,14 @@
           {prefillFile}
           bind:canSubmit={formCanSubmit}
           bind:buildItem={formBuildItem}
+          bind:draftTitle
         />
       {:else if type === 'email'}
         <EmailForm
           {editItem}
           bind:canSubmit={formCanSubmit}
           bind:buildItem={formBuildItem}
+          bind:draftTitle
         />
       {:else if type === 'todo'}
         <TodoForm
@@ -316,6 +329,7 @@
           {prefillTitle}
           bind:canSubmit={formCanSubmit}
           bind:buildItem={formBuildItem}
+          bind:draftTitle
         />
       {/if}
 

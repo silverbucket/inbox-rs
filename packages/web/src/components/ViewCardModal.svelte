@@ -162,15 +162,18 @@
       return;
     }
     showPicker = false;
+    // Close only once the move settles — a failure leaves the card open (with
+    // a toast) so the user can retry, matching the todo-conversion branches.
+    // The write is a local-first IndexedDB store, so the await is cheap.
     moveItemToCollection(item.id, collectionId)
       .then(() => {
         if (collectionId) recordCollectionUse(collectionId);
+        onclose();
       })
       .catch((e) => {
         console.error('Move failed:', e);
         showToast('Move failed');
       });
-    onclose();
   }
 
   function formatDate(iso: string): string {
