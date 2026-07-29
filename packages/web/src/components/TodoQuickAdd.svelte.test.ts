@@ -12,6 +12,8 @@ const { storeItem, moveItemToCollection, toggleGroupFilter, showToast } =
 
 // Mock the data layer. The stores the component subscribes to are real
 // writables so `$`-auto-subscription works; the CRUD/toggle calls are spies.
+// The extra stores/functions beyond TodoQuickAdd's own imports are consumed
+// by the CollectionPicker it renders.
 vi.mock('../lib/stores', async () => {
   const { writable } = await import('svelte/store');
   return {
@@ -22,6 +24,12 @@ vi.mock('../lib/stores', async () => {
     groupCollections: writable({}),
     sortedGroups: writable([]),
     activeGroupIds: writable(new Set<string>()),
+    groups: writable({}),
+    items: writable({}),
+    appConfig: writable({}),
+    orphanCollections: writable([]),
+    createCollection: vi.fn().mockResolvedValue(undefined),
+    updateConfig: vi.fn().mockResolvedValue(undefined),
   };
 });
 vi.mock('../lib/toast', () => ({ showToast }));
@@ -88,11 +96,23 @@ describe('TodoQuickAdd', () => {
     flushSync();
   }
 
-  // Drive the native select the way a user picking a destination would.
-  function pickCollection(value: string) {
-    const sel = collectionSelect();
-    sel.value = value;
-    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  // Drive the chip trigger + shared CollectionPicker the way a user picking
+  // a destination would: open the picker, click the named option.
+  function pickCollection(name: string) {
+    chipTrigger().click();
+    flushSync();
+    const options = [
+      ...host.querySelectorAll<HTMLButtonElement>('.panel .option'),
+    ];
+    const target = options.find((o) => o.textContent?.includes(name));
+    if (!target) {
+      throw new Error(
+        `picker option "${name}" not found among: ${options
+          .map((o) => o.textContent?.trim())
+          .join(', ')}`,
+      );
+    }
+    target.click();
     flushSync();
   }
 
@@ -221,14 +241,16 @@ describe('TodoQuickAdd', () => {
     );
   }
 
-  const collectionSelect = () =>
-    host.querySelector('.quick-add__collection') as HTMLSelectElement;
+  const chipTrigger = () =>
+    host.querySelector('.quick-add__collection') as HTMLButtonElement;
+  const chipText = () =>
+    host.querySelector('.chip-name')?.textContent?.trim() ?? '';
 
   it('ignores a persisted default whose group is filtered out of view', async () => {
     seedHiddenGroupDefault({ visible: false });
     render();
     // The default resolves to Unfiled so the just-added todo stays visible.
-    expect(collectionSelect().value).toBe('');
+    expect(chipText()).toBe('Unfiled');
     type('buy milk');
     submit();
     await vi.waitFor(() => {
@@ -241,7 +263,7 @@ describe('TodoQuickAdd', () => {
   it('honors a persisted default whose group is currently visible', async () => {
     seedHiddenGroupDefault({ visible: true });
     render();
-    expect(collectionSelect().value).toBe('col-h');
+    expect(chipText()).toBe('Hidden Col');
     type('buy milk');
     submit();
     await vi.waitFor(() => {
@@ -296,7 +318,7 @@ describe('TodoQuickAdd', () => {
     seedHiddenGroupDefault({ visible: false });
     render();
     // The default is guarded to Unfiled, so explicitly pick the hidden one.
-    pickCollection('col-h');
+    pickCollection('Hidden Col');
     focus();
     type('buy milk');
     expect(hintText()).toContain('Add to Hidden › Hidden Col (hidden)');
@@ -307,16 +329,16 @@ describe('TodoQuickAdd', () => {
   it('honors an explicit pick into a hidden group instead of bouncing to Unfiled', () => {
     seedHiddenGroupDefault({ visible: false });
     render();
-    expect(collectionSelect().value).toBe('');
-    pickCollection('col-h');
+    expect(chipText()).toBe('Unfiled');
+    pickCollection('Hidden Col');
     // The explicit choice sticks — it does NOT revert to Unfiled.
-    expect(collectionSelect().value).toBe('col-h');
+    expect(chipText()).toBe('Hidden Col');
   });
 
   it('files into the hidden group and shows a Show toast that reveals it', async () => {
     seedHiddenGroupDefault({ visible: false });
     render();
-    pickCollection('col-h');
+    pickCollection('Hidden Col');
     type('buy milk');
     submit();
     await vi.waitFor(() => {
@@ -341,7 +363,7 @@ describe('TodoQuickAdd', () => {
     toggleGroupFilter.mockRejectedValueOnce(new Error('config write failed'));
     seedHiddenGroupDefault({ visible: false });
     render();
-    pickCollection('col-h');
+    pickCollection('Hidden Col');
     type('buy milk');
     submit();
     await vi.waitFor(() => {

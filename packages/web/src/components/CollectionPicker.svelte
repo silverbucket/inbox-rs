@@ -7,6 +7,7 @@
     groupCollections,
     groups,
     items,
+    orphanCollections,
     sortedGroups,
     updateConfig,
   } from '../lib/stores';
@@ -47,6 +48,7 @@
   // touch devices — desktop-only.
   const isCoarse =
     typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
     window.matchMedia('(pointer: coarse)').matches;
 
   const isTodoish = $derived(item.isTodo || item.type === 'todo');
@@ -62,9 +64,10 @@
   );
   const showUnfiled = $derived(mode === 'todo' || !!item.collectionId);
 
-  const allCollections = $derived(
-    $sortedGroups.flatMap((g) => $groupCollections[g.id] ?? []),
-  );
+  const allCollections = $derived([
+    ...$sortedGroups.flatMap((g) => $groupCollections[g.id] ?? []),
+    ...$orphanCollections,
+  ]);
 
   // Suggestions only lead when the user isn't already narrowing by hand.
   const suggestions = $derived(
@@ -94,6 +97,16 @@
         ),
       }))
       .filter(({ cols }) => cols.length > 0);
+  });
+
+  /** Ungrouped collections, query-filtered — rendered under "Other". */
+  const filteredOrphans = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    return $orphanCollections.filter(
+      (col) =>
+        col.id !== item.collectionId &&
+        (!q || col.name.toLowerCase().includes(q)),
+    );
   });
 
   const hasAnyCollections = $derived(allCollections.length > 0);
@@ -151,7 +164,7 @@
 
   function handleSearchKeydown(e: KeyboardEvent) {
     if (e.key !== 'Enter') return;
-    const first = filteredGroups[0]?.cols[0];
+    const first = filteredGroups[0]?.cols[0] ?? filteredOrphans[0];
     if (query.trim() && first) {
       onpick(first.id);
     } else if (query.trim() && !queryHasExactMatch) {
@@ -337,7 +350,18 @@
           {/each}
         {/each}
 
-        {#if hasAnyCollections && query.trim() && filteredGroups.length === 0}
+        {#if filteredOrphans.length > 0}
+          <div class="group-label">Other</div>
+          {#each filteredOrphans as col (col.id)}
+            <button type="button" class="option" onclick={() => onpick(col.id)}>
+              <span class="dot" style="background: {col.color || '#6366f1'}"></span>
+              <span class="col-name">{col.name}</span>
+              <span class="count">{col.itemIds.length}</span>
+            </button>
+          {/each}
+        {/if}
+
+        {#if hasAnyCollections && query.trim() && filteredGroups.length === 0 && filteredOrphans.length === 0}
           <div class="empty">No matching collections</div>
         {/if}
 
