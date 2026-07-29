@@ -12,8 +12,14 @@
     shouldShowCollectionPicker,
     shouldSubmitAddEntryForm,
   } from '../lib/add-entry-modal';
+  import { get } from 'svelte/store';
+  import { collections } from '../lib/stores';
   import { enrichBookmark, needsEnrichment } from '../lib/enrich';
-  import type { FilingSubject } from '../lib/collection-suggest';
+  import {
+    getRecentCollectionIds,
+    recordCollectionUse,
+    type FilingSubject,
+  } from '../lib/collection-suggest';
   import CollectionPicker from './CollectionPicker.svelte';
   import BookmarkForm from './add-entry/BookmarkForm.svelte';
   import NoteForm from './add-entry/NoteForm.svelte';
@@ -51,12 +57,28 @@
   let formCanSubmit = $state(false);
   let formBuildItem = $state<BuildItemFn | undefined>(undefined);
 
-  // Initial destination for new items: honour the caller's explicit
-  // `collectionId` prop (e.g. a collection quick-add button), otherwise leave
-  // unset. For todos, unset means "unfiled" — we deliberately don't
-  // auto-select organization so capture stays frictionless. For refs, unset
-  // means Inbox.
-  let selectedCollectionId = $state<string | undefined>(collectionId);
+  /**
+   * Initial destination for new items, in priority order:
+   *   1. The caller's explicit `collectionId` prop (e.g. a collection
+   *      quick-add button) — that context is authoritative.
+   *   2. The most recent filing target that still exists — repeat captures
+   *      usually file to the same place, and the meta strip's Inbox/Unfiled
+   *      reset makes escaping the default one click.
+   *   3. Unset: Inbox for refs, unfiled for todos.
+   * Edit mode never shows the destination field, so it always starts unset.
+   */
+  function rememberedDestination(): string | undefined {
+    if (isEdit) return undefined;
+    const cols = get(collections);
+    for (const id of getRecentCollectionIds()) {
+      if (cols[id]) return id;
+    }
+    return undefined;
+  }
+
+  let selectedCollectionId = $state<string | undefined>(
+    collectionId ?? rememberedDestination(),
+  );
   let collectionPickerOpen = $state(false);
   // For refs, `undefined` means Inbox. For todos, `undefined` means unfiled:
   // no collectionId is written, and the todo stays available to organize
@@ -180,6 +202,9 @@
       }
       if (selectedCollectionId && !isEdit) {
         await moveItemToCollection(item.id, selectedCollectionId);
+        // Feed the recency signal so the next capture defaults here and the
+        // picker's Suggested block stays honest.
+        recordCollectionUse(selectedCollectionId);
       }
       // Fill blank bookmark fields (title, description, preview image) from
       // the page's metadata in the background. New items only — an edit is
@@ -313,6 +338,29 @@
             {/if}
             {selectedLocation.name}
           </span>
+          {#if selectedCollectionId !== undefined}
+            <button
+              type="button"
+              class="btn-reset"
+              onclick={() => (selectedCollectionId = undefined)}
+            >
+              <svg
+                aria-hidden="true"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+              </svg>
+              {isTodoType ? 'Unfiled' : 'Inbox'}
+            </button>
+          {/if}
         </div>
         <button
           type="button"
@@ -871,12 +919,35 @@
   .meta-strip {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
     gap: 0.9rem;
     margin-top: 0.25rem;
     padding-top: 0.75rem;
     border-top: 1px solid var(--border);
     font-size: 0.78rem;
     color: var(--text-muted);
+  }
+
+  /* One-click escape from the remembered destination. */
+  .btn-reset {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-family: inherit;
+    padding: 0.15rem 0.4rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .btn-reset:hover {
+    color: var(--text);
+    background: var(--surface-tint);
   }
 
   .meta-item {
