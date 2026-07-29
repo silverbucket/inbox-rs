@@ -65,17 +65,29 @@
   const noCollectionLabel = 'Inbox';
 
   // `undefined` is the non-collection sentinel: Inbox for refs, unfiled for
-  // todos.
-  const collectionLabel = $derived.by(() => {
-    if (selectedCollectionId === undefined) {
-      return isTodoType ? 'Unfiled' : noCollectionLabel;
+  // todos. Resolved to display parts so the trigger chip can mirror the card
+  // view's location styling (colored dot + group-colored prefix).
+  const selectedLocation = $derived.by(() => {
+    if (selectedCollectionId !== undefined) {
+      for (const group of $sortedGroups) {
+        const cols = $groupCollections[group.id] ?? [];
+        const found = cols.find((c) => c.id === selectedCollectionId);
+        if (found) {
+          return {
+            name: found.name,
+            color: found.color || '#6366f1',
+            groupName: group.name,
+            groupColor: group.color || 'var(--accent)',
+          };
+        }
+      }
     }
-    for (const group of $sortedGroups) {
-      const cols = $groupCollections[group.id] ?? [];
-      const found = cols.find((c) => c.id === selectedCollectionId);
-      if (found) return found.name;
-    }
-    return isTodoType ? 'Unfiled' : noCollectionLabel;
+    return {
+      name: isTodoType ? 'Unfiled' : noCollectionLabel,
+      color: '#9ca3af',
+      groupName: undefined,
+      groupColor: undefined,
+    };
   });
 
   // Whether the user has any real grouped collections at all. Todo capture
@@ -283,20 +295,30 @@
       {/if}
 
       {#if showCollectionPicker}
-        <div class="field">
-          <span>{isTodoType ? 'File in' : 'Collection'}</span>
+        <div class="field dest-field">
+          <span>File in</span>
           <button
             type="button"
-            class="dest-trigger"
+            class="loc-chip"
             onclick={() => (collectionPickerOpen = true)}
             aria-haspopup="dialog"
             aria-expanded={collectionPickerOpen}
           >
-            <span class="dest-label">{collectionLabel}</span>
+            <span
+              class="loc-dot"
+              style="background: {selectedLocation.color}"
+              aria-hidden="true"
+            ></span>
+            {#if selectedLocation.groupName}
+              <span class="loc-group" style="color: {selectedLocation.groupColor}"
+                >{selectedLocation.groupName}</span
+              >
+              <span class="loc-sep" aria-hidden="true">·</span>
+            {/if}
+            <span class="loc-name">{selectedLocation.name}</span>
             <svg
               aria-hidden="true"
-              class="dest-chevron"
-              class:open={collectionPickerOpen}
+              class="loc-chevron"
               width="12"
               height="12"
               viewBox="0 0 24 24"
@@ -838,44 +860,59 @@
     cursor: default;
   }
 
-  .dest-trigger {
+  /* Location chip — mirrors the card view's meta-strip location styling:
+     a pill with the collection's colored dot and group-colored prefix,
+     rather than a form select. Opens the CollectionPicker. */
+  .dest-field {
+    align-items: flex-start;
+  }
+
+  .loc-chip {
     display: inline-flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    width: 100%;
-    background: var(--bg);
+    gap: 0.45rem;
+    background: var(--surface-tint);
     border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 0.5rem 0.75rem;
+    border-radius: 999px;
+    padding: 0.35rem 0.85rem;
     color: var(--text);
     font-size: 0.85rem;
     font-family: inherit;
     cursor: pointer;
-    transition: border-color 0.15s;
-    white-space: nowrap;
+    transition: border-color 0.15s, background 0.15s;
+    max-width: 100%;
   }
 
-  .dest-trigger:hover {
+  .loc-chip:hover {
     border-color: var(--accent);
+    background: var(--accent-subtler);
   }
 
-  .dest-label {
+  .loc-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .loc-group {
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .loc-sep {
+    color: var(--text-muted);
+  }
+
+  .loc-name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 0.85rem;
-    color: var(--text);
-    font-weight: 400;
   }
 
-  .dest-chevron {
-    transition: transform 150ms;
+  .loc-chevron {
     flex-shrink: 0;
-    opacity: 0.7;
-  }
-
-  .dest-chevron.open {
-    transform: rotate(180deg);
+    opacity: 0.6;
+    color: var(--text-muted);
   }
 </style>
