@@ -12,6 +12,8 @@
   import ShareButton from './ShareButton.svelte';
   import CollectionPicker from './CollectionPicker.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
+  import ScheduleSheet from './ScheduleSheet.svelte';
+  import { formatScheduled, isOverdue } from '../lib/schedule';
   import BookmarkView from './view-card/BookmarkView.svelte';
   import NoteView from './view-card/NoteView.svelte';
   import ImageView from './view-card/ImageView.svelte';
@@ -39,6 +41,8 @@
   // choosing where a converted todo lands ('todo').
   let showPicker = $state(false);
   let pickerMode = $state<'move' | 'todo'>('move');
+
+  let showSchedule = $state(false);
 
   let convertingTodo = $state(false);
   let convertingRef = $state(false);
@@ -217,6 +221,9 @@
     };
   });
 
+  const scheduledLabel = $derived(item.startsAt ? formatScheduled(item) : '');
+  const scheduleOverdue = $derived(isOverdue(item));
+
   const wordCount = $derived.by(() => {
     if (!('body' in item)) return 0;
     const body = (item as unknown as Record<string, unknown>).body;
@@ -242,8 +249,9 @@
    *   - DeleteConfirm, Lightbox: they register their own window handlers and
    *     will close themselves. We only need to keep *this* modal open so the
    *     user isn't unexpectedly dumped back to the card list.
-   *   - CollectionPicker: it closes itself via its own window escape
-   *     listener — we early-return so both layers don't close at once.
+   *   - CollectionPicker, ScheduleSheet: they close themselves via their own
+   *     window escape listeners — we early-return so both layers don't close
+   *     at once.
    *
    * Since `<svelte:window>` listeners fire in registration order, this outer
    * listener is registered first (parent mounts before children) and runs
@@ -252,7 +260,7 @@
    */
   function handleWindowEscape(e: KeyboardEvent) {
     if (e.key !== 'Escape') return;
-    if (showDelete || showPicker) return;
+    if (showDelete || showPicker || showSchedule) return;
     onclose();
   }
 </script>
@@ -428,6 +436,27 @@
           {todoStatus}
         </span>
       {/if}
+      {#if scheduledLabel}
+        <span class="meta-item" class:overdue={scheduleOverdue}>
+          <svg
+            aria-hidden="true"
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+          {scheduledLabel}
+        </span>
+      {/if}
     </div>
 
     <button type="button" class="btn-file" onclick={openMovePicker}>
@@ -499,6 +528,29 @@
           Make a reference
         </button>
       {/if}
+      <button
+        type="button"
+        class="action-row"
+        onclick={() => (showSchedule = true)}
+      >
+        <svg
+          aria-hidden="true"
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        {scheduledLabel ? `${scheduledLabel} — change…` : 'Add to calendar…'}
+      </button>
       <button type="button" class="action-row" onclick={() => onedit(item)}>
         <svg
           aria-hidden="true"
@@ -533,6 +585,10 @@
         onpick={handlePick}
         onclose={() => (showPicker = false)}
       />
+    {/if}
+
+    {#if showSchedule}
+      <ScheduleSheet {item} onclose={() => (showSchedule = false)} />
     {/if}
   </div>
 </div>
@@ -932,6 +988,10 @@
 
   .meta-group {
     font-weight: 600;
+  }
+
+  .meta-item.overdue {
+    color: var(--danger);
   }
 
   /* ── Primary filing action ────────────── */

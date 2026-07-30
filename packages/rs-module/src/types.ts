@@ -19,6 +19,20 @@ export interface InboxItemBase {
   completed?: boolean;
   completedAt?: string;
   collectionId?: string; // undefined = Inbox for refs, unfiled for todos
+  /**
+   * Scheduling. The card is the editor — a calendar entry (once posted) is
+   * a projection of these fields, never the other way around.
+   * `startsAt` is the event start, or the due time when scheduleKind is
+   * 'task'. ISO 8601. `endsAt` only applies to events. For all-day entries
+   * both carry date-only semantics (time portion ignored).
+   */
+  startsAt?: string;
+  endsAt?: string;
+  allDay?: boolean;
+  scheduleKind?: 'event' | 'task';
+  /** CalDAV object href + etag once posted to a calendar; absent until then. */
+  eventUrl?: string;
+  eventEtag?: string;
 }
 
 export interface BookmarkItem extends InboxItemBase {
