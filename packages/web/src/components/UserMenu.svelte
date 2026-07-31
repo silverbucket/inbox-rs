@@ -36,6 +36,20 @@
   let importExportOpen = $state(false);
   let fileInputEl = $state<HTMLInputElement | null>(null);
 
+  // Calendar accounts modal — lazy like Import/Export so the CalDAV client
+  // code stays out of the main bundle until the feature is opened.
+  type CalendarModalComponent = Component<{ onclose: () => void }>;
+  let CalendarSettingsComponent = $state<CalendarModalComponent | null>(null);
+  let calendarSettingsOpen = $state(false);
+
+  async function openCalendarSettings() {
+    open = false;
+    CalendarSettingsComponent ??= await loadLazy<CalendarModalComponent>(
+      () => import('./CalendarSettingsModal.svelte'),
+    );
+    if (CalendarSettingsComponent) calendarSettingsOpen = true;
+  }
+
   // On a failed chunk fetch, loadLazy toasts and the callers' optional-chained
   // calls no-op — Export/Import doesn't fail silently or leave state dangling.
   async function loadImportExportModal() {
@@ -448,6 +462,19 @@
 
       <div class="divider"></div>
 
+      <div class="section-label">Calendars</div>
+      <button type="button" class="menu-item" role="menuitem" onclick={openCalendarSettings}>
+        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        Calendar accounts
+      </button>
+
+      <div class="divider"></div>
+
       <div class="section-label">Quick capture</div>
       <a class="menu-item" role="menuitem" href="/capture/">
         <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -558,6 +585,10 @@
 
 {#if ImportExportModalComponent}
   <ImportExportModalComponent bind:this={importExportModal} bind:open={importExportOpen} />
+{/if}
+
+{#if CalendarSettingsComponent && calendarSettingsOpen}
+  <CalendarSettingsComponent onclose={() => (calendarSettingsOpen = false)} />
 {/if}
 
 <style>

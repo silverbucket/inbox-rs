@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
-  import { storeItem } from '../lib/stores';
-  import { cleanForStorage } from '../lib/clean-for-storage';
+  import { setItemCompleted } from '../lib/schedule-sync';
   import { typeIconPath } from '../lib/item-utils';
   import { draggingItemId, DRAG_MIME } from '../lib/drag';
   import { formatScheduled, isOverdue } from '../lib/schedule';
@@ -61,15 +60,10 @@
 
   async function toggleCompleted(e: Event) {
     e.stopPropagation();
-    const nowCompleted = !todo.completed;
-    const updated = {
-      ...todo,
-      isTodo: true,
-      completed: nowCompleted,
-      completedAt: nowCompleted ? new Date().toISOString() : undefined,
-    };
     try {
-      await storeItem(cleanForStorage(updated) as InboxItem);
+      // Shared helper: local flip + best-effort calendar sync for scheduled
+      // tasks (STATUS:COMPLETED on the posted VTODO).
+      await setItemCompleted(todo, !todo.completed);
     } catch (err) {
       console.error('Failed to update todo:', err);
       // Checkbox reverts on next render because the `todo` prop is unchanged

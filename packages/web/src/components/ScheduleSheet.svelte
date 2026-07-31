@@ -14,6 +14,20 @@
     toTimeInputValue,
     type ScheduleKind,
   } from '../lib/schedule';
+  import {
+    calendarAccounts,
+    choiceForEventUrl,
+    findCalendarChoice,
+    pickPreferredCalendar,
+    type CalendarChoice,
+  } from '../lib/calendar-accounts';
+  import {
+    postScheduledItem,
+    recordCalendarUse,
+    removePostedEntry,
+  } from '../lib/schedule-sync';
+  import { CaldavError } from '../lib/caldav';
+  import CalendarPicker from './CalendarPicker.svelte';
 
   let {
     item,
@@ -52,6 +66,42 @@
   let allDay = $state(!!item.allDay);
   let durationMin = $state(initialDuration);
   let saving = $state(false);
+
+  // ── Destination calendar ───────────────────────────────────────────────
+  // Already-posted entries open on their current home (even if hidden);
+  // otherwise last-used-per-kind → account default → first suitable.
+  const eventHome = choiceForEventUrl(item.eventUrl);
+  let selectedCalendarId = $state<string | undefined>(
+    eventHome?.calendar.id ??
+      pickPreferredCalendar(item.scheduleKind ?? (isTodoish ? 'task' : 'event'))
+        ?.calendar.id,
+  );
+  /** Once the user picks by hand, kind switches stop re-deriving the target. */
+  let calendarTouched = $state(false);
+  let showCalendarPicker = $state(false);
+
+  const hasAccounts = $derived($calendarAccounts.length > 0);
+  const selectedChoice = $derived<CalendarChoice | undefined>(
+    findCalendarChoice(selectedCalendarId) ??
+      (eventHome?.calendar.id === selectedCalendarId ? eventHome : undefined),
+  );
+  const calendarSupportsKind = $derived(
+    !!selectedChoice?.calendar.components.includes(kind),
+  );
+  const willPost = $derived(hasAccounts && !!selectedChoice && calendarSupportsKind);
+
+  function setKind(next: ScheduleKind) {
+    kind = next;
+    if (!calendarTouched && !item.eventUrl) {
+      selectedCalendarId = pickPreferredCalendar(next)?.calendar.id;
+    }
+  }
+
+  function handleCalendarPick(choice: CalendarChoice) {
+    selectedCalendarId = choice.calendar.id;
+    calendarTouched = true;
+    showCalendarPicker = false;
+  }
 
   const DURATIONS = [
     { label: '30 m', min: 30 },
@@ -102,10 +152,34 @@
     }
   }
 
+  /**
+   * Save locally, then post to the chosen calendar when one is selected.
+   * Local-first: a failed post never loses the schedule — the card keeps it
+   * and a toast explains; pressing the button again retries.
+   */
   async function save() {
     const updated = scheduledItem();
     if (!updated) return;
-    if (await persist(updated, 'Failed to save schedule')) onclose();
+    if (!(await persist(updated, 'Failed to save schedule'))) return;
+    if (willPost && selectedChoice) {
+      saving = true;
+      try {
+        const posted = await postScheduledItem(
+          updated,
+          selectedChoice.calendar.id,
+        );
+        await storeItem(cleanForStorage(posted));
+        recordCalendarUse(kind, selectedChoice.calendar.id);
+      } catch (err) {
+        console.error('Calendar post failed', err);
+        const reason =
+          err instanceof CaldavError ? err.message : 'the calendar relay is unreachable';
+        showToast(`Saved locally — ${reason}`);
+      } finally {
+        saving = false;
+      }
+    }
+    onclose();
   }
 
   /** Save (so chips reflect the schedule) and hand the user the .ics. */
@@ -118,7 +192,26 @@
     }
   }
 
+  /**
+   * Removing the schedule also removes the posted calendar entry. If the
+   * server refuses (and the entry may still exist), keep the schedule so
+   * the card and calendar don't silently diverge.
+   */
   async function remove() {
+    if (item.eventUrl) {
+      saving = true;
+      try {
+        await removePostedEntry(item);
+      } catch (err) {
+        console.error('Calendar delete failed', err);
+        const reason =
+          err instanceof CaldavError ? err.message : 'the calendar relay is unreachable';
+        showToast(`Still on your calendar — ${reason}`);
+        saving = false;
+        return;
+      }
+      saving = false;
+    }
     if (await persist(clearSchedule(item), 'Failed to remove schedule')) {
       onclose();
     }
@@ -126,6 +219,8 @@
 
   function handleEscape(e: KeyboardEvent) {
     if (e.key !== 'Escape' || saving) return;
+    // The calendar picker layers on top and closes itself first.
+    if (showCalendarPicker) return;
     onclose();
   }
 </script>
@@ -146,7 +241,7 @@
         class:on={kind === 'event'}
         role="radio"
         aria-checked={kind === 'event'}
-        onclick={() => (kind = 'event')}
+        onclick={() => setKind('event')}
       >
         Event
       </button>
@@ -156,7 +251,7 @@
         class:on={kind === 'task'}
         role="radio"
         aria-checked={kind === 'task'}
-        onclick={() => (kind = 'task')}
+        onclick={() => setKind('task')}
       >
         Task
       </button>
@@ -223,19 +318,60 @@
       </label>
     {/if}
 
+    {#if hasAccounts}
+      <button
+        type="button"
+        class="zone"
+        onclick={() => (showCalendarPicker = true)}
+      >
+        {#if selectedChoice}
+          <span
+            class="dot"
+            style="background: {selectedChoice.calendar.color || 'var(--accent)'}"
+          ></span>
+          <span class="zone-name">{selectedChoice.calendar.name}</span>
+          <span class="zone-sub">· {selectedChoice.account.label}</span>
+        {:else}
+          <span class="zone-name muted">Choose calendar…</span>
+        {/if}
+        <svg class="chev" aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+      {#if selectedChoice && !calendarSupportsKind}
+        <p class="zone-warn">
+          {selectedChoice.calendar.name} doesn't support {kind}s — the
+          schedule stays on the card only.
+        </p>
+      {/if}
+    {/if}
+
     <button type="button" class="btn-primary" disabled={!canSave} onclick={save}>
-      {item.startsAt ? 'Update schedule' : 'Schedule'}
+      {#if willPost}
+        {item.eventUrl ? 'Update event' : kind === 'task' ? 'Add task' : 'Add to calendar'}
+      {:else}
+        {item.startsAt ? 'Update schedule' : 'Schedule'}
+      {/if}
     </button>
     <button type="button" class="btn-ghost" disabled={!canSave} onclick={saveAndDownload}>
       Save &amp; download .ics
     </button>
     {#if item.startsAt}
       <button type="button" class="btn-remove" disabled={saving} onclick={remove}>
-        Remove schedule
+        {item.eventUrl ? 'Remove from calendar' : 'Remove schedule'}
       </button>
     {/if}
   </div>
 </div>
+
+{#if showCalendarPicker}
+  <CalendarPicker
+    {kind}
+    selectedId={selectedCalendarId}
+    onpick={handleCalendarPick}
+    onclose={() => (showCalendarPicker = false)}
+  />
+{/if}
 
 <style>
   .overlay {
@@ -387,6 +523,68 @@
 
   .allday-row input {
     accent-color: var(--accent);
+  }
+
+  /* Destination calendar zone — the location-chip idiom from filing. */
+  .zone {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    margin-top: 0.85rem;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 0.5rem 0.65rem;
+    font-family: inherit;
+    font-size: 0.82rem;
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color 0.15s;
+    text-align: left;
+  }
+
+  .zone:hover {
+    border-color: var(--accent);
+  }
+
+  .zone .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .zone-name {
+    font-weight: 550;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .zone-name.muted {
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
+  .zone-sub {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .zone .chev {
+    margin-left: auto;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .zone-warn {
+    margin-top: 0.4rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.4;
   }
 
   .btn-primary {
