@@ -35,11 +35,12 @@ export interface BuildContext {
 }
 
 /**
- * Carry the edit target's collection membership onto a freshly-rebuilt item.
- * `collectionId` is a type-agnostic placement field the per-type forms never
- * surface, so without this every edit would drop it and silently move the
- * item back to the Inbox. Applied unconditionally on edit (including across
- * type conversions) so an item filed in a collection stays there.
+ * Carry the edit target's type-agnostic fields onto a freshly-rebuilt item.
+ * Collection membership and scheduling are placement/metadata the per-type
+ * forms never surface, so without this every edit would silently move the
+ * item back to the Inbox and strip its calendar schedule (losing the
+ * eventUrl/eventEtag pointer to an already-posted entry). Applied
+ * unconditionally on edit (including across type conversions).
  */
 function preserveCollection<T extends InboxItem>(
   ctx: BuildContext,
@@ -47,6 +48,22 @@ function preserveCollection<T extends InboxItem>(
 ): T {
   if (ctx.editItem?.collectionId) {
     item.collectionId = ctx.editItem.collectionId;
+  }
+  if (ctx.editItem) {
+    const schedule: Partial<InboxItem> = {};
+    for (const key of [
+      'startsAt',
+      'endsAt',
+      'allDay',
+      'scheduleKind',
+      'eventUrl',
+      'eventEtag',
+    ] as const) {
+      if (ctx.editItem[key] !== undefined) {
+        (schedule as Record<string, unknown>)[key] = ctx.editItem[key];
+      }
+    }
+    Object.assign(item, schedule);
   }
   return item;
 }

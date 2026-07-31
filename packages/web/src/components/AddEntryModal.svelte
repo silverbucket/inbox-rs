@@ -20,7 +20,10 @@
     recordCollectionUse,
     type FilingSubject,
   } from '../lib/collection-suggest';
+  import { formatScheduled, type PendingSchedule } from '../lib/schedule';
+  import { applyPendingSchedule } from '../lib/schedule-sync';
   import CollectionPicker from './CollectionPicker.svelte';
+  import ScheduleSheet from './ScheduleSheet.svelte';
   import BookmarkForm from './add-entry/BookmarkForm.svelte';
   import NoteForm from './add-entry/NoteForm.svelte';
   import ImageForm from './add-entry/ImageForm.svelte';
@@ -157,6 +160,26 @@
     collectionPickerOpen = false;
   }
 
+  // ── Optional capture-time schedule ("When?" chip → ScheduleSheet in pick
+  // mode). New items only: editing a schedule lives in the card view's
+  // sheet, and edits preserve existing schedule fields via build-item.
+  let pendingSchedule = $state<PendingSchedule | null>(null);
+  let scheduleSheetOpen = $state(false);
+
+  const whenLabel = $derived(
+    pendingSchedule
+      ? formatScheduled({
+          startsAt: pendingSchedule.start.toISOString(),
+          allDay: pendingSchedule.allDay,
+        })
+      : 'When?',
+  );
+
+  function handleSchedulePick(schedule: PendingSchedule | null) {
+    pendingSchedule = schedule;
+    scheduleSheetOpen = false;
+  }
+
   /**
    * What the CollectionPicker files. The item doesn't exist yet, so this is
    * a lightweight subject built from the live draft fields — the typed
@@ -212,6 +235,16 @@
         // picker's Suggested block stays honest.
         recordCollectionUse(selectedCollectionId);
       }
+      if (pendingSchedule && !isEdit) {
+        // Apply after the move so the stored item keeps its collectionId.
+        // Posts to the picked calendar best-effort — see applyPendingSchedule.
+        await applyPendingSchedule(
+          selectedCollectionId
+            ? { ...item, collectionId: selectedCollectionId }
+            : item,
+          pendingSchedule,
+        );
+      }
       // Fill blank bookmark fields (title, description, preview image) from
       // the page's metadata in the background. New items only — an edit is
       // the user deliberately setting fields, and the view card offers a
@@ -248,6 +281,8 @@
       collectionPickerOpen = false;
       return;
     }
+    // The schedule sheet closes itself via its own Escape listener.
+    if (scheduleSheetOpen) return;
     onclose();
   }}
 />
@@ -401,6 +436,52 @@
         </button>
       {/if}
 
+      {#if !isEdit}
+        <!-- Capture-time schedule: optional, one chip. Untouched it does
+             nothing — scheduling never adds friction to plain capture. -->
+        <div class="schedule-row">
+          <button
+            type="button"
+            class="btn-when"
+            class:has-time={!!pendingSchedule}
+            aria-haspopup="dialog"
+            aria-expanded={scheduleSheetOpen}
+            onclick={() => (scheduleSheetOpen = true)}
+          >
+            <svg
+              aria-hidden="true"
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            {whenLabel}
+          </button>
+          {#if pendingSchedule}
+            <button
+              type="button"
+              class="btn-when-clear"
+              aria-label="Clear time"
+              onclick={() => (pendingSchedule = null)}
+            >
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          {/if}
+        </div>
+      {/if}
+
       {#if error}
         <p class="error">{error}</p>
       {/if}
@@ -450,6 +531,15 @@
         mode={isTodoType ? 'todo' : 'move'}
         onpick={selectCollection}
         onclose={() => (collectionPickerOpen = false)}
+      />
+    {/if}
+
+    {#if scheduleSheetOpen}
+      <ScheduleSheet
+        subject={{ title: draftTitle, isTodo: isTodoType }}
+        initial={pendingSchedule}
+        onpick={handleSchedulePick}
+        onclose={() => (scheduleSheetOpen = false)}
       />
     {/if}
   </div>
@@ -979,6 +1069,59 @@
 
   .meta-group {
     font-weight: 600;
+  }
+
+  /* Capture-time schedule chip row, under the filing zone. */
+  .schedule-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.6rem;
+  }
+
+  .btn-when {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: none;
+    color: var(--text-muted);
+    padding: 0.28rem 0.75rem;
+    font-size: 0.78rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+  }
+
+  .btn-when:hover {
+    border-color: var(--accent);
+    color: var(--text);
+  }
+
+  .btn-when.has-time {
+    border-color: var(--accent-subtle-strong);
+    background: var(--accent-subtler);
+    color: var(--accent);
+  }
+
+  .btn-when-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .btn-when-clear:hover {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
   }
 
   .btn-file {

@@ -14,7 +14,9 @@ import {
 } from './calendar-accounts';
 import { cleanForStorage } from './clean-for-storage';
 import { resolveSockethubEndpoint } from './enrich';
+import { applySchedule, type PendingSchedule } from './schedule';
 import { storeItem } from './stores';
+import { showToast } from './toast';
 
 /**
  * Post the (already locally saved) scheduled item to `calendarId`. Handles
@@ -111,6 +113,34 @@ export async function setItemCompleted(
     await storeItem(cleanForStorage({ ...updated, ...posted }));
   } catch (err) {
     console.warn('Calendar completion sync failed (kept local state)', err);
+  }
+}
+
+/**
+ * Apply a capture-time schedule to a freshly created item: persist the
+ * schedule fields, then post to the chosen calendar when one was picked.
+ * A failed post keeps the local schedule and toasts why — same local-first
+ * contract as the schedule sheet. `item` must already carry its final
+ * collectionId (call after any moveItemToCollection).
+ */
+export async function applyPendingSchedule(
+  item: InboxItem,
+  pending: PendingSchedule,
+): Promise<void> {
+  let scheduled = applySchedule(item, pending);
+  await storeItem(cleanForStorage(scheduled));
+  if (!pending.calendarId) return;
+  try {
+    scheduled = await postScheduledItem(scheduled, pending.calendarId);
+    await storeItem(cleanForStorage(scheduled));
+    recordCalendarUse(pending.kind, pending.calendarId);
+  } catch (err) {
+    console.error('Calendar post failed', err);
+    const reason =
+      err instanceof CaldavError
+        ? err.message
+        : 'the calendar relay is unreachable';
+    showToast(`Scheduled locally — ${reason}`);
   }
 }
 

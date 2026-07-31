@@ -103,6 +103,15 @@ export interface ScheduleInput {
 }
 
 /**
+ * A schedule chosen before its item exists (capture-time "When?" chips).
+ * Applied via applySchedule once the item is created; `calendarId` carries
+ * the destination for the post-creation calendar post.
+ */
+export interface PendingSchedule extends ScheduleInput {
+  calendarId?: string;
+}
+
+/**
  * Return a copy of the item carrying the given schedule. Any previously
  * posted calendar entry's href/etag is preserved — the caller (future CalDAV
  * sync) uses it to update the projection.

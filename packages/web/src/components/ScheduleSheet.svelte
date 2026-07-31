@@ -9,6 +9,7 @@
     clearSchedule,
     fromInputValues,
     nextRoundHour,
+    type PendingSchedule,
     quickOptions,
     toDateInputValue,
     toTimeInputValue,
@@ -31,21 +32,41 @@
 
   let {
     item,
+    subject,
+    initial = null,
+    onpick,
     onclose,
   }: {
-    item: InboxItem;
+    /** Persist mode: schedule an existing item (saves + posts directly). */
+    item?: InboxItem;
+    /** Pick mode context for a not-yet-created item (capture-time chips). */
+    subject?: { title?: string; isTodo?: boolean };
+    /** Pick mode: the previously chosen pending schedule, for re-editing. */
+    initial?: PendingSchedule | null;
+    /**
+     * Pick mode: return the choice instead of persisting — the caller
+     * applies it once the item exists (null = clear the pending schedule).
+     */
+    onpick?: (schedule: PendingSchedule | null) => void;
     /** Called after any successful action, and on plain dismissal. */
     onclose: () => void;
   } = $props();
 
-  const isTodoish = item.isTodo || item.type === 'todo';
+  const pickMode = !!onpick;
+  const displayTitle = item?.title ?? subject?.title ?? '';
+  const isTodoish = item
+    ? item.isTodo || item.type === 'todo'
+    : !!subject?.isTodo;
 
-  // ── Editable state, seeded from the item's current schedule ────────────
-  // (or from the prefilled guess: next round hour, 1 h, event/task by card
-  // kind — the fastest path is glance → confirm.)
-  const initialStart = item.startsAt ? new Date(item.startsAt) : nextRoundHour();
+  // ── Editable state, seeded from the item's current schedule (persist
+  // mode), the previously picked pending schedule (pick mode), or the
+  // prefilled guess: next round hour, 1 h, event/task by card kind — the
+  // fastest path is glance → confirm.
+  const initialStart = item?.startsAt
+    ? new Date(item.startsAt)
+    : (initial?.start ?? nextRoundHour());
   const initialDuration =
-    item.startsAt && item.endsAt
+    item?.startsAt && item.endsAt
       ? Math.max(
           1,
           Math.round(
@@ -54,27 +75,31 @@
               60_000,
           ),
         )
-      : 60;
+      : (initial?.durationMin ?? 60);
+  const initialAllDay = item ? !!item.allDay : !!initial?.allDay;
+  /** Whether something is already scheduled/picked — drives labels. */
+  const hasExisting = item ? !!item.startsAt : !!initial;
 
   let kind = $state<ScheduleKind>(
-    item.scheduleKind ?? (isTodoish ? 'task' : 'event'),
+    item?.scheduleKind ?? initial?.kind ?? (isTodoish ? 'task' : 'event'),
   );
   let dateStr = $state(toDateInputValue(initialStart));
-  let timeStr = $state(
-    item.allDay ? '' : toTimeInputValue(initialStart),
-  );
-  let allDay = $state(!!item.allDay);
+  let timeStr = $state(initialAllDay ? '' : toTimeInputValue(initialStart));
+  let allDay = $state(initialAllDay);
   let durationMin = $state(initialDuration);
   let saving = $state(false);
 
   // ── Destination calendar ───────────────────────────────────────────────
   // Already-posted entries open on their current home (even if hidden);
-  // otherwise last-used-per-kind → account default → first suitable.
-  const eventHome = choiceForEventUrl(item.eventUrl);
+  // otherwise the previously picked pending calendar, then
+  // last-used-per-kind → account default → first suitable.
+  const eventHome = choiceForEventUrl(item?.eventUrl);
   let selectedCalendarId = $state<string | undefined>(
     eventHome?.calendar.id ??
-      pickPreferredCalendar(item.scheduleKind ?? (isTodoish ? 'task' : 'event'))
-        ?.calendar.id,
+      initial?.calendarId ??
+      pickPreferredCalendar(
+        item?.scheduleKind ?? initial?.kind ?? (isTodoish ? 'task' : 'event'),
+      )?.calendar.id,
   );
   /** Once the user picks by hand, kind switches stop re-deriving the target. */
   let calendarTouched = $state(false);
@@ -92,7 +117,7 @@
 
   function setKind(next: ScheduleKind) {
     kind = next;
-    if (!calendarTouched && !item.eventUrl) {
+    if (!calendarTouched && !item?.eventUrl) {
       selectedCalendarId = pickPreferredCalendar(next)?.calendar.id;
     }
   }
@@ -129,7 +154,7 @@
   }
 
   function scheduledItem(): InboxItem | null {
-    if (!start) return null;
+    if (!item || !start) return null;
     return applySchedule(item, {
       kind,
       start,
@@ -158,6 +183,19 @@
    * and a toast explains; pressing the button again retries.
    */
   async function save() {
+    // Pick mode: hand the choice back — the caller applies it once the
+    // item exists (and posts it, via applyPendingSchedule).
+    if (pickMode) {
+      if (!start) return;
+      onpick?.({
+        kind,
+        start,
+        durationMin,
+        allDay: effectiveAllDay,
+        calendarId: willPost ? selectedChoice?.calendar.id : undefined,
+      });
+      return;
+    }
     const updated = scheduledItem();
     if (!updated) return;
     if (!(await persist(updated, 'Failed to save schedule'))) return;
@@ -198,6 +236,11 @@
    * the card and calendar don't silently diverge.
    */
   async function remove() {
+    if (pickMode) {
+      onpick?.(null);
+      return;
+    }
+    if (!item) return;
     if (item.eventUrl) {
       saving = true;
       try {
@@ -231,8 +274,10 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="overlay" role="dialog" aria-modal="true" aria-label="Schedule" onclick={() => { if (!saving) onclose(); }}>
   <div class="sheet" onclick={(e) => e.stopPropagation()}>
-    <h3 class="title">{item.startsAt ? 'Scheduled' : 'Add to calendar'}</h3>
-    <p class="ctx">{item.title || 'Untitled'}</p>
+    <h3 class="title">
+      {pickMode ? 'When?' : hasExisting ? 'Scheduled' : 'Add to calendar'}
+    </h3>
+    <p class="ctx">{displayTitle || 'Untitled'}</p>
 
     <div class="seg" role="radiogroup" aria-label="Entry kind">
       <button
@@ -347,18 +392,26 @@
     {/if}
 
     <button type="button" class="btn-primary" disabled={!canSave} onclick={save}>
-      {#if willPost}
-        {item.eventUrl ? 'Update event' : kind === 'task' ? 'Add task' : 'Add to calendar'}
+      {#if pickMode}
+        Set time
+      {:else if willPost}
+        {item?.eventUrl ? 'Update event' : kind === 'task' ? 'Add task' : 'Add to calendar'}
       {:else}
-        {item.startsAt ? 'Update schedule' : 'Schedule'}
+        {hasExisting ? 'Update schedule' : 'Schedule'}
       {/if}
     </button>
-    <button type="button" class="btn-ghost" disabled={!canSave} onclick={saveAndDownload}>
-      Save &amp; download .ics
-    </button>
-    {#if item.startsAt}
+    {#if !pickMode}
+      <button type="button" class="btn-ghost" disabled={!canSave} onclick={saveAndDownload}>
+        Save &amp; download .ics
+      </button>
+    {/if}
+    {#if hasExisting}
       <button type="button" class="btn-remove" disabled={saving} onclick={remove}>
-        {item.eventUrl ? 'Remove from calendar' : 'Remove schedule'}
+        {pickMode
+          ? 'Clear time'
+          : item?.eventUrl
+            ? 'Remove from calendar'
+            : 'Remove schedule'}
       </button>
     {/if}
   </div>
