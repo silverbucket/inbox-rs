@@ -8,12 +8,12 @@
 import type { InboxItem } from '@inbox-rs/rs-module';
 import { CaldavError, createEntry, deleteEntry, updateEntry } from './caldav';
 import {
+  accountEndpoint,
   choiceForEventUrl,
   findCalendarChoice,
   recordCalendarUse,
 } from './calendar-accounts';
 import { cleanForStorage } from './clean-for-storage';
-import { resolveSockethubEndpoint } from './enrich';
 import { applySchedule, type PendingSchedule } from './schedule';
 import { storeItem } from './stores';
 import { showToast } from './toast';
@@ -29,7 +29,6 @@ export async function postScheduledItem(
   item: InboxItem,
   calendarId: string,
 ): Promise<InboxItem> {
-  const endpoint = resolveSockethubEndpoint();
   const target = findCalendarChoice(calendarId);
   if (!target) throw new CaldavError('caldav:invalid-calendar');
 
@@ -39,7 +38,7 @@ export async function postScheduledItem(
       current.account,
       calendarId,
       item,
-      endpoint,
+      accountEndpoint(current.account),
     );
     return { ...item, ...posted };
   }
@@ -48,14 +47,24 @@ export async function postScheduledItem(
     // (deleted out-of-band in the calendar app) is fine — the goal state is
     // "not there", and create below still runs.
     try {
-      await deleteEntry(current.account, current.calendar.id, item, endpoint);
+      await deleteEntry(
+        current.account,
+        current.calendar.id,
+        item,
+        accountEndpoint(current.account),
+      );
     } catch (err) {
       if (!(err instanceof CaldavError && err.code === 'caldav:not-found')) {
         throw err;
       }
     }
   }
-  const posted = await createEntry(target.account, calendarId, item, endpoint);
+  const posted = await createEntry(
+    target.account,
+    calendarId,
+    item,
+    accountEndpoint(target.account),
+  );
   return { ...item, ...posted };
 }
 
@@ -72,7 +81,7 @@ export async function removePostedEntry(item: InboxItem): Promise<void> {
       current.account,
       current.calendar.id,
       item,
-      resolveSockethubEndpoint(),
+      accountEndpoint(current.account),
     );
   } catch (err) {
     if (err instanceof CaldavError && err.code === 'caldav:not-found') return;
@@ -108,7 +117,7 @@ export async function setItemCompleted(
       current.account,
       current.calendar.id,
       updated,
-      resolveSockethubEndpoint(),
+      accountEndpoint(current.account),
     );
     await storeItem(cleanForStorage({ ...updated, ...posted }));
   } catch (err) {

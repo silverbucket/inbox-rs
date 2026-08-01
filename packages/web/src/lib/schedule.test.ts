@@ -201,4 +201,10 @@ describe('input value round-trip', () => {
     expect(fromInputValues('', '09:00')).toBeNull();
     expect(fromInputValues('2026-99-99', '')).toBeNull();
   });
+
+  it('rejects out-of-range times instead of normalizing them', () => {
+    expect(fromInputValues('2026-07-31', '12:60')).toBeNull();
+    expect(fromInputValues('2026-07-31', '24:00')).toBeNull();
+    expect(fromInputValues('2026-07-31', '23:59')).not.toBeNull();
+  });
 });

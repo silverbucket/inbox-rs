@@ -69,7 +69,17 @@ describe('buildIcs', () => {
   });
 
   it('builds all-day events with an exclusive DTEND', () => {
-    const ics = buildIcs(note({ allDay: true, endsAt: undefined }), NOW)!;
+    // Local-time fixture: all-day dates are taken in the runner's local
+    // day, so a fixed-offset instant would flip dates on far-west runners.
+    const localMidnight = new Date(2026, 6, 31);
+    const ics = buildIcs(
+      note({
+        startsAt: localMidnight.toISOString(),
+        allDay: true,
+        endsAt: undefined,
+      }),
+      NOW,
+    )!;
     expect(ics.text).toContain('DTSTART;VALUE=DATE:20260731');
     expect(ics.text).toContain('DTEND;VALUE=DATE:20260801');
   });
@@ -106,7 +116,24 @@ describe('buildIcs', () => {
     )!;
     expect(ics.text).toContain('SUMMARY:Docs\\; part 1');
     expect(ics.text).toContain('DESCRIPTION:line1\\nline2');
-    expect(ics.text).toContain('URL:https://example.org/a\\,b');
+    // URL is a URI value type — emitted verbatim, no TEXT escaping.
+    expect(ics.text).toContain('URL:https://example.org/a,b');
+  });
+
+  it('drops a URL carrying control characters instead of injecting lines', () => {
+    const ics = buildIcs(
+      {
+        id: 'bm-2',
+        type: 'bookmark',
+        title: 'x',
+        url: 'https://example.org/\r\nX-INJECTED:1',
+        createdAt: '2026-07-28T09:00:00Z',
+        startsAt: '2026-07-31T09:00:00Z',
+      },
+      NOW,
+    )!;
+    expect(ics.text).not.toContain('URL:');
+    expect(ics.text).not.toContain('X-INJECTED');
   });
 
   it('derives a safe filename from the title', () => {

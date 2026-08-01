@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { trapFocus } from '../lib/actions';
   import {
     calendarAccounts,
     type CalendarChoice,
@@ -45,7 +46,7 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="overlay" role="dialog" aria-modal="true" aria-label="Choose calendar" onclick={onclose}>
-  <div class="sheet" onclick={(e) => e.stopPropagation()}>
+  <div class="sheet" use:trapFocus onclick={(e) => e.stopPropagation()}>
     <h3 class="title">Choose calendar</h3>
     {#each groups as group (group.account.id)}
       <div class="grp">{group.account.label} · {group.account.username}</div>

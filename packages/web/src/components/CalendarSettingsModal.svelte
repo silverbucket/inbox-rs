@@ -5,12 +5,14 @@
     type CaldavCredentials,
   } from '../lib/caldav';
   import {
+    accountEndpoint,
     addCalendarAccount,
     calendarAccounts,
     removeCalendarAccount,
     updateCalendarAccount,
     type CalendarAccount,
   } from '../lib/calendar-accounts';
+  import { trapFocus } from '../lib/actions';
   import { resolveSockethubEndpoint } from '../lib/enrich';
   import { showToast } from '../lib/toast';
 
@@ -49,8 +51,12 @@
       username: username.trim(),
       password,
     };
+    // Resolved once, at this explicit local action, and pinned on the
+    // account — later credential-bearing requests never re-resolve the
+    // synced setting (see CalendarAccount.endpoint).
+    const endpoint = resolveSockethubEndpoint();
     try {
-      const calendars = await fetchCalendars(creds, resolveSockethubEndpoint());
+      const calendars = await fetchCalendars(creds, endpoint);
       if (calendars.length === 0) {
         connectError = 'Connected, but the account has no calendars.';
         return;
@@ -61,7 +67,7 @@
       } catch {
         // keep as-is
       }
-      addCalendarAccount({ label: host, ...creds, calendars });
+      addCalendarAccount({ label: host, ...creds, endpoint, calendars });
       showAdd = false;
       serverUrl = '';
       username = '';
@@ -79,7 +85,7 @@
   async function handleRefresh(account: CalendarAccount) {
     refreshingId = account.id;
     try {
-      const calendars = await fetchCalendars(account, resolveSockethubEndpoint());
+      const calendars = await fetchCalendars(account, accountEndpoint(account));
       const ids = new Set(calendars.map((c) => c.id));
       updateCalendarAccount(account.id, {
         calendars,
@@ -138,7 +144,7 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="overlay" role="dialog" aria-modal="true" aria-label="Calendar accounts" onclick={onclose}>
-  <div class="modal" onclick={(e) => e.stopPropagation()}>
+  <div class="modal" use:trapFocus onclick={(e) => e.stopPropagation()}>
     <div class="head">
       <h3 class="title">Calendar accounts</h3>
       <button type="button" class="icon-btn" aria-label="Close" onclick={onclose}>

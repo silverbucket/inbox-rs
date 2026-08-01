@@ -2,6 +2,7 @@
 import { get } from 'svelte/store';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  accountEndpoint,
   addCalendarAccount,
   calendarAccounts,
   choiceForEventUrl,
@@ -30,6 +31,7 @@ function seedAccount(overrides: Record<string, unknown> = {}) {
     url: 'https://cal.example.org/',
     username: 'nick',
     password: 'secret',
+    endpoint: 'https://relay.example.org/sockethub-http',
     calendars: [CAL_PERSONAL, CAL_WORK],
     ...overrides,
   });
@@ -59,6 +61,18 @@ describe('account CRUD + persistence', () => {
     const account = seedAccount();
     updateCalendarAccount(account.id, { defaultCalendarId: CAL_WORK.id });
     expect(get(calendarAccounts)[0].defaultCalendarId).toBe(CAL_WORK.id);
+  });
+
+  it('accountEndpoint returns the pinned relay, with a default fallback', () => {
+    const account = seedAccount();
+    expect(accountEndpoint(account)).toBe(
+      'https://relay.example.org/sockethub-http',
+    );
+    // Legacy entries without a pin fall back to the app default — never the
+    // synced setting.
+    expect(accountEndpoint({ ...account, endpoint: '' })).toMatch(
+      /sockethub-http$/,
+    );
   });
 });
 

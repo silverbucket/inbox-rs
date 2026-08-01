@@ -22,6 +22,7 @@
     pickPreferredCalendar,
     type CalendarChoice,
   } from '../lib/calendar-accounts';
+  import { trapFocus } from '../lib/actions';
   import {
     postScheduledItem,
     recordCalendarUse,
@@ -273,7 +274,7 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="overlay" role="dialog" aria-modal="true" aria-label="Schedule" onclick={() => { if (!saving) onclose(); }}>
-  <div class="sheet" onclick={(e) => e.stopPropagation()}>
+  <div class="sheet" use:trapFocus onclick={(e) => e.stopPropagation()}>
     <h3 class="title">
       {pickMode ? 'When?' : hasExisting ? 'Scheduled' : 'Add to calendar'}
     </h3>
@@ -317,14 +318,20 @@
       </div>
     {/if}
 
-    <span class="flabel" id="sched-when">{kind === 'task' ? 'Due' : 'Date & time'}</span>
-    <div class="inputrow" aria-labelledby="sched-when">
-      <input type="date" class="input" bind:value={dateStr} />
+    <span class="flabel">{kind === 'task' ? 'Due' : 'Date & time'}</span>
+    <div class="inputrow">
+      <input
+        type="date"
+        class="input"
+        bind:value={dateStr}
+        aria-label={kind === 'task' ? 'Due date' : 'Date'}
+      />
       {#if !allDay}
         <input
           type="time"
           class="input time"
           bind:value={timeStr}
+          aria-label={kind === 'task' ? 'Due time (optional)' : 'Time'}
           placeholder={kind === 'task' ? 'time?' : undefined}
         />
       {/if}

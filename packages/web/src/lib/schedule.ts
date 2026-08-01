@@ -177,10 +177,13 @@ export function fromInputValues(dateStr: string, timeStr: string): Date | null {
     tm ? Number(tm[2]) : 0,
   );
   // The Date constructor normalizes out-of-range parts ("2026-99-99" rolls
-  // into 2034) instead of failing — require an exact round-trip.
+  // into 2034, "12:60" into 13:00) instead of failing — require an exact
+  // round-trip of every supplied component.
   const valid =
     d.getFullYear() === Number(dm[1]) &&
     d.getMonth() === Number(dm[2]) - 1 &&
-    d.getDate() === Number(dm[3]);
+    d.getDate() === Number(dm[3]) &&
+    (!tm ||
+      (d.getHours() === Number(tm[1]) && d.getMinutes() === Number(tm[2])));
   return valid ? d : null;
 }

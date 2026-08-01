@@ -10,6 +10,11 @@
  */
 import type { InboxItem } from '@inbox-rs/rs-module';
 
+/** Rejecting the C0 control range is the point: a CR/LF inside a verbatim
+ *  URI value would break out of its content line (property injection). */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: see above
+const CONTROL_CHARS = /[\u0000-\u001f]/;
+
 /** RFC 5545 §3.3.11: backslash, semicolon, comma and newline must be escaped. */
 export function escapeText(value: string): string {
   return value
@@ -125,8 +130,11 @@ export function buildIcs(
   if (item.description) {
     lines.push(`DESCRIPTION:${escapeText(item.description)}`);
   }
-  if (item.type === 'bookmark' && item.url) {
-    lines.push(`URL:${escapeText(item.url)}`);
+  // URL is a URI value type (RFC 5545 §3.3.13) — TEXT backslash-escaping
+  // does not apply and would corrupt commas/semicolons in query strings.
+  // Emit verbatim; CONTROL_CHARS guards against content-line breakout.
+  if (item.type === 'bookmark' && item.url && !CONTROL_CHARS.test(item.url)) {
+    lines.push(`URL:${item.url}`);
   }
 
   lines.push(isTask ? 'END:VTODO' : 'END:VEVENT', 'END:VCALENDAR');

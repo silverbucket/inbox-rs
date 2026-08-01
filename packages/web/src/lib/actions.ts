@@ -47,6 +47,65 @@ export function autofocusIf(node: HTMLElement, enabled: boolean) {
 }
 
 /**
+ * Contain keyboard focus within the bound dialog element.
+ *
+ * `aria-modal` alone doesn't move or trap focus — a keyboard user can Tab
+ * to controls behind the overlay. This action: focuses the first focusable
+ * descendant on mount (unless something inside is already focused, e.g. via
+ * `use:autofocus`), cycles Tab/Shift-Tab at the edges, and restores focus
+ * to the previously focused element when the dialog unmounts.
+ *
+ * Example:
+ * ```svelte
+ * <div class="sheet" role="dialog" aria-modal="true" use:trapFocus>
+ * ```
+ */
+export function trapFocus(node: HTMLElement) {
+  const previouslyFocused =
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+
+  const focusables = (): HTMLElement[] =>
+    Array.from(
+      node.querySelectorAll<HTMLElement>(
+        'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((el) => el.offsetParent !== null);
+
+  requestAnimationFrame(() => {
+    if (!node.contains(document.activeElement)) focusables()[0]?.focus();
+  });
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key !== 'Tab') return;
+    const items = focusables();
+    if (items.length === 0) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement;
+    // Also catch focus that escaped (or never entered) the dialog.
+    if (e.shiftKey && (active === first || !node.contains(active))) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && (active === last || !node.contains(active))) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
+  // Window-level: a node listener would miss Tab presses once focus has
+  // escaped the dialog (the exact case the trap must recover from).
+  window.addEventListener('keydown', handleKeydown, true);
+  return {
+    destroy: () => {
+      window.removeEventListener('keydown', handleKeydown, true);
+      previouslyFocused?.focus();
+    },
+  };
+}
+
+/**
  * Run `onEnter` once when the bound element first approaches the viewport.
  *
  * Used to gate expensive work (binary fetches for card media) on visibility,
