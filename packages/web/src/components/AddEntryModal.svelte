@@ -22,6 +22,7 @@
   } from '../lib/collection-suggest';
   import { formatScheduled, type PendingSchedule } from '../lib/schedule';
   import { applyPendingSchedule } from '../lib/schedule-sync';
+  import { showToast } from '../lib/toast';
   import CollectionPicker from './CollectionPicker.svelte';
   import ScheduleSheet from './ScheduleSheet.svelte';
   import BookmarkForm from './add-entry/BookmarkForm.svelte';
@@ -224,26 +225,36 @@
       //                              collection/group written)
       //   real id                 → assign via moveItemToCollection after storage
       await storeItem(item, fileData, thumbData);
-      // Clean up files this edit orphaned (e.g. a previous thumbnail that the
-      // replacement image no longer produces). Best-effort; never blocks save.
-      if (removePaths) {
-        for (const path of removePaths) await removeFile(path);
-      }
-      if (selectedCollectionId && !isEdit) {
-        await moveItemToCollection(item.id, selectedCollectionId);
-        // Feed the recency signal so the next capture defaults here and the
-        // picker's Suggested block stays honest.
-        recordCollectionUse(selectedCollectionId);
-      }
-      if (pendingSchedule && !isEdit) {
-        // Apply after the move so the stored item keeps its collectionId.
-        // Posts to the picked calendar best-effort — see applyPendingSchedule.
-        await applyPendingSchedule(
-          selectedCollectionId
-            ? { ...item, collectionId: selectedCollectionId }
-            : item,
-          pendingSchedule,
-        );
+      // From here the item exists. A follow-up failure (filing, schedule)
+      // must NOT bounce back into the outer catch: that leaves the modal
+      // open, and pressing Save again re-runs the whole submit with a fresh
+      // crypto.randomUUID() — storing a duplicate. Report the partial
+      // failure and close; the item itself is safe.
+      try {
+        // Clean up files this edit orphaned (e.g. a previous thumbnail that
+        // the replacement image no longer produces).
+        if (removePaths) {
+          for (const path of removePaths) await removeFile(path);
+        }
+        if (selectedCollectionId && !isEdit) {
+          await moveItemToCollection(item.id, selectedCollectionId);
+          // Feed the recency signal so the next capture defaults here and
+          // the picker's Suggested block stays honest.
+          recordCollectionUse(selectedCollectionId);
+        }
+        if (pendingSchedule && !isEdit) {
+          // Apply after the move so the stored item keeps its collectionId.
+          // Posts to the picked calendar best-effort — see applyPendingSchedule.
+          await applyPendingSchedule(
+            selectedCollectionId
+              ? { ...item, collectionId: selectedCollectionId }
+              : item,
+            pendingSchedule,
+          );
+        }
+      } catch (postSaveError) {
+        console.error('Post-save step failed:', postSaveError);
+        showToast('Saved — but filing or scheduling failed. Open the item to finish up.');
       }
       // Fill blank bookmark fields (title, description, preview image) from
       // the page's metadata in the background. New items only — an edit is

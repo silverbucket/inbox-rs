@@ -69,9 +69,9 @@ export async function postScheduledItem(
 }
 
 /**
- * Delete the item's posted entry. Resolves true when the calendar no longer
- * has the entry (deleted now, already gone, or never posted); throws only
- * when the server refused and the entry may still exist.
+ * Delete the item's posted entry. Resolves (with no value) once the calendar
+ * no longer has the entry — deleted now, already gone, or never posted;
+ * throws only when the server refused and the entry may still exist.
  */
 export async function removePostedEntry(item: InboxItem): Promise<void> {
   const current = choiceForEventUrl(item.eventUrl);

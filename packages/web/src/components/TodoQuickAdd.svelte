@@ -183,10 +183,12 @@
     if (!canCaptureTodo(quickTitle) || quickSaving) return;
     quickSaving = true;
     quickError = '';
-    // storeItem creates the todo; the move is a second step. Track the boundary
-    // so a move failure doesn't leave the title around to be re-submitted — that
-    // would store a duplicate unfiled todo on retry.
+    // storeItem creates the todo; filing and scheduling are follow-up steps.
+    // Track each boundary so the error names the stage that actually failed —
+    // and so a failure never leaves the title around to be re-submitted,
+    // which would store a duplicate todo on retry.
     let created = false;
+    let filed = false;
     try {
       const todo = makeUnfiledTodo(quickTitle);
       await storeItem(todo);
@@ -197,6 +199,7 @@
         await moveItemToCollection(todo.id, targetCollectionId);
         notifyIfOutOfView(targetCollectionId);
       }
+      filed = true;
       if (pendingSchedule) {
         // Apply after the move so the stored item keeps its collectionId.
         // Posts to the picked calendar best-effort (local-first, toasts on
@@ -207,16 +210,20 @@
             : todo,
           pendingSchedule,
         );
-        pendingSchedule = null;
       }
     } catch (error) {
       console.error('Failed to add todo', error);
-      quickError = created
-        ? 'Todo added, but filing it into the collection failed.'
-        : error instanceof Error
-          ? error.message
-          : 'Failed to add todo';
+      quickError = filed
+        ? 'Todo added, but saving its schedule failed.'
+        : created
+          ? 'Todo added, but filing it into the collection failed.'
+          : error instanceof Error
+            ? error.message
+            : 'Failed to add todo';
     } finally {
+      // The pending time belongs to the todo just created (even when a
+      // follow-up step failed) — never let it leak onto the next capture.
+      if (created) pendingSchedule = null;
       quickSaving = false;
       // Return focus so the user can keep capturing; tick() lets a hero→compact
       // remount settle before refocusing the (new) element.
