@@ -444,6 +444,9 @@
             type="button"
             class="btn-when"
             class:has-time={!!pendingSchedule}
+            aria-label={pendingSchedule
+              ? `Scheduled ${whenLabel} — change time`
+              : 'Set a time'}
             aria-haspopup="dialog"
             aria-expanded={scheduleSheetOpen}
             onclick={() => (scheduleSheetOpen = true)}

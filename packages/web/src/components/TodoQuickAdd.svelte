@@ -327,7 +327,9 @@
     type="button"
     class="quick-add__when"
     class:has-time={!!pendingSchedule}
-    aria-label="Set a time"
+    aria-label={pendingSchedule
+      ? `Scheduled ${whenLabel} — change time`
+      : 'Set a time'}
     aria-haspopup="dialog"
     aria-expanded={scheduleOpen}
     disabled={quickSaving}

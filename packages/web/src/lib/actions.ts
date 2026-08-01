@@ -47,13 +47,23 @@ export function autofocusIf(node: HTMLElement, enabled: boolean) {
 }
 
 /**
+ * Dialogs currently holding a focus trap, in mount order. Only the topmost
+ * (last-mounted) trap acts on Tab — without this, a dialog stacked on
+ * another (CalendarPicker over ScheduleSheet) would have both window-level
+ * handlers fighting: the lower one sees focus "outside itself" and yanks
+ * it back out of the upper dialog.
+ */
+const trapStack: HTMLElement[] = [];
+
+/**
  * Contain keyboard focus within the bound dialog element.
  *
  * `aria-modal` alone doesn't move or trap focus — a keyboard user can Tab
  * to controls behind the overlay. This action: focuses the first focusable
  * descendant on mount (unless something inside is already focused, e.g. via
  * `use:autofocus`), cycles Tab/Shift-Tab at the edges, and restores focus
- * to the previously focused element when the dialog unmounts.
+ * to the previously focused element when the dialog unmounts. Stacked
+ * dialogs coordinate through {@link trapStack}.
  *
  * Example:
  * ```svelte
@@ -65,6 +75,7 @@ export function trapFocus(node: HTMLElement) {
     document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
+  trapStack.push(node);
 
   const focusables = (): HTMLElement[] =>
     Array.from(
@@ -79,6 +90,9 @@ export function trapFocus(node: HTMLElement) {
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key !== 'Tab') return;
+    // Only the topmost trap acts; lower dialogs stay inert until they
+    // surface again.
+    if (trapStack[trapStack.length - 1] !== node) return;
     const items = focusables();
     if (items.length === 0) return;
     const first = items[0];
@@ -100,6 +114,8 @@ export function trapFocus(node: HTMLElement) {
   return {
     destroy: () => {
       window.removeEventListener('keydown', handleKeydown, true);
+      const idx = trapStack.indexOf(node);
+      if (idx !== -1) trapStack.splice(idx, 1);
       previouslyFocused?.focus();
     },
   };

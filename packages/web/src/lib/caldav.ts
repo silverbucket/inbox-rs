@@ -51,6 +51,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   'caldav:invalid-calendar': 'That calendar was not found on the server',
   'caldav:unsupported-component':
     'That calendar does not support this entry type',
+  // Client-side code: the relay itself was unreachable (offline, DNS, or
+  // the 30 s timeout) — distinct from the calendar server being down.
+  'caldav:relay-unreachable':
+    'Could not reach the calendar relay — are you offline?',
 };
 
 export class CaldavError extends Error {
@@ -101,22 +105,35 @@ async function send(
   expectTypes: string[],
   endpoint: string,
 ): Promise<Record<string, unknown>> {
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Request-Id': crypto.randomUUID(),
-    },
-    body: JSON.stringify([
-      credentialsPayload(creds),
-      { '@context': CALDAV_CONTEXT, actor: actorFor(creds), ...message },
-    ]),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
+  // Normalize transport failures (network down, DNS, the timeout's
+  // DOMException) into coded CaldavErrors — callers branch on `.code` and a
+  // raw TypeError would bypass every one of those checks.
+  let res: Response;
+  let text: string;
+  try {
+    res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Request-Id': crypto.randomUUID(),
+      },
+      body: JSON.stringify([
+        credentialsPayload(creds),
+        { '@context': CALDAV_CONTEXT, actor: actorFor(creds), ...message },
+      ]),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch {
+    throw new CaldavError('caldav:relay-unreachable');
+  }
   if (!res.ok) {
     throw new CaldavError(`calendar relay responded with ${res.status}`);
   }
-  const text = await res.text();
+  try {
+    text = await res.text();
+  } catch {
+    throw new CaldavError('caldav:relay-unreachable');
+  }
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;
     let payload: unknown;
@@ -143,12 +160,19 @@ export async function fetchCalendars(
 ): Promise<RemoteCalendar[]> {
   const result = await send(creds, { type: 'fetch' }, ['collection'], endpoint);
   const items = Array.isArray(result.items) ? result.items : [];
-  return items.filter(
-    (item): item is RemoteCalendar =>
-      !!item &&
-      typeof (item as RemoteCalendar).id === 'string' &&
-      (item as { type?: string }).type === 'calendar',
-  );
+  // Validate the full RemoteCalendar shape — an entry missing `components`
+  // would blow up later in pickPreferredCalendar/the picker UI, far from
+  // the malformed response that caused it.
+  return items.filter((item): item is RemoteCalendar => {
+    const c = item as Partial<RemoteCalendar> | null;
+    return (
+      !!c &&
+      typeof c.id === 'string' &&
+      (c as { type?: string }).type === 'calendar' &&
+      typeof c.name === 'string' &&
+      Array.isArray(c.components)
+    );
+  });
 }
 
 /** The UID we stamp on every entry; derivable from the item forever after. */
@@ -256,7 +280,14 @@ export async function deleteEntry(
   item: InboxItem,
   endpoint: string,
 ): Promise<void> {
-  if (!item.eventUrl || !item.eventEtag) return;
+  // Never posted → nothing to delete. But a posted entry without its etag
+  // is a failure, not a no-op: the platform's delete requires the etag, and
+  // silently returning would strand the entry on the calendar (e.g. as a
+  // stale duplicate after a calendar move).
+  if (!item.eventUrl) return;
+  if (!item.eventEtag) {
+    throw new CaldavError('posted entry has no stored etag — cannot delete');
+  }
   await send(
     creds,
     {

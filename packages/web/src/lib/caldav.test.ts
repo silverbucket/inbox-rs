@@ -154,6 +154,36 @@ describe('fetchCalendars', () => {
     );
     await expect(fetchCalendars(CREDS, ENDPOINT)).rejects.toThrow(/503/);
   });
+
+  it('normalizes network/timeout failures into a coded CaldavError', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+      new TypeError('Failed to fetch'),
+    );
+    const err = await fetchCalendars(CREDS, ENDPOINT).catch((e) => e);
+    expect(err).toBeInstanceOf(CaldavError);
+    expect(err.code).toBe('caldav:relay-unreachable');
+  });
+
+  it('drops discovered entries missing the RemoteCalendar shape', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      ndjson({
+        type: 'collection',
+        totalItems: 3,
+        items: [
+          {
+            id: 'https://cal/x/',
+            type: 'calendar',
+            name: 'OK',
+            components: ['event'],
+          },
+          { id: 'https://cal/y/', type: 'calendar', name: 'No components' },
+          { id: 'https://cal/z/', type: 'calendar', components: ['event'] },
+        ],
+      }),
+    );
+    const calendars = await fetchCalendars(CREDS, ENDPOINT);
+    expect(calendars.map((c) => c.name)).toEqual(['OK']);
+  });
 });
 
 describe('mutations', () => {
@@ -228,6 +258,17 @@ describe('mutations', () => {
       type: 'task',
       etag: '"e1"',
     });
+  });
+
+  it('delete throws (not no-ops) when a posted entry has no etag', async () => {
+    const stranded = note({ eventUrl: `${CAL}x.ics`, eventEtag: undefined });
+    await expect(deleteEntry(CREDS, CAL, stranded, ENDPOINT)).rejects.toThrow(
+      /no stored etag/,
+    );
+    // Never-posted items are still a clean no-op.
+    await expect(
+      deleteEntry(CREDS, CAL, note(), ENDPOINT),
+    ).resolves.toBeUndefined();
   });
 
   it('surfaces conflicts with their code', async () => {
