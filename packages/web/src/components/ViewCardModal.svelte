@@ -15,6 +15,7 @@
   import ScheduleSheet from './ScheduleSheet.svelte';
   import AddToCalendarSheet from './AddToCalendarSheet.svelte';
   import { formatScheduled, isOverdue } from '../lib/schedule';
+  import { removePostedEntry } from '../lib/schedule-sync';
   import BookmarkView from './view-card/BookmarkView.svelte';
   import NoteView from './view-card/NoteView.svelte';
   import ImageView from './view-card/ImageView.svelte';
@@ -57,6 +58,31 @@
     onclose();
   }
 
+  /**
+   * A todo↔reference conversion changes the card's kind, so a posted
+   * calendar entry no longer matches its projection (a VEVENT for what is
+   * now a task, or vice versa) — and archive state belongs to the calendar
+   * ownership that conversion breaks. Detach the entry (best-effort server
+   * delete — a failure only orphans a calendar entry, never blocks the
+   * conversion), strip the pointer + archive flags, and keep the time,
+   * flipping its kind to match.
+   */
+  function detachCalendarOnConversion(
+    updated: Record<string, unknown>,
+    newKind: 'event' | 'task',
+  ) {
+    if (item.eventUrl) {
+      void removePostedEntry(item).catch((error) => {
+        console.warn('Calendar entry not removed on conversion', error);
+      });
+    }
+    delete updated.eventUrl;
+    delete updated.eventEtag;
+    delete updated.archived;
+    delete updated.archivedAt;
+    if (updated.startsAt) updated.scheduleKind = newKind;
+  }
+
   /** Promote the current item to an unfiled todo. */
   async function convertToUnfiledTodo() {
     convertingTodo = true;
@@ -72,6 +98,7 @@
         completed: false,
       };
       delete updated.collectionId;
+      detachCalendarOnConversion(updated, 'task');
       await storeItem(updated as unknown as InboxItem);
       showPicker = false;
       onclose();
@@ -102,13 +129,14 @@
       await moveItemToCollection(item.id, collectionId);
       // Now flip the todo flags. storeItem only touches the item doc — the
       // itemIds arrays are already reconciled by the move above.
-      const updated = {
+      const updated: Record<string, unknown> = {
         ...rest,
         isTodo: true,
         completed: false,
         collectionId,
       };
-      await storeItem(updated as InboxItem);
+      detachCalendarOnConversion(updated, 'task');
+      await storeItem(updated as unknown as InboxItem);
       recordCollectionUse(collectionId);
       showPicker = false;
       onclose();
@@ -135,6 +163,7 @@
         updated.type = 'note';
         if (!updated.body) updated.body = '';
       }
+      detachCalendarOnConversion(updated, 'event');
       await storeItem(updated as unknown as InboxItem);
       onclose();
     } finally {

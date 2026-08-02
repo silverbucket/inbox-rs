@@ -30,6 +30,12 @@
   const PAGE = 60;
   let visibleCount = $state(PAGE);
   const visibleItems = $derived(items.slice(0, visibleCount));
+
+  // Same incremental-rendering safeguard for the archived section:
+  // expanding it must not mount every archived card (and queue every media
+  // fetch) in one update.
+  let archivedVisibleCount = $state(PAGE);
+  const visibleArchived = $derived(archived.slice(0, archivedVisibleCount));
 </script>
 
 {#if items.length === 0}
@@ -102,10 +108,24 @@
     {#if archivedExpanded}
       <div class="grid-wrap">
         <div class="grid archived-grid">
-          {#each archived as item (item.id)}
+          {#each visibleArchived as item (item.id)}
             <InboxCard {item} {onselect} />
           {/each}
         </div>
+        {#if archivedVisibleCount < archived.length}
+          {#key archivedVisibleCount}
+            <div
+              class="load-sentinel"
+              aria-hidden="true"
+              use:inview={() => {
+                archivedVisibleCount = Math.min(
+                  archivedVisibleCount + PAGE,
+                  archived.length,
+                );
+              }}
+            ></div>
+          {/key}
+        {/if}
       </div>
     {/if}
   </div>

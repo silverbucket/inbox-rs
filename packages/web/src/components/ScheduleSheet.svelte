@@ -167,6 +167,13 @@
       } finally {
         saving = false;
       }
+    } else if (updated.eventUrl) {
+      // Posted, but its calendar account is gone (removed in settings) —
+      // the doc contract says a skipped sync must say why.
+      console.error('Calendar sync skipped: no account for', updated.eventUrl);
+      showToast(
+        'Time saved — calendar copy not updated: its calendar account was removed',
+      );
     }
     onclose();
   }
