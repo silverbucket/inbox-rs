@@ -3,10 +3,10 @@
   import { dndzone } from 'svelte-dnd-action';
   import { slide } from 'svelte/transition';
   import {
-    collectionItems, storeItem, deleteItem,
+    collectionItems, deleteItem,
     appConfig, updateConfig, reorderCollectionItems,
   } from '../lib/stores';
-  import { cleanForStorage } from '../lib/clean-for-storage';
+  import { setItemCompleted } from '../lib/schedule-sync';
   import {
     filterCompletedTodos,
     filterOpenTodos,
@@ -71,15 +71,10 @@
 
   async function toggleCompleted(e: Event, item: InboxItem) {
     e.stopPropagation();
-    const nowCompleted = !item.completed;
-    const updated = {
-      ...item,
-      isTodo: true,
-      completed: nowCompleted,
-      completedAt: nowCompleted ? new Date().toISOString() : undefined,
-    };
     try {
-      await storeItem(cleanForStorage(updated));
+      // Shared helper: local flip + best-effort calendar sync for scheduled
+      // tasks (STATUS:COMPLETED on the posted VTODO).
+      await setItemCompleted(item, !item.completed);
     } catch (error) {
       console.error('Failed to toggle todo completion', error);
       // Checkbox reverts on next render because the item prop is unchanged

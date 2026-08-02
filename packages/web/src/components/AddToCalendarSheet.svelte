@@ -1,0 +1,397 @@
+<script lang="ts">
+  import type { InboxItem } from '@inbox-rs/rs-module';
+  import { trapFocus } from '../lib/actions';
+  import { CaldavError } from '../lib/caldav';
+  import {
+    calendarAccounts,
+    type CalendarChoice,
+    choiceForEventUrl,
+    findCalendarChoice,
+    pickPreferredCalendar,
+  } from '../lib/calendar-accounts';
+  import { downloadIcs } from '../lib/ics';
+  import { formatScheduled } from '../lib/schedule';
+  import {
+    addItemToCalendar,
+    recordCalendarUse,
+    removeItemFromCalendar,
+  } from '../lib/schedule-sync';
+  import { showToast } from '../lib/toast';
+  import CalendarPicker from './CalendarPicker.svelte';
+
+  /**
+   * Publishing a timed card to a calendar — the counterpart to the
+   * calendar-free time sheet. Only reachable once a time is set. Posting an
+   * Inbox reference card archives it (the calendar owns it now); removing
+   * the entry brings it back. Todos are never archived — they complete.
+   */
+  let {
+    item,
+    onclose,
+  }: {
+    item: InboxItem;
+    onclose: () => void;
+  } = $props();
+
+  const isTodoish = item.isTodo || item.type === 'todo';
+  const kind = item.scheduleKind ?? (isTodoish ? 'task' : 'event');
+  const timeLabel = formatScheduled(item);
+  const isPosted = !!item.eventUrl;
+  const willArchive = !isPosted && !isTodoish && !item.collectionId;
+
+  const eventHome = choiceForEventUrl(item.eventUrl);
+  let selectedCalendarId = $state<string | undefined>(
+    eventHome?.calendar.id ?? pickPreferredCalendar(kind)?.calendar.id,
+  );
+  let showPicker = $state(false);
+  let saving = $state(false);
+
+  const hasAccounts = $derived($calendarAccounts.length > 0);
+  const selectedChoice = $derived<CalendarChoice | undefined>(
+    findCalendarChoice(selectedCalendarId) ??
+      (eventHome?.calendar.id === selectedCalendarId ? eventHome : undefined),
+  );
+  const calendarSupportsKind = $derived(
+    !!selectedChoice?.calendar.components.includes(kind),
+  );
+  const canPost = $derived(
+    !saving && !!selectedChoice && calendarSupportsKind,
+  );
+  /** Selected a different calendar than the entry's current home. */
+  const isMove = $derived(
+    isPosted && !!selectedChoice && selectedChoice.calendar.id !== eventHome?.calendar.id,
+  );
+
+  function handlePick(choice: CalendarChoice) {
+    selectedCalendarId = choice.calendar.id;
+    showPicker = false;
+  }
+
+  function friendly(err: unknown): string {
+    return err instanceof CaldavError
+      ? err.message
+      : 'the calendar relay is unreachable';
+  }
+
+  async function post() {
+    if (!canPost || !selectedChoice) return;
+    saving = true;
+    try {
+      const posted = await addItemToCalendar(item, selectedChoice.calendar.id);
+      recordCalendarUse(kind, selectedChoice.calendar.id);
+      if (posted.archived) {
+        showToast('Added to calendar — card archived from the Inbox');
+      }
+      onclose();
+    } catch (err) {
+      console.error('Calendar post failed', err);
+      showToast(`Couldn't add to calendar — ${friendly(err)}`);
+    } finally {
+      saving = false;
+    }
+  }
+
+  async function remove() {
+    saving = true;
+    try {
+      await removeItemFromCalendar(item);
+      onclose();
+    } catch (err) {
+      console.error('Calendar delete failed', err);
+      showToast(`Still on your calendar — ${friendly(err)}`);
+    } finally {
+      saving = false;
+    }
+  }
+
+  function handleDownload() {
+    downloadIcs(item);
+    onclose();
+  }
+
+  function handleEscape(e: KeyboardEvent) {
+    if (e.key !== 'Escape' || saving) return;
+    if (showPicker) return; // picker closes itself first
+    onclose();
+  }
+</script>
+
+<svelte:window onkeydown={handleEscape} />
+
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="overlay" role="dialog" aria-modal="true" aria-label="Add to calendar" onclick={() => { if (!saving) onclose(); }}>
+  <div class="sheet" use:trapFocus onclick={(e) => e.stopPropagation()}>
+    <h3 class="title">{isPosted ? 'On calendar' : 'Add to calendar'}</h3>
+    <p class="ctx">{item.title || 'Untitled'}</p>
+
+    <div class="time-row">
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <polyline points="12 6 12 12 16 14"></polyline>
+      </svg>
+      {timeLabel}
+      <span class="kind-tag">{kind}</span>
+    </div>
+
+    {#if hasAccounts}
+      <button type="button" class="zone" onclick={() => (showPicker = true)}>
+        {#if selectedChoice}
+          <span
+            class="dot"
+            style="background: {selectedChoice.calendar.color || 'var(--accent)'}"
+          ></span>
+          <span class="zone-name">{selectedChoice.calendar.name}</span>
+          <span class="zone-sub">· {selectedChoice.account.label}</span>
+        {:else}
+          <span class="zone-name muted">Choose calendar…</span>
+        {/if}
+        <svg class="chev" aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+      {#if selectedChoice && !calendarSupportsKind}
+        <p class="note">
+          {selectedChoice.calendar.name} doesn't support {kind}s — pick
+          another calendar.
+        </p>
+      {/if}
+      {#if willArchive}
+        <p class="note">
+          The card moves to the Inbox's archived section once it's on your
+          calendar. Removing the entry brings it back.
+        </p>
+      {/if}
+
+      {#if !isPosted || isMove}
+        <button type="button" class="btn-primary" disabled={!canPost} onclick={post}>
+          {isMove
+            ? 'Move to this calendar'
+            : kind === 'task'
+              ? 'Add task'
+              : 'Add to calendar'}
+        </button>
+      {/if}
+      <button type="button" class="btn-ghost" disabled={saving} onclick={handleDownload}>
+        Download .ics
+      </button>
+      {#if isPosted}
+        <button type="button" class="btn-remove" disabled={saving} onclick={remove}>
+          Remove from calendar
+        </button>
+      {/if}
+    {:else}
+      <button type="button" class="btn-primary" disabled={saving} onclick={handleDownload}>
+        Download .ics
+      </button>
+      <p class="hint">
+        Post events straight to your calendar by connecting an account:
+        user&nbsp;menu → Calendar accounts.
+      </p>
+    {/if}
+  </div>
+</div>
+
+{#if showPicker}
+  <CalendarPicker
+    {kind}
+    selectedId={selectedCalendarId}
+    onpick={handlePick}
+    onclose={() => (showPicker = false)}
+  />
+{/if}
+
+<style>
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--overlay);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  .sheet {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    max-width: 380px;
+    width: 100%;
+    box-shadow: 0 12px 40px var(--shadow);
+  }
+
+  .title {
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .ctx {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-bottom: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The time being published — read-only here; edited via the time sheet. */
+  .time-row {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.85rem;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.65rem;
+  }
+
+  .time-row svg {
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .kind-tag {
+    margin-left: auto;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.02rem 0.5rem;
+    font-size: 0.64rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .zone {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    margin-top: 0.7rem;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 0.5rem 0.65rem;
+    font-family: inherit;
+    font-size: 0.82rem;
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color 0.15s;
+    text-align: left;
+  }
+
+  .zone:hover {
+    border-color: var(--accent);
+  }
+
+  .zone .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .zone-name {
+    font-weight: 550;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .zone-name.muted {
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
+  .zone-sub {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .zone .chev {
+    margin-left: auto;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .note {
+    margin-top: 0.5rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+  }
+
+  .btn-primary {
+    display: block;
+    width: 100%;
+    margin-top: 0.9rem;
+    background: var(--accent);
+    border: none;
+    color: white;
+    padding: 0.55rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.88rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .btn-ghost,
+  .btn-remove {
+    display: block;
+    width: 100%;
+    margin-top: 0.35rem;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    padding: 0.4rem;
+    font-size: 0.78rem;
+    font-family: inherit;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    color: var(--text);
+    background: var(--surface-hover);
+  }
+
+  .btn-remove {
+    color: var(--danger);
+  }
+
+  .btn-remove:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
+  }
+
+  .btn-ghost:disabled,
+  .btn-remove:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .hint {
+    margin-top: 0.6rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+</style>

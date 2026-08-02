@@ -7,6 +7,7 @@
   import DocumentCard from './DocumentCard.svelte';
   import EmailCard from './EmailCard.svelte';
   import { draggingItemId, DRAG_MIME } from '../lib/drag';
+  import { formatScheduled, isOverdue, isPast } from '../lib/schedule';
 
   let { item, onselect }: { item: InboxItem; onselect: (item: InboxItem) => void } = $props();
 
@@ -118,6 +119,10 @@
       year: 'numeric',
     });
   }
+
+  const scheduledLabel = $derived(item.startsAt ? formatScheduled(item) : '');
+  const scheduleOverdue = $derived(isOverdue(item));
+  const schedulePast = $derived(isPast(item));
 </script>
 
 <article class="card" role="button" tabindex="0"
@@ -196,6 +201,22 @@
 
   <footer class="card-footer">
     <time class="date">{formatDate(item.createdAt)}</time>
+    {#if scheduledLabel}
+      <span
+        class="sched-chip"
+        class:overdue={scheduleOverdue}
+        class:past={schedulePast && !scheduleOverdue}
+        title="Scheduled · {scheduledLabel}"
+      >
+        <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        {scheduledLabel}
+      </span>
+    {/if}
   </footer>
 </article>
 
@@ -284,6 +305,36 @@
 
   .date {
     color: var(--text-muted);
+  }
+
+  /* Scheduled chip: the card wears its calendar time at a glance. */
+  .sched-chip {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.7rem;
+    color: var(--accent);
+    background: var(--accent-subtler);
+    border: 1px solid var(--accent-subtle-strong);
+    border-radius: 999px;
+    padding: 0.1rem 0.5rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+
+  .sched-chip.overdue {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 8%, transparent);
+    border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+  }
+
+  .sched-chip.past {
+    color: var(--text-muted);
+    background: var(--surface-tint);
+    border-color: var(--border);
   }
 
   .card-notes {

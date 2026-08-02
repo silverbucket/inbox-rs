@@ -680,10 +680,29 @@ function sortWithConfiguredOrder<T extends { id: string }>(
 /** Inbox reference items: non-todos with no collectionId. */
 export const sortedItems = derived(items, ($items) => {
   return Object.values($items)
-    .filter((i) => !i.isTodo && i.type !== 'todo' && !i.collectionId)
+    .filter(
+      (i) => !i.isTodo && i.type !== 'todo' && !i.collectionId && !i.archived,
+    )
     .sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+});
+
+/**
+ * Inbox reference cards archived by adding them to a calendar — triage
+ * complete, the calendar owns them. Shown in the Inbox's collapsed archived
+ * section (newest archive first); removing the calendar entry un-archives.
+ */
+export const archivedItems = derived(items, ($items) => {
+  return Object.values($items)
+    .filter(
+      (i) => !i.isTodo && i.type !== 'todo' && !i.collectionId && !!i.archived,
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.archivedAt ?? b.createdAt).getTime() -
+        new Date(a.archivedAt ?? a.createdAt).getTime(),
     );
 });
 

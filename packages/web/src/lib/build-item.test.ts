@@ -145,6 +145,55 @@ describe('buildBookmarkItem', () => {
   });
 });
 
+describe('edit preservation of type-agnostic fields', () => {
+  it('editing keeps the schedule and posted-entry pointer', () => {
+    const editItem: NoteItem = {
+      id: 'item-1',
+      type: 'note',
+      title: 'Old',
+      body: 'old',
+      createdAt: '2026-04-01T00:00:00Z',
+      collectionId: 'col-1',
+      startsAt: '2026-05-01T09:00:00.000Z',
+      endsAt: '2026-05-01T10:00:00.000Z',
+      scheduleKind: 'event',
+      eventUrl: 'https://cal.example.org/nick/personal/item-1%40inbox-rs.ics',
+      eventEtag: '"e1"',
+    };
+    const result = buildNoteItem(ctx({ editItem }), {
+      title: 'New title',
+      body: 'new body',
+      description: '',
+    });
+    expect(result.item).toMatchObject({
+      title: 'New title',
+      collectionId: 'col-1',
+      startsAt: '2026-05-01T09:00:00.000Z',
+      endsAt: '2026-05-01T10:00:00.000Z',
+      scheduleKind: 'event',
+      eventUrl: 'https://cal.example.org/nick/personal/item-1%40inbox-rs.ics',
+      eventEtag: '"e1"',
+    });
+  });
+
+  it('unscheduled edits stay unscheduled', () => {
+    const editItem: NoteItem = {
+      id: 'item-1',
+      type: 'note',
+      title: 'Old',
+      body: 'old',
+      createdAt: '2026-04-01T00:00:00Z',
+    };
+    const result = buildNoteItem(ctx({ editItem }), {
+      title: 'New',
+      body: 'new',
+      description: '',
+    });
+    expect(result.item.startsAt).toBeUndefined();
+    expect(result.item.eventUrl).toBeUndefined();
+  });
+});
+
 describe('buildNoteItem', () => {
   it('falls back to first 50 chars of body when title is empty', () => {
     const longBody = 'a'.repeat(80);

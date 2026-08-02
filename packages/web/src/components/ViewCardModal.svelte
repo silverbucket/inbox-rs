@@ -12,6 +12,10 @@
   import ShareButton from './ShareButton.svelte';
   import CollectionPicker from './CollectionPicker.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
+  import ScheduleSheet from './ScheduleSheet.svelte';
+  import AddToCalendarSheet from './AddToCalendarSheet.svelte';
+  import { formatScheduled, isOverdue } from '../lib/schedule';
+  import { removePostedEntry } from '../lib/schedule-sync';
   import BookmarkView from './view-card/BookmarkView.svelte';
   import NoteView from './view-card/NoteView.svelte';
   import ImageView from './view-card/ImageView.svelte';
@@ -40,6 +44,9 @@
   let showPicker = $state(false);
   let pickerMode = $state<'move' | 'todo'>('move');
 
+  let showSchedule = $state(false);
+  let showCalendarSheet = $state(false);
+
   let convertingTodo = $state(false);
   let convertingRef = $state(false);
 
@@ -49,6 +56,31 @@
     showDelete = false;
     deleting = false;
     onclose();
+  }
+
+  /**
+   * A todo↔reference conversion changes the card's kind, so a posted
+   * calendar entry no longer matches its projection (a VEVENT for what is
+   * now a task, or vice versa) — and archive state belongs to the calendar
+   * ownership that conversion breaks. Detach the entry (best-effort server
+   * delete — a failure only orphans a calendar entry, never blocks the
+   * conversion), strip the pointer + archive flags, and keep the time,
+   * flipping its kind to match.
+   */
+  function detachCalendarOnConversion(
+    updated: Record<string, unknown>,
+    newKind: 'event' | 'task',
+  ) {
+    if (item.eventUrl) {
+      void removePostedEntry(item).catch((error) => {
+        console.warn('Calendar entry not removed on conversion', error);
+      });
+    }
+    delete updated.eventUrl;
+    delete updated.eventEtag;
+    delete updated.archived;
+    delete updated.archivedAt;
+    if (updated.startsAt) updated.scheduleKind = newKind;
   }
 
   /** Promote the current item to an unfiled todo. */
@@ -66,6 +98,7 @@
         completed: false,
       };
       delete updated.collectionId;
+      detachCalendarOnConversion(updated, 'task');
       await storeItem(updated as unknown as InboxItem);
       showPicker = false;
       onclose();
@@ -96,13 +129,14 @@
       await moveItemToCollection(item.id, collectionId);
       // Now flip the todo flags. storeItem only touches the item doc — the
       // itemIds arrays are already reconciled by the move above.
-      const updated = {
+      const updated: Record<string, unknown> = {
         ...rest,
         isTodo: true,
         completed: false,
         collectionId,
       };
-      await storeItem(updated as InboxItem);
+      detachCalendarOnConversion(updated, 'task');
+      await storeItem(updated as unknown as InboxItem);
       recordCollectionUse(collectionId);
       showPicker = false;
       onclose();
@@ -129,6 +163,7 @@
         updated.type = 'note';
         if (!updated.body) updated.body = '';
       }
+      detachCalendarOnConversion(updated, 'event');
       await storeItem(updated as unknown as InboxItem);
       onclose();
     } finally {
@@ -217,6 +252,9 @@
     };
   });
 
+  const scheduledLabel = $derived(item.startsAt ? formatScheduled(item) : '');
+  const scheduleOverdue = $derived(isOverdue(item));
+
   const wordCount = $derived.by(() => {
     if (!('body' in item)) return 0;
     const body = (item as unknown as Record<string, unknown>).body;
@@ -242,8 +280,9 @@
    *   - DeleteConfirm, Lightbox: they register their own window handlers and
    *     will close themselves. We only need to keep *this* modal open so the
    *     user isn't unexpectedly dumped back to the card list.
-   *   - CollectionPicker: it closes itself via its own window escape
-   *     listener — we early-return so both layers don't close at once.
+   *   - CollectionPicker, ScheduleSheet: they close themselves via their own
+   *     window escape listeners — we early-return so both layers don't close
+   *     at once.
    *
    * Since `<svelte:window>` listeners fire in registration order, this outer
    * listener is registered first (parent mounts before children) and runs
@@ -252,7 +291,7 @@
    */
   function handleWindowEscape(e: KeyboardEvent) {
     if (e.key !== 'Escape') return;
-    if (showDelete || showPicker) return;
+    if (showDelete || showPicker || showSchedule || showCalendarSheet) return;
     onclose();
   }
 </script>
@@ -428,6 +467,27 @@
           {todoStatus}
         </span>
       {/if}
+      {#if scheduledLabel}
+        <span class="meta-item" class:overdue={scheduleOverdue}>
+          <svg
+            aria-hidden="true"
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+          {scheduledLabel}
+        </span>
+      {/if}
     </div>
 
     <button type="button" class="btn-file" onclick={openMovePicker}>
@@ -499,6 +559,54 @@
           Make a reference
         </button>
       {/if}
+      <!-- Setting a time is card metadata; adding to a calendar is a
+           separate publish action that only appears once a time exists. -->
+      <button
+        type="button"
+        class="action-row"
+        onclick={() => (showSchedule = true)}
+      >
+        <svg
+          aria-hidden="true"
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+        {scheduledLabel ? `${scheduledLabel} — change…` : 'Set time…'}
+      </button>
+      {#if item.startsAt}
+        <button
+          type="button"
+          class="action-row"
+          onclick={() => (showCalendarSheet = true)}
+        >
+          <svg
+            aria-hidden="true"
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+          {item.eventUrl ? 'On calendar — manage…' : 'Add to calendar…'}
+        </button>
+      {/if}
       <button type="button" class="action-row" onclick={() => onedit(item)}>
         <svg
           aria-hidden="true"
@@ -533,6 +641,14 @@
         onpick={handlePick}
         onclose={() => (showPicker = false)}
       />
+    {/if}
+
+    {#if showSchedule}
+      <ScheduleSheet {item} onclose={() => (showSchedule = false)} />
+    {/if}
+
+    {#if showCalendarSheet}
+      <AddToCalendarSheet {item} onclose={() => (showCalendarSheet = false)} />
     {/if}
   </div>
 </div>
@@ -932,6 +1048,10 @@
 
   .meta-group {
     font-weight: 600;
+  }
+
+  .meta-item.overdue {
+    color: var(--danger);
   }
 
   /* ── Primary filing action ────────────── */

@@ -10,6 +10,19 @@ const collectionFields = {
   collectionId: { type: 'string' },
 };
 
+// Shared scheduling fields — any item can carry a calendar time.
+// See InboxItemBase in types.ts for semantics.
+const scheduleFields = {
+  startsAt: { type: 'string' },
+  endsAt: { type: 'string' },
+  allDay: { type: 'boolean' },
+  scheduleKind: { type: 'string', enum: ['event', 'task'] },
+  eventUrl: { type: 'string' },
+  eventEtag: { type: 'string' },
+  archived: { type: 'boolean' },
+  archivedAt: { type: 'string' },
+};
+
 // rs-migrate version stamp — must be in every item schema so remoteStorage persists it
 const migrateFields = {
   _migrateVersion: { type: 'number' },
@@ -31,6 +44,7 @@ export const bookmarkSchema = {
     mimeType: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...scheduleFields,
     ...collectionFields,
     ...migrateFields,
   },
@@ -47,6 +61,7 @@ export const noteSchema = {
     body: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...scheduleFields,
     ...collectionFields,
     ...migrateFields,
   },
@@ -67,6 +82,7 @@ export const imageMetaSchema = {
     thumbMimeType: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...scheduleFields,
     ...collectionFields,
     ...migrateFields,
   },
@@ -87,6 +103,7 @@ export const audioMetaSchema = {
     transcribed: { type: 'boolean' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...scheduleFields,
     ...collectionFields,
     ...migrateFields,
   },
@@ -106,6 +123,7 @@ export const videoMetaSchema = {
     body: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...scheduleFields,
     ...collectionFields,
     ...migrateFields,
   },
@@ -125,6 +143,7 @@ export const documentMetaSchema = {
     fileName: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...scheduleFields,
     ...collectionFields,
     ...migrateFields,
   },
@@ -144,6 +163,7 @@ export const emailSchema = {
     messageUrl: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...scheduleFields,
     ...collectionFields,
     ...migrateFields,
   },
@@ -185,6 +205,7 @@ export const todoSchema = {
     completed: { type: 'boolean' },
     completedAt: { type: 'string' },
     createdAt: { type: 'string' },
+    ...scheduleFields,
     ...collectionFields,
     ...migrateFields,
   },

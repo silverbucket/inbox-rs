@@ -1,9 +1,9 @@
 <script lang="ts">
   import type { InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
-  import { storeItem } from '../lib/stores';
-  import { cleanForStorage } from '../lib/clean-for-storage';
+  import { setItemCompleted } from '../lib/schedule-sync';
   import { typeIconPath } from '../lib/item-utils';
   import { draggingItemId, DRAG_MIME } from '../lib/drag';
+  import { formatScheduled, isOverdue } from '../lib/schedule';
 
   let { todo, collection, group, onselect, onaddincollection }: {
     todo: InboxItem;
@@ -55,17 +55,15 @@
   const createdLabel = $derived(formatRelative(todo.createdAt));
   const createdTitle = $derived(new Date(todo.createdAt).toLocaleString());
 
+  const scheduledLabel = $derived(todo.startsAt ? formatScheduled(todo) : '');
+  const scheduleOverdue = $derived(isOverdue(todo));
+
   async function toggleCompleted(e: Event) {
     e.stopPropagation();
-    const nowCompleted = !todo.completed;
-    const updated = {
-      ...todo,
-      isTodo: true,
-      completed: nowCompleted,
-      completedAt: nowCompleted ? new Date().toISOString() : undefined,
-    };
     try {
-      await storeItem(cleanForStorage(updated) as InboxItem);
+      // Shared helper: local flip + best-effort calendar sync for scheduled
+      // tasks (STATUS:COMPLETED on the posted VTODO).
+      await setItemCompleted(todo, !todo.completed);
     } catch (err) {
       console.error('Failed to update todo:', err);
       // Checkbox reverts on next render because the `todo` prop is unchanged
@@ -149,6 +147,17 @@
   <!-- The meta block collapses to line 2 on narrow screens via CSS;
        on desktop it sits inline on the right side of the row. -->
   <div class="meta">
+    {#if scheduledLabel}
+      <span class="sched-chip" class:overdue={scheduleOverdue} title="Scheduled · {scheduledLabel}">
+        <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        {scheduledLabel}
+      </span>
+    {/if}
     <button
       class="collection-pill"
       type="button"
@@ -327,6 +336,33 @@
     opacity: 0.75;
     flex-shrink: 0;
     white-space: nowrap;
+  }
+
+  /* Scheduled/due chip — red while a pending task is past due. */
+  .sched-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    font-size: 0.7rem;
+    color: var(--accent);
+    background: var(--accent-subtler);
+    border: 1px solid var(--accent-subtle-strong);
+    border-radius: 999px;
+    padding: 0.08rem 0.45rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .sched-chip.overdue {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 8%, transparent);
+    border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+  }
+
+  .todo-row.completed .sched-chip {
+    color: var(--text-muted);
+    background: var(--surface-tint);
+    border-color: var(--border);
   }
 
   /* Quick-add button: revealed on hover or keyboard focus anywhere in the row

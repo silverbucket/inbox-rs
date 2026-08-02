@@ -25,7 +25,8 @@ export function linkPreviewsEnabled(): boolean {
 }
 
 /** The user's own Sockethub endpoint when set, else the app default. */
-function resolveSockethubEndpoint(): string {
+/** Shared by every sockethub-backed feature (link previews, CalDAV). */
+export function resolveSockethubEndpoint(): string {
   return get(userSettings).sockethubUrl?.trim() || DEFAULT_SOCKETHUB_ENDPOINT;
 }
 

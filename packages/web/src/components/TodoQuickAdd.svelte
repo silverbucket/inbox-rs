@@ -16,7 +16,10 @@
   import { modLabel } from '../lib/platform';
   import { showToast } from '../lib/toast';
   import type { FilingSubject } from '../lib/collection-suggest';
+  import { formatScheduled, type PendingSchedule } from '../lib/schedule';
+  import { applyPendingSchedule } from '../lib/schedule-sync';
   import CollectionPicker from './CollectionPicker.svelte';
+  import ScheduleSheet from './ScheduleSheet.svelte';
   import {
     activeGroupIds,
     collections,
@@ -122,6 +125,25 @@
   // ── Destination picker (shared CollectionPicker, chip trigger) ─────────
   let pickerOpen = $state(false);
 
+  // ── Optional capture-time schedule ("When?" chip → ScheduleSheet) ──────
+  let pendingSchedule = $state<PendingSchedule | null>(null);
+  let scheduleOpen = $state(false);
+
+  const whenLabel = $derived(
+    pendingSchedule
+      ? formatScheduled({
+          startsAt: pendingSchedule.start.toISOString(),
+          allDay: pendingSchedule.allDay,
+        })
+      : 'When?',
+  );
+
+  function handleSchedulePick(schedule: PendingSchedule | null) {
+    pendingSchedule = schedule;
+    scheduleOpen = false;
+    quickInputEl?.focus();
+  }
+
   /** Chip display parts for the current quick-add destination. */
   const chip = $derived.by(() => {
     const col = quickAddCollectionId
@@ -161,10 +183,12 @@
     if (!canCaptureTodo(quickTitle) || quickSaving) return;
     quickSaving = true;
     quickError = '';
-    // storeItem creates the todo; the move is a second step. Track the boundary
-    // so a move failure doesn't leave the title around to be re-submitted — that
-    // would store a duplicate unfiled todo on retry.
+    // storeItem creates the todo; filing and scheduling are follow-up steps.
+    // Track each boundary so the error names the stage that actually failed —
+    // and so a failure never leaves the title around to be re-submitted,
+    // which would store a duplicate todo on retry.
     let created = false;
+    let filed = false;
     try {
       const todo = makeUnfiledTodo(quickTitle);
       await storeItem(todo);
@@ -175,14 +199,31 @@
         await moveItemToCollection(todo.id, targetCollectionId);
         notifyIfOutOfView(targetCollectionId);
       }
+      filed = true;
+      if (pendingSchedule) {
+        // Apply after the move so the stored item keeps its collectionId.
+        // Posts to the picked calendar best-effort (local-first, toasts on
+        // failure) — see applyPendingSchedule.
+        await applyPendingSchedule(
+          targetCollectionId
+            ? { ...todo, collectionId: targetCollectionId }
+            : todo,
+          pendingSchedule,
+        );
+      }
     } catch (error) {
       console.error('Failed to add todo', error);
-      quickError = created
-        ? 'Todo added, but filing it into the collection failed.'
-        : error instanceof Error
-          ? error.message
-          : 'Failed to add todo';
+      quickError = filed
+        ? 'Todo added, but saving its schedule failed.'
+        : created
+          ? 'Todo added, but filing it into the collection failed.'
+          : error instanceof Error
+            ? error.message
+            : 'Failed to add todo';
     } finally {
+      // The pending time belongs to the todo just created (even when a
+      // follow-up step failed) — never let it leak onto the next capture.
+      if (created) pendingSchedule = null;
       quickSaving = false;
       // Return focus so the user can keep capturing; tick() lets a hero→compact
       // remount settle before refocusing the (new) element.
@@ -289,6 +330,36 @@
       </svg>
     </button>
   {/if}
+  <button
+    type="button"
+    class="quick-add__when"
+    class:has-time={!!pendingSchedule}
+    aria-label={pendingSchedule
+      ? `Scheduled ${whenLabel} — change time`
+      : 'Set a time'}
+    aria-haspopup="dialog"
+    aria-expanded={scheduleOpen}
+    disabled={quickSaving}
+    onclick={() => (scheduleOpen = true)}
+  >
+    <svg
+      aria-hidden="true"
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+      <line x1="16" y1="2" x2="16" y2="6"></line>
+      <line x1="8" y1="2" x2="8" y2="6"></line>
+      <line x1="3" y1="10" x2="21" y2="10"></line>
+    </svg>
+    <span class="chip-name">{whenLabel}</span>
+  </button>
   <button type="submit" disabled={!canCaptureTodo(quickTitle) || quickSaving}>
     {quickSaving ? 'Adding...' : 'Add'}
   </button>
@@ -312,19 +383,28 @@
   />
 {/if}
 
+{#if scheduleOpen}
+  <ScheduleSheet
+    subject={{ title: quickTitle, isTodo: true }}
+    initial={pendingSchedule}
+    onpick={handleSchedulePick}
+    onclose={() => (scheduleOpen = false)}
+  />
+{/if}
+
 <style>
   .quick-add {
     /* Full width so the input matches the rows below it; no jump between the
-       empty and populated states. */
+       empty and populated states. Column auto-flow lets the chip set vary
+       (destination chip hidden for fixed collections, When chip always)
+       without enumerating template columns per variant. */
     width: 100%;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-auto-flow: column;
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-columns: auto;
     gap: 0.5rem;
     align-items: center;
-  }
-
-  .quick-add--no-select {
-    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .quick-add--compact {
@@ -449,6 +529,47 @@
     min-height: 2.25rem;
     /* Keep >=1rem (inherited) so iOS Safari doesn't auto-zoom on focus — the
        guideline forbids sub-1rem font-size on form controls. */
+  }
+
+  /* "When?" chip — same chrome as the destination chip; accent-tinted once
+     a time is set so the pending schedule reads at a glance. */
+  .quick-add button.quick-add__when {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2.75rem;
+    max-width: 11rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text-muted);
+    padding: 0 0.7rem;
+    font: inherit;
+    font-weight: 400;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    transition: border-color 150ms, color 150ms, box-shadow 150ms;
+  }
+
+  .quick-add button.quick-add__when:hover:not(:disabled) {
+    border-color: var(--accent);
+    transform: none;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+
+  .quick-add button.quick-add__when:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .quick-add button.quick-add__when.has-time {
+    border-color: var(--accent-subtle-strong);
+    background: var(--accent-subtler);
+    color: var(--accent);
+  }
+
+  .quick-add--compact button.quick-add__when {
+    min-height: 2.25rem;
   }
 
   .quick-error {
