@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
+  import type { Component } from 'svelte';
   import { trapFocus } from '../lib/actions';
   import { CaldavError } from '../lib/caldav';
   import {
@@ -10,6 +11,7 @@
     pickPreferredCalendar,
   } from '../lib/calendar-accounts';
   import { downloadIcs } from '../lib/ics';
+  import { loadLazy } from '../lib/lazy-load';
   import { formatScheduled } from '../lib/schedule';
   import {
     addItemToCalendar,
@@ -45,6 +47,28 @@
   );
   let showPicker = $state(false);
   let saving = $state(false);
+
+  // Connecting the first account happens right here rather than bouncing the
+  // user out to the user menu — lazy like UserMenu's copy so the CalDAV
+  // settings code stays out of this path until asked for.
+  type SettingsModal = Component<{ onclose: () => void }>;
+  let SettingsComponent = $state<SettingsModal | null>(null);
+  let showSettings = $state(false);
+
+  async function openSettings() {
+    SettingsComponent ??= await loadLazy<SettingsModal>(
+      () => import('./CalendarSettingsModal.svelte'),
+    );
+    if (SettingsComponent) showSettings = true;
+  }
+
+  // Closing the settings modal after connecting the first account lands back
+  // on the posting UI — preselect a calendar so the primary button is
+  // immediately actionable.
+  function closeSettings() {
+    showSettings = false;
+    selectedCalendarId ??= pickPreferredCalendar(kind)?.calendar.id;
+  }
 
   const hasAccounts = $derived($calendarAccounts.length > 0);
   const selectedChoice = $derived<CalendarChoice | undefined>(
@@ -111,7 +135,7 @@
 
   function handleEscape(e: KeyboardEvent) {
     if (e.key !== 'Escape' || saving) return;
-    if (showPicker) return; // picker closes itself first
+    if (showPicker || showSettings) return; // the overlay on top closes itself first
     onclose();
   }
 </script>
@@ -181,13 +205,16 @@
         </button>
       {/if}
     {:else}
-      <button type="button" class="btn-primary" disabled={saving} onclick={handleDownload}>
-        Download .ics
-      </button>
       <p class="hint">
-        Post events straight to your calendar by connecting an account:
-        user&nbsp;menu → Calendar accounts.
+        No calendar connected yet. Connect an account once and cards post
+        straight to it.
       </p>
+      <button type="button" class="btn-primary" onclick={openSettings}>
+        Connect calendar account
+      </button>
+      <button type="button" class="btn-ghost" onclick={handleDownload}>
+        Download .ics instead
+      </button>
     {/if}
   </div>
 </div>
@@ -199,6 +226,10 @@
     onpick={handlePick}
     onclose={() => (showPicker = false)}
   />
+{/if}
+
+{#if SettingsComponent && showSettings}
+  <SettingsComponent onclose={closeSettings} />
 {/if}
 
 <style>
