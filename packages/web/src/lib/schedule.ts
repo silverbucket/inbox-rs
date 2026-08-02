@@ -104,12 +104,11 @@ export interface ScheduleInput {
 
 /**
  * A schedule chosen before its item exists (capture-time "When?" chips).
- * Applied via applySchedule once the item is created; `calendarId` carries
- * the destination for the post-creation calendar post.
+ * Applied via applySchedule once the item is created. Deliberately
+ * calendar-free: setting a time is card metadata; adding to a calendar is a
+ * separate action taken later from the card.
  */
-export interface PendingSchedule extends ScheduleInput {
-  calendarId?: string;
-}
+export type PendingSchedule = ScheduleInput;
 
 /**
  * Return a copy of the item carrying the given schedule. Any previously
@@ -135,7 +134,10 @@ export function applySchedule<T extends InboxItem>(
   };
 }
 
-/** Return a copy of the item with all scheduling removed. */
+/**
+ * Return a copy of the item with all scheduling removed — including the
+ * posted-entry pointer and the archived state that posting may have set.
+ */
 export function clearSchedule<T extends InboxItem>(item: T): T {
   return {
     ...item,
@@ -143,8 +145,25 @@ export function clearSchedule<T extends InboxItem>(item: T): T {
     endsAt: undefined,
     allDay: undefined,
     scheduleKind: undefined,
+    ...clearPostedEntryFields(),
+  };
+}
+
+/**
+ * Return a copy of the item detached from its calendar entry, keeping the
+ * time. Un-archives: with the calendar no longer owning the card, it
+ * returns to the Inbox triage queue.
+ */
+export function clearPostedEntry<T extends InboxItem>(item: T): T {
+  return { ...item, ...clearPostedEntryFields() };
+}
+
+function clearPostedEntryFields() {
+  return {
     eventUrl: undefined,
     eventEtag: undefined,
+    archived: undefined,
+    archivedAt: undefined,
   };
 }
 

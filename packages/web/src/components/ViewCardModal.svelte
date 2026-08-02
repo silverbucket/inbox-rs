@@ -13,6 +13,7 @@
   import CollectionPicker from './CollectionPicker.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
   import ScheduleSheet from './ScheduleSheet.svelte';
+  import AddToCalendarSheet from './AddToCalendarSheet.svelte';
   import { formatScheduled, isOverdue } from '../lib/schedule';
   import BookmarkView from './view-card/BookmarkView.svelte';
   import NoteView from './view-card/NoteView.svelte';
@@ -43,6 +44,7 @@
   let pickerMode = $state<'move' | 'todo'>('move');
 
   let showSchedule = $state(false);
+  let showCalendarSheet = $state(false);
 
   let convertingTodo = $state(false);
   let convertingRef = $state(false);
@@ -260,7 +262,7 @@
    */
   function handleWindowEscape(e: KeyboardEvent) {
     if (e.key !== 'Escape') return;
-    if (showDelete || showPicker || showSchedule) return;
+    if (showDelete || showPicker || showSchedule || showCalendarSheet) return;
     onclose();
   }
 </script>
@@ -528,6 +530,8 @@
           Make a reference
         </button>
       {/if}
+      <!-- Setting a time is card metadata; adding to a calendar is a
+           separate publish action that only appears once a time exists. -->
       <button
         type="button"
         class="action-row"
@@ -544,13 +548,36 @@
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <rect x="3" y="4" width="18" height="18" rx="2"></rect>
-          <line x1="16" y1="2" x2="16" y2="6"></line>
-          <line x1="8" y1="2" x2="8" y2="6"></line>
-          <line x1="3" y1="10" x2="21" y2="10"></line>
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
         </svg>
-        {scheduledLabel ? `${scheduledLabel} — change…` : 'Add to calendar…'}
+        {scheduledLabel ? `${scheduledLabel} — change…` : 'Set time…'}
       </button>
+      {#if item.startsAt}
+        <button
+          type="button"
+          class="action-row"
+          onclick={() => (showCalendarSheet = true)}
+        >
+          <svg
+            aria-hidden="true"
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+          {item.eventUrl ? 'On calendar — manage…' : 'Add to calendar…'}
+        </button>
+      {/if}
       <button type="button" class="action-row" onclick={() => onedit(item)}>
         <svg
           aria-hidden="true"
@@ -589,6 +616,10 @@
 
     {#if showSchedule}
       <ScheduleSheet {item} onclose={() => (showSchedule = false)} />
+    {/if}
+
+    {#if showCalendarSheet}
+      <AddToCalendarSheet {item} onclose={() => (showCalendarSheet = false)} />
     {/if}
   </div>
 </div>

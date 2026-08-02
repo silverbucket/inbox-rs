@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
   import { inview } from '../lib/actions';
-  import { connected, sortedItems } from '../lib/stores';
+  import { archivedItems, connected, sortedItems } from '../lib/stores';
   import InboxCard from './InboxCard.svelte';
 
   let {
@@ -12,6 +12,12 @@
     onconnect: () => void;
   } = $props();
   const items = $derived($sortedItems);
+
+  // Cards archived by adding them to a calendar. Collapsed by default,
+  // mirroring the Todos page's "N completed" pattern — same mental model:
+  // handled, out of the way, still reachable.
+  const archived = $derived($archivedItems);
+  let archivedExpanded = $state(false);
 
   // Incremental rendering: mount cards in pages of PAGE as the user scrolls,
   // instead of all at once. At a few thousand items, mounting every card up
@@ -68,6 +74,43 @@
   </div>
 {/if}
 
+{#if archived.length > 0}
+  <div class="archived-section">
+    <button
+      type="button"
+      class="archived-toggle"
+      aria-expanded={archivedExpanded}
+      onclick={() => (archivedExpanded = !archivedExpanded)}
+    >
+      <svg
+        aria-hidden="true"
+        class="archived-chevron"
+        class:open={archivedExpanded}
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <polyline points="9 18 15 12 9 6"></polyline>
+      </svg>
+      {archived.length} archived — on your calendar
+    </button>
+    {#if archivedExpanded}
+      <div class="grid-wrap">
+        <div class="grid archived-grid">
+          {#each archived as item (item.id)}
+            <InboxCard {item} {onselect} />
+          {/each}
+        </div>
+      </div>
+    {/if}
+  </div>
+{/if}
+
 <style>
   .status-bar {
     display: flex;
@@ -116,6 +159,49 @@
      before the user reaches the end of the rendered cards. */
   .load-sentinel {
     height: 1px;
+  }
+
+  /* ── Archived (on calendar) ──────────────────────────────────────────
+     Collapsed row mirroring the Todos page's "N completed" section. */
+  .archived-section {
+    margin-top: 1.5rem;
+  }
+
+  .archived-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0 auto 0.75rem;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    font-family: inherit;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .archived-toggle:hover {
+    color: var(--text);
+    background: var(--surface-tint);
+  }
+
+  .archived-chevron {
+    transition: transform 0.15s;
+  }
+
+  .archived-chevron.open {
+    transform: rotate(90deg);
+  }
+
+  .archived-grid > :global(.card) {
+    opacity: 0.7;
+  }
+
+  .archived-grid > :global(.card:hover) {
+    opacity: 1;
   }
 
   @container (max-width: 760px) {

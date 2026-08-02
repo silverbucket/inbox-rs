@@ -33,6 +33,14 @@ export interface InboxItemBase {
   /** CalDAV object href + etag once posted to a calendar; absent until then. */
   eventUrl?: string;
   eventEtag?: string;
+  /**
+   * Set when adding an Inbox reference card to a calendar: the calendar now
+   * owns it, so it leaves the Inbox triage queue (collapsed "archived"
+   * section). Never set on todos — they complete instead — and removing the
+   * calendar entry clears it.
+   */
+  archived?: boolean;
+  archivedAt?: string;
 }
 
 export interface BookmarkItem extends InboxItemBase {

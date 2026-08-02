@@ -1,9 +1,8 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
-  import { storeItem } from '../lib/stores';
+  import { trapFocus } from '../lib/actions';
+  import { CaldavError } from '../lib/caldav';
   import { cleanForStorage } from '../lib/clean-for-storage';
-  import { showToast } from '../lib/toast';
-  import { downloadIcs } from '../lib/ics';
   import {
     applySchedule,
     clearSchedule,
@@ -11,26 +10,22 @@
     nextRoundHour,
     type PendingSchedule,
     quickOptions,
+    type ScheduleKind,
     toDateInputValue,
     toTimeInputValue,
-    type ScheduleKind,
   } from '../lib/schedule';
-  import {
-    calendarAccounts,
-    choiceForEventUrl,
-    findCalendarChoice,
-    pickPreferredCalendar,
-    type CalendarChoice,
-  } from '../lib/calendar-accounts';
-  import { trapFocus } from '../lib/actions';
-  import {
-    postScheduledItem,
-    recordCalendarUse,
-    removePostedEntry,
-  } from '../lib/schedule-sync';
-  import { CaldavError } from '../lib/caldav';
-  import CalendarPicker from './CalendarPicker.svelte';
+  import { postScheduledItem, removePostedEntry } from '../lib/schedule-sync';
+  import { choiceForEventUrl } from '../lib/calendar-accounts';
+  import { showToast } from '../lib/toast';
+  import { storeItem } from '../lib/stores';
 
+  /**
+   * The time sheet — deliberately calendar-free. Setting a time is card
+   * metadata (due dates, "this happens Friday"); adding the card to a
+   * calendar is a separate action (AddToCalendarSheet). The one link back:
+   * when the card is already ON a calendar, saving a time change silently
+   * updates the posted entry so the projection never drifts.
+   */
   let {
     item,
     subject,
@@ -38,7 +33,7 @@
     onpick,
     onclose,
   }: {
-    /** Persist mode: schedule an existing item (saves + posts directly). */
+    /** Persist mode: edit the time on an existing item. */
     item?: InboxItem;
     /** Pick mode context for a not-yet-created item (capture-time chips). */
     subject?: { title?: string; isTodo?: boolean };
@@ -78,7 +73,7 @@
         )
       : (initial?.durationMin ?? 60);
   const initialAllDay = item ? !!item.allDay : !!initial?.allDay;
-  /** Whether something is already scheduled/picked — drives labels. */
+  /** Whether a time is already set — drives titles and the remove action. */
   const hasExisting = item ? !!item.startsAt : !!initial;
 
   let kind = $state<ScheduleKind>(
@@ -89,45 +84,6 @@
   let allDay = $state(initialAllDay);
   let durationMin = $state(initialDuration);
   let saving = $state(false);
-
-  // ── Destination calendar ───────────────────────────────────────────────
-  // Already-posted entries open on their current home (even if hidden);
-  // otherwise the previously picked pending calendar, then
-  // last-used-per-kind → account default → first suitable.
-  const eventHome = choiceForEventUrl(item?.eventUrl);
-  let selectedCalendarId = $state<string | undefined>(
-    eventHome?.calendar.id ??
-      initial?.calendarId ??
-      pickPreferredCalendar(
-        item?.scheduleKind ?? initial?.kind ?? (isTodoish ? 'task' : 'event'),
-      )?.calendar.id,
-  );
-  /** Once the user picks by hand, kind switches stop re-deriving the target. */
-  let calendarTouched = $state(false);
-  let showCalendarPicker = $state(false);
-
-  const hasAccounts = $derived($calendarAccounts.length > 0);
-  const selectedChoice = $derived<CalendarChoice | undefined>(
-    findCalendarChoice(selectedCalendarId) ??
-      (eventHome?.calendar.id === selectedCalendarId ? eventHome : undefined),
-  );
-  const calendarSupportsKind = $derived(
-    !!selectedChoice?.calendar.components.includes(kind),
-  );
-  const willPost = $derived(hasAccounts && !!selectedChoice && calendarSupportsKind);
-
-  function setKind(next: ScheduleKind) {
-    kind = next;
-    if (!calendarTouched && !item?.eventUrl) {
-      selectedCalendarId = pickPreferredCalendar(next)?.calendar.id;
-    }
-  }
-
-  function handleCalendarPick(choice: CalendarChoice) {
-    selectedCalendarId = choice.calendar.id;
-    calendarTouched = true;
-    showCalendarPicker = false;
-  }
 
   const DURATIONS = [
     { label: '30 m', min: 30 },
@@ -164,7 +120,10 @@
     });
   }
 
-  async function persist(updated: InboxItem, failMessage: string): Promise<boolean> {
+  async function persist(
+    updated: InboxItem,
+    failMessage: string,
+  ): Promise<boolean> {
     saving = true;
     try {
       await storeItem(cleanForStorage(updated));
@@ -179,41 +138,32 @@
   }
 
   /**
-   * Save locally, then post to the chosen calendar when one is selected.
-   * Local-first: a failed post never loses the schedule — the card keeps it
-   * and a toast explains; pressing the button again retries.
+   * Save the time. When the card is already on a calendar, the posted entry
+   * is updated in the same gesture (local-first: a failed sync keeps the
+   * local time and toasts why — the projection catches up on the next save).
    */
   async function save() {
-    // Pick mode: hand the choice back — the caller applies it once the
-    // item exists (and posts it, via applyPendingSchedule).
     if (pickMode) {
       if (!start) return;
-      onpick?.({
-        kind,
-        start,
-        durationMin,
-        allDay: effectiveAllDay,
-        calendarId: willPost ? selectedChoice?.calendar.id : undefined,
-      });
+      onpick?.({ kind, start, durationMin, allDay: effectiveAllDay });
       return;
     }
     const updated = scheduledItem();
     if (!updated) return;
-    if (!(await persist(updated, 'Failed to save schedule'))) return;
-    if (willPost && selectedChoice) {
+    if (!(await persist(updated, 'Failed to save time'))) return;
+    const home = choiceForEventUrl(updated.eventUrl);
+    if (updated.eventUrl && home) {
       saving = true;
       try {
-        const posted = await postScheduledItem(
-          updated,
-          selectedChoice.calendar.id,
-        );
+        const posted = await postScheduledItem(updated, home.calendar.id);
         await storeItem(cleanForStorage(posted));
-        recordCalendarUse(kind, selectedChoice.calendar.id);
       } catch (err) {
-        console.error('Calendar post failed', err);
+        console.error('Calendar sync failed', err);
         const reason =
-          err instanceof CaldavError ? err.message : 'the calendar relay is unreachable';
-        showToast(`Saved locally — ${reason}`);
+          err instanceof CaldavError
+            ? err.message
+            : 'the calendar relay is unreachable';
+        showToast(`Time saved — calendar copy not updated: ${reason}`);
       } finally {
         saving = false;
       }
@@ -221,20 +171,10 @@
     onclose();
   }
 
-  /** Save (so chips reflect the schedule) and hand the user the .ics. */
-  async function saveAndDownload() {
-    const updated = scheduledItem();
-    if (!updated) return;
-    if (await persist(updated, 'Failed to save schedule')) {
-      downloadIcs(updated);
-      onclose();
-    }
-  }
-
   /**
-   * Removing the schedule also removes the posted calendar entry. If the
-   * server refuses (and the entry may still exist), keep the schedule so
-   * the card and calendar don't silently diverge.
+   * Removing the time also removes the posted calendar entry (an entry
+   * can't exist without its time). If the server refuses, keep everything
+   * so card and calendar don't silently diverge.
    */
   async function remove() {
     if (pickMode) {
@@ -249,22 +189,22 @@
       } catch (err) {
         console.error('Calendar delete failed', err);
         const reason =
-          err instanceof CaldavError ? err.message : 'the calendar relay is unreachable';
+          err instanceof CaldavError
+            ? err.message
+            : 'the calendar relay is unreachable';
         showToast(`Still on your calendar — ${reason}`);
         saving = false;
         return;
       }
       saving = false;
     }
-    if (await persist(clearSchedule(item), 'Failed to remove schedule')) {
+    if (await persist(clearSchedule(item), 'Failed to remove time')) {
       onclose();
     }
   }
 
   function handleEscape(e: KeyboardEvent) {
     if (e.key !== 'Escape' || saving) return;
-    // The calendar picker layers on top and closes itself first.
-    if (showCalendarPicker) return;
     onclose();
   }
 </script>
@@ -276,7 +216,7 @@
 <div class="overlay" role="dialog" aria-modal="true" aria-label="Schedule" onclick={() => { if (!saving) onclose(); }}>
   <div class="sheet" use:trapFocus onclick={(e) => e.stopPropagation()}>
     <h3 class="title">
-      {pickMode ? 'When?' : hasExisting ? 'Scheduled' : 'Add to calendar'}
+      {pickMode ? 'When?' : hasExisting ? 'Edit time' : 'Set time'}
     </h3>
     <p class="ctx">{displayTitle || 'Untitled'}</p>
 
@@ -287,7 +227,7 @@
         class:on={kind === 'event'}
         role="radio"
         aria-checked={kind === 'event'}
-        onclick={() => setKind('event')}
+        onclick={() => (kind = 'event')}
       >
         Event
       </button>
@@ -297,7 +237,7 @@
         class:on={kind === 'task'}
         role="radio"
         aria-checked={kind === 'task'}
-        onclick={() => setKind('task')}
+        onclick={() => (kind = 'task')}
       >
         Task
       </button>
@@ -370,68 +310,20 @@
       </label>
     {/if}
 
-    {#if hasAccounts}
-      <button
-        type="button"
-        class="zone"
-        onclick={() => (showCalendarPicker = true)}
-      >
-        {#if selectedChoice}
-          <span
-            class="dot"
-            style="background: {selectedChoice.calendar.color || 'var(--accent)'}"
-          ></span>
-          <span class="zone-name">{selectedChoice.calendar.name}</span>
-          <span class="zone-sub">· {selectedChoice.account.label}</span>
-        {:else}
-          <span class="zone-name muted">Choose calendar…</span>
-        {/if}
-        <svg class="chev" aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="6 9 12 15 18 9"></polyline>
-        </svg>
-      </button>
-      {#if selectedChoice && !calendarSupportsKind}
-        <p class="zone-warn">
-          {selectedChoice.calendar.name} doesn't support {kind}s — the
-          schedule stays on the card only.
-        </p>
-      {/if}
-    {/if}
-
     <button type="button" class="btn-primary" disabled={!canSave} onclick={save}>
-      {#if pickMode}
-        Set time
-      {:else if willPost}
-        {item?.eventUrl ? 'Update event' : kind === 'task' ? 'Add task' : 'Add to calendar'}
-      {:else}
-        {hasExisting ? 'Update schedule' : 'Schedule'}
-      {/if}
+      {pickMode ? 'Set time' : hasExisting ? 'Update time' : 'Set time'}
     </button>
-    {#if !pickMode}
-      <button type="button" class="btn-ghost" disabled={!canSave} onclick={saveAndDownload}>
-        Save &amp; download .ics
-      </button>
-    {/if}
     {#if hasExisting}
       <button type="button" class="btn-remove" disabled={saving} onclick={remove}>
         {pickMode
           ? 'Clear time'
           : item?.eventUrl
-            ? 'Remove from calendar'
-            : 'Remove schedule'}
+            ? 'Remove time & calendar entry'
+            : 'Remove time'}
       </button>
     {/if}
   </div>
 </div>
-
-{#if showCalendarPicker}
-  <CalendarPicker
-    {kind}
-    selectedId={selectedCalendarId}
-    onpick={handleCalendarPick}
-    onclose={() => (showCalendarPicker = false)}
-  />
-{/if}
 
 <style>
   .overlay {
@@ -585,68 +477,6 @@
     accent-color: var(--accent);
   }
 
-  /* Destination calendar zone — the location-chip idiom from filing. */
-  .zone {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    width: 100%;
-    margin-top: 0.85rem;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    border-radius: 10px;
-    padding: 0.5rem 0.65rem;
-    font-family: inherit;
-    font-size: 0.82rem;
-    color: var(--text);
-    cursor: pointer;
-    transition: border-color 0.15s;
-    text-align: left;
-  }
-
-  .zone:hover {
-    border-color: var(--accent);
-  }
-
-  .zone .dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  .zone-name {
-    font-weight: 550;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .zone-name.muted {
-    color: var(--text-muted);
-    font-weight: 400;
-  }
-
-  .zone-sub {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    flex-shrink: 0;
-  }
-
-  .zone .chev {
-    margin-left: auto;
-    color: var(--text-muted);
-    flex-shrink: 0;
-  }
-
-  .zone-warn {
-    margin-top: 0.4rem;
-    font-size: 0.72rem;
-    color: var(--text-muted);
-    line-height: 1.4;
-  }
-
   .btn-primary {
     display: block;
     width: 100%;
@@ -672,14 +502,13 @@
     cursor: default;
   }
 
-  .btn-ghost,
   .btn-remove {
     display: block;
     width: 100%;
     margin-top: 0.35rem;
     background: none;
     border: none;
-    color: var(--text-muted);
+    color: var(--danger);
     padding: 0.4rem;
     font-size: 0.78rem;
     font-family: inherit;
@@ -687,20 +516,10 @@
     border-radius: var(--radius-sm);
   }
 
-  .btn-ghost:hover:not(:disabled) {
-    color: var(--text);
-    background: var(--surface-hover);
-  }
-
-  .btn-remove {
-    color: var(--danger);
-  }
-
   .btn-remove:hover:not(:disabled) {
     background: color-mix(in srgb, var(--danger) 10%, transparent);
   }
 
-  .btn-ghost:disabled,
   .btn-remove:disabled {
     opacity: 0.5;
     cursor: default;

@@ -14,9 +14,12 @@ import {
   recordCalendarUse,
 } from './calendar-accounts';
 import { cleanForStorage } from './clean-for-storage';
-import { applySchedule, type PendingSchedule } from './schedule';
+import {
+  applySchedule,
+  clearPostedEntry,
+  type PendingSchedule,
+} from './schedule';
 import { storeItem } from './stores';
-import { showToast } from './toast';
 
 /**
  * Post the (already locally saved) scheduled item to `calendarId`. Handles
@@ -126,31 +129,55 @@ export async function setItemCompleted(
 }
 
 /**
- * Apply a capture-time schedule to a freshly created item: persist the
- * schedule fields, then post to the chosen calendar when one was picked.
- * A failed post keeps the local schedule and toasts why — same local-first
- * contract as the schedule sheet. `item` must already carry its final
- * collectionId (call after any moveItemToCollection).
+ * Apply a capture-time schedule to a freshly created item. Deliberately
+ * calendar-free: setting a time is card metadata; adding to a calendar is a
+ * separate action taken later from the card. `item` must already carry its
+ * final collectionId (call after any moveItemToCollection).
  */
 export async function applyPendingSchedule(
   item: InboxItem,
   pending: PendingSchedule,
 ): Promise<void> {
-  let scheduled = applySchedule(item, pending);
-  await storeItem(cleanForStorage(scheduled));
-  if (!pending.calendarId) return;
-  try {
-    scheduled = await postScheduledItem(scheduled, pending.calendarId);
-    await storeItem(cleanForStorage(scheduled));
-    recordCalendarUse(pending.kind, pending.calendarId);
-  } catch (err) {
-    console.error('Calendar post failed', err);
-    const reason =
-      err instanceof CaldavError
-        ? err.message
-        : 'the calendar relay is unreachable';
-    showToast(`Scheduled locally — ${reason}`);
+  await storeItem(cleanForStorage(applySchedule(item, pending)));
+}
+
+/**
+ * Post the item to a calendar and apply the ownership rule: adding an
+ * *Inbox reference card* to a calendar completes its triage — the calendar
+ * owns it now, so the card is archived out of the Inbox. Todos are never
+ * archived (they still need completing in the app), and filed cards are
+ * already triaged. Returns the stored item.
+ */
+export async function addItemToCalendar(
+  item: InboxItem,
+  calendarId: string,
+): Promise<InboxItem> {
+  const firstPost = !item.eventUrl;
+  let posted = await postScheduledItem(item, calendarId);
+  const isTodoish = posted.isTodo || posted.type === 'todo';
+  if (firstPost && !isTodoish && !posted.collectionId) {
+    posted = {
+      ...posted,
+      archived: true,
+      archivedAt: new Date().toISOString(),
+    };
   }
+  await storeItem(cleanForStorage(posted));
+  return posted;
+}
+
+/**
+ * Detach the item from its calendar: delete the server entry, keep the
+ * time, un-archive (the card returns to the Inbox queue). Throws when the
+ * server refused and the entry may still exist — callers keep state as-is.
+ */
+export async function removeItemFromCalendar(
+  item: InboxItem,
+): Promise<InboxItem> {
+  await removePostedEntry(item);
+  const updated = clearPostedEntry(item);
+  await storeItem(cleanForStorage(updated));
+  return updated;
 }
 
 export { recordCalendarUse };

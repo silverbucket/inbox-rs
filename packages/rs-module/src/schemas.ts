@@ -19,6 +19,8 @@ const scheduleFields = {
   scheduleKind: { type: 'string', enum: ['event', 'task'] },
   eventUrl: { type: 'string' },
   eventEtag: { type: 'string' },
+  archived: { type: 'boolean' },
+  archivedAt: { type: 'string' },
 };
 
 // rs-migrate version stamp — must be in every item schema so remoteStorage persists it
