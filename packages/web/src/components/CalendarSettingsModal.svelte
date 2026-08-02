@@ -14,6 +14,7 @@
   } from '../lib/calendar-accounts';
   import { trapFocus } from '../lib/actions';
   import { resolveSockethubEndpoint } from '../lib/enrich';
+  import { DEFAULT_SOCKETHUB_ENDPOINT } from '../lib/link-metadata';
   import { showToast } from '../lib/toast';
 
   let { onclose }: { onclose: () => void } = $props();
@@ -30,6 +31,22 @@
   const canConnect = $derived(
     !!serverUrl.trim() && !!username.trim() && !!password && !connecting,
   );
+
+  // The relay that will receive the credentials, surfaced BEFORE the user
+  // presses Connect. The synced `sockethubUrl` setting decides it, and a
+  // compromised linked device could have rewritten that setting — showing
+  // the destination (and flagging a non-default relay) makes a redirected
+  // connect visible at the moment it matters. Recomputed when the add form
+  // opens; the chosen value is pinned on the account afterwards.
+  let connectEndpoint = $state(resolveSockethubEndpoint());
+  const endpointHost = $derived.by(() => {
+    try {
+      return new URL(connectEndpoint).host;
+    } catch {
+      return connectEndpoint;
+    }
+  });
+  const isCustomRelay = $derived(connectEndpoint !== DEFAULT_SOCKETHUB_ENDPOINT);
 
   /** Accept a bare host ("caldav.fastmail.com") — discovery wants a URL. */
   function normalizeUrl(raw: string): string {
@@ -51,10 +68,10 @@
       username: username.trim(),
       password,
     };
-    // Resolved once, at this explicit local action, and pinned on the
+    // The endpoint shown in the form is the one used and then pinned on the
     // account — later credential-bearing requests never re-resolve the
     // synced setting (see CalendarAccount.endpoint).
-    const endpoint = resolveSockethubEndpoint();
+    const endpoint = connectEndpoint;
     try {
       const calendars = await fetchCalendars(creds, endpoint);
       if (calendars.length === 0) {
@@ -243,6 +260,21 @@
           bind:value={password}
           autocomplete="current-password"
         />
+        <p class="relay-line" class:custom={isCustomRelay}>
+          {#if isCustomRelay}
+            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            Credentials will be relayed via <strong>{endpointHost}</strong> —
+            a custom Sockethub server, not the app default. Make sure you
+            trust it.
+          {:else}
+            Credentials are relayed via <strong>{endpointHost}</strong> and
+            never stored there.
+          {/if}
+        </p>
         {#if connectError}
           <p class="error">{connectError}</p>
         {/if}
@@ -255,7 +287,15 @@
         </p>
       </form>
     {:else}
-      <button type="button" class="btn-add" onclick={() => { showAdd = true; connectError = ''; }}>
+      <button
+        type="button"
+        class="btn-add"
+        onclick={() => {
+          showAdd = true;
+          connectError = '';
+          connectEndpoint = resolveSockethubEndpoint();
+        }}
+      >
         + Add calendar account
       </button>
     {/if}
@@ -490,6 +530,28 @@
 
   .add-form input:focus {
     border-color: var(--accent);
+  }
+
+  /* Which relay receives the credentials — always visible pre-Connect. */
+  .relay-line {
+    margin-top: 0.6rem;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+  }
+
+  .relay-line.custom {
+    color: #d97706;
+    border: 1px solid color-mix(in srgb, #d97706 35%, transparent);
+    background: color-mix(in srgb, #d97706 8%, transparent);
+    border-radius: var(--radius-sm);
+    padding: 0.45rem 0.55rem;
+  }
+
+  .relay-line svg {
+    display: inline;
+    vertical-align: -1px;
+    margin-right: 0.2rem;
   }
 
   .error {
