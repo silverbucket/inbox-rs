@@ -51,14 +51,23 @@
   // Connecting the first account happens right here rather than bouncing the
   // user out to the user menu — lazy like UserMenu's copy so the CalDAV
   // settings code stays out of this path until asked for.
-  type SettingsModal = Component<{ onclose: () => void }>;
+  type SettingsModal = Component<{ onclose: () => void; onconnected?: () => void }>;
   let SettingsComponent = $state<SettingsModal | null>(null);
   let showSettings = $state(false);
+  // While the settings chunk is in flight the modal isn't mounted yet, so the
+  // Escape/overlay close guards need this to keep the sheet from closing out
+  // from under the load.
+  let settingsLoading = $state(false);
 
   async function openSettings() {
-    SettingsComponent ??= await loadLazy<SettingsModal>(
-      () => import('./CalendarSettingsModal.svelte'),
-    );
+    settingsLoading = true;
+    try {
+      SettingsComponent ??= await loadLazy<SettingsModal>(
+        () => import('./CalendarSettingsModal.svelte'),
+      );
+    } finally {
+      settingsLoading = false;
+    }
     if (SettingsComponent) showSettings = true;
   }
 
@@ -134,7 +143,7 @@
   }
 
   function handleEscape(e: KeyboardEvent) {
-    if (e.key !== 'Escape' || saving) return;
+    if (e.key !== 'Escape' || saving || settingsLoading) return;
     if (showPicker || showSettings) return; // the overlay on top closes itself first
     onclose();
   }
@@ -144,7 +153,7 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="overlay" role="dialog" aria-modal="true" aria-label="Add to calendar" onclick={() => { if (!saving) onclose(); }}>
+<div class="overlay" role="dialog" aria-modal="true" aria-label="Add to calendar" onclick={() => { if (!saving && !settingsLoading) onclose(); }}>
   <div class="sheet" use:trapFocus onclick={(e) => e.stopPropagation()}>
     <h3 class="title">{isPosted ? 'On calendar' : 'Add to calendar'}</h3>
     <p class="ctx">{item.title || 'Untitled'}</p>
@@ -209,7 +218,7 @@
         No calendar connected yet. Connect an account once and cards post
         straight to it.
       </p>
-      <button type="button" class="btn-primary" onclick={openSettings}>
+      <button type="button" class="btn-primary" disabled={settingsLoading} onclick={openSettings}>
         Connect calendar account
       </button>
       <button type="button" class="btn-ghost" onclick={handleDownload}>
@@ -229,7 +238,7 @@
 {/if}
 
 {#if SettingsComponent && showSettings}
-  <SettingsComponent onclose={closeSettings} />
+  <SettingsComponent onclose={closeSettings} onconnected={closeSettings} />
 {/if}
 
 <style>

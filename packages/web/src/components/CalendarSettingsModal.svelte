@@ -17,7 +17,18 @@
   import { DEFAULT_SOCKETHUB_ENDPOINT } from '../lib/link-metadata';
   import { showToast } from '../lib/toast';
 
-  let { onclose }: { onclose: () => void } = $props();
+  let {
+    onclose,
+    onconnected,
+  }: {
+    onclose: () => void;
+    /**
+     * Fired after an account connects successfully. The add-to-calendar
+     * sheet uses it to close the modal and return to posting; from the user
+     * menu it's absent and the modal stays open on the accounts list.
+     */
+    onconnected?: () => void;
+  } = $props();
 
   let showAdd = $state(false);
   let serverUrl = $state('');
@@ -90,6 +101,7 @@
       username = '';
       password = '';
       showToast(`Found ${calendars.length} calendar${calendars.length === 1 ? '' : 's'}`);
+      onconnected?.();
     } catch (err) {
       console.error('Calendar discovery failed', err);
       connectError = friendlyError(err);
