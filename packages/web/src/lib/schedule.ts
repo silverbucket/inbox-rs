@@ -83,6 +83,34 @@ export function isOverdue(
   return due.getTime() < now.getTime();
 }
 
+/**
+ * Membership test for the Todos page's pinned "Due" band: an open,
+ * un-archived item whose scheduled *date* is today or earlier. Date-based on
+ * purpose — the band's contents only change at midnight or on edits, so
+ * derived stores can depend on a once-per-day `todayStart` instead of a
+ * ticking clock.
+ */
+export function isDueTodayOrOverdue(
+  item: Pick<InboxItem, 'startsAt' | 'completed' | 'archived'>,
+  todayStartMs: number,
+): boolean {
+  if (!item.startsAt || item.completed || item.archived) return false;
+  const d = new Date(item.startsAt);
+  if (Number.isNaN(d.getTime())) return false;
+  d.setHours(0, 0, 0, 0);
+  return d.getTime() <= todayStartMs;
+}
+
+/** Earliest due moment first; items without a time sort last. */
+export function compareByDueTime(
+  a: Pick<InboxItem, 'startsAt'>,
+  b: Pick<InboxItem, 'startsAt'>,
+): number {
+  const at = a.startsAt ? new Date(a.startsAt).getTime() : Infinity;
+  const bt = b.startsAt ? new Date(b.startsAt).getTime() : Infinity;
+  return at - bt;
+}
+
 /** The scheduled moment (or the event's end) is behind us. */
 export function isPast(
   item: Pick<InboxItem, 'startsAt' | 'endsAt' | 'allDay'>,

@@ -64,14 +64,14 @@ function lastStored(): Record<string, unknown> {
 }
 
 describe('addItemToCalendar — the archive ownership rule', () => {
-  it('archives an Inbox reference card on first post', async () => {
+  it('archives an Inbox reference card on first post (move is the default)', async () => {
     const result = await addItemToCalendar(note(), CAL.id);
     expect(result.archived).toBe(true);
     expect(result.archivedAt).toBeTruthy();
     expect(lastStored().archived).toBe(true);
   });
 
-  it('never archives todos — they complete instead', async () => {
+  it('archives todos in move mode — the calendar owns them now', async () => {
     const todo: TodoItem = {
       id: 't1',
       type: 'todo',
@@ -81,14 +81,22 @@ describe('addItemToCalendar — the archive ownership rule', () => {
       startsAt: '2026-08-03T13:00:00.000Z',
       scheduleKind: 'task',
     };
-    const result = await addItemToCalendar(todo, CAL.id);
-    expect(result.archived).toBeUndefined();
+    const result = await addItemToCalendar(todo, CAL.id, 'move');
+    expect(result.archived).toBe(true);
+    expect(result.archivedAt).toBeTruthy();
   });
 
-  it('does not archive filed cards — they are already triaged', async () => {
+  it('archives filed cards in move mode', async () => {
     const filed = note({ collectionId: 'col-1' });
     const result = await addItemToCalendar(filed, CAL.id);
+    expect(result.archived).toBe(true);
+  });
+
+  it('never archives in copy mode — the item stays active in the app', async () => {
+    const result = await addItemToCalendar(note(), CAL.id, 'copy');
     expect(result.archived).toBeUndefined();
+    expect(result.archivedAt).toBeUndefined();
+    expect(result.eventUrl).toBeTruthy();
   });
 
   it('does not re-archive on subsequent posts (calendar move keeps state)', async () => {

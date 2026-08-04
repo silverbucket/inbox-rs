@@ -177,6 +177,7 @@ export const userSettingsSchema = {
     theme: { type: 'string', enum: ['system', 'light', 'dark'] },
     linkPreviews: { type: 'boolean' },
     sockethubUrl: { type: 'string' },
+    calendarPostMode: { type: 'string', enum: ['move', 'copy'] },
   },
 };
 

@@ -142,20 +142,21 @@ export async function applyPendingSchedule(
 }
 
 /**
- * Post the item to a calendar and apply the ownership rule: adding an
- * *Inbox reference card* to a calendar completes its triage — the calendar
- * owns it now, so the card is archived out of the Inbox. Todos are never
- * archived (they still need completing in the app), and filed cards are
- * already triaged. Returns the stored item.
+ * Post the item to a calendar and apply the ownership rule: in 'move' mode
+ * (the default) the calendar owns the item now, so it is archived out of
+ * its surface's active lists — any kind, filed or not. 'copy' mode posts
+ * without archiving. Only the first post can archive; relocating an
+ * already-posted entry between calendars never changes archive state.
+ * Returns the stored item.
  */
 export async function addItemToCalendar(
   item: InboxItem,
   calendarId: string,
+  mode: 'move' | 'copy' = 'move',
 ): Promise<InboxItem> {
   const firstPost = !item.eventUrl;
   let posted = await postScheduledItem(item, calendarId);
-  const isTodoish = posted.isTodo || posted.type === 'todo';
-  if (firstPost && !isTodoish && !posted.collectionId) {
+  if (firstPost && mode === 'move') {
     posted = {
       ...posted,
       archived: true,

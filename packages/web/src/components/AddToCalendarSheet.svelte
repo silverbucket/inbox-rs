@@ -18,14 +18,17 @@
     recordCalendarUse,
     removeItemFromCalendar,
   } from '../lib/schedule-sync';
+  import { updateUserSettings, userSettings } from '../lib/stores';
   import { showToast } from '../lib/toast';
   import CalendarPicker from './CalendarPicker.svelte';
 
   /**
    * Publishing a timed card to a calendar — the counterpart to the
-   * calendar-free time sheet. Only reachable once a time is set. Posting an
-   * Inbox reference card archives it (the calendar owns it now); removing
-   * the entry brings it back. Todos are never archived — they complete.
+   * calendar-free time sheet. Only reachable once a time is set. Posting in
+   * 'move' mode (the default) archives the item — any kind — into its
+   * surface's collapsed "On calendar" section; the calendar owns it now,
+   * and removing the entry brings it back. 'Keep a copy' posts without
+   * archiving. The choice is remembered in user settings.
    */
   let {
     item,
@@ -39,7 +42,28 @@
   const kind = item.scheduleKind ?? (isTodoish ? 'task' : 'event');
   const timeLabel = formatScheduled(item);
   const isPosted = !!item.eventUrl;
-  const willArchive = !isPosted && !isTodoish && !item.collectionId;
+
+  // Move vs copy — initialized once from the synced preference; toggling
+  // persists so the next sheet opens on the same choice.
+  let postMode = $state<'move' | 'copy'>(
+    $userSettings.calendarPostMode ?? 'move',
+  );
+
+  function setPostMode(mode: 'move' | 'copy') {
+    postMode = mode;
+    updateUserSettings({ calendarPostMode: mode }).catch((err) => {
+      console.error('Failed to save calendar post mode', err);
+    });
+  }
+
+  const willArchive = $derived(!isPosted && postMode === 'move');
+  const archiveNote = $derived(
+    isTodoish
+      ? "The todo moves to the Todos page's “On calendar” section once it's on your calendar. Removing the entry brings it back."
+      : item.collectionId
+        ? "The card moves to its collection's “On calendar” section once it's on your calendar. Removing the entry brings it back."
+        : "The card moves to the Inbox's archived section once it's on your calendar. Removing the entry brings it back.",
+  );
 
   const eventHome = choiceForEventUrl(item.eventUrl);
   let selectedCalendarId = $state<string | undefined>(
@@ -91,7 +115,7 @@
     !saving && !!selectedChoice && calendarSupportsKind,
   );
   /** Selected a different calendar than the entry's current home. */
-  const isMove = $derived(
+  const movingCalendars = $derived(
     isPosted && !!selectedChoice && selectedChoice.calendar.id !== eventHome?.calendar.id,
   );
 
@@ -110,10 +134,20 @@
     if (!canPost || !selectedChoice) return;
     saving = true;
     try {
-      const posted = await addItemToCalendar(item, selectedChoice.calendar.id);
+      const posted = await addItemToCalendar(
+        item,
+        selectedChoice.calendar.id,
+        postMode,
+      );
       recordCalendarUse(kind, selectedChoice.calendar.id);
       if (posted.archived) {
-        showToast('Added to calendar — card archived from the Inbox');
+        showToast(
+          isTodoish
+            ? 'Added to calendar — todo moved to the On-calendar section'
+            : item.collectionId
+              ? "Added to calendar — card moved to the collection's On-calendar section"
+              : 'Added to calendar — card archived from the Inbox',
+        );
       }
       onclose();
     } catch (err) {
@@ -189,16 +223,33 @@
           another calendar.
         </p>
       {/if}
+      {#if !isPosted}
+        <div class="mode-switcher" role="group" aria-label="After adding to calendar">
+          <button type="button"
+            class="mode-option"
+            class:active={postMode === 'move'}
+            aria-pressed={postMode === 'move'}
+            onclick={() => setPostMode('move')}
+          >
+            Move
+          </button>
+          <button type="button"
+            class="mode-option"
+            class:active={postMode === 'copy'}
+            aria-pressed={postMode === 'copy'}
+            onclick={() => setPostMode('copy')}
+          >
+            Keep a copy
+          </button>
+        </div>
+      {/if}
       {#if willArchive}
-        <p class="note">
-          The card moves to the Inbox's archived section once it's on your
-          calendar. Removing the entry brings it back.
-        </p>
+        <p class="note">{archiveNote}</p>
       {/if}
 
-      {#if !isPosted || isMove}
+      {#if !isPosted || movingCalendars}
         <button type="button" class="btn-primary" disabled={!canPost} onclick={post}>
-          {isMove
+          {movingCalendars
             ? 'Move to this calendar'
             : kind === 'task'
               ? 'Add task'
@@ -367,6 +418,42 @@
     font-size: 0.72rem;
     color: var(--text-muted);
     line-height: 1.45;
+  }
+
+  /* Move / Keep-a-copy — same segmented pattern as the user menu's
+     theme switcher. */
+  .mode-switcher {
+    display: flex;
+    gap: 2px;
+    margin-top: 0.7rem;
+  }
+
+  .mode-option {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.35rem 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 150ms;
+  }
+
+  .mode-option:hover {
+    color: var(--text);
+    border-color: var(--text-muted);
+  }
+
+  .mode-option.active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-subtle);
   }
 
   .btn-primary {

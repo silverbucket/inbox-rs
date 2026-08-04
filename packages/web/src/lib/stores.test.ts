@@ -94,6 +94,7 @@ import {
   toggleGroupFilter,
   userSettings,
   visibleGroupedCollections,
+  visibleOnCalendarTodos,
   visibleOpenTodos,
   visibleTodos,
 } from './stores';
@@ -1876,6 +1877,18 @@ describe('allTodos / openTodos', () => {
 
     expect(get(openTodos).map((t) => t.id)).toEqual(['open']);
   });
+
+  it('openTodos excludes calendar-archived todos', () => {
+    items.set({
+      open: makeTodo('open'),
+      moved: makeTodo('moved', {
+        archived: true,
+        archivedAt: '2026-01-02T00:00:00.000Z',
+      }),
+    });
+
+    expect(get(openTodos).map((t) => t.id)).toEqual(['open']);
+  });
 });
 
 describe('visibleTodos', () => {
@@ -1950,6 +1963,72 @@ describe('visibleTodos', () => {
     appConfig.set({ todosGlobalOrder: ['t2'] });
 
     expect(get(visibleTodos).map((t) => t.id)).toEqual(['t2', 't3', 't1']);
+  });
+
+  it('pins due todos above the manual order, earliest due first', () => {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+    const earlierToday = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
+    const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60_000).toISOString();
+    items.set({
+      plain: makeTodo('plain'),
+      dueOld: makeTodo('dueOld', {
+        startsAt: yesterday,
+        scheduleKind: 'task',
+      }),
+      dueToday: makeTodo('dueToday', {
+        startsAt: earlierToday,
+        scheduleKind: 'task',
+      }),
+      future: makeTodo('future', { startsAt: nextWeek, scheduleKind: 'task' }),
+    });
+    // Manual order puts the due items last — the band overrides it.
+    appConfig.set({
+      todosGlobalOrder: ['plain', 'future', 'dueToday', 'dueOld'],
+    });
+
+    expect(get(visibleTodos).map((t) => t.id)).toEqual([
+      'dueOld',
+      'dueToday',
+      'plain',
+      'future',
+    ]);
+  });
+
+  it('hides calendar-archived todos; visibleOnCalendarTodos lists them newest-move-first', () => {
+    items.set({
+      open: makeTodo('open'),
+      m1: makeTodo('m1', {
+        archived: true,
+        archivedAt: '2026-01-02T00:00:00.000Z',
+      }),
+      m2: makeTodo('m2', {
+        archived: true,
+        archivedAt: '2026-01-03T00:00:00.000Z',
+      }),
+    });
+
+    expect(get(visibleTodos).map((t) => t.id)).toEqual(['open']);
+    expect(get(visibleOnCalendarTodos).map((t) => t.id)).toEqual(['m2', 'm1']);
+  });
+
+  it('visibleOnCalendarTodos honours the group filter like visibleTodos', () => {
+    items.set({
+      filedMoved: makeTodo('filedMoved', {
+        collectionId: 'col-hidden',
+        archived: true,
+        archivedAt: '2026-01-02T00:00:00.000Z',
+      }),
+    });
+    collections.set({
+      'col-hidden': makeCollection('col-hidden', 'g-hidden'),
+    });
+    groups.set({
+      'g-active': makeGroup('g-active', []),
+      'g-hidden': makeGroup('g-hidden', ['col-hidden']),
+    });
+    appConfig.set({ activeGroupFilters: ['g-active'] });
+
+    expect(get(visibleOnCalendarTodos)).toEqual([]);
   });
 });
 

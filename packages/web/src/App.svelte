@@ -14,6 +14,7 @@
     createCollection, storeGroup,
     appConfig, setActiveGroupFilters,
   } from './lib/stores';
+  import { initAlerts, setAlertOpenHandler } from './lib/alerts';
   import { captureDetected, captureFile } from './lib/capture';
   import { loadLazy } from './lib/lazy-load';
   import { showToast } from './lib/toast';
@@ -142,6 +143,12 @@
     };
     syncRoute();
     window.addEventListener('hashchange', syncRoute);
+
+    // Due-alert scheduler — app-level, so alerts fire regardless of which
+    // page or filter is active. Idempotent across remounts.
+    setAlertOpenHandler(openView);
+    initAlerts();
+
     return () => window.removeEventListener('hashchange', syncRoute);
   });
 

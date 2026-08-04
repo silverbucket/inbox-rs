@@ -3,6 +3,7 @@
   import { setItemCompleted } from '../lib/schedule-sync';
   import { typeIconPath } from '../lib/item-utils';
   import { draggingItemId, DRAG_MIME } from '../lib/drag';
+  import { now } from '../lib/now';
   import { formatScheduled, isOverdue } from '../lib/schedule';
 
   let { todo, collection, group, onselect, onaddincollection }: {
@@ -56,7 +57,7 @@
   const createdTitle = $derived(new Date(todo.createdAt).toLocaleString());
 
   const scheduledLabel = $derived(todo.startsAt ? formatScheduled(todo) : '');
-  const scheduleOverdue = $derived(isOverdue(todo));
+  const scheduleOverdue = $derived(isOverdue(todo, $now));
 
   async function toggleCompleted(e: Event) {
     e.stopPropagation();

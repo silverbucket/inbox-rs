@@ -2,6 +2,7 @@ import type { InboxItem, NoteItem, TodoItem } from '@inbox-rs/rs-module';
 import { describe, expect, it } from 'vitest';
 import {
   filterCompletedTodos,
+  filterOnCalendarItems,
   filterOpenTodos,
   filterReferenceItems,
   filterTodos,
@@ -67,6 +68,16 @@ describe('filterOpenTodos / filterCompletedTodos', () => {
     expect(filterOpenTodos(todos).map((t) => t.id)).toEqual(['t1', 't3']);
     expect(filterCompletedTodos(todos).map((t) => t.id)).toEqual(['t2']);
   });
+
+  it('excludes calendar-archived todos from both partitions', () => {
+    const todos: InboxItem[] = [
+      todo('t1', false),
+      { ...todo('t2', false), archived: true },
+      { ...todo('t3', true, '2026-04-02T00:00:00.000Z'), archived: true },
+    ];
+    expect(filterOpenTodos(todos).map((t) => t.id)).toEqual(['t1']);
+    expect(filterCompletedTodos(todos)).toEqual([]);
+  });
 });
 
 describe('filterReferenceItems', () => {
@@ -78,6 +89,37 @@ describe('filterReferenceItems', () => {
       ref('r2'),
     ];
     expect(filterReferenceItems(items).map((i) => i.id)).toEqual(['r1', 'r2']);
+  });
+
+  it('excludes calendar-archived reference items', () => {
+    const items: InboxItem[] = [ref('r1'), { ...ref('r2'), archived: true }];
+    expect(filterReferenceItems(items).map((i) => i.id)).toEqual(['r1']);
+  });
+});
+
+describe('filterOnCalendarItems', () => {
+  it('returns only archived items of any kind, newest move first', () => {
+    const items: InboxItem[] = [
+      ref('r1'),
+      { ...ref('r2'), archived: true, archivedAt: '2026-04-02T00:00:00.000Z' },
+      todo('t1', false),
+      {
+        ...todo('t2', false),
+        archived: true,
+        archivedAt: '2026-04-03T00:00:00.000Z',
+      },
+      // archived + completed: archived wins — it belongs here
+      {
+        ...todo('t3', true, '2026-04-01T00:00:00.000Z'),
+        archived: true,
+        archivedAt: '2026-04-01T00:00:00.000Z',
+      },
+    ];
+    expect(filterOnCalendarItems(items).map((i) => i.id)).toEqual([
+      't2',
+      'r2',
+      't3',
+    ]);
   });
 });
 
