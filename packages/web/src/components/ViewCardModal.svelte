@@ -15,7 +15,6 @@
   import ScheduleSheet from './ScheduleSheet.svelte';
   import AddToCalendarSheet from './AddToCalendarSheet.svelte';
   import { formatScheduled, isOverdue } from '../lib/schedule';
-  import { removePostedEntry } from '../lib/schedule-sync';
   import BookmarkView from './view-card/BookmarkView.svelte';
   import NoteView from './view-card/NoteView.svelte';
   import ImageView from './view-card/ImageView.svelte';
@@ -60,22 +59,17 @@
 
   /**
    * A todo↔reference conversion changes the card's kind, so a posted
-   * calendar entry no longer matches its projection (a VEVENT for what is
-   * now a task, or vice versa) — and archive state belongs to the calendar
-   * ownership that conversion breaks. Detach the entry (best-effort server
-   * delete — a failure only orphans a calendar entry, never blocks the
-   * conversion), strip the pointer + archive flags, and keep the time,
-   * flipping its kind to match.
+   * calendar entry no longer matches what the receipt claims (a VEVENT for
+   * what is now a task, or vice versa) — and archive state belongs to the
+   * calendar ownership that conversion breaks. Drop the receipt + archive
+   * flags locally and keep the time, flipping its kind to match. The
+   * calendar keeps its entry untouched: publishing is one-shot, inbox-rs
+   * never updates or deletes there.
    */
   function detachCalendarOnConversion(
     updated: Record<string, unknown>,
     newKind: 'event' | 'task',
   ) {
-    if (item.eventUrl) {
-      void removePostedEntry(item).catch((error) => {
-        console.warn('Calendar entry not removed on conversion', error);
-      });
-    }
     delete updated.eventUrl;
     delete updated.eventEtag;
     delete updated.archived;

@@ -24,13 +24,13 @@
 
   /**
    * Publishing a timed card to a calendar — the counterpart to the
-   * calendar-free time sheet. Only reachable once a time is set. Posting in
-   * 'move' mode (the default) archives the item — any kind — into its
-   * surface's collapsed "On calendar" section; the calendar owns it now.
-   * 'Keep a copy' posts without archiving. Re-enabling a moved item is
-   * local-only (it becomes a copy); this sheet never deletes calendar
-   * entries — that's the calendar's business, not ours. The move/copy
-   * choice is remembered in user settings.
+   * calendar-free time sheet. Only reachable once a time is set, and
+   * ONE-SHOT: posting creates the entry and inbox-rs never updates or
+   * deletes it afterwards. 'Move' mode (the default) archives the item —
+   * any kind — into its surface's collapsed "On calendar" section; 'Keep a
+   * copy' posts without archiving. For a posted item this sheet is a
+   * receipt: it shows the destination calendar and offers local-only
+   * re-enable. The move/copy choice is remembered in user settings.
    */
   let {
     item,
@@ -67,9 +67,11 @@
         : "The card moves to the Inbox's archived section once it's on your calendar. You can re-enable it from there anytime.",
   );
 
+  // The receipt: which calendar this item went to (undefined when the
+  // account has since been removed — the entry still exists there).
   const eventHome = choiceForEventUrl(item.eventUrl);
   let selectedCalendarId = $state<string | undefined>(
-    eventHome?.calendar.id ?? pickPreferredCalendar(kind)?.calendar.id,
+    pickPreferredCalendar(kind)?.calendar.id,
   );
   let showPicker = $state(false);
   let saving = $state(false);
@@ -107,18 +109,13 @@
 
   const hasAccounts = $derived($calendarAccounts.length > 0);
   const selectedChoice = $derived<CalendarChoice | undefined>(
-    findCalendarChoice(selectedCalendarId) ??
-      (eventHome?.calendar.id === selectedCalendarId ? eventHome : undefined),
+    findCalendarChoice(selectedCalendarId),
   );
   const calendarSupportsKind = $derived(
     !!selectedChoice?.calendar.components.includes(kind),
   );
   const canPost = $derived(
     !saving && !!selectedChoice && calendarSupportsKind,
-  );
-  /** Selected a different calendar than the entry's current home. */
-  const movingCalendars = $derived(
-    isPosted && !!selectedChoice && selectedChoice.calendar.id !== eventHome?.calendar.id,
   );
 
   function handlePick(choice: CalendarChoice) {
@@ -205,7 +202,34 @@
       <span class="kind-tag">{kind}</span>
     </div>
 
-    {#if hasAccounts}
+    {#if isPosted}
+      <!-- Receipt: which calendar this went to. Read-only — publishing is
+           one-shot, so there is nothing to change from here. -->
+      <div class="zone static">
+        {#if eventHome}
+          <span
+            class="dot"
+            style="background: {eventHome.calendar.color || 'var(--accent)'}"
+          ></span>
+          <span class="zone-name">{eventHome.calendar.name}</span>
+          <span class="zone-sub">· {eventHome.account.label}</span>
+        {:else}
+          <span class="zone-name muted">On a calendar whose account was removed</span>
+        {/if}
+      </div>
+      {#if item.archived}
+        <button type="button" class="btn-primary" disabled={saving} onclick={reEnable}>
+          Re-enable in {isTodoish ? 'Todos' : item.collectionId ? 'this collection' : 'the Inbox'}
+        </button>
+        <p class="note">
+          Brings it back under this app's management. The calendar entry is
+          not touched.
+        </p>
+      {/if}
+      <button type="button" class="btn-ghost" disabled={saving} onclick={handleDownload}>
+        Download .ics
+      </button>
+    {:else if hasAccounts}
       <button type="button" class="zone" onclick={() => (showPicker = true)}>
         {#if selectedChoice}
           <span
@@ -227,51 +251,34 @@
           another calendar.
         </p>
       {/if}
-      {#if !isPosted}
-        <div class="mode-switcher" role="group" aria-label="After adding to calendar">
-          <button type="button"
-            class="mode-option"
-            class:active={postMode === 'move'}
-            aria-pressed={postMode === 'move'}
-            onclick={() => setPostMode('move')}
-          >
-            Move
-          </button>
-          <button type="button"
-            class="mode-option"
-            class:active={postMode === 'copy'}
-            aria-pressed={postMode === 'copy'}
-            onclick={() => setPostMode('copy')}
-          >
-            Keep a copy
-          </button>
-        </div>
-      {/if}
+      <div class="mode-switcher" role="group" aria-label="After adding to calendar">
+        <button type="button"
+          class="mode-option"
+          class:active={postMode === 'move'}
+          aria-pressed={postMode === 'move'}
+          onclick={() => setPostMode('move')}
+        >
+          Move
+        </button>
+        <button type="button"
+          class="mode-option"
+          class:active={postMode === 'copy'}
+          aria-pressed={postMode === 'copy'}
+          onclick={() => setPostMode('copy')}
+        >
+          Keep a copy
+        </button>
+      </div>
       {#if willArchive}
         <p class="note">{archiveNote}</p>
       {/if}
 
-      {#if !isPosted || movingCalendars}
-        <button type="button" class="btn-primary" disabled={!canPost} onclick={post}>
-          {movingCalendars
-            ? 'Move to this calendar'
-            : kind === 'task'
-              ? 'Add task'
-              : 'Add to calendar'}
-        </button>
-      {/if}
+      <button type="button" class="btn-primary" disabled={!canPost} onclick={post}>
+        {kind === 'task' ? 'Add task' : 'Add to calendar'}
+      </button>
       <button type="button" class="btn-ghost" disabled={saving} onclick={handleDownload}>
         Download .ics
       </button>
-      {#if isPosted && item.archived}
-        <button type="button" class="btn-ghost" disabled={saving} onclick={reEnable}>
-          Re-enable in {isTodoish ? 'Todos' : item.collectionId ? 'this collection' : 'the Inbox'}
-        </button>
-        <p class="note">
-          Brings it back under this app's management. The calendar entry is
-          not touched.
-        </p>
-      {/if}
     {:else}
       <p class="hint">
         No calendar connected yet. Connect an account once and cards post
@@ -387,6 +394,14 @@
 
   .zone:hover {
     border-color: var(--accent);
+  }
+
+  .zone.static {
+    cursor: default;
+  }
+
+  .zone.static:hover {
+    border-color: var(--border);
   }
 
   .zone .dot {

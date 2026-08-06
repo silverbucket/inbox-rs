@@ -11,17 +11,16 @@ vi.mock('./caldav', async (importOriginal) => {
       eventUrl: 'https://cal.example.org/nick/personal/x.ics',
       eventEtag: '"e1"',
     })),
-    updateEntry: vi.fn(async () => ({
-      eventUrl: 'https://cal.example.org/nick/personal/x.ics',
-      eventEtag: '"e2"',
-    })),
-    deleteEntry: vi.fn(async () => {}),
   };
 });
 
 import { calendarAccounts } from './calendar-accounts';
-import { deleteEntry } from './caldav';
-import { addItemToCalendar, reEnableFromCalendar } from './schedule-sync';
+import { createEntry } from './caldav';
+import {
+  addItemToCalendar,
+  detachFromCalendar,
+  reEnableFromCalendar,
+} from './schedule-sync';
 import { storeItem } from './stores';
 
 const CAL = {
@@ -100,18 +99,20 @@ describe('addItemToCalendar — the archive ownership rule', () => {
     expect(result.eventUrl).toBeTruthy();
   });
 
-  it('does not re-archive on subsequent posts (calendar move keeps state)', async () => {
+  it('refuses to post an already-posted item — publishing is one-shot', async () => {
     const posted = note({
       eventUrl: `${CAL.id}x.ics`,
       eventEtag: '"e1"',
     });
-    const result = await addItemToCalendar(posted, CAL.id);
-    expect(result.archived).toBeUndefined();
+    await expect(addItemToCalendar(posted, CAL.id)).rejects.toThrow(
+      /one-shot/,
+    );
+    expect(vi.mocked(createEntry)).not.toHaveBeenCalled();
   });
 });
 
 describe('reEnableFromCalendar', () => {
-  it('un-archives locally, keeping the entry link and the time — the calendar is never touched', async () => {
+  it('un-archives locally, keeping the receipt and the time — the calendar is never touched', async () => {
     const archived = note({
       eventUrl: `${CAL.id}x.ics`,
       eventEtag: '"e1"',
@@ -121,11 +122,29 @@ describe('reEnableFromCalendar', () => {
     const result = await reEnableFromCalendar(archived);
     expect(result.archived).toBeUndefined();
     expect(result.archivedAt).toBeUndefined();
-    // The link survives: the item is a copy now, still syncing to its entry.
+    // The receipt survives: the item reads as a copy of the calendar entry.
     expect(result.eventUrl).toBe(archived.eventUrl);
     expect(result.eventEtag).toBe(archived.eventEtag);
     expect(result.startsAt).toBe(archived.startsAt);
     // No server call of any kind.
-    expect(vi.mocked(deleteEntry)).not.toHaveBeenCalled();
+    expect(vi.mocked(createEntry)).not.toHaveBeenCalled();
+  });
+});
+
+describe('detachFromCalendar', () => {
+  it('drops the receipt and archive state locally, keeping the time — no server call', async () => {
+    const archived = note({
+      eventUrl: `${CAL.id}x.ics`,
+      eventEtag: '"e1"',
+      archived: true,
+      archivedAt: '2026-08-01T00:00:00Z',
+    });
+    const result = await detachFromCalendar(archived);
+    expect(result.eventUrl).toBeUndefined();
+    expect(result.eventEtag).toBeUndefined();
+    expect(result.archived).toBeUndefined();
+    expect(result.archivedAt).toBeUndefined();
+    expect(result.startsAt).toBe(archived.startsAt);
+    expect(vi.mocked(createEntry)).not.toHaveBeenCalled();
   });
 });
