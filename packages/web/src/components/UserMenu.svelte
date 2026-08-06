@@ -420,7 +420,7 @@
 
         <div class="divider"></div>
 
-        <!-- Link previews — synced setting; endpoint is for self-hosters -->
+        <!-- Link previews — synced setting -->
         <div class="section-label">Link previews</div>
         <div class="theme-switcher" role="group" aria-label="Link previews">
           <button type="button"
@@ -440,24 +440,29 @@
             Off
           </button>
         </div>
-        {#if linkPreviewsOn}
-          <form
-            class="connect-form"
-            onsubmit={(e) => { e.preventDefault(); saveSockethubUrl(); }}
-          >
-            <input
-              type="url"
-              bind:value={sockethubUrlInput}
-              placeholder={DEFAULT_SOCKETHUB_ENDPOINT}
-              aria-label="Sockethub endpoint"
-              onfocus={() => (sockethubUrlEditing = true)}
-              onblur={() => {
-                saveSockethubUrl();
-                sockethubUrlEditing = false;
-              }}
-            />
-          </form>
-        {/if}
+        <div class="divider"></div>
+
+        <!-- Sockethub — the relay behind link previews AND calendar sync, so
+             it gets its own section instead of hiding under either feature.
+             Synced setting; the endpoint override is for self-hosters. -->
+        <div class="section-label">Sockethub service</div>
+        <p class="menu-note">Relays link previews and calendar sync.</p>
+        <form
+          class="connect-form"
+          onsubmit={(e) => { e.preventDefault(); saveSockethubUrl(); }}
+        >
+          <input
+            type="url"
+            bind:value={sockethubUrlInput}
+            placeholder={DEFAULT_SOCKETHUB_ENDPOINT}
+            aria-label="Sockethub endpoint"
+            onfocus={() => (sockethubUrlEditing = true)}
+            onblur={() => {
+              saveSockethubUrl();
+              sockethubUrlEditing = false;
+            }}
+          />
+        </form>
       {/if}
 
       <div class="divider"></div>
@@ -944,6 +949,13 @@
     font-size: 0.7rem;
     opacity: 0.45;
     font-weight: 400;
+  }
+
+  .menu-note {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+    padding: 0 0.5rem 0.25rem;
   }
 
   /* ── Connect form ────────────────────────── */

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
+  import type { Component } from 'svelte';
   import { trapFocus } from '../lib/actions';
   import { CaldavError } from '../lib/caldav';
   import {
@@ -10,6 +11,7 @@
     pickPreferredCalendar,
   } from '../lib/calendar-accounts';
   import { downloadIcs } from '../lib/ics';
+  import { loadLazy } from '../lib/lazy-load';
   import { formatScheduled } from '../lib/schedule';
   import {
     addItemToCalendar,
@@ -45,6 +47,37 @@
   );
   let showPicker = $state(false);
   let saving = $state(false);
+
+  // Connecting the first account happens right here rather than bouncing the
+  // user out to the user menu — lazy like UserMenu's copy so the CalDAV
+  // settings code stays out of this path until asked for.
+  type SettingsModal = Component<{ onclose: () => void; onconnected?: () => void }>;
+  let SettingsComponent = $state<SettingsModal | null>(null);
+  let showSettings = $state(false);
+  // While the settings chunk is in flight the modal isn't mounted yet, so the
+  // Escape/overlay close guards need this to keep the sheet from closing out
+  // from under the load.
+  let settingsLoading = $state(false);
+
+  async function openSettings() {
+    settingsLoading = true;
+    try {
+      SettingsComponent ??= await loadLazy<SettingsModal>(
+        () => import('./CalendarSettingsModal.svelte'),
+      );
+    } finally {
+      settingsLoading = false;
+    }
+    if (SettingsComponent) showSettings = true;
+  }
+
+  // Closing the settings modal after connecting the first account lands back
+  // on the posting UI — preselect a calendar so the primary button is
+  // immediately actionable.
+  function closeSettings() {
+    showSettings = false;
+    selectedCalendarId ??= pickPreferredCalendar(kind)?.calendar.id;
+  }
 
   const hasAccounts = $derived($calendarAccounts.length > 0);
   const selectedChoice = $derived<CalendarChoice | undefined>(
@@ -110,8 +143,8 @@
   }
 
   function handleEscape(e: KeyboardEvent) {
-    if (e.key !== 'Escape' || saving) return;
-    if (showPicker) return; // picker closes itself first
+    if (e.key !== 'Escape' || saving || settingsLoading) return;
+    if (showPicker || showSettings) return; // the overlay on top closes itself first
     onclose();
   }
 </script>
@@ -120,7 +153,7 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="overlay" role="dialog" aria-modal="true" aria-label="Add to calendar" onclick={() => { if (!saving) onclose(); }}>
+<div class="overlay" role="dialog" aria-modal="true" aria-label="Add to calendar" onclick={() => { if (!saving && !settingsLoading) onclose(); }}>
   <div class="sheet" use:trapFocus onclick={(e) => e.stopPropagation()}>
     <h3 class="title">{isPosted ? 'On calendar' : 'Add to calendar'}</h3>
     <p class="ctx">{item.title || 'Untitled'}</p>
@@ -181,13 +214,16 @@
         </button>
       {/if}
     {:else}
-      <button type="button" class="btn-primary" disabled={saving} onclick={handleDownload}>
-        Download .ics
-      </button>
       <p class="hint">
-        Post events straight to your calendar by connecting an account:
-        user&nbsp;menu → Calendar accounts.
+        No calendar connected yet. Connect an account once and cards post
+        straight to it.
       </p>
+      <button type="button" class="btn-primary" disabled={settingsLoading} onclick={openSettings}>
+        Connect calendar account
+      </button>
+      <button type="button" class="btn-ghost" onclick={handleDownload}>
+        Download .ics instead
+      </button>
     {/if}
   </div>
 </div>
@@ -199,6 +235,10 @@
     onpick={handlePick}
     onclose={() => (showPicker = false)}
   />
+{/if}
+
+{#if SettingsComponent && showSettings}
+  <SettingsComponent onclose={closeSettings} onconnected={closeSettings} />
 {/if}
 
 <style>
