@@ -14,11 +14,7 @@ import {
   recordCalendarUse,
 } from './calendar-accounts';
 import { cleanForStorage } from './clean-for-storage';
-import {
-  applySchedule,
-  clearPostedEntry,
-  type PendingSchedule,
-} from './schedule';
+import { applySchedule, type PendingSchedule } from './schedule';
 import { storeItem } from './stores';
 
 /**
@@ -168,15 +164,21 @@ export async function addItemToCalendar(
 }
 
 /**
- * Detach the item from its calendar: delete the server entry, keep the
- * time, un-archive (the card returns to the Inbox queue). Throws when the
- * server refused and the entry may still exist — callers keep state as-is.
+ * Bring a moved item back under the app's management WITHOUT touching the
+ * calendar: only the archive state clears; the entry link stays, so the
+ * item becomes a copy (time edits and completion keep syncing, and it
+ * alerts in-app again). What happens to the calendar's copy is the
+ * calendar's business — inbox-rs never deletes entries on the user's
+ * behalf outside its own sync maintenance.
  */
-export async function removeItemFromCalendar(
+export async function reEnableFromCalendar(
   item: InboxItem,
 ): Promise<InboxItem> {
-  await removePostedEntry(item);
-  const updated = clearPostedEntry(item);
+  const updated: InboxItem = {
+    ...item,
+    archived: undefined,
+    archivedAt: undefined,
+  };
   await storeItem(cleanForStorage(updated));
   return updated;
 }

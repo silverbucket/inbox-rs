@@ -20,7 +20,8 @@ vi.mock('./caldav', async (importOriginal) => {
 });
 
 import { calendarAccounts } from './calendar-accounts';
-import { addItemToCalendar, removeItemFromCalendar } from './schedule-sync';
+import { deleteEntry } from './caldav';
+import { addItemToCalendar, reEnableFromCalendar } from './schedule-sync';
 import { storeItem } from './stores';
 
 const CAL = {
@@ -109,19 +110,22 @@ describe('addItemToCalendar — the archive ownership rule', () => {
   });
 });
 
-describe('removeItemFromCalendar', () => {
-  it('clears the entry pointer and un-archives, keeping the time', async () => {
+describe('reEnableFromCalendar', () => {
+  it('un-archives locally, keeping the entry link and the time — the calendar is never touched', async () => {
     const archived = note({
       eventUrl: `${CAL.id}x.ics`,
       eventEtag: '"e1"',
       archived: true,
       archivedAt: '2026-08-01T00:00:00Z',
     });
-    const result = await removeItemFromCalendar(archived);
-    expect(result.eventUrl).toBeUndefined();
-    expect(result.eventEtag).toBeUndefined();
+    const result = await reEnableFromCalendar(archived);
     expect(result.archived).toBeUndefined();
     expect(result.archivedAt).toBeUndefined();
+    // The link survives: the item is a copy now, still syncing to its entry.
+    expect(result.eventUrl).toBe(archived.eventUrl);
+    expect(result.eventEtag).toBe(archived.eventEtag);
     expect(result.startsAt).toBe(archived.startsAt);
+    // No server call of any kind.
+    expect(vi.mocked(deleteEntry)).not.toHaveBeenCalled();
   });
 });

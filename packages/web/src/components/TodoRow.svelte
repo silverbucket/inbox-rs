@@ -19,8 +19,8 @@
     onaddincollection?: (collectionId: string | undefined) => void;
     /** Receipt mode for "On calendar" sections: the todo is managed
         elsewhere now, so no completion checkbox — a calendar marker instead.
-        The row still opens the card, where "Remove from calendar" brings it
-        back under the app's management. */
+        The row still opens the card, where "Re-enable" brings it back under
+        the app's management (without touching the calendar). */
     readonly?: boolean;
   } = $props();
 

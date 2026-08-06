@@ -16,7 +16,7 @@
   import {
     addItemToCalendar,
     recordCalendarUse,
-    removeItemFromCalendar,
+    reEnableFromCalendar,
   } from '../lib/schedule-sync';
   import { updateUserSettings, userSettings } from '../lib/stores';
   import { showToast } from '../lib/toast';
@@ -26,9 +26,11 @@
    * Publishing a timed card to a calendar — the counterpart to the
    * calendar-free time sheet. Only reachable once a time is set. Posting in
    * 'move' mode (the default) archives the item — any kind — into its
-   * surface's collapsed "On calendar" section; the calendar owns it now,
-   * and removing the entry brings it back. 'Keep a copy' posts without
-   * archiving. The choice is remembered in user settings.
+   * surface's collapsed "On calendar" section; the calendar owns it now.
+   * 'Keep a copy' posts without archiving. Re-enabling a moved item is
+   * local-only (it becomes a copy); this sheet never deletes calendar
+   * entries — that's the calendar's business, not ours. The move/copy
+   * choice is remembered in user settings.
    */
   let {
     item,
@@ -59,10 +61,10 @@
   const willArchive = $derived(!isPosted && postMode === 'move');
   const archiveNote = $derived(
     isTodoish
-      ? "The todo moves to the Todos page's “On calendar” section once it's on your calendar. Removing the entry brings it back."
+      ? "The todo moves to the Todos page's “On calendar” section once it's on your calendar. You can re-enable it from there anytime."
       : item.collectionId
-        ? "The card moves to its collection's “On calendar” section once it's on your calendar. Removing the entry brings it back."
-        : "The card moves to the Inbox's archived section once it's on your calendar. Removing the entry brings it back.",
+        ? "The card moves to its collection's “On calendar” section once it's on your calendar. You can re-enable it from there anytime."
+        : "The card moves to the Inbox's archived section once it's on your calendar. You can re-enable it from there anytime.",
   );
 
   const eventHome = choiceForEventUrl(item.eventUrl);
@@ -158,14 +160,16 @@
     }
   }
 
-  async function remove() {
+  // Local-only: clears the archive state, never touches the calendar.
+  async function reEnable() {
     saving = true;
     try {
-      await removeItemFromCalendar(item);
+      await reEnableFromCalendar(item);
+      showToast('Re-enabled — the calendar entry stays put');
       onclose();
     } catch (err) {
-      console.error('Calendar delete failed', err);
-      showToast(`Still on your calendar — ${friendly(err)}`);
+      console.error('Re-enable failed', err);
+      showToast("Couldn't re-enable — try again");
     } finally {
       saving = false;
     }
@@ -259,10 +263,14 @@
       <button type="button" class="btn-ghost" disabled={saving} onclick={handleDownload}>
         Download .ics
       </button>
-      {#if isPosted}
-        <button type="button" class="btn-remove" disabled={saving} onclick={remove}>
-          Remove from calendar
+      {#if isPosted && item.archived}
+        <button type="button" class="btn-ghost" disabled={saving} onclick={reEnable}>
+          Re-enable in {isTodoish ? 'Todos' : item.collectionId ? 'this collection' : 'the Inbox'}
         </button>
+        <p class="note">
+          Brings it back under this app's management. The calendar entry is
+          not touched.
+        </p>
       {/if}
     {:else}
       <p class="hint">
@@ -481,8 +489,7 @@
     cursor: default;
   }
 
-  .btn-ghost,
-  .btn-remove {
+  .btn-ghost {
     display: block;
     width: 100%;
     margin-top: 0.35rem;
@@ -501,16 +508,7 @@
     background: var(--surface-hover);
   }
 
-  .btn-remove {
-    color: var(--danger);
-  }
-
-  .btn-remove:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--danger) 10%, transparent);
-  }
-
-  .btn-ghost:disabled,
-  .btn-remove:disabled {
+  .btn-ghost:disabled {
     opacity: 0.5;
     cursor: default;
   }

@@ -38,7 +38,8 @@ export interface InboxItemBase {
    * owns it, so it leaves the active lists for its surface's collapsed
    * "on calendar" section (Inbox archived section for unfiled cards, the
    * Todos page's section for todos, the collection view's for filed items).
-   * "Copy" mode never sets it, and removing the calendar entry clears it.
+   * "Copy" mode never sets it. Re-enabling clears it locally — the calendar
+   * entry is never deleted on the user's behalf.
    */
   archived?: boolean;
   archivedAt?: string;
