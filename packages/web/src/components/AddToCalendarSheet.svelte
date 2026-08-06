@@ -15,6 +15,7 @@
   import { formatScheduled } from '../lib/schedule';
   import {
     addItemToCalendar,
+    ReceiptWriteError,
     recordCalendarUse,
     reEnableFromCalendar,
   } from '../lib/schedule-sync';
@@ -151,7 +152,16 @@
       onclose();
     } catch (err) {
       console.error('Calendar post failed', err);
-      showToast(`Couldn't add to calendar — ${friendly(err)}`);
+      if (err instanceof ReceiptWriteError) {
+        // The entry WAS created; only the local receipt failed. Saying
+        // "couldn't add" here would invite a confused re-add.
+        showToast(
+          "Added to the calendar, but the app couldn't record it — the card may still offer to add it.",
+        );
+        onclose();
+      } else {
+        showToast(`Couldn't add to calendar — ${friendly(err)}`);
+      }
     } finally {
       saving = false;
     }

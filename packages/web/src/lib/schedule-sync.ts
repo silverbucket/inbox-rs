@@ -53,6 +53,22 @@ export async function applyPendingSchedule(
 }
 
 /**
+ * The entry was created on the calendar, but persisting the receipt
+ * locally failed — the card will still offer "Add to calendar" even though
+ * the entry exists. Callers must not report this as "couldn't add".
+ * Retrying the same calendar is bounded: the entry href derives from the
+ * item's deterministic UID (`<id>@inbox-rs`), so a re-create targets the
+ * same resource rather than piling up duplicates.
+ */
+export class ReceiptWriteError extends Error {
+  constructor(cause: unknown) {
+    super('Calendar entry created, but saving its receipt failed');
+    this.name = 'ReceiptWriteError';
+    this.cause = cause;
+  }
+}
+
+/**
  * Create the item's calendar entry (one shot — an already-posted item can
  * never be posted again) and apply the ownership rule: in 'move' mode (the
  * default) the calendar owns the item now, so it is archived out of its
@@ -85,7 +101,11 @@ export async function addItemToCalendar(
       archivedAt: new Date().toISOString(),
     };
   }
-  await storeItem(cleanForStorage(posted));
+  try {
+    await storeItem(cleanForStorage(posted));
+  } catch (err) {
+    throw new ReceiptWriteError(err);
+  }
   return posted;
 }
 

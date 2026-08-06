@@ -396,9 +396,7 @@
               {#if onCalendarTodos.length > 0}
                 <ul class="todo-list completed-list" role="list">
                   {#each onCalendarTodos as todo (todo.id)}
-                    <div in:fade={{ duration: 150 }}>
-                      <TodoRow {todo} readonly {collection} {group} {onselect} />
-                    </div>
+                    <TodoRow {todo} readonly {collection} {group} {onselect} />
                   {/each}
                 </ul>
               {/if}

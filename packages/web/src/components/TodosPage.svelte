@@ -159,17 +159,18 @@
     {#if dueTodos.length > 0}
       <div class="due-band">
         <div class="due-header">Due</div>
+        <!-- TodoRow renders its own <li>, so rows sit directly in the list —
+             no transition wrapper (a div between ul and li breaks list
+             semantics for assistive tech). -->
         <ul class="todo-list" role="list">
           {#each dueTodos as todo (todo.id)}
-            <div in:fade={{ duration: 180 }} out:fade={{ duration: 120 }}>
-              <TodoRow
-                {todo}
-                collection={lookupCollection(todo.collectionId)}
-                group={lookupGroup(todo.collectionId)}
-                {onselect}
-                onaddincollection={onaddtodoincollection}
-              />
-            </div>
+            <TodoRow
+              {todo}
+              collection={lookupCollection(todo.collectionId)}
+              group={lookupGroup(todo.collectionId)}
+              {onselect}
+              onaddincollection={onaddtodoincollection}
+            />
           {/each}
         </ul>
       </div>
@@ -259,15 +260,13 @@
             transition:slide={{ duration: isTouchDevice ? 0 : 200 }}
           >
             {#each onCalendarTodos as todo (todo.id)}
-              <div in:fade={{ duration: 150 }}>
-                <TodoRow
-                  {todo}
-                  readonly
-                  collection={lookupCollection(todo.collectionId)}
-                  group={lookupGroup(todo.collectionId)}
-                  {onselect}
-                />
-              </div>
+              <TodoRow
+                {todo}
+                readonly
+                collection={lookupCollection(todo.collectionId)}
+                group={lookupGroup(todo.collectionId)}
+                {onselect}
+              />
             {/each}
           </ul>
         {/if}

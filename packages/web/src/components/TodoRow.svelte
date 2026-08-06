@@ -94,6 +94,11 @@
   // The pill (not the whole row) is the handle so it doesn't fight the
   // svelte-dnd-action reorder gesture, which owns row-body drags.
   function onFileDragStart(e: DragEvent) {
+    // Receipt rows are read-only end to end — no re-filing from here.
+    if (readonly) {
+      e.preventDefault();
+      return;
+    }
     if (!e.dataTransfer) return;
     e.dataTransfer.setData(DRAG_MIME, todo.id);
     e.dataTransfer.setData('text/plain', todo.title || todo.id);
@@ -140,7 +145,7 @@
   style="--group-color: {groupColor}; --collection-color: {collectionColor}"
 >
   {#if readonly}
-    <span class="cal-marker" title="On calendar" aria-label="On calendar">
+    <span class="cal-marker" title="On calendar" role="img" aria-label="On calendar">
       <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="3" y="4" width="18" height="18" rx="2"></rect>
         <line x1="16" y1="2" x2="16" y2="6"></line>
@@ -179,9 +184,11 @@
       class="collection-pill"
       type="button"
       tabindex="-1"
-      draggable="true"
-      title="Drag to refile · {collectionName}"
-      aria-label="Drag {todo.title} onto a collection to refile it"
+      draggable={!readonly}
+      title={readonly ? collectionName : `Drag to refile · ${collectionName}`}
+      aria-label={readonly
+        ? `Filed in ${collectionName}`
+        : `Drag ${todo.title} onto a collection to refile it`}
       onpointerdown={(e) => e.stopPropagation()}
       ondragstart={onFileDragStart}
       ondragend={onFileDragEnd}

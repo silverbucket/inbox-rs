@@ -40,12 +40,16 @@ export function eligibleForAlert(item: InboxItem): boolean {
   return !!item.startsAt && !item.completed && !item.archived;
 }
 
-/** Dedup key: one alert per (item, scheduled moment) — editing the time
- *  re-arms the alert. */
+/**
+ * Dedup key: one alert per (item, effective alert moment) — editing the
+ * time OR toggling all-day re-arms the alert, since both change when it
+ * fires. Derived from alertTimeFor, not raw startsAt, so a timed→all-day
+ * flip with the same startsAt still gets its 09:00 alert.
+ */
 export function alertKey(
-  item: Pick<InboxItem, 'id' | 'startsAt'>,
+  item: Pick<InboxItem, 'id' | 'startsAt' | 'allDay'>,
 ): string {
-  return `${item.id}@${item.startsAt}`;
+  return `${item.id}@${alertTimeFor(item) ?? 'unscheduled'}`;
 }
 
 /**
@@ -78,8 +82,8 @@ export function collectDueAlerts(
 
 /**
  * Drop fired keys that can never matter again: the item is gone, its
- * schedule moved (a fresh key guards the new time), or the key is older
- * than the retention window.
+ * effective alert moment moved (a fresh key guards the new time), or the
+ * key is older than the retention window.
  */
 export function pruneFiredKeys(
   keys: string[],
@@ -90,10 +94,10 @@ export function pruneFiredKeys(
     const at = key.lastIndexOf('@');
     if (at <= 0) return false;
     const id = key.slice(0, at);
-    const startsAt = key.slice(at + 1);
     const item = items[id];
-    if (!item || item.startsAt !== startsAt) return false;
+    if (!item) return false;
     const due = alertTimeFor(item);
-    return due !== null && nowMs - due < FIRED_RETENTION_MS;
+    if (due === null || key.slice(at + 1) !== String(due)) return false;
+    return nowMs - due < FIRED_RETENTION_MS;
   });
 }

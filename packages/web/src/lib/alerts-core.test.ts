@@ -95,6 +95,17 @@ describe('collectDueAlerts', () => {
     ]);
   });
 
+  it('re-arms when allDay flips with an unchanged startsAt — the effective time moved', () => {
+    const t = todo('a', { startsAt: new Date(NOW - 5_000).toISOString() });
+    const fired = new Set([alertKey(t)]);
+    const flipped = { ...t, allDay: true };
+    expect(alertKey(flipped)).not.toBe(alertKey(t));
+    // The 09:00 all-day alert is its own key, so the timed alert's fired
+    // entry no longer suppresses it (generous grace keeps it in `fire`).
+    const { fire } = collectDueAlerts([flipped], fired, NOW, 12 * 60 * 60_000);
+    expect(fire.map((i) => i.id)).toEqual(['a']);
+  });
+
   it('ignores ineligible items even when due', () => {
     const moved = todo('moved', {
       startsAt: new Date(NOW - 5_000).toISOString(),
@@ -122,7 +133,7 @@ describe('pruneFiredKeys', () => {
     const items: Record<string, InboxItem> = { b: rearmed, c: ancient };
     const keys = [
       'gone@2026-08-04T00:00:00.000Z',
-      `b@${new Date(NOW - 60_000).toISOString()}`, // old schedule, item moved on
+      `b@${new Date(NOW - 60_000).getTime()}`, // old effective time, item moved on
       alertKey(ancient),
       'no-separator',
     ];
