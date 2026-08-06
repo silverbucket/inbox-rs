@@ -4,9 +4,12 @@
   import { flip } from 'svelte/animate';
   import { slide, fade } from 'svelte/transition';
   import {
-    visibleTodos, reorderTodosGlobal,
+    visibleTodos, visibleOnCalendarTodos, reorderTodosGlobal,
     collections, sortedGroups, appConfig, updateConfig,
   } from '../lib/stores';
+  import { isDueTodayOrOverdue } from '../lib/schedule';
+  import { todayStart } from '../lib/now';
+  import AlertsPermissionBanner from './AlertsPermissionBanner.svelte';
   import TodoRow from './TodoRow.svelte';
   import TodoQuickAdd from './TodoQuickAdd.svelte';
   import Fab from './Fab.svelte';
@@ -25,6 +28,15 @@
 
   const todos = $derived($visibleTodos);
   const openTodos = $derived(todos.filter(t => !t.completed));
+  // The store pins due todos first (earliest due leading); the page renders
+  // them as a separate non-draggable band so manual ordering stays meaningful
+  // for everything below.
+  const dueTodos = $derived(
+    openTodos.filter(t => isDueTodayOrOverdue(t, $todayStart)),
+  );
+  const restOpenTodos = $derived(
+    openTodos.filter(t => !isDueTodayOrOverdue(t, $todayStart)),
+  );
   // Completed todos are sorted newest-first by completedAt for the collapsed
   // section — the global order only governs open todos.
   const completedTodos = $derived(
@@ -45,6 +57,11 @@
 
   const completedExpanded = $derived($appConfig.completedTodosExpanded === true);
 
+  // Todos moved to a calendar — the calendar owns them now. Collapsed by
+  // default; local state only (unlike completed, no cross-device flag yet).
+  const onCalendarTodos = $derived($visibleOnCalendarTodos);
+  let onCalendarExpanded = $state(false);
+
   let isTouchDevice = $state(false);
 
   $effect(() => {
@@ -60,7 +77,7 @@
   // where `handleDndConsider` is authoritative.
   let dndOpen = $state<Array<InboxItem & { id: string }>>([]);
   $effect(() => {
-    dndOpen = openTodos.map(t => ({ ...t }));
+    dndOpen = restOpenTodos.map(t => ({ ...t }));
   });
 
   function handleDndConsider(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
@@ -68,12 +85,17 @@
   }
 
   async function handleDndFinalize(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
-    const previous = openTodos.map(t => ({ ...t }));
+    const previous = restOpenTodos.map(t => ({ ...t }));
     dndOpen = e.detail.items;
     try {
       // Persist just the open ids — completed todos fall back to completedAt
       // ordering on re-render, so we don't need to thread them through config.
-      await reorderTodosGlobal(dndOpen.map(t => t.id));
+      // Due-band todos lead the persisted order so they resume a sane manual
+      // slot once their due date passes out of the band.
+      await reorderTodosGlobal([
+        ...dueTodos.map(t => t.id),
+        ...dndOpen.map(t => t.id),
+      ]);
     } catch (error) {
       console.error('Failed to reorder todos', error);
       dndOpen = previous;
@@ -101,6 +123,7 @@
 </script>
 
 <div class="todos-page">
+  <AlertsPermissionBanner />
   <!--
     Toolbar: count + Fab (the Fab is an inline pill on desktop, position:fixed
     and out of flow on mobile). Rendered BELOW the quick-add in the populated
@@ -116,7 +139,7 @@
     </div>
   {/snippet}
 
-  {#if openTodos.length === 0 && completedTodos.length === 0}
+  {#if openTodos.length === 0 && completedTodos.length === 0 && onCalendarTodos.length === 0}
     <!-- Lead with the composer so its input lines up with the inbox capture
          bar. The toolbar's Fab is hidden on desktop (the input + ⌘↵ handle
          capture) and a floating + circle on mobile. -->
@@ -132,6 +155,27 @@
   {:else}
     <TodoQuickAdd hideOnMobile compact focusOnMount onopenmodal={(t, c) => onaddtodo(t, c)} />
     {@render todoToolbar()}
+
+    {#if dueTodos.length > 0}
+      <div class="due-band">
+        <div class="due-header">Due</div>
+        <!-- TodoRow renders its own <li>, so rows sit directly in the list —
+             no transition wrapper (a div between ul and li breaks list
+             semantics for assistive tech). -->
+        <ul class="todo-list" role="list">
+          {#each dueTodos as todo (todo.id)}
+            <TodoRow
+              {todo}
+              collection={lookupCollection(todo.collectionId)}
+              group={lookupGroup(todo.collectionId)}
+              {onselect}
+              onaddincollection={onaddtodoincollection}
+            />
+          {/each}
+        </ul>
+      </div>
+    {/if}
+
     <ul
       class="todo-list" role="list"
       use:dndzone={{
@@ -195,6 +239,39 @@
         {/if}
       </div>
     {/if}
+
+    {#if onCalendarTodos.length > 0}
+      <div class="completed-section">
+        <button type="button"
+          class="btn-completed-toggle"
+          onclick={() => (onCalendarExpanded = !onCalendarExpanded)}
+          aria-expanded={onCalendarExpanded}
+        >
+          <svg aria-hidden="true" class="chevron" class:open={onCalendarExpanded} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+          {onCalendarTodos.length} on calendar
+        </button>
+
+        {#if onCalendarExpanded}
+          <ul
+            class="todo-list completed-list"
+            role="list"
+            transition:slide={{ duration: isTouchDevice ? 0 : 200 }}
+          >
+            {#each onCalendarTodos as todo (todo.id)}
+              <TodoRow
+                {todo}
+                readonly
+                collection={lookupCollection(todo.collectionId)}
+                group={lookupGroup(todo.collectionId)}
+                {onselect}
+              />
+            {/each}
+          </ul>
+        {/if}
+      </div>
+    {/if}
   {/if}
 </div>
 
@@ -228,6 +305,23 @@
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
+  }
+
+  .due-band {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px dashed var(--border);
+  }
+
+  .due-header {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--danger);
+    padding: 0 0.25rem;
   }
 
   .completed-section {

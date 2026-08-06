@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   applySchedule,
   clearSchedule,
+  compareByDueTime,
   formatScheduled,
   fromInputValues,
+  isDueTodayOrOverdue,
   isOverdue,
   isPast,
   nextRoundHour,
@@ -126,6 +128,51 @@ describe('isOverdue / isPast', () => {
     });
     expect(isPast(running, WED_1423)).toBe(false);
     expect(isPast(note({ startsAt: past }), WED_1423)).toBe(true);
+  });
+});
+
+describe('isDueTodayOrOverdue / compareByDueTime', () => {
+  // Local midnight of the reference Wednesday.
+  const TODAY_START = new Date(2026, 6, 29).getTime();
+
+  it('is date-based: earlier today, yesterday, and later today all count', () => {
+    const laterToday = new Date(2026, 6, 29, 23, 0).toISOString();
+    const yesterday = new Date(2026, 6, 28, 9, 0).toISOString();
+    const tomorrow = new Date(2026, 6, 30, 0, 30).toISOString();
+    expect(
+      isDueTodayOrOverdue(note({ startsAt: laterToday }), TODAY_START),
+    ).toBe(true);
+    expect(
+      isDueTodayOrOverdue(note({ startsAt: yesterday }), TODAY_START),
+    ).toBe(true);
+    expect(
+      isDueTodayOrOverdue(note({ startsAt: tomorrow }), TODAY_START),
+    ).toBe(false);
+  });
+
+  it('excludes completed, archived, and unscheduled items', () => {
+    const due = new Date(2026, 6, 29, 9, 0).toISOString();
+    expect(
+      isDueTodayOrOverdue(
+        note({ startsAt: due, completed: true }),
+        TODAY_START,
+      ),
+    ).toBe(false);
+    expect(
+      isDueTodayOrOverdue(note({ startsAt: due, archived: true }), TODAY_START),
+    ).toBe(false);
+    expect(isDueTodayOrOverdue(note(), TODAY_START)).toBe(false);
+  });
+
+  it('compareByDueTime sorts earliest first, undated last', () => {
+    const a = note({ startsAt: '2026-07-29T08:00:00.000Z' });
+    const b = note({ startsAt: '2026-07-29T10:00:00.000Z' });
+    const c = note();
+    expect([b, c, a].sort(compareByDueTime).map((i) => i.startsAt)).toEqual([
+      a.startsAt,
+      b.startsAt,
+      undefined,
+    ]);
   });
 });
 

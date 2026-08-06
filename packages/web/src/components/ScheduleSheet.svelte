@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
   import { trapFocus } from '../lib/actions';
-  import { CaldavError } from '../lib/caldav';
   import { cleanForStorage } from '../lib/clean-for-storage';
   import {
     applySchedule,
@@ -14,8 +13,6 @@
     toDateInputValue,
     toTimeInputValue,
   } from '../lib/schedule';
-  import { postScheduledItem, removePostedEntry } from '../lib/schedule-sync';
-  import { choiceForEventUrl } from '../lib/calendar-accounts';
   import { showToast } from '../lib/toast';
   import { storeItem } from '../lib/stores';
 
@@ -138,9 +135,10 @@
   }
 
   /**
-   * Save the time. When the card is already on a calendar, the posted entry
-   * is updated in the same gesture (local-first: a failed sync keeps the
-   * local time and toasts why — the projection catches up on the next save).
+   * Save the time — local-only, always. Publishing is one-shot: a posted
+   * calendar entry is a frozen snapshot, so a time edit changes the card
+   * but never the calendar. The toast says so, once, so the drift isn't
+   * mysterious in the other direction.
    */
   async function save() {
     if (pickMode) {
@@ -151,37 +149,18 @@
     const updated = scheduledItem();
     if (!updated) return;
     if (!(await persist(updated, 'Failed to save time'))) return;
-    const home = choiceForEventUrl(updated.eventUrl);
-    if (updated.eventUrl && home) {
-      saving = true;
-      try {
-        const posted = await postScheduledItem(updated, home.calendar.id);
-        await storeItem(cleanForStorage(posted));
-      } catch (err) {
-        console.error('Calendar sync failed', err);
-        const reason =
-          err instanceof CaldavError
-            ? err.message
-            : 'the calendar relay is unreachable';
-        showToast(`Time saved — calendar copy not updated: ${reason}`);
-      } finally {
-        saving = false;
-      }
-    } else if (updated.eventUrl) {
-      // Posted, but its calendar account is gone (removed in settings) —
-      // the doc contract says a skipped sync must say why.
-      console.error('Calendar sync skipped: no account for', updated.eventUrl);
-      showToast(
-        'Time saved — calendar copy not updated: its calendar account was removed',
-      );
+    if (updated.eventUrl) {
+      showToast('Time saved — the calendar entry keeps its original time');
     }
     onclose();
   }
 
   /**
-   * Removing the time also removes the posted calendar entry (an entry
-   * can't exist without its time). If the server refuses, keep everything
-   * so card and calendar don't silently diverge.
+   * Removing the time also drops the calendar receipt, locally: without its
+   * time the card no longer matches what was posted, so it stops claiming
+   * to be on a calendar (and un-archives). The calendar keeps its entry —
+   * inbox-rs never deletes there. clearSchedule clears the receipt fields
+   * along with the time.
    */
   async function remove() {
     if (pickMode) {
@@ -189,23 +168,11 @@
       return;
     }
     if (!item) return;
-    if (item.eventUrl) {
-      saving = true;
-      try {
-        await removePostedEntry(item);
-      } catch (err) {
-        console.error('Calendar delete failed', err);
-        const reason =
-          err instanceof CaldavError
-            ? err.message
-            : 'the calendar relay is unreachable';
-        showToast(`Still on your calendar — ${reason}`);
-        saving = false;
-        return;
-      }
-      saving = false;
-    }
+    const wasPosted = !!item.eventUrl;
     if (await persist(clearSchedule(item), 'Failed to remove time')) {
+      if (wasPosted) {
+        showToast('Time removed — the calendar entry stays put');
+      }
       onclose();
     }
   }

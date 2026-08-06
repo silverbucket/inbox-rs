@@ -10,6 +10,7 @@
   import { makeTodo } from '../lib/item-utils';
   import {
     filterCompletedTodos,
+    filterOnCalendarItems,
     filterOpenTodos,
     filterReferenceItems,
     filterTodos,
@@ -46,6 +47,15 @@
     sortCompletedTodosByCompletedAt(filterCompletedTodos(todoItems))
   );
   const referenceItems = $derived(filterReferenceItems(items));
+
+  // Items moved to a calendar (todos and cards alike) — one combined
+  // collapsed section; the calendar owns them until the entry is removed.
+  const onCalendarItems = $derived(filterOnCalendarItems(items));
+  const onCalendarTodos = $derived(filterTodos(onCalendarItems));
+  const onCalendarRefs = $derived(
+    onCalendarItems.filter((i) => !i.isTodo && i.type !== 'todo'),
+  );
+  let onCalendarExpanded = $state(false);
 
   // Shared group lookup for TodoRow styling — collection's own color takes
   // priority, but we also supply the group so the pill colour degrades
@@ -368,6 +378,41 @@
           <p class="section-empty">No references yet.</p>
         {/if}
       </section>
+
+      {#if onCalendarItems.length > 0}
+        <section class="on-calendar-section" aria-label="On calendar in {collection.name}">
+          <button type="button"
+            class="btn-completed-toggle"
+            onclick={() => (onCalendarExpanded = !onCalendarExpanded)}
+            aria-expanded={onCalendarExpanded}
+          >
+            <svg aria-hidden="true" class="chevron-sm" class:open={onCalendarExpanded} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+            {onCalendarItems.length} on calendar
+          </button>
+          {#if onCalendarExpanded}
+            <div class="on-calendar-body" transition:slide={{ duration: isTouchDevice ? 0 : 200 }}>
+              {#if onCalendarTodos.length > 0}
+                <ul class="todo-list completed-list" role="list">
+                  {#each onCalendarTodos as todo (todo.id)}
+                    <TodoRow {todo} readonly {collection} {group} {onselect} />
+                  {/each}
+                </ul>
+              {/if}
+              {#if onCalendarRefs.length > 0}
+                <div class="grid on-calendar-grid">
+                  {#each onCalendarRefs as item (item.id)}
+                    <div class="grid-card-wrapper">
+                      <InboxCard {item} {onselect} />
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/if}
+        </section>
+      {/if}
     </div>
   {/if}
 </div>
@@ -688,6 +733,23 @@
   }
 
   .completed-list {
+    margin-top: 0.4rem;
+    opacity: 0.75;
+  }
+
+  .on-calendar-section {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed var(--border);
+  }
+
+  .on-calendar-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .on-calendar-grid {
     margin-top: 0.4rem;
     opacity: 0.75;
   }

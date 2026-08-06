@@ -1,15 +1,16 @@
 /**
- * Orchestrates posting a card's schedule to a CalDAV calendar via the
- * sockethub relay: create vs update vs move, entry removal, and best-effort
- * completion sync for tasks. The card is always the source of truth — these
- * helpers only maintain the calendar-side projection and the stored
- * eventUrl/eventEtag pointing at it.
+ * One-shot calendar publishing via the sockethub relay. Posting CREATES an
+ * entry and stores eventUrl/eventEtag as a receipt — which calendar the item
+ * went to, and that it's there. After that, inbox-rs NEVER updates or
+ * deletes the entry, no matter what happens to the card: the user's
+ * calendar is theirs, and entries must not change or vanish because
+ * someone was editing cards in this app. All detach/re-enable operations
+ * are local-only.
  */
 import type { InboxItem } from '@inbox-rs/rs-module';
-import { CaldavError, createEntry, deleteEntry, updateEntry } from './caldav';
+import { CaldavError, createEntry } from './caldav';
 import {
   accountEndpoint,
-  choiceForEventUrl,
   findCalendarChoice,
   recordCalendarUse,
 } from './calendar-accounts';
@@ -22,81 +23,8 @@ import {
 import { storeItem } from './stores';
 
 /**
- * Post the (already locally saved) scheduled item to `calendarId`. Handles
- * all three shapes: first post (create), same-calendar change (update), and
- * calendar move (delete from the old calendar, create in the new one).
- * Returns the item with its eventUrl/eventEtag refreshed — the caller
- * persists it.
- */
-export async function postScheduledItem(
-  item: InboxItem,
-  calendarId: string,
-): Promise<InboxItem> {
-  const target = findCalendarChoice(calendarId);
-  if (!target) throw new CaldavError('caldav:invalid-calendar');
-
-  const current = choiceForEventUrl(item.eventUrl);
-  if (item.eventUrl && current && current.calendar.id === calendarId) {
-    const posted = await updateEntry(
-      current.account,
-      calendarId,
-      item,
-      accountEndpoint(current.account),
-    );
-    return { ...item, ...posted };
-  }
-  if (item.eventUrl && current) {
-    // Moving calendars: remove the old projection first. A vanished entry
-    // (deleted out-of-band in the calendar app) is fine — the goal state is
-    // "not there", and create below still runs.
-    try {
-      await deleteEntry(
-        current.account,
-        current.calendar.id,
-        item,
-        accountEndpoint(current.account),
-      );
-    } catch (err) {
-      if (!(err instanceof CaldavError && err.code === 'caldav:not-found')) {
-        throw err;
-      }
-    }
-  }
-  const posted = await createEntry(
-    target.account,
-    calendarId,
-    item,
-    accountEndpoint(target.account),
-  );
-  return { ...item, ...posted };
-}
-
-/**
- * Delete the item's posted entry. Resolves (with no value) once the calendar
- * no longer has the entry — deleted now, already gone, or never posted;
- * throws only when the server refused and the entry may still exist.
- */
-export async function removePostedEntry(item: InboxItem): Promise<void> {
-  const current = choiceForEventUrl(item.eventUrl);
-  if (!item.eventUrl || !current) return;
-  try {
-    await deleteEntry(
-      current.account,
-      current.calendar.id,
-      item,
-      accountEndpoint(current.account),
-    );
-  } catch (err) {
-    if (err instanceof CaldavError && err.code === 'caldav:not-found') return;
-    throw err;
-  }
-}
-
-/**
- * The shared completion toggle: persists the flip locally, then — for tasks
- * with a posted entry — syncs STATUS:COMPLETED to the calendar best-effort.
- * Calendar failures never block or revert the local toggle; the next
- * successful post refreshes the projection.
+ * The shared completion toggle — local-only. Completing a todo here never
+ * touches a posted calendar entry; the calendar's copy is a frozen snapshot.
  */
 export async function setItemCompleted(
   item: InboxItem,
@@ -109,23 +37,6 @@ export async function setItemCompleted(
     completedAt: completed ? new Date().toISOString() : undefined,
   };
   await storeItem(cleanForStorage(updated));
-
-  if (item.scheduleKind !== 'task' || !item.eventUrl || !item.eventEtag) {
-    return;
-  }
-  const current = choiceForEventUrl(item.eventUrl);
-  if (!current) return;
-  try {
-    const posted = await updateEntry(
-      current.account,
-      current.calendar.id,
-      updated,
-      accountEndpoint(current.account),
-    );
-    await storeItem(cleanForStorage({ ...updated, ...posted }));
-  } catch (err) {
-    console.warn('Calendar completion sync failed (kept local state)', err);
-  }
 }
 
 /**
@@ -142,39 +53,88 @@ export async function applyPendingSchedule(
 }
 
 /**
- * Post the item to a calendar and apply the ownership rule: adding an
- * *Inbox reference card* to a calendar completes its triage — the calendar
- * owns it now, so the card is archived out of the Inbox. Todos are never
- * archived (they still need completing in the app), and filed cards are
- * already triaged. Returns the stored item.
+ * The entry was created on the calendar, but persisting the receipt
+ * locally failed — the card will still offer "Add to calendar" even though
+ * the entry exists. Callers must not report this as "couldn't add".
+ * Retrying the same calendar is bounded: the entry href derives from the
+ * item's deterministic UID (`<id>@inbox-rs`), so a re-create targets the
+ * same resource rather than piling up duplicates.
+ */
+export class ReceiptWriteError extends Error {
+  constructor(cause: unknown) {
+    super('Calendar entry created, but saving its receipt failed');
+    this.name = 'ReceiptWriteError';
+    this.cause = cause;
+  }
+}
+
+/**
+ * Create the item's calendar entry (one shot — an already-posted item can
+ * never be posted again) and apply the ownership rule: in 'move' mode (the
+ * default) the calendar owns the item now, so it is archived out of its
+ * surface's active lists — any kind, filed or not. 'copy' mode posts
+ * without archiving. Returns the stored item.
  */
 export async function addItemToCalendar(
   item: InboxItem,
   calendarId: string,
+  mode: 'move' | 'copy' = 'move',
 ): Promise<InboxItem> {
-  const firstPost = !item.eventUrl;
-  let posted = await postScheduledItem(item, calendarId);
-  const isTodoish = posted.isTodo || posted.type === 'todo';
-  if (firstPost && !isTodoish && !posted.collectionId) {
+  if (item.eventUrl) {
+    throw new Error(
+      'Item is already on a calendar — posting is one-shot and never updates entries.',
+    );
+  }
+  const target = findCalendarChoice(calendarId);
+  if (!target) throw new CaldavError('caldav:invalid-calendar');
+  const receipt = await createEntry(
+    target.account,
+    calendarId,
+    item,
+    accountEndpoint(target.account),
+  );
+  let posted: InboxItem = { ...item, ...receipt };
+  if (mode === 'move') {
     posted = {
       ...posted,
       archived: true,
       archivedAt: new Date().toISOString(),
     };
   }
-  await storeItem(cleanForStorage(posted));
+  try {
+    await storeItem(cleanForStorage(posted));
+  } catch (err) {
+    throw new ReceiptWriteError(err);
+  }
   return posted;
 }
 
 /**
- * Detach the item from its calendar: delete the server entry, keep the
- * time, un-archive (the card returns to the Inbox queue). Throws when the
- * server refused and the entry may still exist — callers keep state as-is.
+ * Bring a moved item back under the app's management: only the archive
+ * state clears. The receipt (eventUrl) stays, so the item reads as a copy,
+ * and the calendar entry is not touched.
  */
-export async function removeItemFromCalendar(
+export async function reEnableFromCalendar(
   item: InboxItem,
 ): Promise<InboxItem> {
-  await removePostedEntry(item);
+  const updated: InboxItem = {
+    ...item,
+    archived: undefined,
+    archivedAt: undefined,
+  };
+  await storeItem(cleanForStorage(updated));
+  return updated;
+}
+
+/**
+ * Drop the item's calendar receipt entirely (link + archive state),
+ * local-only — the calendar keeps its entry. Used when the card diverges
+ * from what was posted beyond what a receipt should claim (e.g. its time
+ * was cleared, or it changed kind).
+ */
+export async function detachFromCalendar(
+  item: InboxItem,
+): Promise<InboxItem> {
   const updated = clearPostedEntry(item);
   await storeItem(cleanForStorage(updated));
   return updated;

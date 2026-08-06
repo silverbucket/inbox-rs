@@ -3,9 +3,10 @@
   import { setItemCompleted } from '../lib/schedule-sync';
   import { typeIconPath } from '../lib/item-utils';
   import { draggingItemId, DRAG_MIME } from '../lib/drag';
+  import { now } from '../lib/now';
   import { formatScheduled, isOverdue } from '../lib/schedule';
 
-  let { todo, collection, group, onselect, onaddincollection }: {
+  let { todo, collection, group, onselect, onaddincollection, readonly = false }: {
     todo: InboxItem;
     /** The collection this todo belongs to, or null when unfiled. */
     collection: Collection | null;
@@ -16,6 +17,11 @@
         this row's collection. Unfiled rows pass `undefined` so the follow-up
         stays unfiled too. Omit the handler to hide the affordance. */
     onaddincollection?: (collectionId: string | undefined) => void;
+    /** Receipt mode for "On calendar" sections: the todo is managed
+        elsewhere now, so no completion checkbox — a calendar marker instead.
+        The row still opens the card, where "Re-enable" brings it back under
+        the app's management (without touching the calendar). */
+    readonly?: boolean;
   } = $props();
 
   // Show the underlying item type as an icon for items that are "todos by flag"
@@ -56,7 +62,7 @@
   const createdTitle = $derived(new Date(todo.createdAt).toLocaleString());
 
   const scheduledLabel = $derived(todo.startsAt ? formatScheduled(todo) : '');
-  const scheduleOverdue = $derived(isOverdue(todo));
+  const scheduleOverdue = $derived(isOverdue(todo, $now));
 
   async function toggleCompleted(e: Event) {
     e.stopPropagation();
@@ -88,6 +94,11 @@
   // The pill (not the whole row) is the handle so it doesn't fight the
   // svelte-dnd-action reorder gesture, which owns row-body drags.
   function onFileDragStart(e: DragEvent) {
+    // Receipt rows are read-only end to end — no re-filing from here.
+    if (readonly) {
+      e.preventDefault();
+      return;
+    }
     if (!e.dataTransfer) return;
     e.dataTransfer.setData(DRAG_MIME, todo.id);
     e.dataTransfer.setData('text/plain', todo.title || todo.id);
@@ -133,14 +144,25 @@
   onkeydown={handleKey}
   style="--group-color: {groupColor}; --collection-color: {collectionColor}"
 >
-  <input
-    type="checkbox"
-    class="checkbox"
-    checked={todo.completed}
-    onclick={(e) => e.stopPropagation()}
-    onchange={toggleCompleted}
-    aria-label="Mark {todo.title} as {todo.completed ? 'incomplete' : 'complete'}"
-  />
+  {#if readonly}
+    <span class="cal-marker" title="On calendar" role="img" aria-label="On calendar">
+      <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+        <line x1="16" y1="2" x2="16" y2="6"></line>
+        <line x1="8" y1="2" x2="8" y2="6"></line>
+        <line x1="3" y1="10" x2="21" y2="10"></line>
+      </svg>
+    </span>
+  {:else}
+    <input
+      type="checkbox"
+      class="checkbox"
+      checked={todo.completed}
+      onclick={(e) => e.stopPropagation()}
+      onchange={toggleCompleted}
+      aria-label="Mark {todo.title} as {todo.completed ? 'incomplete' : 'complete'}"
+    />
+  {/if}
 
   <span class="title">{todo.title}</span>
 
@@ -162,9 +184,11 @@
       class="collection-pill"
       type="button"
       tabindex="-1"
-      draggable="true"
-      title="Drag to refile · {collectionName}"
-      aria-label="Drag {todo.title} onto a collection to refile it"
+      draggable={!readonly}
+      title={readonly ? collectionName : `Drag to refile · ${collectionName}`}
+      aria-label={readonly
+        ? `Filed in ${collectionName}`
+        : `Drag ${todo.title} onto a collection to refile it`}
       onpointerdown={(e) => e.stopPropagation()}
       ondragstart={onFileDragStart}
       ondragend={onFileDragEnd}
@@ -237,6 +261,17 @@
        signal available for this individual todo. */
     accent-color: var(--collection-color);
     cursor: pointer;
+  }
+
+  /* Receipt marker in place of the checkbox for on-calendar rows. */
+  .cal-marker {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    color: var(--text-muted);
   }
 
   .title {

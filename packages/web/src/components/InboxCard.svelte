@@ -7,6 +7,7 @@
   import DocumentCard from './DocumentCard.svelte';
   import EmailCard from './EmailCard.svelte';
   import { draggingItemId, DRAG_MIME } from '../lib/drag';
+  import { now } from '../lib/now';
   import { formatScheduled, isOverdue, isPast } from '../lib/schedule';
 
   let { item, onselect }: { item: InboxItem; onselect: (item: InboxItem) => void } = $props();
@@ -121,8 +122,8 @@
   }
 
   const scheduledLabel = $derived(item.startsAt ? formatScheduled(item) : '');
-  const scheduleOverdue = $derived(isOverdue(item));
-  const schedulePast = $derived(isPast(item));
+  const scheduleOverdue = $derived(isOverdue(item, $now));
+  const schedulePast = $derived(isPast(item, $now));
 </script>
 
 <article class="card" role="button" tabindex="0"

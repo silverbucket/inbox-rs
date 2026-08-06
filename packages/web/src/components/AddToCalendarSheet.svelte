@@ -15,17 +15,23 @@
   import { formatScheduled } from '../lib/schedule';
   import {
     addItemToCalendar,
+    ReceiptWriteError,
     recordCalendarUse,
-    removeItemFromCalendar,
+    reEnableFromCalendar,
   } from '../lib/schedule-sync';
+  import { updateUserSettings, userSettings } from '../lib/stores';
   import { showToast } from '../lib/toast';
   import CalendarPicker from './CalendarPicker.svelte';
 
   /**
    * Publishing a timed card to a calendar — the counterpart to the
-   * calendar-free time sheet. Only reachable once a time is set. Posting an
-   * Inbox reference card archives it (the calendar owns it now); removing
-   * the entry brings it back. Todos are never archived — they complete.
+   * calendar-free time sheet. Only reachable once a time is set, and
+   * ONE-SHOT: posting creates the entry and inbox-rs never updates or
+   * deletes it afterwards. 'Move' mode (the default) archives the item —
+   * any kind — into its surface's collapsed "On calendar" section; 'Keep a
+   * copy' posts without archiving. For a posted item this sheet is a
+   * receipt: it shows the destination calendar and offers local-only
+   * re-enable. The move/copy choice is remembered in user settings.
    */
   let {
     item,
@@ -39,11 +45,34 @@
   const kind = item.scheduleKind ?? (isTodoish ? 'task' : 'event');
   const timeLabel = formatScheduled(item);
   const isPosted = !!item.eventUrl;
-  const willArchive = !isPosted && !isTodoish && !item.collectionId;
 
+  // Move vs copy — initialized once from the synced preference; toggling
+  // persists so the next sheet opens on the same choice.
+  let postMode = $state<'move' | 'copy'>(
+    $userSettings.calendarPostMode ?? 'move',
+  );
+
+  function setPostMode(mode: 'move' | 'copy') {
+    postMode = mode;
+    updateUserSettings({ calendarPostMode: mode }).catch((err) => {
+      console.error('Failed to save calendar post mode', err);
+    });
+  }
+
+  const willArchive = $derived(!isPosted && postMode === 'move');
+  const archiveNote = $derived(
+    isTodoish
+      ? "The todo moves to the Todos page's “On calendar” section once it's on your calendar. You can re-enable it from there anytime."
+      : item.collectionId
+        ? "The card moves to its collection's “On calendar” section once it's on your calendar. You can re-enable it from there anytime."
+        : "The card moves to the Inbox's archived section once it's on your calendar. You can re-enable it from there anytime.",
+  );
+
+  // The receipt: which calendar this item went to (undefined when the
+  // account has since been removed — the entry still exists there).
   const eventHome = choiceForEventUrl(item.eventUrl);
   let selectedCalendarId = $state<string | undefined>(
-    eventHome?.calendar.id ?? pickPreferredCalendar(kind)?.calendar.id,
+    pickPreferredCalendar(kind)?.calendar.id,
   );
   let showPicker = $state(false);
   let saving = $state(false);
@@ -81,18 +110,13 @@
 
   const hasAccounts = $derived($calendarAccounts.length > 0);
   const selectedChoice = $derived<CalendarChoice | undefined>(
-    findCalendarChoice(selectedCalendarId) ??
-      (eventHome?.calendar.id === selectedCalendarId ? eventHome : undefined),
+    findCalendarChoice(selectedCalendarId),
   );
   const calendarSupportsKind = $derived(
     !!selectedChoice?.calendar.components.includes(kind),
   );
   const canPost = $derived(
     !saving && !!selectedChoice && calendarSupportsKind,
-  );
-  /** Selected a different calendar than the entry's current home. */
-  const isMove = $derived(
-    isPosted && !!selectedChoice && selectedChoice.calendar.id !== eventHome?.calendar.id,
   );
 
   function handlePick(choice: CalendarChoice) {
@@ -110,28 +134,49 @@
     if (!canPost || !selectedChoice) return;
     saving = true;
     try {
-      const posted = await addItemToCalendar(item, selectedChoice.calendar.id);
+      const posted = await addItemToCalendar(
+        item,
+        selectedChoice.calendar.id,
+        postMode,
+      );
       recordCalendarUse(kind, selectedChoice.calendar.id);
       if (posted.archived) {
-        showToast('Added to calendar — card archived from the Inbox');
+        showToast(
+          isTodoish
+            ? 'Added to calendar — todo moved to the On-calendar section'
+            : item.collectionId
+              ? "Added to calendar — card moved to the collection's On-calendar section"
+              : 'Added to calendar — card archived from the Inbox',
+        );
       }
       onclose();
     } catch (err) {
       console.error('Calendar post failed', err);
-      showToast(`Couldn't add to calendar — ${friendly(err)}`);
+      if (err instanceof ReceiptWriteError) {
+        // The entry WAS created; only the local receipt failed. Saying
+        // "couldn't add" here would invite a confused re-add.
+        showToast(
+          "Added to the calendar, but the app couldn't record it — the card may still offer to add it.",
+        );
+        onclose();
+      } else {
+        showToast(`Couldn't add to calendar — ${friendly(err)}`);
+      }
     } finally {
       saving = false;
     }
   }
 
-  async function remove() {
+  // Local-only: clears the archive state, never touches the calendar.
+  async function reEnable() {
     saving = true;
     try {
-      await removeItemFromCalendar(item);
+      await reEnableFromCalendar(item);
+      showToast('Re-enabled — the calendar entry stays put');
       onclose();
     } catch (err) {
-      console.error('Calendar delete failed', err);
-      showToast(`Still on your calendar — ${friendly(err)}`);
+      console.error('Re-enable failed', err);
+      showToast("Couldn't re-enable — try again");
     } finally {
       saving = false;
     }
@@ -167,7 +212,34 @@
       <span class="kind-tag">{kind}</span>
     </div>
 
-    {#if hasAccounts}
+    {#if isPosted}
+      <!-- Receipt: which calendar this went to. Read-only — publishing is
+           one-shot, so there is nothing to change from here. -->
+      <div class="zone static">
+        {#if eventHome}
+          <span
+            class="dot"
+            style="background: {eventHome.calendar.color || 'var(--accent)'}"
+          ></span>
+          <span class="zone-name">{eventHome.calendar.name}</span>
+          <span class="zone-sub">· {eventHome.account.label}</span>
+        {:else}
+          <span class="zone-name muted">On a calendar whose account was removed</span>
+        {/if}
+      </div>
+      {#if item.archived}
+        <button type="button" class="btn-primary" disabled={saving} onclick={reEnable}>
+          Re-enable in {isTodoish ? 'Todos' : item.collectionId ? 'this collection' : 'the Inbox'}
+        </button>
+        <p class="note">
+          Brings it back under this app's management. The calendar entry is
+          not touched.
+        </p>
+      {/if}
+      <button type="button" class="btn-ghost" disabled={saving} onclick={handleDownload}>
+        Download .ics
+      </button>
+    {:else if hasAccounts}
       <button type="button" class="zone" onclick={() => (showPicker = true)}>
         {#if selectedChoice}
           <span
@@ -189,30 +261,34 @@
           another calendar.
         </p>
       {/if}
+      <div class="mode-switcher" role="group" aria-label="After adding to calendar">
+        <button type="button"
+          class="mode-option"
+          class:active={postMode === 'move'}
+          aria-pressed={postMode === 'move'}
+          onclick={() => setPostMode('move')}
+        >
+          Move
+        </button>
+        <button type="button"
+          class="mode-option"
+          class:active={postMode === 'copy'}
+          aria-pressed={postMode === 'copy'}
+          onclick={() => setPostMode('copy')}
+        >
+          Keep a copy
+        </button>
+      </div>
       {#if willArchive}
-        <p class="note">
-          The card moves to the Inbox's archived section once it's on your
-          calendar. Removing the entry brings it back.
-        </p>
+        <p class="note">{archiveNote}</p>
       {/if}
 
-      {#if !isPosted || isMove}
-        <button type="button" class="btn-primary" disabled={!canPost} onclick={post}>
-          {isMove
-            ? 'Move to this calendar'
-            : kind === 'task'
-              ? 'Add task'
-              : 'Add to calendar'}
-        </button>
-      {/if}
+      <button type="button" class="btn-primary" disabled={!canPost} onclick={post}>
+        {kind === 'task' ? 'Add task' : 'Add to calendar'}
+      </button>
       <button type="button" class="btn-ghost" disabled={saving} onclick={handleDownload}>
         Download .ics
       </button>
-      {#if isPosted}
-        <button type="button" class="btn-remove" disabled={saving} onclick={remove}>
-          Remove from calendar
-        </button>
-      {/if}
     {:else}
       <p class="hint">
         No calendar connected yet. Connect an account once and cards post
@@ -330,6 +406,14 @@
     border-color: var(--accent);
   }
 
+  .zone.static {
+    cursor: default;
+  }
+
+  .zone.static:hover {
+    border-color: var(--border);
+  }
+
   .zone .dot {
     width: 9px;
     height: 9px;
@@ -369,6 +453,42 @@
     line-height: 1.45;
   }
 
+  /* Move / Keep-a-copy — same segmented pattern as the user menu's
+     theme switcher. */
+  .mode-switcher {
+    display: flex;
+    gap: 2px;
+    margin-top: 0.7rem;
+  }
+
+  .mode-option {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.35rem 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 150ms;
+  }
+
+  .mode-option:hover {
+    color: var(--text);
+    border-color: var(--text-muted);
+  }
+
+  .mode-option.active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-subtle);
+  }
+
   .btn-primary {
     display: block;
     width: 100%;
@@ -394,8 +514,7 @@
     cursor: default;
   }
 
-  .btn-ghost,
-  .btn-remove {
+  .btn-ghost {
     display: block;
     width: 100%;
     margin-top: 0.35rem;
@@ -414,16 +533,7 @@
     background: var(--surface-hover);
   }
 
-  .btn-remove {
-    color: var(--danger);
-  }
-
-  .btn-remove:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--danger) 10%, transparent);
-  }
-
-  .btn-ghost:disabled,
-  .btn-remove:disabled {
+  .btn-ghost:disabled {
     opacity: 0.5;
     cursor: default;
   }

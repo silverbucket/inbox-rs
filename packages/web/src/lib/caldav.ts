@@ -10,10 +10,11 @@
  * Contract (see sockethub packages/platform-caldav):
  * - timed values must carry a UTC offset — our ISO `...Z` strings qualify
  * - all-day values must be date-only `YYYY-MM-DD` in the user's local day
- * - `update` requires id + etag + uid; `delete` requires id + type + etag
- * - client-supplied UIDs are allowed — we always use `<itemId>@inbox-rs`,
- *   so the uid needed for updates is derivable from the item alone
+ * - client-supplied UIDs are allowed — we always use `<itemId>@inbox-rs`
  * - failures arrive as machine-readable `caldav:*` codes
+ *
+ * This client only discovers calendars and CREATES entries. Publishing is
+ * one-shot by design — no updates, no deletes (see note at end of file).
  */
 import type { InboxItem } from '@inbox-rs/rs-module';
 import { toDateInputValue } from './schedule';
@@ -249,57 +250,8 @@ export async function createEntry(
   return mutationResult(result);
 }
 
-/** Replace the item's existing entry (requires the stored href + etag). */
-export async function updateEntry(
-  creds: CaldavCredentials,
-  calendarId: string,
-  item: InboxItem,
-  endpoint: string,
-): Promise<PostedEntry> {
-  const object = itemToCalendarObject(item);
-  if (!object || !item.eventUrl || !item.eventEtag) {
-    throw new CaldavError('item has no posted entry to update');
-  }
-  const result = await send(
-    creds,
-    {
-      type: 'update',
-      target: { id: calendarId, type: 'calendar' },
-      object: { ...object, id: item.eventUrl, etag: item.eventEtag },
-    },
-    ['update'],
-    endpoint,
-  );
-  return mutationResult(result);
-}
-
-/** Delete the item's entry from its calendar. */
-export async function deleteEntry(
-  creds: CaldavCredentials,
-  calendarId: string,
-  item: InboxItem,
-  endpoint: string,
-): Promise<void> {
-  // Never posted → nothing to delete. But a posted entry without its etag
-  // is a failure, not a no-op: the platform's delete requires the etag, and
-  // silently returning would strand the entry on the calendar (e.g. as a
-  // stale duplicate after a calendar move).
-  if (!item.eventUrl) return;
-  if (!item.eventEtag) {
-    throw new CaldavError('posted entry has no stored etag — cannot delete');
-  }
-  await send(
-    creds,
-    {
-      type: 'delete',
-      target: { id: calendarId, type: 'calendar' },
-      object: {
-        id: item.eventUrl,
-        type: item.scheduleKind === 'task' ? 'task' : 'event',
-        etag: item.eventEtag,
-      },
-    },
-    ['delete'],
-    endpoint,
-  );
-}
+// There are deliberately no update or delete operations here. Publishing is
+// one-shot: inbox-rs only ever ADDS entries to the user's calendar, and only
+// on explicit request. Entries must never change or disappear because a card
+// was edited in the app. (The sockethub platform supports update/delete; this
+// client intentionally does not.)

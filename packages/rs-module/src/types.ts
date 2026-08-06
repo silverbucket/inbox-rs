@@ -34,10 +34,12 @@ export interface InboxItemBase {
   eventUrl?: string;
   eventEtag?: string;
   /**
-   * Set when adding an Inbox reference card to a calendar: the calendar now
-   * owns it, so it leaves the Inbox triage queue (collapsed "archived"
-   * section). Never set on todos — they complete instead — and removing the
-   * calendar entry clears it.
+   * Set when posting an item to a calendar in "move" mode: the calendar now
+   * owns it, so it leaves the active lists for its surface's collapsed
+   * "on calendar" section (Inbox archived section for unfiled cards, the
+   * Todos page's section for todos, the collection view's for filed items).
+   * "Copy" mode never sets it. Re-enabling clears it locally — the calendar
+   * entry is never deleted on the user's behalf.
    */
   archived?: boolean;
   archivedAt?: string;
@@ -133,6 +135,9 @@ export interface UserSettings {
   /** Sockethub HTTP actions endpoint used for link-metadata fetching.
    *  Undefined/empty means the app's default server. */
   sockethubUrl?: string;
+  /** Whether posting an item to a calendar moves it (archives it in the
+   *  app) or keeps an active copy. Undefined means 'move'. */
+  calendarPostMode?: 'move' | 'copy';
 }
 
 export interface AppConfig {

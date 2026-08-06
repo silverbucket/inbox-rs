@@ -9,7 +9,9 @@ import { migrator, wrapCodeBlock } from '@inbox-rs/rs-module';
 import type { Readable, Writable } from 'svelte/store';
 import { derived, get, writable } from 'svelte/store';
 import { cleanForStorage } from './clean-for-storage';
+import { todayStart } from './now';
 import rs, { fetchFileBlobUrl } from './rs';
+import { compareByDueTime, isDueTodayOrOverdue } from './schedule';
 
 function getInbox() {
   return rs.inbox;
@@ -718,16 +720,22 @@ export const archivedItems = derived(items, ($items) => {
  * Named `todoItems` for backwards compatibility with callers
  * (CollectionItemPicker, test suite) that use this store for unfiled todos.
  */
-export const todoItems = derived([items, appConfig], ([$items, $config]) => {
+export const todoItems = derived(
+  [items, appConfig, todayStart],
+  ([$items, $config, $todayStart]) => {
   const all = Object.values($items).filter(
-    (i) => (i.isTodo || i.type === 'todo') && !i.collectionId,
+    (i) => (i.isTodo || i.type === 'todo') && !i.collectionId && !i.archived,
   );
   const completed = all.filter((i) => i.completed);
 
-  const open = sortWithConfiguredOrder(
-    all.filter((i) => !i.completed),
-    $config.todosGlobalOrder,
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  const open = pinDueTodos(
+    sortWithConfiguredOrder(
+      all.filter((i) => !i.completed),
+      $config.todosGlobalOrder,
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    ),
+    $todayStart,
   );
 
   // Completed sorted by completedAt desc
@@ -1731,10 +1739,30 @@ export const allTodos = derived(items, ($items) => {
   return Object.values($items).filter((i) => i.isTodo || i.type === 'todo');
 });
 
-/** Convenience: open todos across all collections, for badges/counts. */
+/** Convenience: open todos across all collections, for badges/counts.
+ *  Excludes todos moved to a calendar — the calendar owns those. */
 export const openTodos = derived(allTodos, ($allTodos) =>
-  $allTodos.filter((t) => !t.completed),
+  $allTodos.filter((t) => !t.completed && !t.archived),
 );
+
+/**
+ * The group-filter rule for the flat Todos page: unfiled todos are always
+ * visible; filed todos require their collection's group to be active and
+ * the collection not individually filtered out.
+ */
+function todoPassesGroupFilter(
+  todo: InboxItem,
+  $collections: Record<string, Collection>,
+  $activeGroupIds: Set<string>,
+  $inactiveCollectionIds: Set<string>,
+): boolean {
+  if (!todo.collectionId) return true;
+  const col = $collections[todo.collectionId];
+  if (!col) return true;
+  if (!col.groupId) return false;
+  if (!$activeGroupIds.has(col.groupId)) return false;
+  return !$inactiveCollectionIds.has(col.id);
+}
 
 /**
  * Todos visible on the flat Todos page. Unfiled todos are always visible;
@@ -1743,30 +1771,83 @@ export const openTodos = derived(allTodos, ($allTodos) =>
  * and open todos are mixed — the page splits them at render time.
  */
 export const visibleTodos = derived(
-  [allTodos, collections, activeGroupIds, inactiveCollectionIds, appConfig],
+  [
+    allTodos,
+    collections,
+    activeGroupIds,
+    inactiveCollectionIds,
+    appConfig,
+    todayStart,
+  ],
   ([
     $allTodos,
     $collections,
     $activeGroupIds,
     $inactiveCollectionIds,
     $config,
+    $todayStart,
   ]) => {
-    const filtered = $allTodos.filter((todo) => {
-      if (!todo.collectionId) return true;
-      const col = $collections[todo.collectionId];
-      if (!col) return true;
-      if (!col.groupId) return false;
-      if (!$activeGroupIds.has(col.groupId)) return false;
-      return !$inactiveCollectionIds.has(col.id);
-    });
+    const filtered = $allTodos.filter(
+      (todo) =>
+        !todo.archived &&
+        todoPassesGroupFilter(
+          todo,
+          $collections,
+          $activeGroupIds,
+          $inactiveCollectionIds,
+        ),
+    );
 
-    return sortWithConfiguredOrder(
+    const sorted = sortWithConfiguredOrder(
       filtered,
       $config.todosGlobalOrder,
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
+
+    return pinDueTodos(sorted, $todayStart);
   },
+);
+
+/**
+ * Due/overdue todos float in a band above the manual order, earliest due
+ * first; everything else keeps its configured position. Completed todos are
+ * never band members (isDueTodayOrOverdue excludes them), so the page's
+ * render-time open/completed split is unaffected.
+ */
+function pinDueTodos(sorted: InboxItem[], todayStartMs: number): InboxItem[] {
+  const due = sorted
+    .filter((t) => isDueTodayOrOverdue(t, todayStartMs))
+    .sort(compareByDueTime);
+  if (due.length === 0) return sorted;
+  const rest = sorted.filter((t) => !isDueTodayOrOverdue(t, todayStartMs));
+  return [...due, ...rest];
+}
+
+/**
+ * Todos moved to a calendar, for the Todos page's collapsed "on calendar"
+ * section. Honours the same group filter as `visibleTodos`; newest move
+ * first. Removing the calendar entry returns a todo to the open list.
+ */
+export const visibleOnCalendarTodos = derived(
+  [allTodos, collections, activeGroupIds, inactiveCollectionIds],
+  ([$allTodos, $collections, $activeGroupIds, $inactiveCollectionIds]) =>
+    $allTodos
+      .filter(
+        (todo) =>
+          !!todo.archived &&
+          todoPassesGroupFilter(
+            todo,
+            $collections,
+            $activeGroupIds,
+            $inactiveCollectionIds,
+          ),
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.archivedAt ?? b.createdAt).getTime() -
+          new Date(a.archivedAt ?? a.createdAt).getTime(),
+      ),
 );
 
 /**

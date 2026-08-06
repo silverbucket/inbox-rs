@@ -3,11 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CaldavError,
   createEntry,
-  deleteEntry,
   fetchCalendars,
   itemToCalendarObject,
   uidFor,
-  updateEntry,
 } from './caldav';
 
 const ENDPOINT = 'https://sockethub.test/sockethub-http';
@@ -210,75 +208,7 @@ describe('mutations', () => {
     expect(body[1].object.uid).toBe(uidFor(note()));
   });
 
-  it('update sends id + etag alongside the object', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      ndjson({
-        type: 'update',
-        object: { id: `${CAL}x.ics`, etag: '"e2"' },
-      }),
-    );
-    const scheduled = note({ eventUrl: `${CAL}x.ics`, eventEtag: '"e1"' });
-    const posted = await updateEntry(CREDS, CAL, scheduled, ENDPOINT);
-    expect(posted.eventEtag).toBe('"e2"');
-    const body = JSON.parse(
-      (fetchMock.mock.calls[0][1] as RequestInit).body as string,
-    );
-    expect(body[1].object.id).toBe(`${CAL}x.ics`);
-    expect(body[1].object.etag).toBe('"e1"');
-    expect(body[1].object.uid).toBe('item-1@inbox-rs');
-  });
-
-  it('update refuses items without a posted entry', async () => {
-    await expect(updateEntry(CREDS, CAL, note(), ENDPOINT)).rejects.toThrow(
-      /no posted entry/,
-    );
-  });
-
-  it('delete sends the required id/type/etag triple', async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(
-        ndjson({ type: 'delete', object: { id: `${CAL}x.ics` } }),
-      );
-    await deleteEntry(
-      CREDS,
-      CAL,
-      note({
-        eventUrl: `${CAL}x.ics`,
-        eventEtag: '"e1"',
-        scheduleKind: 'task',
-      }),
-      ENDPOINT,
-    );
-    const body = JSON.parse(
-      (fetchMock.mock.calls[0][1] as RequestInit).body as string,
-    );
-    expect(body[1].object).toEqual({
-      id: `${CAL}x.ics`,
-      type: 'task',
-      etag: '"e1"',
-    });
-  });
-
-  it('delete throws (not no-ops) when a posted entry has no etag', async () => {
-    const stranded = note({ eventUrl: `${CAL}x.ics`, eventEtag: undefined });
-    await expect(deleteEntry(CREDS, CAL, stranded, ENDPOINT)).rejects.toThrow(
-      /no stored etag/,
-    );
-    // Never-posted items are still a clean no-op.
-    await expect(
-      deleteEntry(CREDS, CAL, note(), ENDPOINT),
-    ).resolves.toBeUndefined();
-  });
-
-  it('surfaces conflicts with their code', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      ndjson({ type: 'error', error: 'caldav:conflict' }),
-    );
-    const scheduled = note({ eventUrl: `${CAL}x.ics`, eventEtag: '"stale"' });
-    const err = await updateEntry(CREDS, CAL, scheduled, ENDPOINT).catch(
-      (e) => e,
-    );
-    expect(err.code).toBe('caldav:conflict');
-  });
+  // No update/delete tests: those operations were removed from the client
+  // on purpose — publishing is one-shot, and inbox-rs never modifies the
+  // user's calendar after the create.
 });

@@ -5,15 +5,30 @@ export function filterTodos(items: InboxItem[]): InboxItem[] {
 }
 
 export function filterOpenTodos(todos: InboxItem[]): InboxItem[] {
-  return todos.filter((t) => !t.completed);
+  return todos.filter((t) => !t.completed && !t.archived);
 }
 
 export function filterCompletedTodos(todos: InboxItem[]): InboxItem[] {
-  return todos.filter((t) => t.completed);
+  return todos.filter((t) => t.completed && !t.archived);
 }
 
 export function filterReferenceItems(items: InboxItem[]): InboxItem[] {
-  return items.filter((i) => !i.isTodo && i.type !== 'todo');
+  return items.filter((i) => !i.isTodo && i.type !== 'todo' && !i.archived);
+}
+
+/**
+ * Items moved to a calendar (any kind), for a collection's collapsed
+ * "on calendar" section — newest move first. Archived wins over completed:
+ * an archived+completed todo lives here, not in the completed section.
+ */
+export function filterOnCalendarItems(items: InboxItem[]): InboxItem[] {
+  return items
+    .filter((i) => !!i.archived)
+    .sort(
+      (a, b) =>
+        new Date(b.archivedAt ?? b.createdAt).getTime() -
+        new Date(a.archivedAt ?? a.createdAt).getTime(),
+    );
 }
 
 export function sortCompletedTodosByCompletedAt(
