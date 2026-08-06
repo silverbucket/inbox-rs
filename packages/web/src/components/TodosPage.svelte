@@ -262,10 +262,10 @@
               <div in:fade={{ duration: 150 }}>
                 <TodoRow
                   {todo}
+                  readonly
                   collection={lookupCollection(todo.collectionId)}
                   group={lookupGroup(todo.collectionId)}
                   {onselect}
-                  onaddincollection={onaddtodoincollection}
                 />
               </div>
             {/each}

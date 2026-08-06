@@ -6,7 +6,7 @@
   import { now } from '../lib/now';
   import { formatScheduled, isOverdue } from '../lib/schedule';
 
-  let { todo, collection, group, onselect, onaddincollection }: {
+  let { todo, collection, group, onselect, onaddincollection, readonly = false }: {
     todo: InboxItem;
     /** The collection this todo belongs to, or null when unfiled. */
     collection: Collection | null;
@@ -17,6 +17,11 @@
         this row's collection. Unfiled rows pass `undefined` so the follow-up
         stays unfiled too. Omit the handler to hide the affordance. */
     onaddincollection?: (collectionId: string | undefined) => void;
+    /** Receipt mode for "On calendar" sections: the todo is managed
+        elsewhere now, so no completion checkbox — a calendar marker instead.
+        The row still opens the card, where "Remove from calendar" brings it
+        back under the app's management. */
+    readonly?: boolean;
   } = $props();
 
   // Show the underlying item type as an icon for items that are "todos by flag"
@@ -134,14 +139,25 @@
   onkeydown={handleKey}
   style="--group-color: {groupColor}; --collection-color: {collectionColor}"
 >
-  <input
-    type="checkbox"
-    class="checkbox"
-    checked={todo.completed}
-    onclick={(e) => e.stopPropagation()}
-    onchange={toggleCompleted}
-    aria-label="Mark {todo.title} as {todo.completed ? 'incomplete' : 'complete'}"
-  />
+  {#if readonly}
+    <span class="cal-marker" title="On calendar" aria-label="On calendar">
+      <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+        <line x1="16" y1="2" x2="16" y2="6"></line>
+        <line x1="8" y1="2" x2="8" y2="6"></line>
+        <line x1="3" y1="10" x2="21" y2="10"></line>
+      </svg>
+    </span>
+  {:else}
+    <input
+      type="checkbox"
+      class="checkbox"
+      checked={todo.completed}
+      onclick={(e) => e.stopPropagation()}
+      onchange={toggleCompleted}
+      aria-label="Mark {todo.title} as {todo.completed ? 'incomplete' : 'complete'}"
+    />
+  {/if}
 
   <span class="title">{todo.title}</span>
 
@@ -238,6 +254,17 @@
        signal available for this individual todo. */
     accent-color: var(--collection-color);
     cursor: pointer;
+  }
+
+  /* Receipt marker in place of the checkbox for on-calendar rows. */
+  .cal-marker {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    color: var(--text-muted);
   }
 
   .title {

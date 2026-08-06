@@ -31,14 +31,13 @@ export function alertTimeFor(
 }
 
 /**
- * Whether this item participates in in-app alerting at all. Items posted to
- * a calendar (`eventUrl`) are excluded even in copy mode — the calendar owns
- * alerting for them, and double notifications are worse than none.
+ * Whether this item participates in in-app alerting: anything open with a
+ * time. Moved items are excluded via `archived` (the calendar owns them);
+ * copies alert like any other item — it has a date on it, you expect an
+ * alert, no assumptions about what the calendar does with its copy.
  */
 export function eligibleForAlert(item: InboxItem): boolean {
-  return (
-    !!item.startsAt && !item.completed && !item.archived && !item.eventUrl
-  );
+  return !!item.startsAt && !item.completed && !item.archived;
 }
 
 /** Dedup key: one alert per (item, scheduled moment) — editing the time

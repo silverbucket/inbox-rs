@@ -50,13 +50,16 @@ describe('eligibleForAlert', () => {
     expect(eligibleForAlert(todo('a', base))).toBe(true);
   });
 
-  it('rejects completed, archived, calendar-posted, and unscheduled items', () => {
+  it('rejects completed, archived (moved), and unscheduled items', () => {
     expect(eligibleForAlert(todo('a', { ...base, completed: true }))).toBe(false);
     expect(eligibleForAlert(todo('a', { ...base, archived: true }))).toBe(false);
+    expect(eligibleForAlert(todo('a'))).toBe(false);
+  });
+
+  it('accepts calendar copies — a copy with a time alerts like anything else', () => {
     expect(
       eligibleForAlert(todo('a', { ...base, eventUrl: 'https://cal/x.ics' })),
-    ).toBe(false);
-    expect(eligibleForAlert(todo('a'))).toBe(false);
+    ).toBe(true);
   });
 });
 
@@ -93,11 +96,12 @@ describe('collectDueAlerts', () => {
   });
 
   it('ignores ineligible items even when due', () => {
-    const posted = todo('posted', {
+    const moved = todo('moved', {
       startsAt: new Date(NOW - 5_000).toISOString(),
       eventUrl: 'https://cal/x.ics',
+      archived: true,
     });
-    const { fire, expire } = collectDueAlerts([posted], new Set(), NOW);
+    const { fire, expire } = collectDueAlerts([moved], new Set(), NOW);
     expect(fire).toEqual([]);
     expect(expire).toEqual([]);
   });
