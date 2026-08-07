@@ -79,6 +79,13 @@ jobs:
           git remote add 5apps-staging git@5apps.com:silverbucket_inbox-rs-staging.git 2>/dev/null \
             || git remote set-url 5apps-staging git@5apps.com:silverbucket_inbox-rs-staging.git
 
+          # Content-hashed runtime assets are immutable and may still be used
+          # by a dormant installed PWA. Carry the deployed set forward; only
+          # mutable shell files are replaced by the new release.
+          git fetch 5apps-staging master
+          node scripts/retain-deployed-web-assets.mjs 5apps-staging/master
+          node scripts/check-web-deploy.mjs
+
           # Throwaway branch for the deploy commit so nothing local is pushed to origin.
           git checkout -b "staging-deploy/${{ github.run_id }}"
           git add packages/web/dist -f

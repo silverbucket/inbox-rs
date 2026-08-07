@@ -1,10 +1,12 @@
 import { mount } from 'svelte';
+import App from './App.svelte';
 import { installPreloadErrorReload } from './lib/preload-error';
 import { type Accent, applyTheme, isAccent, type Mode } from './lib/theme';
-import Root from './Root.svelte';
+import './styles/global.css';
 
-// A tab left open across a release can no longer fetch its lazy chunks —
-// reload once to pick up the fresh shell (see lib/preload-error.ts).
+// Recover if a lazy chunk is temporarily unavailable during publication or a
+// CDN inconsistency. Deploys retain old hashed assets, so this is a last line
+// of defence rather than the normal update path (see lib/preload-error.ts).
 installPreloadErrorReload();
 
 // Apply the stored theme (accent + light/dark) before mount to avoid a flash.
@@ -27,6 +29,6 @@ applyTheme(accent, mode);
 
 const target = document.getElementById('app');
 if (!target) throw new Error('Mount target #app not found');
-const app = mount(Root, { target });
+const app = mount(App, { target });
 
 export default app;
