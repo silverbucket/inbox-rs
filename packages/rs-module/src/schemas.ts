@@ -5,6 +5,11 @@ const todoFields = {
   completedAt: { type: 'string' },
 };
 
+// Shared priority field — any active todo or reference can be pinned first.
+const priorityFields = {
+  pinned: { type: 'boolean' },
+};
+
 // Shared collection field — any item can belong to a collection.
 const collectionFields = {
   collectionId: { type: 'string' },
@@ -44,6 +49,7 @@ export const bookmarkSchema = {
     mimeType: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...priorityFields,
     ...scheduleFields,
     ...collectionFields,
     ...migrateFields,
@@ -61,6 +67,7 @@ export const noteSchema = {
     body: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...priorityFields,
     ...scheduleFields,
     ...collectionFields,
     ...migrateFields,
@@ -82,6 +89,7 @@ export const imageMetaSchema = {
     thumbMimeType: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...priorityFields,
     ...scheduleFields,
     ...collectionFields,
     ...migrateFields,
@@ -103,6 +111,7 @@ export const audioMetaSchema = {
     transcribed: { type: 'boolean' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...priorityFields,
     ...scheduleFields,
     ...collectionFields,
     ...migrateFields,
@@ -123,6 +132,7 @@ export const videoMetaSchema = {
     body: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...priorityFields,
     ...scheduleFields,
     ...collectionFields,
     ...migrateFields,
@@ -143,6 +153,7 @@ export const documentMetaSchema = {
     fileName: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...priorityFields,
     ...scheduleFields,
     ...collectionFields,
     ...migrateFields,
@@ -163,6 +174,7 @@ export const emailSchema = {
     messageUrl: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
+    ...priorityFields,
     ...scheduleFields,
     ...collectionFields,
     ...migrateFields,
@@ -205,6 +217,7 @@ export const todoSchema = {
     body: { type: 'string' },
     completed: { type: 'boolean' },
     completedAt: { type: 'string' },
+    ...priorityFields,
     createdAt: { type: 'string' },
     ...scheduleFields,
     ...collectionFields,

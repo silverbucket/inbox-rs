@@ -132,9 +132,7 @@ export async function reEnableFromCalendar(
  * from what was posted beyond what a receipt should claim (e.g. its time
  * was cleared, or it changed kind).
  */
-export async function detachFromCalendar(
-  item: InboxItem,
-): Promise<InboxItem> {
+export async function detachFromCalendar(item: InboxItem): Promise<InboxItem> {
   const updated = clearPostedEntry(item);
   await storeItem(cleanForStorage(updated));
   return updated;

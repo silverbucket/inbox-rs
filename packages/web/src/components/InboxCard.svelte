@@ -8,7 +8,9 @@
   import EmailCard from './EmailCard.svelte';
   import { draggingItemId, DRAG_MIME } from '../lib/drag';
   import { now } from '../lib/now';
+  import { animatePriorityChange } from '../lib/priority-motion';
   import { formatScheduled, isOverdue, isPast } from '../lib/schedule';
+  import { setItemPinned } from '../lib/stores';
 
   let { item, onselect }: { item: InboxItem; onselect: (item: InboxItem) => void } = $props();
 
@@ -124,9 +126,25 @@
   const scheduledLabel = $derived(item.startsAt ? formatScheduled(item) : '');
   const scheduleOverdue = $derived(isOverdue(item, $now));
   const schedulePast = $derived(isPast(item, $now));
+
+  async function togglePinned(e: MouseEvent) {
+    e.stopPropagation();
+    try {
+      const card = (e.currentTarget as HTMLElement).closest<HTMLElement>(
+        '[data-priority-item]',
+      );
+      await animatePriorityChange(card, () =>
+        setItemPinned(item, !item.pinned),
+      );
+    } catch (error) {
+      console.error('Failed to update reference priority:', error);
+    }
+  }
 </script>
 
 <article class="card" role="button" tabindex="0"
+  class:pinned={item.pinned}
+  data-priority-item
   draggable="true"
   ondragstart={onDragStart}
   ondragend={onDragEnd}
@@ -139,6 +157,20 @@
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onselect(item); }
   }}>
   <div class="card-body">
+    <button
+      type="button"
+      class="pin-button"
+      class:active={item.pinned}
+      aria-pressed={item.pinned === true}
+      aria-label={item.pinned ? `Remove important flag from ${item.title}` : `Flag ${item.title} as important`}
+      title={item.pinned ? 'Remove important flag' : 'Flag as important'}
+      onclick={togglePinned}
+    >
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path fill={item.pinned ? 'currentColor' : 'none'} d="M5 4s1.5-1 4-1 4 2 7 2 4-1 4-1v10s-1 1-4 1-4-2-7-2-4 1-4 1z"></path>
+        <path d="M5 22V4"></path>
+      </svg>
+    </button>
     <div class="card-kind">
       <span class="kind-ic" style="--kc:{kind.color}" aria-hidden="true">
         {#if item.type === 'note'}
@@ -237,6 +269,58 @@
     box-shadow: 0 0 0 1px var(--accent), 0 4px 16px var(--shadow);
   }
 
+  .card.pinned {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  }
+
+  .pin-button {
+    position: absolute;
+    top: 0.65rem;
+    right: 0.65rem;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    color: var(--text-muted);
+    background: color-mix(in srgb, var(--surface) 90%, transparent);
+    cursor: pointer;
+    opacity: 0;
+    transition: color 150ms, background 150ms, opacity 150ms;
+  }
+
+  .card:hover .pin-button,
+  .card:focus-within .pin-button,
+  .pin-button.active {
+    opacity: 1;
+  }
+
+  .pin-button:hover,
+  .pin-button:focus-visible,
+  .pin-button.active {
+    color: var(--accent);
+    background: var(--accent-subtler);
+  }
+
+  .pin-button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  @media (hover: none) {
+    .pin-button {
+      width: 44px;
+      height: 44px;
+      top: 0.35rem;
+      right: 0.35rem;
+      opacity: 0.65;
+    }
+  }
+
   .card-body {
     padding: 1rem 1.1rem 1.1rem;
   }
@@ -248,6 +332,7 @@
     align-items: center;
     gap: 0.5rem;
     margin-bottom: 0.7rem;
+    padding-right: 2rem;
   }
 
   .kind-ic {
