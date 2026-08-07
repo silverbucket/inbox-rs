@@ -6,6 +6,7 @@ import {
   filterOpenTodos,
   filterReferenceItems,
   filterTodos,
+  pinItemsFirst,
   sortCompletedTodosByCompletedAt,
   spliceOpenTodoOrder,
 } from './collection-todos';
@@ -94,6 +95,24 @@ describe('filterReferenceItems', () => {
   it('excludes calendar-archived reference items', () => {
     const items: InboxItem[] = [ref('r1'), { ...ref('r2'), archived: true }];
     expect(filterReferenceItems(items).map((i) => i.id)).toEqual(['r1']);
+  });
+});
+
+describe('pinItemsFirst', () => {
+  it('moves pinned items first without disturbing either manual-order band', () => {
+    const items = [
+      ref('a'),
+      { ...ref('b'), pinned: true },
+      ref('c'),
+      { ...ref('d'), pinned: true },
+    ];
+
+    expect(pinItemsFirst(items).map((entry) => entry.id)).toEqual([
+      'b',
+      'd',
+      'a',
+      'c',
+    ]);
   });
 });
 

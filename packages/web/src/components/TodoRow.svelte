@@ -4,7 +4,9 @@
   import { typeIconPath } from '../lib/item-utils';
   import { draggingItemId, DRAG_MIME } from '../lib/drag';
   import { now } from '../lib/now';
+  import { animatePriorityChange } from '../lib/priority-motion';
   import { formatScheduled, isOverdue } from '../lib/schedule';
+  import { setItemPinned } from '../lib/stores';
 
   let { todo, collection, group, onselect, onaddincollection, readonly = false }: {
     todo: InboxItem;
@@ -76,6 +78,20 @@
     }
   }
 
+  async function togglePinned(e: Event) {
+    e.stopPropagation();
+    try {
+      const row = (e.currentTarget as HTMLElement).closest<HTMLElement>(
+        '[data-priority-item]',
+      );
+      await animatePriorityChange(row, () =>
+        setItemPinned(todo, !todo.pinned),
+      );
+    } catch (err) {
+      console.error('Failed to update todo priority:', err);
+    }
+  }
+
   function handleClick(e: MouseEvent) {
     // Don't open the view modal when clicking the checkbox or its label.
     const target = e.target as HTMLElement;
@@ -138,6 +154,7 @@
   class="todo-row"
   class:completed={todo.completed}
   class:unfiled={isUnfiled}
+  data-priority-item
   role="button"
   tabindex="0"
   onclick={handleClick}
@@ -165,6 +182,23 @@
   {/if}
 
   <span class="title">{todo.title}</span>
+
+  {#if !readonly && !todo.completed}
+    <button
+      type="button"
+      class="pin-button"
+      class:active={todo.pinned}
+      aria-pressed={todo.pinned === true}
+      aria-label={todo.pinned ? `Remove important flag from ${todo.title}` : `Flag ${todo.title} as important`}
+      title={todo.pinned ? 'Remove important flag' : 'Flag as important'}
+      onclick={togglePinned}
+    >
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path fill={todo.pinned ? 'currentColor' : 'none'} d="M5 4s1.5-1 4-1 4 2 7 2 4-1 4-1v10s-1 1-4 1-4-2-7-2-4 1-4 1z"></path>
+        <path d="M5 22V4"></path>
+      </svg>
+    </button>
+  {/if}
 
   <!-- The meta block collapses to line 2 on narrow screens via CSS;
        on desktop it sits inline on the right side of the row. -->
@@ -282,6 +316,44 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .pin-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    color: var(--text-muted);
+    background: transparent;
+    cursor: pointer;
+    opacity: 0.35;
+    transition: color 150ms, background 150ms, opacity 150ms, transform 150ms;
+  }
+
+  .todo-row:hover .pin-button,
+  .pin-button:focus-visible,
+  .pin-button.active {
+    opacity: 1;
+  }
+
+  .pin-button:hover,
+  .pin-button:focus-visible {
+    color: var(--accent);
+    background: var(--accent-subtler);
+  }
+
+  .pin-button.active {
+    color: var(--accent);
+  }
+
+  .pin-button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
   }
 
   .todo-row.completed .title {
@@ -441,6 +513,12 @@
      alternative — but touch users already have the page-level "Add todo"
      button, so hide instead of clutter every row. */
   @media (hover: none) {
+    .pin-button {
+      width: 44px;
+      height: 44px;
+      opacity: 0.65;
+    }
+
     .btn-quick-add {
       display: none;
     }
@@ -452,7 +530,7 @@
   @media (max-width: 600px) {
     .todo-row {
       display: grid;
-      grid-template-columns: auto 1fr;
+      grid-template-columns: auto 1fr auto;
       grid-template-rows: auto auto;
       column-gap: 0.6rem;
       row-gap: 0.25rem;
@@ -470,6 +548,12 @@
       grid-column: 2;
       grid-row: 1;
       font-size: 0.9rem;
+    }
+
+    .pin-button {
+      grid-column: 3;
+      grid-row: 1 / span 2;
+      align-self: center;
     }
 
     .meta {

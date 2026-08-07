@@ -18,6 +18,8 @@ export interface InboxItemBase {
   isTodo?: boolean;
   completed?: boolean;
   completedAt?: string;
+  /** Keeps an active todo or reference at the top of its list. */
+  pinned?: boolean;
   collectionId?: string; // undefined = Inbox for refs, unfiled for todos
   /**
    * Scheduling. The card is the editor — a calendar entry (once posted) is

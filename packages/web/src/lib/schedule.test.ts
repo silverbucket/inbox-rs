@@ -145,9 +145,9 @@ describe('isDueTodayOrOverdue / compareByDueTime', () => {
     expect(
       isDueTodayOrOverdue(note({ startsAt: yesterday }), TODAY_START),
     ).toBe(true);
-    expect(
-      isDueTodayOrOverdue(note({ startsAt: tomorrow }), TODAY_START),
-    ).toBe(false);
+    expect(isDueTodayOrOverdue(note({ startsAt: tomorrow }), TODAY_START)).toBe(
+      false,
+    );
   });
 
   it('excludes completed, archived, and unscheduled items', () => {

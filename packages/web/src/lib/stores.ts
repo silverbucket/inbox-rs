@@ -9,6 +9,7 @@ import { migrator, wrapCodeBlock } from '@inbox-rs/rs-module';
 import type { Readable, Writable } from 'svelte/store';
 import { derived, get, writable } from 'svelte/store';
 import { cleanForStorage } from './clean-for-storage';
+import { pinItemsFirst } from './collection-todos';
 import { todayStart } from './now';
 import rs, { fetchFileBlobUrl } from './rs';
 import { compareByDueTime, isDueTodayOrOverdue } from './schedule';
@@ -681,14 +682,16 @@ function sortWithConfiguredOrder<T extends { id: string }>(
 
 /** Inbox reference items: non-todos with no collectionId. */
 export const sortedItems = derived(items, ($items) => {
-  return Object.values($items)
-    .filter(
-      (i) => !i.isTodo && i.type !== 'todo' && !i.collectionId && !i.archived,
-    )
-    .sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
+  return pinItemsFirst(
+    Object.values($items)
+      .filter(
+        (i) => !i.isTodo && i.type !== 'todo' && !i.collectionId && !i.archived,
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ),
+  );
 });
 
 /**
@@ -723,30 +726,33 @@ export const archivedItems = derived(items, ($items) => {
 export const todoItems = derived(
   [items, appConfig, todayStart],
   ([$items, $config, $todayStart]) => {
-  const all = Object.values($items).filter(
-    (i) => (i.isTodo || i.type === 'todo') && !i.collectionId && !i.archived,
-  );
-  const completed = all.filter((i) => i.completed);
+    const all = Object.values($items).filter(
+      (i) => (i.isTodo || i.type === 'todo') && !i.collectionId && !i.archived,
+    );
+    const completed = all.filter((i) => i.completed);
 
-  const open = pinDueTodos(
-    sortWithConfiguredOrder(
-      all.filter((i) => !i.completed),
-      $config.todosGlobalOrder,
+    const open = pinDueTodos(
+      pinItemsFirst(
+        sortWithConfiguredOrder(
+          all.filter((i) => !i.completed),
+          $config.todosGlobalOrder,
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        ),
+      ),
+      $todayStart,
+    );
+
+    // Completed sorted by completedAt desc
+    completed.sort(
       (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    ),
-    $todayStart,
-  );
+        new Date(b.completedAt ?? b.createdAt).getTime() -
+        new Date(a.completedAt ?? a.createdAt).getTime(),
+    );
 
-  // Completed sorted by completedAt desc
-  completed.sort(
-    (a, b) =>
-      new Date(b.completedAt ?? b.createdAt).getTime() -
-      new Date(a.completedAt ?? a.createdAt).getTime(),
-  );
-
-  return [...open, ...completed];
-});
+    return [...open, ...completed];
+  },
+);
 
 export const collectionItems = derived(
   [items, collections],
@@ -963,6 +969,11 @@ export async function storeItem(
     [cleanItem.id]: cleanItem as object,
   }));
   items.update((current) => ({ ...current, [cleanItem.id]: cleanItem }));
+}
+
+/** Toggle an item's top-of-list priority while preserving every other field. */
+export async function setItemPinned(item: InboxItem, pinned: boolean) {
+  await storeItem({ ...item, pinned });
 }
 
 /**
@@ -1805,7 +1816,9 @@ export const visibleTodos = derived(
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
 
-    return pinDueTodos(sorted, $todayStart);
+    // Deadlines remain the strongest signal. Pinned items lead the manually
+    // ordered band immediately below them.
+    return pinDueTodos(pinItemsFirst(sorted), $todayStart);
   },
 );
 

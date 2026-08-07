@@ -57,7 +57,9 @@ function loadFired(): Set<string> {
     const raw = localStorage.getItem(FIRED_KEY);
     if (!raw) return new Set();
     const parsed: unknown = JSON.parse(raw);
-    return new Set(Array.isArray(parsed) ? parsed.filter((k) => typeof k === 'string') : []);
+    return new Set(
+      Array.isArray(parsed) ? parsed.filter((k) => typeof k === 'string') : [],
+    );
   } catch {
     return new Set();
   }

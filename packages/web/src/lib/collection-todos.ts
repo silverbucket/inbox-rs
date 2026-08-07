@@ -5,7 +5,7 @@ export function filterTodos(items: InboxItem[]): InboxItem[] {
 }
 
 export function filterOpenTodos(todos: InboxItem[]): InboxItem[] {
-  return todos.filter((t) => !t.completed && !t.archived);
+  return pinItemsFirst(todos.filter((t) => !t.completed && !t.archived));
 }
 
 export function filterCompletedTodos(todos: InboxItem[]): InboxItem[] {
@@ -13,7 +13,16 @@ export function filterCompletedTodos(todos: InboxItem[]): InboxItem[] {
 }
 
 export function filterReferenceItems(items: InboxItem[]): InboxItem[] {
-  return items.filter((i) => !i.isTodo && i.type !== 'todo' && !i.archived);
+  return pinItemsFirst(
+    items.filter((i) => !i.isTodo && i.type !== 'todo' && !i.archived),
+  );
+}
+
+/** Stable priority partition: preserve manual/natural order within each band. */
+export function pinItemsFirst(items: InboxItem[]): InboxItem[] {
+  const pinned = items.filter((item) => item.pinned);
+  if (pinned.length === 0) return items;
+  return [...pinned, ...items.filter((item) => !item.pinned)];
 }
 
 /**

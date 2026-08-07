@@ -14,8 +14,8 @@ vi.mock('./caldav', async (importOriginal) => {
   };
 });
 
-import { calendarAccounts } from './calendar-accounts';
 import { createEntry } from './caldav';
+import { calendarAccounts } from './calendar-accounts';
 import {
   addItemToCalendar,
   detachFromCalendar,
@@ -104,9 +104,7 @@ describe('addItemToCalendar — the archive ownership rule', () => {
       eventUrl: `${CAL.id}x.ics`,
       eventEtag: '"e1"',
     });
-    await expect(addItemToCalendar(posted, CAL.id)).rejects.toThrow(
-      /one-shot/,
-    );
+    await expect(addItemToCalendar(posted, CAL.id)).rejects.toThrow(/one-shot/);
     expect(vi.mocked(createEntry)).not.toHaveBeenCalled();
   });
 });

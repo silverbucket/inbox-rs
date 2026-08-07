@@ -27,7 +27,9 @@ const NOW = new Date('2026-08-04T12:00:00').getTime();
 describe('alertTimeFor', () => {
   it('uses the exact startsAt moment for timed items', () => {
     const t = todo('a', { startsAt: '2026-08-04T13:30:00.000Z' });
-    expect(alertTimeFor(t)).toBe(new Date('2026-08-04T13:30:00.000Z').getTime());
+    expect(alertTimeFor(t)).toBe(
+      new Date('2026-08-04T13:30:00.000Z').getTime(),
+    );
   });
 
   it(`resolves all-day items to ${ALL_DAY_ALERT_HOUR}:00 local on their day`, () => {
@@ -51,8 +53,12 @@ describe('eligibleForAlert', () => {
   });
 
   it('rejects completed, archived (moved), and unscheduled items', () => {
-    expect(eligibleForAlert(todo('a', { ...base, completed: true }))).toBe(false);
-    expect(eligibleForAlert(todo('a', { ...base, archived: true }))).toBe(false);
+    expect(eligibleForAlert(todo('a', { ...base, completed: true }))).toBe(
+      false,
+    );
+    expect(eligibleForAlert(todo('a', { ...base, archived: true }))).toBe(
+      false,
+    );
     expect(eligibleForAlert(todo('a'))).toBe(false);
   });
 
@@ -90,9 +96,9 @@ describe('collectDueAlerts', () => {
     expect(collectDueAlerts([t], fired, NOW).fire).toEqual([]);
 
     const moved = { ...t, startsAt: new Date(NOW - 1_000).toISOString() };
-    expect(collectDueAlerts([moved], fired, NOW).fire.map((i) => i.id)).toEqual([
-      'a',
-    ]);
+    expect(collectDueAlerts([moved], fired, NOW).fire.map((i) => i.id)).toEqual(
+      ['a'],
+    );
   });
 
   it('re-arms when allDay flips with an unchanged startsAt — the effective time moved', () => {
