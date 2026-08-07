@@ -108,6 +108,87 @@ test.describe('PWA release transitions', () => {
     }
   });
 
+  test('a failed release removes its CSS before loading a fallback', async ({
+    browser,
+    webOrigin,
+  }) => {
+    const context = await browser.newContext({ serviceWorkers: 'block' });
+    try {
+      const page = await context.newPage();
+      await page.goto(webOrigin);
+      await expect(
+        page.getByRole('button', { name: 'Inbox' }).first(),
+      ).toBeVisible();
+
+      await page.route('**/asset-manifest.json*', (route) =>
+        route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            'src/main.ts': {
+              file: 'assets/missing-release.js',
+              css: ['assets/failed-release.css'],
+              isEntry: true,
+            },
+          }),
+        }),
+      );
+      await page.route('**/assets/failed-release.css', (route) =>
+        route.fulfill({
+          contentType: 'text/css',
+          body: ':root { --failed-release-loaded: 1; }',
+        }),
+      );
+      await page.route('**/assets/missing-release.js', (route) =>
+        route.fulfill({ status: 404, body: 'missing' }),
+      );
+
+      await page.reload();
+      await expect(
+        page.getByRole('button', { name: 'Inbox' }).first(),
+      ).toBeVisible();
+      await expect(
+        page.locator('link[href*="failed-release.css"]'),
+      ).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('rejects cross-origin asset paths from a boot manifest', async ({
+    browser,
+    webOrigin,
+  }) => {
+    const context = await browser.newContext({ serviceWorkers: 'block' });
+    try {
+      const page = await context.newPage();
+      const crossOriginRequests: string[] = [];
+      page.on('request', (request) => {
+        if (request.url().includes('evil.example')) {
+          crossOriginRequests.push(request.url());
+        }
+      });
+      await page.route('**/asset-manifest.json*', (route) =>
+        route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            'src/main.ts': {
+              file: '//evil.example/pwn.js',
+              isEntry: true,
+            },
+          }),
+        }),
+      );
+
+      await page.goto(webOrigin);
+      await expect(
+        page.getByRole('heading', { name: 'Could not load the app' }),
+      ).toBeVisible();
+      expect(crossOriginRequests).toEqual([]);
+    } finally {
+      await context.close();
+    }
+  });
+
   test('a first-load bundle failure shows recovery UI, never a white screen', async ({
     browser,
     webOrigin,

@@ -36,7 +36,7 @@ STAGING_BUILD=1 npm run build
 
 # Preserve immutable assets used by any older installed shell, then verify the
 # stable loader and its release manifest before publishing the new tree.
-git fetch 5apps-staging master
+git fetch 5apps-staging +refs/heads/master:refs/remotes/5apps-staging/master
 node scripts/retain-deployed-web-assets.mjs 5apps-staging/master
 node scripts/create-deployed-entry-shims.mjs 5apps-staging/master
 node scripts/check-web-deploy.mjs

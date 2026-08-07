@@ -100,23 +100,43 @@
     return entry;
   }
 
+  function assetUrl(file) {
+    if (
+      typeof file !== 'string' ||
+      !/^assets\/[A-Za-z0-9._/-]+$/.test(file) ||
+      file.split('/').some((segment) => segment === '.' || segment === '..')
+    ) {
+      throw new Error(`Boot manifest contains an invalid asset path: ${file}`);
+    }
+    const url = new URL(`/${file}`, location.origin);
+    if (
+      url.origin !== location.origin ||
+      !url.pathname.startsWith('/assets/')
+    ) {
+      throw new Error(`Boot manifest asset is not same-origin: ${file}`);
+    }
+    return url.href;
+  }
+
   function loadStyles(files) {
+    const created = [];
     return Promise.all(
       (files || []).map(
         (file) =>
           new Promise((resolve, reject) => {
-            const href = `/${file}`;
-            const existing = document.querySelector(
-              `link[rel="stylesheet"][href="${href}"]`,
-            );
+            const href = assetUrl(file);
+            const existing = Array.from(
+              document.querySelectorAll('link[rel="stylesheet"]'),
+            ).find((link) => link.href === href);
             if (existing) {
-              resolve();
+              resolve(null);
               return;
             }
             const link = document.createElement('link');
             link.rel = 'stylesheet';
             link.href = href;
-            link.onload = resolve;
+            created.push(link);
+            link.onload = () => resolve(link);
             link.onerror = () => {
               link.remove();
               reject(new Error(`Stylesheet failed to load: ${href}`));
@@ -124,13 +144,22 @@
             document.head.appendChild(link);
           }),
       ),
-    );
+    ).catch((error) => {
+      for (const link of created) link.remove();
+      throw error;
+    });
   }
 
   async function loadManifest(manifest) {
     const entry = entryFrom(manifest);
-    await loadStyles(entry.css);
-    await import(`/${entry.file}`);
+    const entryUrl = assetUrl(entry.file);
+    const styles = await loadStyles(entry.css);
+    try {
+      await import(entryUrl);
+    } catch (error) {
+      for (const link of styles) link?.remove();
+      throw error;
+    }
   }
 
   async function loadApplication() {
