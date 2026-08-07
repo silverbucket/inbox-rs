@@ -103,6 +103,39 @@ describe('web deployment safety', () => {
     );
   });
 
+  it('rejects traversal paths found in historical HTML entries', () => {
+    const repo = mkdtempSync(join(tmpdir(), 'inbox-rs-shim-traversal-'));
+    run('git', ['init'], repo);
+    run('git', ['config', 'user.name', 'Test'], repo);
+    run('git', ['config', 'user.email', 'test@example.com'], repo);
+    write(
+      join(repo, 'index.html'),
+      '<script type="module" src="/assets/../../escaped.js"></script>',
+    );
+    run('git', ['add', '.'], repo);
+    run('git', ['commit', '-m', 'malicious deployment'], repo);
+
+    const dist = join(repo, 'dist');
+    write(
+      join(dist, 'asset-manifest.json'),
+      JSON.stringify({
+        'src/main.ts': { file: 'assets/main-current.js', isEntry: true },
+        'src/capture/main.ts': {
+          file: 'assets/capture-current.js',
+          isEntry: true,
+        },
+      }),
+    );
+
+    expect(() =>
+      run(
+        'node',
+        [join(scriptsDir, 'create-deployed-entry-shims.mjs'), 'HEAD', dist],
+        repo,
+      ),
+    ).toThrow(/invalid asset path/);
+  });
+
   it('rejects a deployment whose manifest points at a missing entry', () => {
     const dist = mkdtempSync(join(tmpdir(), 'inbox-rs-invalid-deploy-'));
     write(

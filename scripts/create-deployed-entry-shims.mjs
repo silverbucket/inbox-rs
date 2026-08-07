@@ -25,12 +25,15 @@ const currentEntries = new Set(
     .filter((file) => typeof file === 'string'),
 );
 
+function isEntryScriptPath(entry) {
+  return (
+    typeof entry === 'string' && /^assets\/[A-Za-z0-9_.-]+\.js$/.test(entry)
+  );
+}
+
 if (
   !Array.isArray(knownEntries) ||
-  knownEntries.some(
-    (entry) =>
-      typeof entry !== 'string' || !/^assets\/[A-Za-z0-9_.-]+\.js$/.test(entry),
-  )
+  knownEntries.some((entry) => !isEntryScriptPath(entry))
 ) {
   throw new Error('deployed-entrypoints.json contains an invalid asset path');
 }
@@ -57,7 +60,13 @@ for (const commit of commits) {
       continue;
     }
     for (const match of html.matchAll(scriptPattern)) {
-      entryScripts.add(match[1]);
+      const entryScript = match[1];
+      if (!isEntryScriptPath(entryScript)) {
+        throw new Error(
+          `Historical entry has an invalid asset path: ${entryScript}`,
+        );
+      }
+      entryScripts.add(entryScript);
     }
   }
 }
