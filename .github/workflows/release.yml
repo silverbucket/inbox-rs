@@ -149,6 +149,7 @@ jobs:
           # mutable shell files are replaced by the new release.
           git fetch 5apps master
           node scripts/retain-deployed-web-assets.mjs 5apps/master
+          node scripts/create-deployed-entry-shims.mjs 5apps/master
           node scripts/check-web-deploy.mjs
 
           # Create a throwaway branch for the deploy commit so master stays clean.

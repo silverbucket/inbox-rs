@@ -5,4 +5,5 @@ import './styles.css';
 const target = document.getElementById('capture-app');
 if (!target) throw new Error('Mount target #capture-app not found');
 
+target.replaceChildren();
 mount(App, { target });

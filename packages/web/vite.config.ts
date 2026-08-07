@@ -33,6 +33,7 @@ export default defineConfig({
         'icon-512-maskable.png',
       ],
       workbox: {
+        clientsClaim: true,
         additionalManifestEntries: [
           { url: '/', revision: version },
           { url: '/capture/', revision: version },

@@ -64,6 +64,7 @@ npm run build
 # stable loader and its release manifest before publishing the new tree.
 git fetch 5apps master
 node scripts/retain-deployed-web-assets.mjs 5apps/master
+node scripts/create-deployed-entry-shims.mjs 5apps/master
 node scripts/check-web-deploy.mjs
 
 # ── 5. Deploy to 5apps via throwaway branch (dist/ stays off master) ─────────

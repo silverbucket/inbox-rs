@@ -44,6 +44,65 @@ describe('web deployment safety', () => {
     expect(() => readFileSync(join(dist, 'assets/release-1.js.map'))).toThrow();
   });
 
+  it('replaces every historical HTML entry bundle with a recovery shim', () => {
+    const repo = mkdtempSync(join(tmpdir(), 'inbox-rs-shims-'));
+    run('git', ['init'], repo);
+    run('git', ['config', 'user.name', 'Test'], repo);
+    run('git', ['config', 'user.email', 'test@example.com'], repo);
+    write(
+      join(repo, 'index.html'),
+      '<script type="module" src="/assets/main-release-1.js"></script>',
+    );
+    write(
+      join(repo, 'capture/index.html'),
+      '<script type="module" src="/assets/capture-release-1.js"></script>',
+    );
+    run('git', ['add', '.'], repo);
+    run('git', ['commit', '-m', 'release one'], repo);
+    write(
+      join(repo, 'index.html'),
+      '<script type="module" src="/assets/main-release-2.js"></script>',
+    );
+    run('git', ['add', '.'], repo);
+    run('git', ['commit', '-m', 'release two'], repo);
+
+    const dist = join(repo, 'dist');
+    write(
+      join(dist, 'asset-manifest.json'),
+      JSON.stringify({
+        'src/main.ts': { file: 'assets/main-current.js', isEntry: true },
+        'src/capture/main.ts': {
+          file: 'assets/capture-current.js',
+          isEntry: true,
+        },
+      }),
+    );
+    write(join(dist, 'assets/main-current.js'), 'current main');
+    write(join(dist, 'assets/capture-current.js'), 'current capture');
+
+    run(
+      'node',
+      [join(scriptsDir, 'create-deployed-entry-shims.mjs'), 'HEAD', dist],
+      repo,
+    );
+
+    for (const historicalEntry of [
+      'main-release-1.js',
+      'main-release-2.js',
+      'capture-release-1.js',
+      // Known staging entry whose cached HTML caused the original white
+      // screen; keep its rescue path permanently covered.
+      'main-DVGRcOrn.js',
+    ]) {
+      expect(
+        readFileSync(join(dist, 'assets', historicalEntry), 'utf8'),
+      ).toContain("import '/app-loader.js'");
+    }
+    expect(readFileSync(join(dist, 'assets/main-current.js'), 'utf8')).toBe(
+      'current main',
+    );
+  });
+
   it('rejects a deployment whose manifest points at a missing entry', () => {
     const dist = mkdtempSync(join(tmpdir(), 'inbox-rs-invalid-deploy-'));
     write(

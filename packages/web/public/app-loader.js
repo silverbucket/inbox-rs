@@ -177,15 +177,6 @@
     });
     if (!registration) return;
 
-    if (!hadController) {
-      await navigator.serviceWorker.ready;
-      if (!navigator.serviceWorker.controller && !reloadingForWorker) {
-        reloadingForWorker = true;
-        location.reload();
-      }
-      return;
-    }
-
     const activateWaitingWorker = () => {
       if (registration.waiting) {
         registration.waiting.postMessage({ type: 'SKIP_WAITING' });
@@ -193,7 +184,9 @@
     };
 
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (reloadingForWorker) return;
+      // A first install claims this page without interrupting app startup.
+      // Only an update to an already-controlled page requires a reload.
+      if (!hadController || reloadingForWorker) return;
       reloadingForWorker = true;
       location.reload();
     });
