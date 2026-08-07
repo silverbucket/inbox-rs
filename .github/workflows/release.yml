@@ -144,6 +144,14 @@ jobs:
           git remote add 5apps git@5apps.com:silverbucket_inbox-rs.git 2>/dev/null \
             || git remote set-url 5apps git@5apps.com:silverbucket_inbox-rs.git
 
+          # Content-hashed runtime assets are immutable and may still be used
+          # by a dormant installed PWA. Carry the deployed set forward; only
+          # mutable shell files are replaced by the new release.
+          git fetch 5apps +refs/heads/master:refs/remotes/5apps/master
+          node scripts/retain-deployed-web-assets.mjs 5apps/master
+          node scripts/create-deployed-entry-shims.mjs 5apps/master
+          node scripts/check-web-deploy.mjs
+
           # Create a throwaway branch for the deploy commit so master stays clean.
           git checkout -b deploy/v${VERSION}
           git add packages/web/dist -f

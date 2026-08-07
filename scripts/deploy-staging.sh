@@ -34,6 +34,13 @@ git remote add 5apps-staging "$STAGING_REMOTE_URL" 2>/dev/null \
 npm install
 STAGING_BUILD=1 npm run build
 
+# Preserve immutable assets used by any older installed shell, then verify the
+# stable loader and its release manifest before publishing the new tree.
+git fetch 5apps-staging +refs/heads/master:refs/remotes/5apps-staging/master
+node scripts/retain-deployed-web-assets.mjs 5apps-staging/master
+node scripts/create-deployed-entry-shims.mjs 5apps-staging/master
+node scripts/check-web-deploy.mjs
+
 # ── 5. Deploy to staging via a throwaway branch (dist/ never lands on origin) ─
 DEPLOY_BRANCH="staging-deploy/${BRANCH//\//-}"
 git branch -D "$DEPLOY_BRANCH" 2>/dev/null || true

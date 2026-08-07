@@ -1,13 +1,12 @@
 /**
- * Recover from deploy-invalidated lazy chunks.
+ * Recover from failed lazy-chunk loads.
  *
- * The app is a PWA registered with `autoUpdate`: a tab left open across a
- * release keeps running the old shell, but the new service worker purges the
- * old hashed chunks from the precache (and the deploy removes them from the
- * server). The next dynamic import — e.g. clicking a card, which lazy-loads
- * ViewCardModal — then 404s. Vite surfaces exactly that failure as a
- * `vite:preloadError` event; reloading fetches the fresh shell whose chunks
- * all exist.
+ * Deploys retain immutable hashed assets and the stable bootloader coordinates
+ * service-worker activation, so a normal release must not invalidate a live
+ * page. This remains a last-resort guard for a temporarily incomplete CDN
+ * publication or manually removed asset. Vite surfaces a failed dynamic import
+ * as a `vite:preloadError` event; reloading asks the stable loader to select a
+ * complete release or fall back to the last one known to work.
  *
  * A reload is only attempted once per RELOAD_WINDOW_MS (tracked in
  * sessionStorage so it survives the reload itself). If the failure persists —

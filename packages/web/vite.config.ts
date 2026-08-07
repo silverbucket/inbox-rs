@@ -19,8 +19,8 @@ export default defineConfig({
   plugins: [
     svelte(),
     VitePWA({
-      registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      registerType: 'prompt',
+      injectRegister: false,
       manifest: false,
       includeAssets: [
         'manifest.webmanifest',
@@ -33,6 +33,7 @@ export default defineConfig({
         'icon-512-maskable.png',
       ],
       workbox: {
+        clientsClaim: true,
         additionalManifestEntries: [
           { url: '/', revision: version },
           { url: '/capture/', revision: version },
@@ -45,7 +46,7 @@ export default defineConfig({
         // paths) falls through to the MAIN app's index.html and boots the
         // wrong app inside the capture PWA window.
         navigateFallbackDenylist: [/^\/capture\//],
-        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest,wasm}'],
+        globPatterns: ['**/*.{js,css,html,json,png,svg,webmanifest,wasm}'],
         globIgnores: [
           'ml/**/*',
           // Lazy-only heavyweights (~1.4 MB minified combined). They're
@@ -96,6 +97,7 @@ export default defineConfig({
     ...(process.env.VITEST ? { conditions: ['browser'] } : {}),
   },
   build: {
+    manifest: 'asset-manifest.json',
     // Bump above Vite's default `modules` baseline so top-level `await` is
     // available. Used in `src/lib/rs.ts` to gate RS construction on a
     // corrupt-IndexedDB self-recovery probe. TLA shipped in Chrome 89 / Edge
@@ -107,8 +109,10 @@ export default defineConfig({
     sourcemap: isStaging,
     rollupOptions: {
       input: {
-        main: path.resolve(__dirname, 'index.html'),
-        capture: path.resolve(__dirname, 'capture/index.html'),
+        mainShell: path.resolve(__dirname, 'index.html'),
+        captureShell: path.resolve(__dirname, 'capture/index.html'),
+        main: path.resolve(__dirname, 'src/main.ts'),
+        capture: path.resolve(__dirname, 'src/capture/main.ts'),
       },
     },
   },
