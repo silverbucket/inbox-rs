@@ -153,4 +153,24 @@ describe('InboxCard bookmark favicon decorator', () => {
     expect(img).not.toBeNull();
     expect(img?.src).toBe('https://example.com/favicon.ico');
   });
+
+  it('uses a native selection button without making the card interactive', () => {
+    const onselect = vi.fn();
+    const item = bookmark();
+    component = mount(InboxCard, {
+      target: host,
+      props: { item, onselect },
+    });
+    flushSync();
+
+    const card = host.querySelector('article.card');
+    const select = host.querySelector<HTMLButtonElement>('button.card-select');
+    expect(card?.hasAttribute('role')).toBe(false);
+    expect(card?.hasAttribute('tabindex')).toBe(false);
+    expect(select?.ariaLabel).toBe('Open Example');
+
+    select?.click();
+    expect(onselect).toHaveBeenCalledOnce();
+    expect(onselect).toHaveBeenCalledWith(item);
+  });
 });

@@ -142,20 +142,22 @@
   }
 </script>
 
-<article class="card" role="button" tabindex="0"
+<article class="card"
   class:pinned={item.pinned}
   data-priority-item
   draggable="true"
   ondragstart={onDragStart}
   ondragend={onDragEnd}
-  onclick={(e) => {
-    const target = e.target as HTMLElement;
-    if (target.closest('a, button, input, audio, video')) return;
-    onselect(item);
-  }}
-  onkeydown={(e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onselect(item); }
-  }}>
+>
+  <!-- A native button supplies whole-card mouse and keyboard selection without
+       making the article itself interactive. Real card controls sit above this
+       overlay, so the flag, links, and media remain independent siblings. -->
+  <button
+    type="button"
+    class="card-select"
+    aria-label="Open {item.title}"
+    onclick={() => onselect(item)}
+  ></button>
   <div class="card-body">
     <button
       type="button"
@@ -271,6 +273,34 @@
 
   .card.pinned {
     border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  }
+
+  .card-select {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .card-select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -3px;
+  }
+
+  /* Keep genuine card controls above the full-card selection surface. */
+  .card :global(a),
+  .card :global(button:not(.card-select)),
+  .card :global(input),
+  .card :global(audio),
+  .card :global(video) {
+    position: relative;
+    z-index: 2;
   }
 
   .pin-button {
