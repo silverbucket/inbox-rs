@@ -214,7 +214,9 @@ test('a failed metadata fetch leaves the capture intact and the view card offers
     'Example Org',
     { timeout: 10_000 },
   );
-  await expect(dialog.getByText('Recovered metadata')).toBeVisible();
+  await expect(
+    dialog.getByRole('textbox', { name: 'Description' }),
+  ).toHaveValue('Recovered metadata');
 
   assertNoConsoleErrors(log);
 });
