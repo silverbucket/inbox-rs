@@ -9,7 +9,17 @@
   } from '../../lib/stores';
   import Lightbox from '../Lightbox.svelte';
 
-  let { item, titleId }: { item: BookmarkItem; titleId: string } = $props();
+  let {
+    item,
+    titleId,
+    showTitle = true,
+    beforeAction = async () => {},
+  }: {
+    item: BookmarkItem;
+    titleId: string;
+    showTitle?: boolean;
+    beforeAction?: () => Promise<void>;
+  } = $props();
 
   let showLightbox = $state(false);
   let fetchingPreview = $state(false);
@@ -20,6 +30,11 @@
   // flow — the parent's `{#key item.id}` remount makes state resets and
   // stale-promise guards unnecessary.
   async function handleFetchPreview() {
+    try {
+      await beforeAction();
+    } catch {
+      return;
+    }
     fetchingPreview = true;
     previewStatus = '';
     try {
@@ -64,9 +79,10 @@
   });
 </script>
 
-<h2 class="title" id={titleId}>
-  <a href={item.url} target="_blank" rel="noopener noreferrer"
-    >{item.title}<svg
+{#if showTitle}
+  <h2 class="title" id={titleId}>
+    <a href={item.url} target="_blank" rel="noopener noreferrer"
+      >{item.title}<svg
       aria-hidden="true"
       class="link-icon"
       width="14"
@@ -84,9 +100,10 @@
         x2="21"
         y2="3"
       ></line></svg
-    ></a
-  >
-</h2>
+      ></a
+    >
+  </h2>
+{/if}
 
 <div class="meta-row">
   {#if item.favicon}

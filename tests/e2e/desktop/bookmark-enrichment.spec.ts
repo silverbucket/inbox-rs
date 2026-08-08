@@ -210,10 +210,13 @@ test('a failed metadata fetch leaves the capture intact and the view card offers
   await expect(dialog).toBeVisible({ timeout: 10_000 });
 
   await dialog.getByRole('button', { name: 'Fetch preview' }).click();
-  await expect(dialog.getByRole('link', { name: 'Example Org' })).toBeVisible({
-    timeout: 10_000,
-  });
-  await expect(dialog.getByText('Recovered metadata')).toBeVisible();
+  await expect(dialog.getByRole('textbox', { name: 'Title' })).toHaveValue(
+    'Example Org',
+    { timeout: 10_000 },
+  );
+  await expect(
+    dialog.getByRole('textbox', { name: 'Description' }),
+  ).toHaveValue('Recovered metadata');
 
   assertNoConsoleErrors(log);
 });

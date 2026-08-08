@@ -3,7 +3,7 @@
   import type { DocumentItem } from '@inbox-rs/rs-module';
   import rs from '../../lib/rs';
 
-  let { item, titleId }: { item: DocumentItem; titleId: string } = $props();
+  let { item, titleId, showTitle = true }: { item: DocumentItem; titleId: string; showTitle?: boolean } = $props();
 
   let docBlobUrl = $state<string | null>(null);
   let docLoading = $state(false);
@@ -61,7 +61,7 @@
   }
 </script>
 
-<h2 class="title" id={titleId}>{item.title}</h2>
+{#if showTitle}<h2 class="title" id={titleId}>{item.title}</h2>{/if}
 
 {#if item.fileName}
   <p class="meta-text">{item.fileName}</p>
