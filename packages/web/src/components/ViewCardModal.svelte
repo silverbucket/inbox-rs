@@ -86,6 +86,11 @@
 
   async function handleDelete() {
     deleting = true;
+    try {
+      await flushEdits();
+    } catch {
+      // The save attempt has settled. Deletion must now win.
+    }
     await deleteItem(item.id, item);
     clearCardDraft(item.id, localStorage);
     showDelete = false;
@@ -423,12 +428,14 @@
     </div>
 
     <h2 class="sr-only" id={TITLE_ID}>{item.title || 'Untitled card'}</h2>
-    <CardInlineEditor
-      {item}
-      bind:status={saveStatus}
-      bind:flush={flushEdits}
-      bind:retry={retrySave}
-    />
+    {#key item.id}
+      <CardInlineEditor
+        {item}
+        bind:status={saveStatus}
+        bind:flush={flushEdits}
+        bind:retry={retrySave}
+      />
+    {/key}
 
     <!-- Type-specific previews and file actions stay available beneath the
          always-editable content without duplicating title/body fields. -->

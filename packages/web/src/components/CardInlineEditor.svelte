@@ -5,8 +5,11 @@
     applyCardDraft,
     clearCardDraft,
     createCardDraft,
+    draftsEqual,
+    mergeExternalCardDraft,
     readCardDraft,
     writeCardDraft,
+    type CardDraft,
   } from '../lib/card-draft';
   import { storeItem } from '../lib/stores';
   import MarkdownContentField from './add-entry/MarkdownContentField.svelte';
@@ -28,6 +31,9 @@
   const initialItem = untrack(() => item);
   const recovered = readCardDraft(initialItem, localStorage);
   let draft = $state(recovered ?? createCardDraft(initialItem));
+  let syncedDraft = $state<CardDraft>(
+    untrack(() => structuredClone(createCardDraft(initialItem))),
+  );
   let revision = recovered ? 1 : 0;
   let persistedRevision = 0;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -62,6 +68,7 @@
     try {
       await savePromise;
       persistedRevision = savingRevision;
+      syncedDraft = structuredClone(snapshot);
       if (revision === savingRevision) {
         clearCardDraft(item.id, localStorage);
         status = 'saved';
@@ -87,6 +94,25 @@
 
   onDestroy(() => {
     if (saveTimer) clearTimeout(saveTimer);
+  });
+
+  // Background updates (bookmark enrichment, transcription, etc.) flow through
+  // the items store while the modal stays open. Merge them into the draft
+  // without clobbering fields the user has edited locally.
+  $effect(() => {
+    const external = item;
+    untrack(() => {
+      if (revision > persistedRevision) {
+        const merged = mergeExternalCardDraft(draft, syncedDraft, external);
+        if (merged) draft = merged;
+        return;
+      }
+      const next = createCardDraft(external);
+      if (!draftsEqual(draft, next)) {
+        draft = next;
+        syncedDraft = structuredClone(next);
+      }
+    });
   });
 
   const hasBody = $derived('body' in item && item.type !== 'bookmark');

@@ -61,7 +61,11 @@
   }
 
   async function handleTranscribe() {
-    await beforeAction();
+    try {
+      await beforeAction();
+    } catch {
+      return;
+    }
     // The parent's `{#key item.id}` block destroys this component if the
     // user navigates to a different audio mid-transcription, which cancels
     // any UI updates from the in-flight promise — Svelte simply stops

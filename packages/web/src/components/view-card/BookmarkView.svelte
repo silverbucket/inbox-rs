@@ -30,7 +30,11 @@
   // flow — the parent's `{#key item.id}` remount makes state resets and
   // stale-promise guards unnecessary.
   async function handleFetchPreview() {
-    await beforeAction();
+    try {
+      await beforeAction();
+    } catch {
+      return;
+    }
     fetchingPreview = true;
     previewStatus = '';
     try {

@@ -6,6 +6,8 @@ import {
   cardDraftKey,
   clearCardDraft,
   createCardDraft,
+  draftsEqual,
+  mergeExternalCardDraft,
   readCardDraft,
   writeCardDraft,
 } from './card-draft';
@@ -56,6 +58,29 @@ describe('card drafts', () => {
       body: 'Changed body',
       description: undefined,
     });
+  });
+
+  it('merges external updates only into untouched draft fields', () => {
+    const bookmark: InboxItem = {
+      id: 'bm-1',
+      type: 'bookmark',
+      title: 'https://example.org',
+      url: 'https://example.org',
+      createdAt: note.createdAt,
+    };
+    const synced = createCardDraft(bookmark);
+    const draft = { ...synced, title: 'My custom title' };
+    const enriched = {
+      ...bookmark,
+      title: 'Example Org',
+      description: 'Recovered metadata',
+    };
+
+    expect(mergeExternalCardDraft(draft, synced, enriched)).toEqual({
+      ...draft,
+      description: 'Recovered metadata',
+    });
+    expect(draftsEqual(synced, createCardDraft(bookmark))).toBe(true);
   });
 
   it('stamps completion only on the open-to-done transition', () => {

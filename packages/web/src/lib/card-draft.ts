@@ -109,3 +109,53 @@ export function clearCardDraft(
     // Non-fatal: a successfully persisted card remains the source of truth.
   }
 }
+
+const MERGEABLE_DRAFT_KEYS = [
+  'title',
+  'description',
+  'body',
+  'url',
+  'from',
+  'notes',
+  'completed',
+] as const satisfies readonly (keyof CardDraft)[];
+
+function draftField(
+  draft: CardDraft,
+  key: (typeof MERGEABLE_DRAFT_KEYS)[number],
+): string | boolean | undefined {
+  return draft[key];
+}
+
+/** True when two drafts carry the same editable field values. */
+export function draftsEqual(a: CardDraft, b: CardDraft): boolean {
+  return MERGEABLE_DRAFT_KEYS.every(
+    (key) => draftField(a, key) === draftField(b, key),
+  );
+}
+
+/**
+ * Pull externally-updated fields into a local draft without clobbering
+ * values the user has changed since the last persisted/synced snapshot.
+ */
+export function mergeExternalCardDraft(
+  draft: CardDraft,
+  synced: CardDraft,
+  item: InboxItem,
+): CardDraft | null {
+  const external = createCardDraft(item);
+  const merged = { ...draft };
+  let changed = false;
+
+  for (const key of MERGEABLE_DRAFT_KEYS) {
+    if (draftField(draft, key) === draftField(synced, key)) {
+      const next = draftField(external, key);
+      if (draftField(draft, key) !== next) {
+        (merged as Record<string, unknown>)[key] = next;
+        changed = true;
+      }
+    }
+  }
+
+  return changed ? merged : null;
+}
