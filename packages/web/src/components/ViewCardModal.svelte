@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
+  import { tick } from 'svelte';
   import { clearCardDraft } from '../lib/card-draft';
   import {
     collections,
@@ -33,6 +34,8 @@
   const TITLE_ID = 'view-modal-title';
 
   let showActions = $state(false);
+  let actionsTrigger = $state<HTMLButtonElement>();
+  let deleteAction = $state<HTMLButtonElement>();
   let showDelete = $state(false);
   let deleting = $state(false);
 
@@ -332,15 +335,52 @@
     if (e.key !== 'Escape') return;
     if (showDelete || showPicker || showSchedule || showCalendarSheet) return;
     if (showActions) {
-      showActions = false;
+      closeActions(true);
       return;
     }
     void requestClose();
   }
 
+  async function openActions() {
+    showActions = true;
+    await tick();
+    deleteAction?.focus();
+  }
+
+  function closeActions(restoreFocus = false) {
+    showActions = false;
+    if (restoreFocus) actionsTrigger?.focus();
+  }
+
+  function handleActionsTriggerKeydown(e: KeyboardEvent) {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    void openActions();
+  }
+
+  function handleActionsMenuKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeActions(true);
+      return;
+    }
+    if (
+      e.key === 'ArrowDown' ||
+      e.key === 'ArrowUp' ||
+      e.key === 'Home' ||
+      e.key === 'End'
+    ) {
+      e.preventDefault();
+      deleteAction?.focus();
+    } else if (e.key === 'Tab') {
+      closeActions();
+    }
+  }
+
   function handleOverlayClick() {
     if (showActions) {
-      showActions = false;
+      closeActions(true);
       return;
     }
     void requestClose();
@@ -349,7 +389,7 @@
   function handleModalClick(e: MouseEvent) {
     e.stopPropagation();
     if (showActions && !(e.target as HTMLElement).closest('.header-actions')) {
-      showActions = false;
+      closeActions();
     }
   }
 
@@ -399,13 +439,16 @@
       </button>
       <div class="header-actions">
         <button
+          bind:this={actionsTrigger}
           type="button"
           class="icon-btn"
           title="Card actions"
           aria-label="Card actions"
           aria-haspopup="menu"
           aria-expanded={showActions}
-          onclick={() => (showActions = !showActions)}
+          onclick={() =>
+            showActions ? closeActions() : void openActions()}
+          onkeydown={handleActionsTriggerKeydown}
         >
           <svg
             aria-hidden="true"
@@ -420,13 +463,20 @@
           </svg>
         </button>
         {#if showActions}
-          <div class="actions-menu" role="menu">
+          <div
+            class="actions-menu"
+            role="menu"
+            aria-label="Card actions"
+            tabindex="-1"
+            onkeydown={handleActionsMenuKeydown}
+          >
             <button
+              bind:this={deleteAction}
               type="button"
               class="actions-menu-item actions-menu-danger"
               role="menuitem"
               onclick={() => {
-                showActions = false;
+                closeActions();
                 showDelete = true;
               }}
             >
