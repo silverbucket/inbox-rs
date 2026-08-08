@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import type { ImageItem } from '@inbox-rs/rs-module';
+import type { BookmarkItem, ImageItem } from '@inbox-rs/rs-module';
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,6 +10,7 @@ const { storeItem } = vi.hoisted(() => ({
 vi.mock('../lib/stores', () => ({ storeItem }));
 
 import { cardDraftKey, createCardDraft } from '../lib/card-draft';
+import Harness from './CardInlineEditor.harness.svelte';
 import CardInlineEditor from './CardInlineEditor.svelte';
 
 const item: ImageItem = {
@@ -77,5 +78,55 @@ describe('CardInlineEditor autosave', () => {
     expect(
       (host.querySelector('[aria-label="Title"]') as HTMLInputElement).value,
     ).toBe('Recovered after refresh');
+  });
+
+  it('keeps a merged external update pending when an older save is in flight', async () => {
+    let releaseSave: (() => void) | undefined;
+    const saveGate = new Promise<void>((resolve) => {
+      releaseSave = resolve;
+    });
+    storeItem.mockImplementationOnce(() => saveGate);
+
+    const bookmark: BookmarkItem = {
+      id: 'bookmark-1',
+      type: 'bookmark',
+      title: 'https://example.org',
+      url: 'https://example.org',
+      createdAt: '2026-08-01T10:00:00.000Z',
+    };
+    const harness = mount(Harness, {
+      target: host,
+      props: { initial: bookmark },
+    });
+    flushSync();
+
+    const title = host.querySelector(
+      '[aria-label="Title"]',
+    ) as HTMLInputElement;
+    title.value = 'My custom title';
+    title.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    flushSync();
+
+    const flushPromise = harness.flushEdits();
+    const enriched: BookmarkItem = {
+      ...bookmark,
+      title: 'Example Org',
+      description: 'Recovered metadata',
+    };
+    harness.updateItem(enriched);
+    flushSync();
+
+    releaseSave?.();
+    await flushPromise;
+    await new Promise((resolve) => setTimeout(resolve, 750));
+
+    unmount(harness);
+
+    expect(storeItem).toHaveBeenCalledTimes(2);
+    expect(storeItem.mock.calls[1]?.[0]).toMatchObject({
+      title: 'My custom title',
+      description: 'Recovered metadata',
+    });
+    expect(localStorage.getItem(cardDraftKey(bookmark.id))).toBeNull();
   });
 });

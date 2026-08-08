@@ -67,9 +67,9 @@
     savePromise = storeItem(applyCardDraft(item, snapshot));
     try {
       await savePromise;
-      persistedRevision = savingRevision;
-      syncedDraft = structuredClone(snapshot);
       if (revision === savingRevision) {
+        persistedRevision = savingRevision;
+        syncedDraft = structuredClone(snapshot);
         clearCardDraft(item.id, localStorage);
         status = 'saved';
       } else {
@@ -96,6 +96,14 @@
     if (saveTimer) clearTimeout(saveTimer);
   });
 
+  function noteExternalDraftChange() {
+    revision += 1;
+    status = 'pending';
+    writeCardDraft(draft, localStorage);
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => void persist().catch(() => {}), 700);
+  }
+
   // Background updates (bookmark enrichment, transcription, etc.) flow through
   // the items store while the modal stays open. Merge them into the draft
   // without clobbering fields the user has edited locally.
@@ -104,7 +112,10 @@
     untrack(() => {
       if (revision > persistedRevision) {
         const merged = mergeExternalCardDraft(draft, syncedDraft, external);
-        if (merged) draft = merged;
+        if (merged) {
+          draft = merged;
+          noteExternalDraftChange();
+        }
         return;
       }
       const next = createCardDraft(external);
