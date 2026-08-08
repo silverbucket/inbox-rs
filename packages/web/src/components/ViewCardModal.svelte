@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
+  import { tick } from 'svelte';
   import { clearCardDraft } from '../lib/card-draft';
   import {
     collections,
@@ -32,6 +33,9 @@
 
   const TITLE_ID = 'view-modal-title';
 
+  let showActions = $state(false);
+  let actionsTrigger = $state<HTMLButtonElement>();
+  let deleteAction = $state<HTMLButtonElement>();
   let showDelete = $state(false);
   let deleting = $state(false);
 
@@ -330,7 +334,63 @@
     }
     if (e.key !== 'Escape') return;
     if (showDelete || showPicker || showSchedule || showCalendarSheet) return;
+    if (showActions) {
+      closeActions(true);
+      return;
+    }
     void requestClose();
+  }
+
+  async function openActions() {
+    showActions = true;
+    await tick();
+    deleteAction?.focus();
+  }
+
+  function closeActions(restoreFocus = false) {
+    showActions = false;
+    if (restoreFocus) actionsTrigger?.focus();
+  }
+
+  function handleActionsTriggerKeydown(e: KeyboardEvent) {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    void openActions();
+  }
+
+  function handleActionsMenuKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeActions(true);
+      return;
+    }
+    if (
+      e.key === 'ArrowDown' ||
+      e.key === 'ArrowUp' ||
+      e.key === 'Home' ||
+      e.key === 'End'
+    ) {
+      e.preventDefault();
+      deleteAction?.focus();
+    } else if (e.key === 'Tab') {
+      closeActions();
+    }
+  }
+
+  function handleOverlayClick() {
+    if (showActions) {
+      closeActions(true);
+      return;
+    }
+    void requestClose();
+  }
+
+  function handleModalClick(e: MouseEvent) {
+    e.stopPropagation();
+    if (showActions && !(e.target as HTMLElement).closest('.header-actions')) {
+      closeActions();
+    }
   }
 
   async function openSchedule() {
@@ -356,13 +416,13 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="overlay" onclick={() => void requestClose()}>
+<div class="overlay" onclick={handleOverlayClick}>
   <div
     class="modal"
     role="dialog"
     aria-modal="true"
     aria-labelledby={TITLE_ID}
-    onclick={(e) => e.stopPropagation()}
+    onclick={handleModalClick}
   >
     <div class="modal-header">
       <span class="type-badge">{item.type}</span>
@@ -379,29 +439,67 @@
       </button>
       <div class="header-actions">
         <button
+          bind:this={actionsTrigger}
           type="button"
-          class="icon-btn icon-btn-danger"
-          title="Delete"
-          aria-label="Delete"
-          onclick={() => (showDelete = true)}
+          class="icon-btn"
+          title="Card actions"
+          aria-label="Card actions"
+          aria-haspopup="menu"
+          aria-expanded={showActions}
+          onclick={() =>
+            showActions ? closeActions() : void openActions()}
+          onkeydown={handleActionsTriggerKeydown}
         >
           <svg
             aria-hidden="true"
-            width="16"
-            height="16"
+            width="18"
+            height="18"
             viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+            fill="currentColor"
           >
-            <polyline points="3 6 5 6 21 6"></polyline>
-            <path
-              d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-            ></path>
+            <circle cx="5" cy="12" r="1.75"></circle>
+            <circle cx="12" cy="12" r="1.75"></circle>
+            <circle cx="19" cy="12" r="1.75"></circle>
           </svg>
         </button>
+        {#if showActions}
+          <div
+            class="actions-menu"
+            role="menu"
+            aria-label="Card actions"
+            tabindex="-1"
+            onkeydown={handleActionsMenuKeydown}
+          >
+            <button
+              bind:this={deleteAction}
+              type="button"
+              class="actions-menu-item actions-menu-danger"
+              role="menuitem"
+              onclick={() => {
+                closeActions();
+                showDelete = true;
+              }}
+            >
+              <svg
+                aria-hidden="true"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path
+                  d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                ></path>
+              </svg>
+              Delete card
+            </button>
+          </div>
+        {/if}
         <button
           type="button"
           class="icon-btn"
@@ -1069,11 +1167,12 @@
     margin-left: auto;
     display: flex;
     gap: 0.25rem;
+    position: relative;
   }
 
   .icon-btn {
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
     border-radius: var(--radius-sm);
     display: grid;
     place-items: center;
@@ -1089,9 +1188,59 @@
     color: var(--text);
   }
 
-  .icon-btn-danger:hover {
+  .actions-menu {
+    position: absolute;
+    z-index: 10;
+    top: calc(100% + 0.35rem);
+    right: 44px;
+    min-width: 168px;
+    padding: 0.3rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    box-shadow: 0 12px 32px var(--shadow);
+  }
+
+  .actions-menu-item {
+    width: 100%;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.7rem;
+    border: none;
+    border-radius: calc(var(--radius-sm) - 2px);
+    background: none;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.9rem;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .actions-menu-danger {
+    color: var(--danger);
+  }
+
+  .actions-menu-danger:hover,
+  .actions-menu-danger:focus-visible {
     color: var(--danger);
     background: color-mix(in srgb, var(--danger) 10%, transparent);
+  }
+
+  @media (max-width: 600px), (display-mode: standalone) {
+    .icon-btn {
+      width: 44px;
+      height: 44px;
+    }
+
+    .actions-menu {
+      right: 48px;
+    }
+
+    .actions-menu-item {
+      min-height: 44px;
+    }
   }
 
   /* ── Meta strip ───────────────────────── */
