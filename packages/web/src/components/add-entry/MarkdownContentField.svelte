@@ -94,12 +94,12 @@
     {#if MarkdownEditorComponent}
       <MarkdownEditorComponent bind:value {placeholder} {focusOnMount} />
     {:else if markdownEditorLoadError}
-      <textarea use:autofocus class="code-input" bind:value rows="10" placeholder="Write in Markdown..." onkeydown={handleCodeKeydown}></textarea>
+      <textarea use:autofocus class="code-input" bind:value rows="10" {placeholder} onkeydown={handleCodeKeydown}></textarea>
     {:else}
       <div class="editor-loading" aria-live="polite">Loading visual editor…</div>
     {/if}
   {:else if editorMode === 'write'}
-    <textarea use:autofocus class="code-input" bind:value rows="10" placeholder="Write in Markdown..." onkeydown={handleCodeKeydown}></textarea>
+    <textarea use:autofocus class="code-input" bind:value rows="10" {placeholder} onkeydown={handleCodeKeydown}></textarea>
   {:else}
     <div class="preview-wrap markdown-body">
       {#if previewHtml}

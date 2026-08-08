@@ -33,8 +33,11 @@
     const currentItem = item;
     renderedBody = '';
     if (!currentItem.body) return;
-    renderMarkdown(currentItem.body).then((html) => {
-      if (item.id === currentItem.id) renderedBody = html;
+    const currentBody = currentItem.body;
+    renderMarkdown(currentBody).then((html) => {
+      if (item.id === currentItem.id && item.body === currentBody) {
+        renderedBody = html;
+      }
     });
   });
 
