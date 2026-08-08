@@ -1,0 +1,340 @@
+<script lang="ts">
+  import type { InboxItem } from '@inbox-rs/rs-module';
+  import { onDestroy, untrack } from 'svelte';
+  import {
+    applyCardDraft,
+    clearCardDraft,
+    createCardDraft,
+    readCardDraft,
+    writeCardDraft,
+  } from '../lib/card-draft';
+  import { storeItem } from '../lib/stores';
+  import MarkdownContentField from './add-entry/MarkdownContentField.svelte';
+
+  export type SaveStatus = 'saved' | 'pending' | 'saving' | 'error' | 'restored';
+
+  let {
+    item,
+    status = $bindable<SaveStatus>('saved'),
+    flush = $bindable<() => Promise<void>>(async () => {}),
+    retry = $bindable<() => void>(() => {}),
+  }: {
+    item: InboxItem;
+    status?: SaveStatus;
+    flush?: () => Promise<void>;
+    retry?: () => void;
+  } = $props();
+
+  const initialItem = untrack(() => item);
+  const recovered = readCardDraft(initialItem, localStorage);
+  let draft = $state(recovered ?? createCardDraft(initialItem));
+  let revision = recovered ? 1 : 0;
+  let persistedRevision = 0;
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  let savePromise: Promise<void> | null = null;
+
+  status = recovered ? 'restored' : 'saved';
+
+  function scheduleSave() {
+    revision += 1;
+    status = 'pending';
+    writeCardDraft(draft, localStorage);
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => void persist().catch(() => {}), 700);
+  }
+
+  async function persist(): Promise<void> {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = undefined;
+    }
+    if (revision <= persistedRevision) return;
+    if (savePromise) {
+      await savePromise;
+      if (revision > persistedRevision) await persist();
+      return;
+    }
+
+    const savingRevision = revision;
+    const snapshot = $state.snapshot(draft);
+    status = 'saving';
+    savePromise = storeItem(applyCardDraft(item, snapshot));
+    try {
+      await savePromise;
+      persistedRevision = savingRevision;
+      if (revision === savingRevision) {
+        clearCardDraft(item.id, localStorage);
+        status = 'saved';
+      } else {
+        status = 'pending';
+        saveTimer = setTimeout(() => void persist().catch(() => {}), 0);
+      }
+    } catch (error) {
+      console.error('Card autosave failed', error);
+      status = 'error';
+      throw error;
+    } finally {
+      savePromise = null;
+    }
+  }
+
+  flush = persist;
+  retry = () => void persist().catch(() => {});
+
+  if (recovered) {
+    saveTimer = setTimeout(() => void persist().catch(() => {}), 700);
+  }
+
+  onDestroy(() => {
+    if (saveTimer) clearTimeout(saveTimer);
+  });
+
+  const hasBody = $derived('body' in item && item.type !== 'bookmark');
+  const bodyLabel = $derived(
+    item.type === 'todo'
+      ? 'Details'
+      : item.type === 'audio' || item.type === 'video'
+        ? 'Transcription or notes'
+        : 'Content',
+  );
+  const bodyPlaceholder = $derived(
+    item.type === 'todo'
+      ? 'Add details…'
+      : item.type === 'email'
+        ? 'Email body…'
+        : item.type === 'audio' || item.type === 'video'
+          ? 'Add a transcription or notes…'
+          : 'Start writing…',
+  );
+  const descriptionIsPrimary = $derived(
+    item.type === 'image' || item.type === 'document',
+  );
+</script>
+
+<section class="editor" aria-label="Card content">
+  <div class="title-row">
+    {#if item.isTodo || item.type === 'todo'}
+      <label class="complete-toggle" title={draft.completed ? 'Mark open' : 'Mark complete'}>
+        <input type="checkbox" bind:checked={draft.completed} onchange={scheduleSave} />
+        <span aria-hidden="true"></span>
+        <span class="sr-only">Completed</span>
+      </label>
+    {/if}
+    <input
+      class="title-input"
+      bind:value={draft.title}
+      oninput={scheduleSave}
+      aria-label="Title"
+      placeholder="Untitled"
+    />
+    {#if item.type === 'bookmark' && draft.url}
+      <a class="source-link" href={draft.url} target="_blank" rel="noopener noreferrer">Open link ↗</a>
+    {:else if item.type === 'email' && item.messageUrl}
+      <a class="source-link" href={item.messageUrl}>Open email ↗</a>
+    {/if}
+  </div>
+
+  {#if item.type === 'bookmark'}
+    <label class="compact-field">
+      <span class="field-label">URL</span>
+      <input type="url" bind:value={draft.url} oninput={scheduleSave} placeholder="https://…" />
+    </label>
+  {:else if item.type === 'email'}
+    <label class="compact-field">
+      <span class="field-label">From</span>
+      <input bind:value={draft.from} oninput={scheduleSave} placeholder="Sender" />
+    </label>
+  {/if}
+
+  {#if hasBody}
+    <MarkdownContentField
+      bind:value={draft.body}
+      label={bodyLabel}
+      placeholder={bodyPlaceholder}
+      onchange={scheduleSave}
+    />
+  {/if}
+
+  {#if item.type === 'email'}
+    <label class="text-field">
+      <span class="field-label">Notes</span>
+      <textarea bind:value={draft.notes} oninput={scheduleSave} rows="3" placeholder="Your notes about this email…"></textarea>
+    </label>
+  {/if}
+
+  {#if descriptionIsPrimary}
+    <label class="text-field description-primary">
+      <span class="field-label">Description</span>
+      <textarea bind:value={draft.description} oninput={scheduleSave} rows="6" placeholder="Add a description…"></textarea>
+    </label>
+  {:else}
+    <details class="more-fields" open={!!draft.description}>
+      <summary>More details</summary>
+      <label class="text-field">
+        <span class="field-label">Description</span>
+        <textarea bind:value={draft.description} oninput={scheduleSave} rows="3" placeholder="Optional description…"></textarea>
+      </label>
+    </details>
+  {/if}
+</section>
+
+<style>
+  .editor {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 1rem;
+    min-height: 0;
+  }
+
+  .title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .title-input {
+    min-width: 0;
+    flex: 1;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: clamp(1.45rem, 3vw, 2.15rem);
+    font-weight: 650;
+    line-height: 1.2;
+    padding: 0.35rem 0.45rem;
+  }
+
+  .title-input:hover {
+    background: var(--surface-hover);
+  }
+
+  .title-input:focus {
+    border-color: var(--border);
+    background: var(--bg);
+    outline: none;
+  }
+
+  .source-link {
+    flex-shrink: 0;
+    color: var(--accent);
+    font-size: 0.8rem;
+  }
+
+  .complete-toggle {
+    position: relative;
+    display: grid;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    cursor: pointer;
+    place-items: center;
+  }
+
+  .complete-toggle input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+  }
+
+  .complete-toggle > span:not(.sr-only) {
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--text-muted);
+    border-radius: 50%;
+  }
+
+  .complete-toggle input:checked + span {
+    border-color: var(--accent);
+    background: var(--accent);
+    box-shadow: inset 0 0 0 4px var(--surface);
+  }
+
+  .complete-toggle input:focus-visible + span {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  .compact-field,
+  .text-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .field-label {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 500;
+  }
+
+  .compact-field input,
+  .text-field textarea {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 1rem;
+    line-height: 1.5;
+    padding: 0.65rem 0.75rem;
+  }
+
+  .compact-field input:focus,
+  .text-field textarea:focus {
+    border-color: var(--accent);
+    outline: none;
+  }
+
+  .text-field textarea {
+    resize: vertical;
+  }
+
+  .description-primary {
+    flex: 1;
+  }
+
+  .description-primary textarea {
+    flex: 1;
+    min-height: 12rem;
+  }
+
+  .more-fields {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+  }
+
+  .more-fields summary {
+    width: max-content;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .more-fields .text-field {
+    margin-top: 0.65rem;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    clip-path: inset(50%);
+  }
+
+  @media (max-width: 600px) {
+    .title-row {
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .source-link {
+      margin-left: 2.75rem;
+    }
+  }
+</style>

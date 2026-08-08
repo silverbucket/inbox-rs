@@ -3,7 +3,7 @@
   import { blobUrls, connected, loadFileBlobUrl } from '../../lib/stores';
   import Lightbox from '../Lightbox.svelte';
 
-  let { item, titleId }: { item: ImageItem; titleId: string } = $props();
+  let { item, titleId, showTitle = true }: { item: ImageItem; titleId: string; showTitle?: boolean } = $props();
 
   let showLightbox = $state(false);
 
@@ -23,7 +23,7 @@
   });
 </script>
 
-<h2 class="title" id={titleId}>{item.title}</h2>
+{#if showTitle}<h2 class="title" id={titleId}>{item.title}</h2>{/if}
 
 {#if imageSrc}
   <!-- svelte-ignore a11y_click_events_have_key_events -->

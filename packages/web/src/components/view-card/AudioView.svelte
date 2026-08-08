@@ -7,7 +7,19 @@
   import { transcribeAudio } from '../../lib/transcribe';
   import OfflineTranscriptionAssets from '../OfflineTranscriptionAssets.svelte';
 
-  let { item, titleId }: { item: AudioItem; titleId: string } = $props();
+  let {
+    item,
+    titleId,
+    showTitle = true,
+    showBody = true,
+    beforeAction = async () => {},
+  }: {
+    item: AudioItem;
+    titleId: string;
+    showTitle?: boolean;
+    showBody?: boolean;
+    beforeAction?: () => Promise<void>;
+  } = $props();
 
   let audioError = $state(false);
   let transcribing = $state(false);
@@ -49,6 +61,7 @@
   }
 
   async function handleTranscribe() {
+    await beforeAction();
     // The parent's `{#key item.id}` block destroys this component if the
     // user navigates to a different audio mid-transcription, which cancels
     // any UI updates from the in-flight promise — Svelte simply stops
@@ -77,7 +90,7 @@
   }
 </script>
 
-<h2 class="title" id={titleId}>{item.title}</h2>
+{#if showTitle}<h2 class="title" id={titleId}>{item.title}</h2>{/if}
 
 <div class="player">
   {#if audioError}
@@ -113,7 +126,7 @@
   <OfflineTranscriptionAssets />
 </div>
 
-{#if item.body}
+{#if showBody && item.body}
   <div class="content-block">
     <span class="content-label">Transcription</span>
     {#if renderedBody}

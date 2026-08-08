@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
+  import { clearCardDraft } from '../lib/card-draft';
   import {
     collections,
     deleteItem,
@@ -16,21 +17,17 @@
   import AddToCalendarSheet from './AddToCalendarSheet.svelte';
   import { formatScheduled, isOverdue } from '../lib/schedule';
   import BookmarkView from './view-card/BookmarkView.svelte';
-  import NoteView from './view-card/NoteView.svelte';
   import ImageView from './view-card/ImageView.svelte';
   import AudioView from './view-card/AudioView.svelte';
   import DocumentView from './view-card/DocumentView.svelte';
-  import EmailView from './view-card/EmailView.svelte';
-  import TodoView from './view-card/TodoView.svelte';
+  import CardInlineEditor, { type SaveStatus } from './CardInlineEditor.svelte';
 
   let {
     item,
     onclose,
-    onedit,
   }: {
     item: InboxItem;
     onclose: () => void;
-    onedit: (item: InboxItem) => void;
   } = $props();
 
   const TITLE_ID = 'view-modal-title';
@@ -48,10 +45,49 @@
 
   let convertingTodo = $state(false);
   let convertingRef = $state(false);
+  let saveStatus = $state<SaveStatus>('saved');
+  let flushEdits = $state<() => Promise<void>>(async () => {});
+  let retrySave = $state<() => void>(() => {});
+  let closing = $state(false);
+
+  const saveLabel = $derived(
+    saveStatus === 'saving'
+      ? 'Saving…'
+      : saveStatus === 'pending'
+        ? 'Saved on this device'
+        : saveStatus === 'error'
+          ? 'Couldn’t sync · Retry'
+          : saveStatus === 'restored'
+            ? 'Draft restored'
+            : 'Saved',
+  );
+
+  async function prepareAction() {
+    try {
+      await flushEdits();
+    } catch {
+      showToast('Changes are safe on this device, but could not sync');
+      throw new Error('Pending card changes could not sync');
+    }
+  }
+
+  async function requestClose() {
+    if (closing) return;
+    closing = true;
+    try {
+      await flushEdits();
+    } catch {
+      // The immediate local draft survives navigation and refresh, so closing
+      // remains safe even when remoteStorage is temporarily unavailable.
+    } finally {
+      onclose();
+    }
+  }
 
   async function handleDelete() {
     deleting = true;
     await deleteItem(item.id, item);
+    clearCardDraft(item.id, localStorage);
     showDelete = false;
     deleting = false;
     onclose();
@@ -81,6 +117,7 @@
   async function convertToUnfiledTodo() {
     convertingTodo = true;
     try {
+      await prepareAction();
       const { completedAt: _, ...rest } = item;
       await moveItemToCollection(item.id, undefined);
       // Strip collectionId so the converted todo lands in Unfiled. Cast to
@@ -108,6 +145,7 @@
   async function convertToTodoInCollection(collectionId: string) {
     convertingTodo = true;
     try {
+      await prepareAction();
       // Snapshot the rest of the item BEFORE we do any writes — once we move
       // the item, the store reflects the new collectionId and the prop might
       // be re-read as a different object, so working off a local copy keeps
@@ -145,6 +183,7 @@
   async function convertToReference() {
     convertingRef = true;
     try {
+      await prepareAction();
       // Cast to Record<string,unknown> for the structural rewrite below —
       // we're deleting and re-typing fields, which the discriminated InboxItem
       // union actively prevents at the type level.
@@ -179,14 +218,14 @@
   }
 
   /** Route the picker's choice to the flow that opened it. */
-  function handlePick(collectionId: string | undefined) {
+  async function handlePick(collectionId: string | undefined) {
     if (pickerMode === 'todo') {
       // Conversion closes the picker + modal itself on success so a failure
       // can leave both open for a retry.
       if (collectionId) {
-        void convertToTodoInCollection(collectionId);
+        await convertToTodoInCollection(collectionId);
       } else {
-        void convertToUnfiledTodo();
+        await convertToUnfiledTodo();
       }
       return;
     }
@@ -194,15 +233,15 @@
     // Close only once the move settles — a failure leaves the card open (with
     // a toast) so the user can retry, matching the todo-conversion branches.
     // The write is a local-first IndexedDB store, so the await is cheap.
-    moveItemToCollection(item.id, collectionId)
-      .then(() => {
-        if (collectionId) recordCollectionUse(collectionId);
-        onclose();
-      })
-      .catch((e) => {
-        console.error('Move failed:', e);
-        showToast('Move failed');
-      });
+    try {
+      await prepareAction();
+      await moveItemToCollection(item.id, collectionId);
+      if (collectionId) recordCollectionUse(collectionId);
+      onclose();
+    } catch (e) {
+      console.error('Move failed:', e);
+      showToast('Move failed');
+    }
   }
 
   function formatDate(iso: string): string {
@@ -216,11 +255,6 @@
     });
   }
 
-  // The discriminated union narrows nicely on `item.type === 'X'`, but a few
-  // shared trailing sections (notes/description/share) want to peek at
-  // optional fields without forcing the per-type branches. Use a Record cast
-  // for those structural reads.
-  const description = $derived(item.description);
   const hasFile = $derived(
     'filePath' in item && !!(item as unknown as Record<string, unknown>).filePath,
   );
@@ -284,9 +318,32 @@
    * nested handlers will fire immediately after.
    */
   function handleWindowEscape(e: KeyboardEvent) {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      void flushEdits().catch(() => {});
+      return;
+    }
     if (e.key !== 'Escape') return;
     if (showDelete || showPicker || showSchedule || showCalendarSheet) return;
-    onclose();
+    void requestClose();
+  }
+
+  async function openSchedule() {
+    try {
+      await prepareAction();
+      showSchedule = true;
+    } catch {
+      // prepareAction already explains that the draft is safe locally.
+    }
+  }
+
+  async function openCalendar() {
+    try {
+      await prepareAction();
+      showCalendarSheet = true;
+    } catch {
+      // prepareAction already explains that the draft is safe locally.
+    }
   }
 </script>
 
@@ -294,7 +351,7 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="overlay" onclick={onclose}>
+<div class="overlay" onclick={() => void requestClose()}>
   <div
     class="modal"
     role="dialog"
@@ -305,6 +362,16 @@
     <div class="modal-header">
       <span class="type-badge">{item.type}</span>
       <time class="date">{formatDate(item.createdAt)}</time>
+      <button
+        type="button"
+        class="save-status"
+        class:error={saveStatus === 'error'}
+        onclick={() => saveStatus === 'error' && retrySave()}
+        disabled={saveStatus !== 'error'}
+        aria-live="polite"
+      >
+        <span class="save-dot" aria-hidden="true"></span>{saveLabel}
+      </button>
       <div class="header-actions">
         <button
           type="button"
@@ -335,7 +402,7 @@
           class="icon-btn"
           title="Close"
           aria-label="Close"
-          onclick={onclose}
+          onclick={() => void requestClose()}
         >
           <svg
             aria-hidden="true"
@@ -355,47 +422,27 @@
       </div>
     </div>
 
-    <!--
-      Per-type body. Each child renders the title (with type-specific link
-      icon for bookmark/email) plus its own meta and main content. Wrapping
-      in `{#key item.id}` resets per-type local state (audio transcribe
-      flags, document blob URL caches, image lightbox state, etc.) when the
-      user navigates between cards without forcing every child to write its
-      own reset effect.
-    -->
+    <h2 class="sr-only" id={TITLE_ID}>{item.title || 'Untitled card'}</h2>
+    <CardInlineEditor
+      {item}
+      bind:status={saveStatus}
+      bind:flush={flushEdits}
+      bind:retry={retrySave}
+    />
+
+    <!-- Type-specific previews and file actions stay available beneath the
+         always-editable content without duplicating title/body fields. -->
     {#key item.id}
       {#if item.type === 'bookmark'}
-        <BookmarkView {item} titleId={TITLE_ID} />
-      {:else if item.type === 'note'}
-        <NoteView {item} titleId={TITLE_ID} />
+        <BookmarkView {item} titleId={TITLE_ID} showTitle={false} beforeAction={prepareAction} />
       {:else if item.type === 'image'}
-        <ImageView {item} titleId={TITLE_ID} />
+        <ImageView {item} titleId={TITLE_ID} showTitle={false} />
       {:else if item.type === 'audio'}
-        <AudioView {item} titleId={TITLE_ID} />
+        <AudioView {item} titleId={TITLE_ID} showTitle={false} showBody={false} beforeAction={prepareAction} />
       {:else if item.type === 'document'}
-        <DocumentView {item} titleId={TITLE_ID} />
-      {:else if item.type === 'email'}
-        <EmailView {item} titleId={TITLE_ID} />
-      {:else if item.type === 'todo'}
-        <TodoView {item} titleId={TITLE_ID} />
-      {:else}
-        <!--
-          Generic fallback for item types without a dedicated view (e.g.
-          `video`, which the rs-module schema reserves but the web UI
-          doesn't yet render). Renders the title only so the modal still
-          presents something legible — and so `aria-labelledby` always
-          resolves to a real heading.
-        -->
-        <h2 class="title" id={TITLE_ID}>{item.title}</h2>
+        <DocumentView {item} titleId={TITLE_ID} showTitle={false} />
       {/if}
     {/key}
-
-    {#if description}
-      <div class="content-block">
-        <span class="content-label">Description</span>
-        <p class="content-text">{description}</p>
-      </div>
-    {/if}
 
     {#if hasFile}
       <div class="share-row">
@@ -558,7 +605,7 @@
       <button
         type="button"
         class="action-row"
-        onclick={() => (showSchedule = true)}
+        onclick={() => void openSchedule()}
       >
         <svg
           aria-hidden="true"
@@ -580,7 +627,7 @@
         <button
           type="button"
           class="action-row"
-          onclick={() => (showCalendarSheet = true)}
+          onclick={() => void openCalendar()}
         >
           <svg
             aria-hidden="true"
@@ -601,23 +648,6 @@
           {item.eventUrl ? 'On calendar — manage…' : 'Add to calendar…'}
         </button>
       {/if}
-      <button type="button" class="action-row" onclick={() => onedit(item)}>
-        <svg
-          aria-hidden="true"
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M12 20h9"></path>
-          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
-        </svg>
-        Edit
-      </button>
     </div>
 
     {#if showDelete}
@@ -652,21 +682,27 @@
     position: fixed;
     inset: 0;
     z-index: 200;
+    display: grid;
+    place-items: center;
     background: var(--overlay);
-    overflow-y: auto;
+    overflow: hidden;
     overscroll-behavior: contain;
-    padding: 3rem 1rem;
+    padding: 1.25rem;
   }
 
   .modal {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     width: 100%;
-    max-width: 560px;
+    max-width: 1120px;
+    height: min(920px, calc(100dvh - 2.5rem));
+    overflow-y: auto;
     padding: 1.5rem;
-    margin-left: auto;
-    margin-right: auto;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
   }
 
   @media (max-width: 600px), (display-mode: standalone) {
@@ -678,9 +714,11 @@
 
     .modal {
       max-width: none;
-      min-height: 100%;
+      width: 100%;
+      height: 100dvh;
       border: none;
       border-radius: 0;
+      padding: 1rem;
     }
   }
 
@@ -688,7 +726,8 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    margin-bottom: 0.75rem;
+    flex-shrink: 0;
+    min-height: 36px;
   }
 
   .type-badge {
@@ -705,6 +744,41 @@
   .date {
     font-size: 0.75rem;
     color: var(--text-muted);
+  }
+
+  .save-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.4rem;
+  }
+
+  .save-status.error {
+    color: var(--danger);
+    cursor: pointer;
+  }
+
+  .save-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.65;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    clip-path: inset(50%);
   }
 
   /*
@@ -770,8 +844,8 @@
 
   .modal :global(.view-image) {
     width: 100%;
-    max-height: 300px;
-    object-fit: cover;
+    max-height: 42vh;
+    object-fit: contain;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border);
   }
@@ -978,7 +1052,6 @@
   }
 
   .share-row {
-    margin-bottom: 0.75rem;
     padding-top: 0.5rem;
     border-top: 1px solid var(--border);
   }
@@ -1020,7 +1093,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.9rem;
-    margin-top: 1rem;
     padding-top: 0.75rem;
     border-top: 1px solid var(--border);
     font-size: 0.78rem;
@@ -1056,10 +1128,9 @@
     justify-content: center;
     gap: 0.45rem;
     width: 100%;
-    margin-top: 0.85rem;
-    background: var(--accent);
-    border: none;
-    color: white;
+    background: var(--accent-subtle);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+    color: var(--accent);
     padding: 0.6rem 1rem;
     border-radius: var(--radius-sm);
     font-size: 0.9rem;
@@ -1077,15 +1148,15 @@
 
   .action-list {
     display: flex;
-    flex-direction: column;
-    margin-top: 0.5rem;
+    flex-wrap: wrap;
+    gap: 0.25rem;
   }
 
   .action-row {
     display: flex;
     align-items: center;
     gap: 0.55rem;
-    width: 100%;
+    width: auto;
     padding: 0.55rem 0.5rem;
     border: none;
     background: none;

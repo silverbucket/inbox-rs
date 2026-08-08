@@ -357,12 +357,6 @@
     void loadViewCardModal();
   }
 
-  function openEditFromView(item: InboxItem) {
-    viewingItem = null;
-    editingItem = item;
-    activeModal = item.type;
-  }
-
   function closeViewModal() {
     viewingItem = null;
   }
@@ -501,7 +495,7 @@
       snapshot fallback covers the moment an item is deleted elsewhere
       while the modal is closing.
     -->
-    <ViewCardModalComponent item={$items[viewingItem.id] ?? viewingItem} onclose={closeViewModal} onedit={openEditFromView} />
+    <ViewCardModalComponent item={$items[viewingItem.id] ?? viewingItem} onclose={closeViewModal} />
   {/if}
 {/if}
 

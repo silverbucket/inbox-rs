@@ -13,11 +13,13 @@
     label = 'Content',
     placeholder = 'Write your note...',
     focusOnMount = false,
+    onchange = undefined,
   }: {
     value?: string;
     label?: string;
     placeholder?: string;
     focusOnMount?: boolean;
+    onchange?: () => void;
   } = $props();
 
   let editorMode = $state<'visual' | 'write' | 'preview'>('visual');
@@ -28,6 +30,14 @@
   let previewHtml = $state('');
 
   const handleCodeKeydown = createCodeKeydownHandler();
+  let previousValue = value;
+
+  $effect(() => {
+    const currentValue = value;
+    if (currentValue === previousValue) return;
+    previousValue = currentValue;
+    onchange?.();
+  });
 
   $effect(() => {
     if (
@@ -115,3 +125,103 @@
 {#if markdownEditorLoadError}
   <p class="info-note">{markdownEditorLoadError}</p>
 {/if}
+
+<style>
+  .field {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.45rem;
+    min-height: 0;
+  }
+
+  .field-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .field-header > span {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 500;
+  }
+
+  .editor-tabs {
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .tab {
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.72rem;
+    padding: 0.2rem 0.55rem;
+  }
+
+  .tab:hover {
+    color: var(--text);
+  }
+
+  .tab.active {
+    border-color: var(--border);
+    background: var(--surface-hover);
+    color: var(--accent);
+  }
+
+  .tab:disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+
+  textarea {
+    flex: 1;
+    min-height: 16rem;
+    resize: vertical;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
+    font-size: 1rem;
+    line-height: 1.55;
+    padding: 0.9rem;
+  }
+
+  textarea:focus {
+    border-color: var(--accent);
+    outline: none;
+  }
+
+  .editor-loading,
+  .preview-wrap {
+    flex: 1;
+    min-height: 16rem;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    padding: 0.9rem;
+  }
+
+  .editor-loading {
+    display: grid;
+    place-items: center;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  .preview-empty,
+  .info-note {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+  }
+
+  :global(.tiptap-wrap .tiptap-editor) {
+    min-height: 16rem;
+  }
+</style>
