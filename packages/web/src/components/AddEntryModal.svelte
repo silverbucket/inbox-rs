@@ -303,7 +303,7 @@
 <div class="overlay" onclick={onclose}>
   <div
     class="modal"
-    class:modal-note={type === 'note'}
+    class:modal-note={type === 'note' || type === 'todo'}
     role="dialog"
     aria-modal="true"
     aria-labelledby="modal-title"

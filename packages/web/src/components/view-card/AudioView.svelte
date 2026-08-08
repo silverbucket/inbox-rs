@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { AudioItem } from '@inbox-rs/rs-module';
+  import 'highlight.js/styles/github-dark.min.css';
+  import { renderMarkdown } from '../../lib/markdown';
   import { blobUrls, connected, loadFileBlobUrl, storeItem } from '../../lib/stores';
   import rs from '../../lib/rs';
   import { transcribeAudio } from '../../lib/transcribe';
@@ -10,6 +12,7 @@
   let audioError = $state(false);
   let transcribing = $state(false);
   let transcriptionError = $state(false);
+  let renderedBody = $state('');
 
   const audioSrc = $derived($blobUrls[item.filePath] || null);
 
@@ -24,6 +27,15 @@
     // offline-captured files still render; retries on reconnect.
     void $connected;
     if (item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
+  });
+
+  $effect(() => {
+    const currentItem = item;
+    renderedBody = '';
+    if (!currentItem.body) return;
+    renderMarkdown(currentItem.body).then((html) => {
+      if (item.id === currentItem.id) renderedBody = html;
+    });
   });
 
   function formatDuration(seconds?: number): string {
@@ -101,6 +113,10 @@
 {#if item.body}
   <div class="content-block">
     <span class="content-label">Transcription</span>
-    <p class="content-text">{item.body}</p>
+    {#if renderedBody}
+      <div class="markdown-body">{@html renderedBody}</div>
+    {:else}
+      <p class="content-text">{item.body}</p>
+    {/if}
   </div>
 {/if}

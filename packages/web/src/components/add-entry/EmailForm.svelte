@@ -3,6 +3,7 @@
   import { autofocus } from '../../lib/actions';
   import type { BuildItemFn } from '../../lib/add-entry-modal';
   import { buildEmailItem } from '../../lib/build-item';
+  import MarkdownContentField from './MarkdownContentField.svelte';
 
   let {
     editItem,
@@ -51,10 +52,7 @@
   <span>From</span>
   <input type="text" bind:value={from} placeholder="Sender" />
 </label>
-<label class="field">
-  <span>Body *</span>
-  <textarea bind:value={body} rows="6" placeholder="Email body..."></textarea>
-</label>
+<MarkdownContentField bind:value={body} label="Body *" placeholder="Email body..." />
 <label class="field">
   <span>Notes</span>
   <textarea bind:value={notes} rows="2" placeholder="Optional notes..."

@@ -6,7 +6,7 @@
     canCaptureTodo,
   } from '../../lib/add-entry-modal';
   import { buildTodoItem } from '../../lib/build-item';
-  import { createCodeKeydownHandler } from '../../lib/code-indent';
+  import MarkdownContentField from './MarkdownContentField.svelte';
 
   let {
     editItem,
@@ -38,8 +38,6 @@
     editItem && 'completed' in editItem ? !!editItem.completed : false,
   );
 
-  const handleCodeKeydown = createCodeKeydownHandler();
-
   $effect(() => {
     canSubmit = canCaptureTodo(title);
   });
@@ -60,15 +58,7 @@
     placeholder="What needs to be done?"
   />
 </label>
-<label class="field">
-  <span>Details</span>
-  <textarea
-    bind:value={body}
-    rows="3"
-    placeholder="Optional details..."
-    onkeydown={handleCodeKeydown}
-  ></textarea>
-</label>
+<MarkdownContentField bind:value={body} label="Details" placeholder="Add details..." />
 {#if isEdit}
   <label class="field checkbox-field">
     <input type="checkbox" bind:checked={completed} />

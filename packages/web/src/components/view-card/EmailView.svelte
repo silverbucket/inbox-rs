@@ -1,7 +1,20 @@
 <script lang="ts">
   import type { EmailItem } from '@inbox-rs/rs-module';
+  import 'highlight.js/styles/github-dark.min.css';
+  import { renderMarkdown } from '../../lib/markdown';
 
   let { item, titleId }: { item: EmailItem; titleId: string } = $props();
+
+  let renderedBody = $state('');
+
+  $effect(() => {
+    const currentItem = item;
+    renderedBody = '';
+    if (!currentItem.body) return;
+    renderMarkdown(currentItem.body).then((html) => {
+      if (item.id === currentItem.id) renderedBody = html;
+    });
+  });
 </script>
 
 <h2 class="title" id={titleId}>
@@ -48,6 +61,10 @@
 {#if item.body}
   <div class="content-block">
     <span class="content-label">Body</span>
-    <p class="content-text">{item.body}</p>
+    {#if renderedBody}
+      <div class="markdown-body">{@html renderedBody}</div>
+    {:else}
+      <p class="content-text">{item.body}</p>
+    {/if}
   </div>
 {/if}
