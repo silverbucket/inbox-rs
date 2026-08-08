@@ -9,6 +9,7 @@
   import { buildAudioItem } from '../../lib/build-item';
   import { transcribeAudio } from '../../lib/transcribe';
   import OfflineTranscriptionAssets from '../OfflineTranscriptionAssets.svelte';
+  import MarkdownContentField from './MarkdownContentField.svelte';
 
   let {
     editItem,
@@ -214,12 +215,8 @@
   <span>Title</span>
   <input use:autofocus type="text" bind:value={title} placeholder="Memo title" />
 </label>
-<label class="field">
-  <span>Body</span>
-  <textarea
-    class="auto-expand"
-    bind:value={body}
-    rows="3"
-    placeholder="Transcription or notes..."
-  ></textarea>
-</label>
+<MarkdownContentField
+  bind:value={body}
+  label="Body"
+  placeholder="Transcription or notes..."
+/>
