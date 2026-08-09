@@ -1,12 +1,8 @@
 // @vitest-environment jsdom
 
 import { Editor } from '@tiptap/core';
-import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
-import StarterKit from '@tiptap/starter-kit';
-import { common, createLowlight } from 'lowlight';
-import { Markdown } from 'tiptap-markdown';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CodeBlockAutoIndent } from '../lib/tiptap-code-indent';
+import { createMarkdownEditorExtensions } from '../lib/markdown-editor';
 
 type MarkdownStorage = {
   markdown: { getMarkdown(): string };
@@ -23,21 +19,7 @@ describe('MarkdownEditor markdown compatibility', () => {
   function roundTrip(markdown: string): string {
     editor = new Editor({
       element: document.createElement('div'),
-      extensions: [
-        StarterKit.configure({ codeBlock: false }),
-        CodeBlockLowlight.configure({
-          lowlight: createLowlight(common),
-          enableTabIndentation: true,
-          tabSize: 2,
-        }),
-        Markdown.configure({
-          html: false,
-          breaks: true,
-          tightLists: true,
-          transformPastedText: true,
-        }),
-        CodeBlockAutoIndent,
-      ],
+      extensions: createMarkdownEditorExtensions(),
       content: markdown,
     });
 
