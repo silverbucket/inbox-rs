@@ -1,13 +1,9 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { Editor } from '@tiptap/core';
-  import StarterKit from '@tiptap/starter-kit';
-  import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
-  import { Markdown } from 'tiptap-markdown';
   import Placeholder from '@tiptap/extension-placeholder';
-  import { common, createLowlight } from 'lowlight';
   import 'highlight.js/styles/github-dark.min.css';
-  import { CodeBlockAutoIndent } from '../lib/tiptap-code-indent';
+  import { createMarkdownEditorExtensions } from '../lib/markdown-editor';
 
   let {
     value = $bindable(''),
@@ -26,31 +22,15 @@
   let editorElement = $state<HTMLDivElement>();
   let editor: Editor | null = null;
 
-  const lowlight = createLowlight(common);
-
   onMount(() => {
     if (!editorElement) return;
     editor = new Editor({
       element: editorElement,
       extensions: [
-        StarterKit.configure({
-          codeBlock: false,
-        }),
-        CodeBlockLowlight.configure({
-          lowlight,
-          enableTabIndentation: true,
-          tabSize: 2,
-        }),
-        Markdown.configure({
-          html: false,
-          breaks: true,
-          tightLists: true,
-          transformPastedText: true,
-        }),
+        ...createMarkdownEditorExtensions(),
         Placeholder.configure({
           placeholder,
         }),
-        CodeBlockAutoIndent,
       ],
       content: value,
       autofocus: focusOnMount ? 'end' : false,
