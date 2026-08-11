@@ -154,6 +154,15 @@ describe('InboxCard bookmark favicon decorator', () => {
     expect(img?.src).toBe('https://example.com/favicon.ico');
   });
 
+  it('does not reserve flow space for the pin button above the kind row', () => {
+    mountCard(bookmark({ favicon: 'https://example.com/favicon.ico' }));
+    const kind = host.querySelector('.card-kind');
+    expect(kind).not.toBeNull();
+    // When the pin button incorrectly stays in document flow it sits above the
+    // kind row and pushes the favicon down, leaving a blank band at the top.
+    expect(kind!.offsetTop).toBeLessThan(28);
+  });
+
   it('uses a native selection button without making the card interactive', () => {
     const onselect = vi.fn();
     const item = bookmark();
