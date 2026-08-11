@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
-import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { defineConfig } from 'vitest/config';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const { version } = JSON.parse(
@@ -115,5 +115,8 @@ export default defineConfig({
         capture: path.resolve(__dirname, 'src/capture/main.ts'),
       },
     },
+  },
+  test: {
+    css: true,
   },
 });
