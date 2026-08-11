@@ -154,6 +154,15 @@ describe('InboxCard bookmark favicon decorator', () => {
     expect(img?.src).toBe('https://example.com/favicon.ico');
   });
 
+  it('keeps the pin button absolutely positioned', () => {
+    mountCard(bookmark({ favicon: 'https://example.com/favicon.ico' }));
+    const pin = host.querySelector<HTMLElement>('.pin-button');
+    const kind = host.querySelector('.card-kind');
+    expect(pin).not.toBeNull();
+    expect(kind).not.toBeNull();
+    expect(getComputedStyle(pin!).position).toBe('absolute');
+  });
+
   it('uses a native selection button without making the card interactive', () => {
     const onselect = vi.fn();
     const item = bookmark();

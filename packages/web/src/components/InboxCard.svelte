@@ -293,9 +293,12 @@
     outline-offset: -3px;
   }
 
-  /* Keep genuine card controls above the full-card selection surface. */
+  /* Keep genuine card controls above the full-card selection surface. The
+     pin button is excluded — it is absolutely positioned in the card corner
+     and must not pick up `position: relative` (that reserves flow space and
+     shifts the flag into the kind row). */
   .card :global(a),
-  .card :global(button:not(.card-select)),
+  .card :global(button:not(.card-select):not(.pin-button)),
   .card :global(input),
   .card :global(audio),
   .card :global(video) {
