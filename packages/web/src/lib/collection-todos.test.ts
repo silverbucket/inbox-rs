@@ -96,6 +96,30 @@ describe('filterReferenceItems', () => {
     const items: InboxItem[] = [ref('r1'), { ...ref('r2'), archived: true }];
     expect(filterReferenceItems(items).map((i) => i.id)).toEqual(['r1']);
   });
+
+  it('sorts references newest first within pinned and unpinned cards', () => {
+    const items: InboxItem[] = [
+      { ...ref('old'), createdAt: '2026-04-01T00:00:00.000Z' },
+      {
+        ...ref('pinned-old'),
+        pinned: true,
+        createdAt: '2026-04-02T00:00:00.000Z',
+      },
+      { ...ref('new'), createdAt: '2026-04-04T00:00:00.000Z' },
+      {
+        ...ref('pinned-new'),
+        pinned: true,
+        createdAt: '2026-04-03T00:00:00.000Z',
+      },
+    ];
+
+    expect(filterReferenceItems(items).map((i) => i.id)).toEqual([
+      'pinned-new',
+      'pinned-old',
+      'new',
+      'old',
+    ]);
+  });
 });
 
 describe('pinItemsFirst', () => {

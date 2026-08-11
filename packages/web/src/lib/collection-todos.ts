@@ -14,7 +14,12 @@ export function filterCompletedTodos(todos: InboxItem[]): InboxItem[] {
 
 export function filterReferenceItems(items: InboxItem[]): InboxItem[] {
   return pinItemsFirst(
-    items.filter((i) => !i.isTodo && i.type !== 'todo' && !i.archived),
+    items
+      .filter((i) => !i.isTodo && i.type !== 'todo' && !i.archived)
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ),
   );
 }
 
