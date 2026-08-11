@@ -19,15 +19,48 @@ import {
 } from './link-metadata';
 import { items, storeItem, userSettings } from './stores';
 
+export const LOCAL_LINK_PREVIEWS_KEY = 'inbox-rs:link-previews';
+export const LOCAL_SOCKETHUB_URL_KEY = 'inbox-rs:sockethub-url';
+
+/** Read a browser-local setting without failing in restricted storage contexts. */
+function localSetting(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
 /** Link previews are on unless the user turned them off. */
 export function linkPreviewsEnabled(): boolean {
-  return get(userSettings).linkPreviews !== false;
+  return (
+    get(userSettings).linkPreviews !== false &&
+    localSetting(LOCAL_LINK_PREVIEWS_KEY) !== 'false'
+  );
 }
 
 /** The user's own Sockethub endpoint when set, else the app default. */
 /** Shared by every sockethub-backed feature (link previews, CalDAV). */
 export function resolveSockethubEndpoint(): string {
-  return get(userSettings).sockethubUrl?.trim() || DEFAULT_SOCKETHUB_ENDPOINT;
+  return (
+    get(userSettings).sockethubUrl?.trim() ||
+    localSetting(LOCAL_SOCKETHUB_URL_KEY)?.trim() ||
+    DEFAULT_SOCKETHUB_ENDPOINT
+  );
+}
+
+/** Turn low-level fetch failures into a short diagnosis with a next step. */
+export function describeLinkPreviewError(error: unknown): string {
+  if (error instanceof DOMException && error.name === 'TimeoutError') {
+    return 'Preview service timed out. Check the Sockethub URL.';
+  }
+  if (error instanceof TypeError) {
+    return 'Couldn’t reach the preview service. Check its URL, CORS, and that it is running.';
+  }
+  const detail = error instanceof Error ? error.message.trim() : '';
+  return detail
+    ? `Preview service error: ${detail}`
+    : 'Preview fetch failed. Check the Sockethub URL and try again.';
 }
 
 /** True when a fetch could still add something to this bookmark. */

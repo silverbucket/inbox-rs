@@ -38,9 +38,13 @@ vi.mock('./stores', () => ({
 import {
   applyLinkMetadata,
   bulkEnrichProgress,
+  describeLinkPreviewError,
   enrichAllBookmarks,
   enrichBookmark,
+  LOCAL_LINK_PREVIEWS_KEY,
+  LOCAL_SOCKETHUB_URL_KEY,
   needsEnrichment,
+  resolveSockethubEndpoint,
 } from './enrich';
 
 function bookmark(overrides: Partial<BookmarkItem> = {}): BookmarkItem {
@@ -56,8 +60,38 @@ function bookmark(overrides: Partial<BookmarkItem> = {}): BookmarkItem {
 
 afterEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
   for (const key of Object.keys(itemsMap)) delete itemsMap[key];
   for (const key of Object.keys(settings)) delete settings[key];
+});
+
+describe('local preview settings', () => {
+  it('uses a local Sockethub endpoint while disconnected', () => {
+    localStorage.setItem(
+      LOCAL_SOCKETHUB_URL_KEY,
+      'http://localhost:10550/sockethub-http',
+    );
+    expect(resolveSockethubEndpoint()).toBe(
+      'http://localhost:10550/sockethub-http',
+    );
+  });
+
+  it('honors the local preview toggle', async () => {
+    localStorage.setItem(LOCAL_LINK_PREVIEWS_KEY, 'false');
+    const item = bookmark();
+    itemsMap[item.id] = item;
+    await expect(enrichBookmark(item)).resolves.toBe('none');
+    expect(fetchLinkMetadata).not.toHaveBeenCalled();
+  });
+
+  it('turns network failures into an actionable message', () => {
+    expect(describeLinkPreviewError(new TypeError('Failed to fetch'))).toBe(
+      'Couldn’t reach the preview service. Check its URL, CORS, and that it is running.',
+    );
+    expect(describeLinkPreviewError(new Error('404 Not Found'))).toBe(
+      'Preview service error: 404 Not Found',
+    );
+  });
 });
 
 describe('needsEnrichment', () => {

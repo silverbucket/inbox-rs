@@ -1,6 +1,10 @@
 <script lang="ts">
   import type { BookmarkItem } from '@inbox-rs/rs-module';
-  import { enrichBookmark, needsEnrichment } from '../../lib/enrich';
+  import {
+    describeLinkPreviewError,
+    enrichBookmark,
+    needsEnrichment,
+  } from '../../lib/enrich';
   import {
     blobUrls,
     connected,
@@ -23,7 +27,8 @@
 
   let showLightbox = $state(false);
   let fetchingPreview = $state(false);
-  let previewStatus = $state<'' | 'error' | 'none'>('');
+  let previewStatus = $state<'' | 'none'>('');
+  let previewError = $state('');
 
   // Fetch the page's metadata on demand for bookmarks saved before this
   // feature (or whose auto-fetch failed). Mirrors AudioView's transcribe
@@ -37,6 +42,7 @@
     }
     fetchingPreview = true;
     previewStatus = '';
+    previewError = '';
     try {
       const result = await enrichBookmark(item);
       // The enriched fields flow back reactively through the items store;
@@ -44,7 +50,7 @@
       if (result === 'none') previewStatus = 'none';
     } catch (e) {
       console.warn('Metadata fetch failed:', e);
-      previewStatus = 'error';
+      previewError = describeLinkPreviewError(e);
     } finally {
       fetchingPreview = false;
     }
@@ -79,6 +85,7 @@
   });
 </script>
 
+<section class="bookmark-preview" aria-label="Link preview">
 {#if showTitle}
   <h2 class="title" id={titleId}>
     <a href={item.url} target="_blank" rel="noopener noreferrer"
@@ -119,8 +126,8 @@
   <span class="domain">{item.siteName || getDomain(item.url)}</span>
   {#if fetchingPreview}
     <span class="status-text">Fetching preview…</span>
-  {:else if previewStatus === 'error'}
-    <span class="status-text">Couldn't fetch preview</span>
+  {:else if previewError}
+    <span class="status-text error-text">{previewError}</span>
     <button type="button" class="btn-action" onclick={handleFetchPreview}
       >Retry</button
     >
@@ -168,3 +175,16 @@
     <p class="content-text">{item.body}</p>
   </div>
 {/if}
+</section>
+
+<style>
+  .bookmark-preview {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+  }
+
+  .error-text {
+    color: var(--danger);
+  }
+</style>

@@ -3,6 +3,10 @@ import type { InboxItem } from '@inbox-rs/rs-module';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const { storeItem } = vi.hoisted(() => ({
+  storeItem: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('../lib/stores', async () => {
   const { writable } = await import('svelte/store');
   return {
@@ -10,7 +14,7 @@ vi.mock('../lib/stores', async () => {
     groups: writable({}),
     deleteItem: vi.fn().mockResolvedValue(undefined),
     moveItemToCollection: vi.fn().mockResolvedValue(undefined),
-    storeItem: vi.fn().mockResolvedValue(undefined),
+    storeItem,
   };
 });
 
@@ -30,6 +34,7 @@ describe('ViewCardModal actions menu', () => {
   let onclose: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     onclose = vi.fn();
     host = document.createElement('div');
     document.body.appendChild(host);
@@ -42,10 +47,10 @@ describe('ViewCardModal actions menu', () => {
     localStorage.clear();
   });
 
-  function render() {
+  function render(renderedItem: InboxItem = item) {
     component = mount(ViewCardModal, {
       target: host,
-      props: { item, onclose },
+      props: { item: renderedItem, onclose },
     });
     flushSync();
   }
@@ -82,5 +87,35 @@ describe('ViewCardModal actions menu', () => {
     expect(host.querySelector('[role="menu"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
     expect(onclose).not.toHaveBeenCalled();
+  });
+
+  it('converts and fetches when an existing note contains only a URL', async () => {
+    const url =
+      'https://x.com/vivistac/status/2086480928591819162?s=46&t=UTd7gPLSy4yZR518MK49Qg';
+    render({
+      id: 'legacy-url-note',
+      type: 'note',
+      title: url.slice(0, 50),
+      body: `[${url}](${url})`,
+      createdAt: '2026-08-10T13:59:00.000Z',
+    });
+
+    expect(host.textContent).toContain('This note contains a link.');
+    expect(host.textContent).toContain('Fetch link preview');
+
+    const fetchButton = Array.from(host.querySelectorAll('button')).find(
+      (button) => button.textContent?.includes('Fetch link preview'),
+    );
+    fetchButton?.click();
+    await vi.waitFor(() => {
+      expect(storeItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'legacy-url-note',
+          type: 'bookmark',
+          url,
+          title: url,
+        }),
+      );
+    });
   });
 });
