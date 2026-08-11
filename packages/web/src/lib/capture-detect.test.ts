@@ -96,4 +96,12 @@ describe('bookmarkUrlFromNoteBody', () => {
   it('rejects a link surrounded by actual note content', () => {
     expect(bookmarkUrlFromNoteBody(`Read this: [post](${url})`)).toBeNull();
   });
+
+  it('preserves parenthesized segments in a Markdown link URL', () => {
+    const parenthesizedUrl =
+      'https://en.wikipedia.org/wiki/Function_(mathematics)';
+    expect(bookmarkUrlFromNoteBody(`[Function](${parenthesizedUrl})`)).toBe(
+      parenthesizedUrl,
+    );
+  });
 });

@@ -9,6 +9,7 @@ export type CaptureKind =
   | { kind: 'note'; body: string }
   | { kind: 'empty' };
 
+/** Classify raw quick-capture input while preserving non-URL note content. */
 export function detectCaptureKind(raw: string): CaptureKind {
   const text = raw.trim();
   if (!text) return { kind: 'empty' };
@@ -40,7 +41,7 @@ export function bookmarkUrlFromNoteBody(body: string): string | null {
   const direct = bookmarkUrlFromText(text);
   if (direct) return direct;
 
-  const markdownLink = text.match(/^\[[^\]]*\]\((https?:\/\/[^\s)]+)\)$/i);
+  const markdownLink = text.match(/^\[[^\]]*\]\((https?:\/\/.+)\)$/i);
   if (markdownLink) return bookmarkUrlFromText(markdownLink[1]);
 
   const autolink = text.match(/^<(https?:\/\/[^\s>]+)>$/i);
@@ -52,6 +53,7 @@ export function bookmarkUrlFromNoteBody(body: string): string | null {
   return htmlLink ? bookmarkUrlFromText(htmlLink[1]) : null;
 }
 
+/** Check that a complete value is an absolute HTTP(S) URL with a host. */
 function isHttpUrl(s: string): boolean {
   try {
     const u = new URL(s);

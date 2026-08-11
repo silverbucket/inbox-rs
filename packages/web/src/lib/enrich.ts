@@ -22,6 +22,7 @@ import { items, storeItem, userSettings } from './stores';
 export const LOCAL_LINK_PREVIEWS_KEY = 'inbox-rs:link-previews';
 export const LOCAL_SOCKETHUB_URL_KEY = 'inbox-rs:sockethub-url';
 
+/** Read a browser-local setting without failing in restricted storage contexts. */
 function localSetting(key: string): string | null {
   try {
     return localStorage.getItem(key);
