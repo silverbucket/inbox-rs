@@ -80,6 +80,25 @@ describe('CardInlineEditor autosave', () => {
     ).toBe('Recovered after refresh');
   });
 
+  it('keeps compact bookmark fields from stretching the preview layout', () => {
+    const bookmark: BookmarkItem = {
+      id: 'bookmark-layout',
+      type: 'bookmark',
+      title: 'Example',
+      url: 'https://example.com',
+      createdAt: '2026-08-01T10:00:00.000Z',
+    };
+    component = mount(CardInlineEditor, {
+      target: host,
+      props: { item: bookmark },
+    });
+    flushSync();
+
+    expect(host.querySelector('section.editor')?.classList).toContain(
+      'compact',
+    );
+  });
+
   it('keeps a merged external update pending when an older save is in flight', async () => {
     let releaseSave: (() => void) | undefined;
     const saveGate = new Promise<void>((resolve) => {

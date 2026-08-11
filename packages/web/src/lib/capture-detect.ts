@@ -12,12 +12,13 @@ export type CaptureKind =
 export function detectCaptureKind(raw: string): CaptureKind {
   const text = raw.trim();
   if (!text) return { kind: 'empty' };
-  const url = asBookmarkUrl(text);
+  const url = bookmarkUrlFromText(text);
   if (url) return { kind: 'bookmark', url };
   return { kind: 'note', body: raw };
 }
 
-function asBookmarkUrl(text: string): string | null {
+/** Return a normalized URL only when the complete value is a single bookmark URL. */
+export function bookmarkUrlFromText(text: string): string | null {
   if (/\s/.test(text)) return null; // multi-token => note
   if (/^[a-z][a-z0-9+.-]*:/i.test(text)) {
     // Has an explicit scheme: only http/https qualify.
@@ -31,6 +32,24 @@ function asBookmarkUrl(text: string): string | null {
   if (!/^[a-z]{2,}$/i.test(lastLabel)) return null;
   const candidate = `https://${text}`;
   return isHttpUrl(candidate) ? candidate : null;
+}
+
+/** Recover a URL-only note after a Markdown editor has wrapped the URL. */
+export function bookmarkUrlFromNoteBody(body: string): string | null {
+  const text = body.trim();
+  const direct = bookmarkUrlFromText(text);
+  if (direct) return direct;
+
+  const markdownLink = text.match(/^\[[^\]]*\]\((https?:\/\/[^\s)]+)\)$/i);
+  if (markdownLink) return bookmarkUrlFromText(markdownLink[1]);
+
+  const autolink = text.match(/^<(https?:\/\/[^\s>]+)>$/i);
+  if (autolink) return bookmarkUrlFromText(autolink[1]);
+
+  const htmlLink = text.match(
+    /^(?:<p>)?<a\s+[^>]*href=["'](https?:\/\/[^"']+)["'][^>]*>.*<\/a>(?:<\/p>)?$/i,
+  );
+  return htmlLink ? bookmarkUrlFromText(htmlLink[1]) : null;
 }
 
 function isHttpUrl(s: string): boolean {

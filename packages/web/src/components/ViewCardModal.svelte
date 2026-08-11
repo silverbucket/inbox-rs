@@ -1,7 +1,9 @@
 <script lang="ts">
-  import type { InboxItem } from '@inbox-rs/rs-module';
+  import type { BookmarkItem, InboxItem } from '@inbox-rs/rs-module';
   import { tick } from 'svelte';
   import { clearCardDraft } from '../lib/card-draft';
+  import { bookmarkUrlFromNoteBody } from '../lib/capture-detect';
+  import { enrichBookmark } from '../lib/enrich';
   import {
     collections,
     deleteItem,
@@ -49,6 +51,7 @@
 
   let convertingTodo = $state(false);
   let convertingRef = $state(false);
+  let convertingBookmark = $state(false);
   let saveStatus = $state<SaveStatus>('saved');
   let flushEdits = $state<() => Promise<void>>(async () => {});
   let retrySave = $state<() => void>(() => {});
@@ -213,8 +216,43 @@
     }
   }
 
+  async function convertNoteToBookmark() {
+    if (!noteBookmarkUrl) return;
+    convertingBookmark = true;
+    try {
+      await prepareAction();
+      const bodyFallbackTitle = item.type === 'note' ? item.body.slice(0, 50) : '';
+      const urlFallbackTitle = noteBookmarkUrl.slice(0, 50);
+      const updated = {
+        ...item,
+        type: 'bookmark',
+        url: noteBookmarkUrl,
+        title:
+          !item.title ||
+          item.title === bodyFallbackTitle ||
+          item.title === urlFallbackTitle
+            ? noteBookmarkUrl
+            : item.title,
+      } as BookmarkItem;
+      delete (updated as unknown as Record<string, unknown>).body;
+      clearCardDraft(item.id, localStorage);
+      await storeItem(updated);
+      void enrichBookmark(updated).catch(() => {});
+    } catch (error) {
+      console.error('Failed to convert note to bookmark', error);
+      showToast('Could not convert this note to a bookmark');
+    } finally {
+      convertingBookmark = false;
+    }
+  }
+
   const canMakeTodo = $derived(item.type !== 'todo' && !item.isTodo);
   const canMakeRef = $derived(item.isTodo || item.type === 'todo');
+  const noteBookmarkUrl = $derived(
+    item.type === 'note' && !item.isTodo
+      ? bookmarkUrlFromNoteBody(item.body)
+      : null,
+  );
 
   function openMovePicker() {
     pickerMode = 'move';
@@ -420,6 +458,7 @@
   <div
     class="modal"
     role="dialog"
+    tabindex="-1"
     aria-modal="true"
     aria-labelledby={TITLE_ID}
     onclick={handleModalClick}
@@ -526,18 +565,20 @@
     </div>
 
     <h2 class="sr-only" id={TITLE_ID}>{item.title || 'Untitled card'}</h2>
-    {#key item.id}
+    {#key `${item.id}:${item.type}`}
       <CardInlineEditor
         {item}
         bind:status={saveStatus}
         bind:flush={flushEdits}
         bind:retry={retrySave}
+        onfetchurlpreview={noteBookmarkUrl ? convertNoteToBookmark : undefined}
+        fetchingUrlPreview={convertingBookmark}
       />
     {/key}
 
     <!-- Type-specific previews and file actions stay available beneath the
          always-editable content without duplicating title/body fields. -->
-    {#key item.id}
+    {#key `${item.id}:${item.type}`}
       {#if item.type === 'bookmark'}
         <BookmarkView {item} titleId={TITLE_ID} showTitle={false} beforeAction={prepareAction} />
       {:else if item.type === 'image'}

@@ -2,7 +2,12 @@
   import type { Component } from 'svelte';
   import { tick } from 'svelte';
   import rs from '../lib/rs';
-  import { bulkEnrichProgress, enrichAllBookmarks } from '../lib/enrich';
+  import {
+    bulkEnrichProgress,
+    enrichAllBookmarks,
+    LOCAL_LINK_PREVIEWS_KEY,
+    LOCAL_SOCKETHUB_URL_KEY,
+  } from '../lib/enrich';
   import { DEFAULT_SOCKETHUB_ENDPOINT } from '../lib/link-metadata';
   import { connected, syncing, userAddress, userSettings, updateUserSettings } from '../lib/stores';
   import { showToast } from '../lib/toast';
@@ -194,8 +199,18 @@
 
   // Link previews: on unless explicitly disabled; the endpoint input lets
   // self-hosters point at their own Sockethub. Synced via user settings.
-  const linkPreviewsOn = $derived($userSettings.linkPreviews !== false);
-  let sockethubUrlInput = $state('');
+  let localLinkPreviewsOn = $state(
+    localStorage.getItem(LOCAL_LINK_PREVIEWS_KEY) !== 'false',
+  );
+  const linkPreviewsOn = $derived(
+    $userSettings.linkPreviews !== false && localLinkPreviewsOn,
+  );
+  let localSockethubUrl = $state(
+    localStorage.getItem(LOCAL_SOCKETHUB_URL_KEY) ?? '',
+  );
+  let sockethubUrlInput = $state(
+    localStorage.getItem(LOCAL_SOCKETHUB_URL_KEY) ?? '',
+  );
   let sockethubUrlEditing = $state(false);
   // Re-sync from settings only while the field isn't focused — the store
   // emits on every settings change (theme, abbreviation, remote sync from
@@ -203,19 +218,27 @@
   // mid-edit. On blur, saveSockethubUrl runs before the flag flips back, so
   // the re-sync lands on the value that was just saved.
   $effect(() => {
-    const synced = $userSettings.sockethubUrl ?? '';
+    const synced = $userSettings.sockethubUrl ?? localSockethubUrl;
     if (!sockethubUrlEditing) sockethubUrlInput = synced;
   });
 
   function setLinkPreviews(on: boolean) {
-    // Store only the off state; undefined means the default (on).
-    void updateUserSettings({ linkPreviews: on ? undefined : false });
+    localLinkPreviewsOn = on;
+    localStorage.setItem(LOCAL_LINK_PREVIEWS_KEY, String(on));
+    if ($connected) {
+      // Store only the off state remotely; undefined means the default (on).
+      void updateUserSettings({ linkPreviews: on ? undefined : false });
+    }
   }
 
   function saveSockethubUrl() {
     const val = sockethubUrlInput.trim();
-    if (val === ($userSettings.sockethubUrl ?? '')) return;
-    void updateUserSettings({ sockethubUrl: val || undefined });
+    if (val === localSockethubUrl && (!$connected || val === ($userSettings.sockethubUrl ?? ''))) return;
+    localSockethubUrl = val;
+    localStorage.setItem(LOCAL_SOCKETHUB_URL_KEY, val);
+    if ($connected) {
+      void updateUserSettings({ sockethubUrl: val || undefined });
+    }
   }
 
   // Backfill metadata (title, description, preview image) for bookmarks
@@ -389,27 +412,6 @@
           Import Data
           <span class="menu-hint">.zip</span>
         </button>
-        {#if linkPreviewsOn}
-          <button
-            type="button"
-            class="menu-item"
-            role="menuitem"
-            onclick={handleFetchPreviews}
-            disabled={!!$bulkEnrichProgress}
-          >
-            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-              <circle cx="8.5" cy="8.5" r="1.5"></circle>
-              <polyline points="21 15 16 10 5 21"></polyline>
-            </svg>
-            Fetch Link Previews
-            {#if $bulkEnrichProgress}
-              <span class="menu-hint" aria-live="polite"
-                >{$bulkEnrichProgress.done}/{$bulkEnrichProgress.total}</span
-              >
-            {/if}
-          </button>
-        {/if}
         <input
           bind:this={fileInputEl}
           type="file"
@@ -417,12 +419,14 @@
           style="display: none"
           onchange={handleFileSelected}
         />
+      {/if}
 
-        <div class="divider"></div>
+      <div class="divider"></div>
 
-        <!-- Link previews — synced setting -->
-        <div class="section-label">Link previews</div>
-        <div class="theme-switcher" role="group" aria-label="Link previews">
+      <!-- Preview settings work for local-only cards too. When connected,
+           changes are additionally synced through remoteStorage. -->
+      <div class="section-label">Link previews</div>
+      <div class="theme-switcher" role="group" aria-label="Link previews">
           <button type="button"
             class="theme-option"
             class:active={linkPreviewsOn}
@@ -439,31 +443,51 @@
           >
             Off
           </button>
-        </div>
-        <div class="divider"></div>
-
-        <!-- Sockethub — the relay behind link previews AND calendar sync, so
-             it gets its own section instead of hiding under either feature.
-             Synced setting; the endpoint override is for self-hosters. -->
-        <div class="section-label">Sockethub service</div>
-        <p class="menu-note">Relays link previews and calendar sync.</p>
-        <form
-          class="connect-form"
-          onsubmit={(e) => { e.preventDefault(); saveSockethubUrl(); }}
+      </div>
+      {#if linkPreviewsOn}
+        <button
+          type="button"
+          class="menu-item"
+          role="menuitem"
+          onclick={handleFetchPreviews}
+          disabled={!!$bulkEnrichProgress}
         >
-          <input
-            type="url"
-            bind:value={sockethubUrlInput}
-            placeholder={DEFAULT_SOCKETHUB_ENDPOINT}
-            aria-label="Sockethub endpoint"
-            onfocus={() => (sockethubUrlEditing = true)}
-            onblur={() => {
-              saveSockethubUrl();
-              sockethubUrlEditing = false;
-            }}
-          />
-        </form>
+          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <polyline points="21 15 16 10 5 21"></polyline>
+          </svg>
+          Fetch Link Previews
+          {#if $bulkEnrichProgress}
+            <span class="menu-hint" aria-live="polite"
+              >{$bulkEnrichProgress.done}/{$bulkEnrichProgress.total}</span
+            >
+          {/if}
+        </button>
       {/if}
+      <div class="divider"></div>
+
+      <div class="section-label">Sockethub service</div>
+      <p class="menu-note">
+        Full HTTP actions URL, for example
+        <code>http://localhost:10550/sockethub-http</code>.
+      </p>
+      <form
+        class="connect-form"
+        onsubmit={(e) => { e.preventDefault(); saveSockethubUrl(); }}
+      >
+        <input
+          type="url"
+          bind:value={sockethubUrlInput}
+          placeholder={DEFAULT_SOCKETHUB_ENDPOINT}
+          aria-label="Sockethub endpoint"
+          onfocus={() => (sockethubUrlEditing = true)}
+          onblur={() => {
+            saveSockethubUrl();
+            sockethubUrlEditing = false;
+          }}
+        />
+      </form>
 
       <div class="divider"></div>
 

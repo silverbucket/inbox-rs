@@ -21,11 +21,15 @@
     status = $bindable<SaveStatus>('saved'),
     flush = $bindable<() => Promise<void>>(async () => {}),
     retry = $bindable<() => void>(() => {}),
+    onfetchurlpreview = undefined,
+    fetchingUrlPreview = false,
   }: {
     item: InboxItem;
     status?: SaveStatus;
     flush?: () => Promise<void>;
     retry?: () => void;
+    onfetchurlpreview?: () => void;
+    fetchingUrlPreview?: boolean;
   } = $props();
 
   const initialItem = untrack(() => item);
@@ -148,7 +152,11 @@
   );
 </script>
 
-<section class="editor" aria-label="Card content">
+<section
+  class="editor"
+  class:compact={item.type === 'bookmark'}
+  aria-label="Card content"
+>
   <div class="title-row">
     {#if item.isTodo || item.type === 'todo'}
       <label class="complete-toggle" title={draft.completed ? 'Mark open' : 'Mark complete'}>
@@ -170,6 +178,19 @@
       <a class="source-link" href={item.messageUrl}>Open email ↗</a>
     {/if}
   </div>
+
+  {#if onfetchurlpreview}
+    <div class="url-preview-prompt">
+      <span>This note contains a link.</span>
+      <button
+        type="button"
+        disabled={fetchingUrlPreview}
+        onclick={onfetchurlpreview}
+      >
+        {fetchingUrlPreview ? 'Fetching preview…' : 'Fetch link preview'}
+      </button>
+    </div>
+  {/if}
 
   {#if item.type === 'bookmark'}
     <label class="compact-field">
@@ -224,10 +245,45 @@
     min-height: 0;
   }
 
+  /* Bookmark fields are short. Letting this section grow pushed the actual
+     preview to the bottom of the full-height modal. */
+  .editor.compact {
+    flex: 0 0 auto;
+  }
+
   .title-row {
     display: flex;
     align-items: center;
     gap: 0.75rem;
+  }
+
+  .url-preview-prompt {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--accent-subtle);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    padding: 0.6rem 0.75rem;
+  }
+
+  .url-preview-prompt button {
+    flex-shrink: 0;
+    border: none;
+    background: transparent;
+    color: var(--accent);
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .url-preview-prompt button:disabled {
+    opacity: 0.6;
+    cursor: default;
   }
 
   .title-input {
