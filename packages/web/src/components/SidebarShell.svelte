@@ -14,6 +14,7 @@
     activeGroupIds,
     inactiveCollectionIds,
     toggleGroupFilter,
+    soloGroupFilter,
     toggleCollectionFilter,
     enableCollectionFilter,
     moveItemToCollection,
@@ -21,6 +22,7 @@
     storeGroup,
     items,
   } from '../lib/stores';
+  import { isSoloModifier, soloHint, soloModifierHeld } from '../lib/solo-modifier';
   import { draggingItemId, DRAG_MIME } from '../lib/drag';
   import { showToast } from '../lib/toast';
   import { randomPresetColor } from '../lib/constants';
@@ -120,12 +122,27 @@
     );
   }
 
-  async function onToggleGroup(group: CollectionGroup) {
+  async function onToggleGroup(e: MouseEvent, group: CollectionGroup) {
     try {
-      await toggleGroupFilter(group.id);
+      if (isSoloModifier(e)) await soloGroupFilter(group.id);
+      else await toggleGroupFilter(group.id);
     } catch (error) {
       console.error('Failed to toggle group filter', error);
     }
+  }
+
+  /** True when this group is the only one showing. */
+  function isGroupSoloed(group: CollectionGroup): boolean {
+    return activeGroups.size === 1 && activeGroups.has(group.id);
+  }
+
+  const soloing = $derived($soloModifierHeld && groups.length > 1);
+
+  function groupTitle(group: CollectionGroup): string {
+    if (soloing) {
+      return isGroupSoloed(group) ? 'Show all groups' : `Show only ${group.name}`;
+    }
+    return isGroupActive(group) ? `Hide ${group.name}` : `Show ${group.name}`;
   }
 
   async function onToggleCollection(group: CollectionGroup, col: Collection) {
@@ -348,8 +365,8 @@
               type="button"
               style="--entity-color: {group.color || 'var(--accent)'}"
               aria-pressed={groupActive}
-              title={groupActive ? `Hide ${group.name}` : `Show ${group.name}`}
-              onclick={() => onToggleGroup(group)}
+              title={groupTitle(group)}
+              onclick={(e) => onToggleGroup(e, group)}
             >
               <span class="dot"></span>
             </button>
@@ -360,7 +377,13 @@
           <div class="filing">Filing mode — drop on a collection</div>
         {/if}
         <div class="sidebar-head">
-          <span class="sidebar-title">Groups</span>
+          <!-- The hint takes the header's slot rather than adding a line, so
+               holding the modifier doesn't shove the group list down. -->
+          {#if soloing}
+            <span class="solo-hint">{soloHint}</span>
+          {:else}
+            <span class="sidebar-title">Groups</span>
+          {/if}
           <button
             class="add-group-btn"
             type="button"
@@ -403,11 +426,12 @@
                   <button
                     class="entity group-entity"
                     class:inactive={!groupActive}
+                    class:soloing
                     type="button"
                     style="--entity-color: {group.color || 'var(--accent)'}"
                     aria-pressed={groupActive}
-                    title={groupActive ? `Hide ${group.name}` : `Show ${group.name}`}
-                    onclick={() => onToggleGroup(group)}
+                    title={groupTitle(group)}
+                    onclick={(e) => onToggleGroup(e, group)}
                   >
                     <span class="dot"></span>
                     <span class="entity-name">{group.name}</span>
@@ -775,6 +799,25 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--text-muted);
+  }
+
+  /* Mixed-case and unspaced (unlike .sidebar-title) so the full sentence fits
+     the 268px rail without truncating. */
+  .solo-hint {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+
+  /* Held-modifier hover means "solo", not "toggle" — neutral outline instead of
+     the tint that previews the toggle. */
+  .group-entity.soloing:hover {
+    background: color-mix(in srgb, var(--entity-color) 12%, transparent);
+    box-shadow: inset 0 0 0 1px var(--entity-color);
   }
 
   .add-group-btn {
