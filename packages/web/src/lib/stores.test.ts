@@ -86,13 +86,13 @@ import {
   reorderTodosGlobal,
   reorderUnfiledTodos,
   setActiveGroupFilters,
+  soloGroupFilter,
   storeCollection,
   storeGroup,
   storeItem,
   todoItems,
   toggleCollectionFilter,
   toggleGroupFilter,
-  soloGroupFilter,
   userSettings,
   visibleGroupedCollections,
   visibleOnCalendarTodos,
@@ -1679,7 +1679,11 @@ describe('soloGroupFilter', () => {
   });
 
   it('hides every other group', async () => {
-    groups.set({ g1: makeGroup('g1'), g2: makeGroup('g2'), g3: makeGroup('g3') });
+    groups.set({
+      g1: makeGroup('g1'),
+      g2: makeGroup('g2'),
+      g3: makeGroup('g3'),
+    });
 
     await soloGroupFilter('g2');
 
@@ -1704,7 +1708,10 @@ describe('soloGroupFilter', () => {
       c2: makeCollection('c2', 'g2'),
       c3: makeCollection('c3', 'g1'),
     });
-    groups.set({ g1: makeGroup('g1', ['c3']), g2: makeGroup('g2', ['c1', 'c2']) });
+    groups.set({
+      g1: makeGroup('g1', ['c3']),
+      g2: makeGroup('g2', ['c1', 'c2']),
+    });
     appConfig.set({ inactiveCollectionFilters: ['c1', 'c2', 'c3'] });
 
     await soloGroupFilter('g2');
