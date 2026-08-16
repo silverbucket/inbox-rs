@@ -1,9 +1,10 @@
 <script lang="ts">
   import { dndzone } from 'svelte-dnd-action';
   import {
-    sortedGroups, activeGroupIds, toggleGroupFilter, reorderGroups,
+    sortedGroups, activeGroupIds, toggleGroupFilter, soloGroupFilter, reorderGroups,
     appConfig,
   } from '../lib/stores';
+  import { isSoloModifier, soloHint, soloModifierHeld } from '../lib/solo-modifier';
 
   let { onaddgroup, dimmed = false }: {
     onaddgroup: () => void;
@@ -55,10 +56,11 @@
     }
   }
 
-  async function handleToggle(e: Event, pill: FilterPill) {
+  async function handleToggle(e: MouseEvent, pill: FilterPill) {
     e.preventDefault();
     try {
-      await toggleGroupFilter(pill.id);
+      if (isSoloModifier(e)) await soloGroupFilter(pill.id);
+      else await toggleGroupFilter(pill.id);
     } catch (error) {
       console.error('Failed to toggle filter pill', error);
     }
@@ -66,6 +68,20 @@
 
   function isPillActive(pill: FilterPill): boolean {
     return active.has(pill.id);
+  }
+
+  /** True when this pill's group is the only one showing. */
+  function isSoloed(pill: FilterPill): boolean {
+    return active.size === 1 && active.has(pill.id);
+  }
+
+  const soloing = $derived($soloModifierHeld && groups.length > 1);
+
+  function pillTitle(pill: FilterPill, isActive: boolean): string {
+    if (soloing) {
+      return isSoloed(pill) ? 'Show all groups' : `Show only ${pill.name}`;
+    }
+    return isActive ? `Hide ${pill.name}` : `Show ${pill.name}`;
   }
 </script>
 
@@ -88,9 +104,10 @@
         type="button"
         class="pill"
         class:active={isActive}
+        class:soloing
         style="--pill-color: {pill.color}"
         aria-pressed={isActive}
-        title={isActive ? `Hide ${pill.name}` : `Show ${pill.name}`}
+        title={pillTitle(pill, isActive)}
         onclick={(e) => handleToggle(e, pill)}
       >
         <span class="pill-dot"></span>
@@ -98,6 +115,10 @@
       </button>
     {/each}
   </div>
+
+  {#if soloing}
+    <span class="solo-hint">{soloHint}</span>
+  {/if}
 
   {#if groups.length === 0}
     <button type="button" class="empty-cta" onclick={onaddgroup}>
@@ -169,6 +190,26 @@
     background: color-mix(in srgb, var(--pill-color) 20%, var(--surface) 80%);
     border-color: color-mix(in srgb, var(--pill-color) 55%, var(--border) 45%);
     color: var(--text);
+  }
+
+  /* While the solo modifier is held every pill means "show only this one", so
+     the hover tint would read as a preview of the wrong gesture. Swap it for a
+     neutral outline that matches the hint text. */
+  .pill.soloing:hover {
+    background: color-mix(in srgb, var(--pill-color) 12%, var(--surface) 88%);
+    border-color: var(--pill-color);
+    color: var(--text);
+  }
+
+  /* Sits between the pills and the add-group button, nowrap so it never
+     fragments; the pills box shrinks around it rather than the bar growing. */
+  .solo-hint {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    padding: 0 0.4rem;
+    pointer-events: none;
   }
 
   .pill-dot {

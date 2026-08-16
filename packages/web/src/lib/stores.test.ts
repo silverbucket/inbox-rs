@@ -92,6 +92,7 @@ import {
   todoItems,
   toggleCollectionFilter,
   toggleGroupFilter,
+  soloGroupFilter,
   userSettings,
   visibleGroupedCollections,
   visibleOnCalendarTodos,
@@ -776,6 +777,26 @@ describe('deleteGroup', () => {
 
     expect(result).toBe(true);
     expect(get(groups).g1).toBeUndefined();
+  });
+
+  it('drops the deleted id from the filter allow-list', async () => {
+    groups.set({ g1: makeGroup('g1', []), g2: makeGroup('g2', []) });
+    appConfig.set({ activeGroupFilters: ['g1', 'g2'] });
+
+    await deleteGroup('g1');
+
+    expect(get(appConfig).activeGroupFilters).toEqual(['g2']);
+  });
+
+  it('resets filters to all-active rather than empty when the last id goes', async () => {
+    groups.set({ g1: makeGroup('g1', []), g2: makeGroup('g2', []) });
+    // Only g1 was visible; deleting it must not leave [] ("show nothing").
+    appConfig.set({ activeGroupFilters: ['g1'] });
+
+    await deleteGroup('g1');
+
+    expect(get(appConfig).activeGroupFilters).toBeUndefined();
+    expect(get(activeGroupIds)).toEqual(new Set(['g2']));
   });
 });
 
@@ -1628,6 +1649,77 @@ describe('toggleGroupFilter', () => {
 
     expect(get(appConfig).activeGroupFilters).toEqual([]);
     expect(get(appConfig).inactiveCollectionFilters).toEqual(['c1']);
+  });
+
+  // Regression: with an all-stale filter list, `activeGroupIds` falls back to
+  // all-active so every pill renders selected — but the raw array holds none of
+  // the real ids. Reading the raw array here scored the click as an activation,
+  // leaving only the clicked group visible: every pill "soloed" its group and
+  // no group could be switched off.
+  it('switches a group off when the stored filters are all stale', async () => {
+    groups.set({ g1: makeGroup('g1'), g2: makeGroup('g2') });
+    appConfig.set({ activeGroupFilters: ['gone'] });
+    // Precondition: the UI shows both groups as active.
+    expect(get(activeGroupIds)).toEqual(new Set(['g1', 'g2']));
+
+    await toggleGroupFilter('g1');
+
+    // g1 hidden, g2 still visible — and the stale id is pruned on write.
+    expect(get(appConfig).activeGroupFilters).toEqual(['g2']);
+    expect(get(activeGroupIds)).toEqual(new Set(['g2']));
+  });
+});
+
+describe('soloGroupFilter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('hides every other group', async () => {
+    groups.set({ g1: makeGroup('g1'), g2: makeGroup('g2'), g3: makeGroup('g3') });
+
+    await soloGroupFilter('g2');
+
+    expect(get(appConfig).activeGroupFilters).toEqual(['g2']);
+    expect(get(activeGroupIds)).toEqual(new Set(['g2']));
+  });
+
+  it('restores all groups when soloing the group that is already alone', async () => {
+    groups.set({ g1: makeGroup('g1'), g2: makeGroup('g2') });
+    appConfig.set({ activeGroupFilters: ['g2'] });
+
+    await soloGroupFilter('g2');
+
+    // undefined, not ['g1','g2'] — back to the default-all state.
+    expect(get(appConfig).activeGroupFilters).toBeUndefined();
+    expect(get(activeGroupIds)).toEqual(new Set(['g1', 'g2']));
+  });
+
+  it('reveals the soloed group’s hidden collections, leaving others alone', async () => {
+    collections.set({
+      c1: makeCollection('c1', 'g2'),
+      c2: makeCollection('c2', 'g2'),
+      c3: makeCollection('c3', 'g1'),
+    });
+    groups.set({ g1: makeGroup('g1', ['c3']), g2: makeGroup('g2', ['c1', 'c2']) });
+    appConfig.set({ inactiveCollectionFilters: ['c1', 'c2', 'c3'] });
+
+    await soloGroupFilter('g2');
+
+    expect(get(appConfig).activeGroupFilters).toEqual(['g2']);
+    expect(get(appConfig).inactiveCollectionFilters).toEqual(['c3']);
+  });
+
+  it('solos from an all-stale filter list rather than adding to it', async () => {
+    groups.set({ g1: makeGroup('g1'), g2: makeGroup('g2') });
+    appConfig.set({ activeGroupFilters: ['gone'] });
+
+    await soloGroupFilter('g1');
+
+    expect(get(appConfig).activeGroupFilters).toEqual(['g1']);
   });
 });
 

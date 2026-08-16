@@ -1329,6 +1329,19 @@ export async function deleteGroup(id: string): Promise<boolean> {
       return next;
     });
     await removeFromOrderConfig(id, 'groupsOrder');
+    // Drop the id from the filter allow-list too. Left behind it becomes a
+    // stale id, and a list of nothing but stale ids is the state that makes
+    // `activeGroupIds` report "all active" while the stored array says
+    // otherwise — see the note on `toggleGroupFilter`. When pruning would empty
+    // the list, reset to undefined ("all active") rather than [] ("show
+    // nothing"): deleting a group is not a request to hide the survivors.
+    const filters = get(appConfig).activeGroupFilters;
+    if (filters?.includes(id)) {
+      const next = filters.filter((f) => f !== id);
+      await updateConfig({
+        activeGroupFilters: next.length > 0 ? next : undefined,
+      });
+    }
     return true;
   } catch (e) {
     groups.set(prevGroups);
@@ -1625,6 +1638,17 @@ export const orphanCollections = derived(
  * If activeGroupFilters was undefined (default-all), this materializes the
  * current set first, then flips the requested id.
  *
+ * The "current" set is read from `activeGroupIds` — the same effective set the
+ * pills and sidebar render from — not from the raw `activeGroupFilters` array.
+ * Those two disagree whenever the stored array is non-empty but every id in it
+ * is stale: `activeGroupIds` then falls back to all-active (see its note), so
+ * every pill looks selected, while the raw array contains none of the real
+ * ids. Reading the raw array there would score the click as an *activation*,
+ * appending the id to a list of dead ones and leaving exactly one group
+ * visible — "click any pill and it solos that group, with no way to switch one
+ * off". Deriving from the effective set also prunes the stale ids on write, so
+ * a single toggle heals the config.
+ *
  * When *activating* a group, any per-collection hides (the deny-list) for that
  * group's collections are cleared, so "show this group" always reveals all of
  * its collections. This keeps the two sidebar gestures coherent: the group
@@ -1636,7 +1660,8 @@ export const orphanCollections = derived(
 export async function toggleGroupFilter(groupId: string): Promise<void> {
   const config = get(appConfig);
   const allGroupIds = get(sortedGroups).map((g) => g.id);
-  const current = config.activeGroupFilters ?? allGroupIds;
+  const effective = get(activeGroupIds);
+  const current = allGroupIds.filter((id) => effective.has(id));
   const activating = !current.includes(groupId);
   const next = activating
     ? [...current, groupId]
@@ -1654,6 +1679,44 @@ export async function toggleGroupFilter(groupId: string): Promise<void> {
       if (nextDeny.length !== deny.length) {
         patch.inactiveCollectionFilters = nextDeny;
       }
+    }
+  }
+
+  await updateConfig(patch);
+}
+
+/**
+ * Show only `groupId`, hiding every other group — the ⌘/Ctrl-click gesture on a
+ * group pill or sidebar row. Persists to config.
+ *
+ * The gesture is its own undo: soloing the group that is *already* alone
+ * restores all groups (filters back to undefined, "default-all"). Without that,
+ * getting back would mean clicking every other group on by hand — the exact
+ * dead end plain toggling used to have.
+ *
+ * Like `toggleGroupFilter`, soloing clears any per-collection hides belonging to
+ * the soloed group, so "show only this group" really does show all of it.
+ * Restoring all groups leaves the deny-list alone: it undoes the solo, and is
+ * not a "reveal everything" hammer.
+ */
+export async function soloGroupFilter(groupId: string): Promise<void> {
+  const config = get(appConfig);
+  const effective = get(activeGroupIds);
+
+  if (effective.size === 1 && effective.has(groupId)) {
+    await updateConfig({ activeGroupFilters: undefined });
+    return;
+  }
+
+  const patch: Partial<AppConfig> = { activeGroupFilters: [groupId] };
+  const deny = config.inactiveCollectionFilters;
+  if (deny && deny.length > 0) {
+    const groupColIds = new Set(
+      (get(groupCollections)[groupId] ?? []).map((c) => c.id),
+    );
+    const nextDeny = deny.filter((id) => !groupColIds.has(id));
+    if (nextDeny.length !== deny.length) {
+      patch.inactiveCollectionFilters = nextDeny;
     }
   }
 
