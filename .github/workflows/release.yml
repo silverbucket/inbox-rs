@@ -121,21 +121,41 @@ jobs:
         # Skipped when the tag already exists: a re-run of this job replays the
         # bump from the dispatched commit and arrives at the same version, so
         # without this guard `git tag` aborts the whole job (exit 128) and the
-        # steps after it never get their retry. An existing tag means a prior
-        # attempt already committed and pushed this exact release.
+        # steps after it never get their retry.
+        #
+        # But an existing tag name is not on its own proof that a prior attempt
+        # landed this release — it could be a hand-made tag, or one left behind
+        # by a partial push. Resuming on that would deploy this checkout while
+        # the release notes are cut from an unrelated commit, so the tag has to
+        # look like this release (same version in its package.json) and already
+        # be on master. Anything else stops the run rather than guessing.
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          if git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null \
-            || git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" >/dev/null 2>&1; then
-            echo "::notice::v${VERSION} is already committed and tagged by an earlier attempt — skipping the bump commit."
-            exit 0
+          TAG="v${VERSION}"
+
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null \
+            || git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            # origin is the source of truth for both refs; a local tag from the
+            # checkout may be stale.
+            git fetch -q origin "+refs/heads/master:refs/remotes/origin/master" "+refs/tags/${TAG}:refs/tags/${TAG}"
+            TAGGED_VERSION=$(git show "${TAG}:package.json" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version" 2>/dev/null || true)
+
+            if [ "$TAGGED_VERSION" = "$VERSION" ] && git merge-base --is-ancestor "${TAG}" origin/master; then
+              echo "::notice::${TAG} is already committed, tagged and on master from an earlier attempt — skipping the bump commit."
+              exit 0
+            fi
+
+            echo "::error::${TAG} already exists but is not this release on master (tagged version: ${TAGGED_VERSION:-unknown}). Refusing to deploy a checkout that does not match the tag. Delete or correct the tag, or dispatch a different bump."
+            exit 1
           fi
 
           git add -u
           git commit -m "release v${VERSION}"
-          git tag "v${VERSION}"
-          git push origin HEAD:master --tags
+          git tag "${TAG}"
+          # --atomic so the tag can never land without the master commit; that
+          # split is what leaves a re-run facing a tag it can't safely resume.
+          git push --atomic origin HEAD:master --tags
 
       - name: Setup SSH for 5apps
         env:
@@ -191,6 +211,14 @@ jobs:
 
           for attempt in 1 2 3; do
             if gh release create "v${VERSION}" --generate-notes; then
+              exit 0
+            fi
+            # A create can fail *after* the release was written (the blip that
+            # prompted this can land on either side of the write), and a
+            # concurrent run may have created it meanwhile. Either way the work
+            # is done — check before burning another attempt or failing.
+            if gh release view "v${VERSION}" >/dev/null 2>&1; then
+              echo "::notice::Release v${VERSION} exists despite the failed create — treating as done."
               exit 0
             fi
             if [ "$attempt" -lt 3 ]; then
