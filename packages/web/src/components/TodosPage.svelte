@@ -18,12 +18,14 @@
     onselect: (item: InboxItem) => void;
     /** Opens the add-todo modal for richer details and optional filing.
         Optionally pre-fills the todo title (⌘/Ctrl-Enter from the quick-add)
-        and the target collection (mirrors the quick-add's collection select). */
-    onaddtodo: (prefillTitle?: string, collectionId?: string) => void;
+        and the target collection (mirrors the quick-add's collection select),
+        where `null` is the quick-add's explicit Unfiled and `undefined` means
+        no destination context at all (the bare Fab). */
+    onaddtodo: (prefillTitle?: string, collectionId?: string | null) => void;
     /** Opens the add-todo modal with a specific collection pre-selected.
-        Used by the per-row quick-add affordance. Pass `undefined` to target
-        an unfiled todo. */
-    onaddtodoincollection: (collectionId: string | undefined) => void;
+        Used by the per-row quick-add affordance. Pass `null` to target an
+        unfiled todo. */
+    onaddtodoincollection: (collectionId: string | null) => void;
   } = $props();
 
   const todos = $derived($visibleTodos);

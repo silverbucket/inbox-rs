@@ -9,8 +9,10 @@
   } from '../lib/stores';
   import {
     type BuildItemFn,
+    initialDestination,
     shouldShowCollectionPicker,
     shouldSubmitAddEntryForm,
+    shouldUseRecentDestination,
   } from '../lib/add-entry-modal';
   import { get } from 'svelte/store';
   import { collections } from '../lib/stores';
@@ -44,7 +46,10 @@
   }: {
     type: InboxItemType;
     editItem?: InboxItem;
-    collectionId?: string;
+    /** Where the add originated: a collection id targets it, `null` means the
+        caller deliberately chose no collection, `undefined` means no context.
+        See `initialDestination`. */
+    collectionId?: string | null;
     prefillTitle?: string;
     prefillFile?: File;
     onclose: () => void;
@@ -66,17 +71,16 @@
   let draftUrl = $state('');
 
   /**
-   * Initial destination for new items, in priority order:
-   *   1. The caller's explicit `collectionId` prop (e.g. a collection
-   *      quick-add button) — that context is authoritative.
-   *   2. The most recent filing target that still exists — repeat captures
-   *      usually file to the same place, and the meta strip's Inbox/Unfiled
-   *      reset makes escaping the default one click.
-   *   3. Unset: Inbox for refs, unfiled for todos.
+   * The most recent filing target that still exists, for callers that gave no
+   * destination context. Todos only: repeat todo captures usually file to the
+   * same place, and the meta strip's Unfiled reset makes escaping it one click.
+   * Refs deliberately opt out — capturing from the inbox should land in the
+   * Inbox, not get whisked off to wherever you last filed something. Recency
+   * still ranks the picker's suggestions, so the last target is one tap away.
    * Edit mode never shows the destination field, so it always starts unset.
    */
   function rememberedDestination(): string | undefined {
-    if (isEdit) return undefined;
+    if (!shouldUseRecentDestination(isEdit, type)) return undefined;
     const cols = get(collections);
     for (const id of getRecentCollectionIds()) {
       if (cols[id]) return id;
@@ -85,7 +89,7 @@
   }
 
   let selectedCollectionId = $state<string | undefined>(
-    collectionId ?? rememberedDestination(),
+    initialDestination(collectionId, rememberedDestination()),
   );
   let collectionPickerOpen = $state(false);
   // For refs, `undefined` means Inbox. For todos, `undefined` means unfiled:

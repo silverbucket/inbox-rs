@@ -16,9 +16,10 @@
     group: CollectionGroup | null;
     onselect: (item: InboxItem) => void;
     /** Optional quick-add handler: opens the add-todo modal pre-targeted at
-        this row's collection. Unfiled rows pass `undefined` so the follow-up
-        stays unfiled too. Omit the handler to hide the affordance. */
-    onaddincollection?: (collectionId: string | undefined) => void;
+        this row's collection. Unfiled rows pass `null` so the follow-up stays
+        unfiled too, rather than picking up a remembered collection. Omit the
+        handler to hide the affordance. */
+    onaddincollection?: (collectionId: string | null) => void;
     /** Receipt mode for "On calendar" sections: the todo is managed
         elsewhere now, so no completion checkbox — a calendar marker instead.
         The row still opens the card, where "Re-enable" brings it back under
@@ -99,7 +100,9 @@
     onselect(todo);
   }
 
-  const quickAddTarget = $derived(todo.collectionId);
+  // `null` rather than `undefined` for an unfiled row: adding alongside it is
+  // an explicit "unfiled" choice, not an absent one.
+  const quickAddTarget = $derived(todo.collectionId ?? null);
 
   function handleQuickAdd(e: Event) {
     e.stopPropagation();

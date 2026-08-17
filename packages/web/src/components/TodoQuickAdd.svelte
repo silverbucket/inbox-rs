@@ -46,11 +46,10 @@
         doesn't, to avoid stealing focus when a collection is expanded). */
     focusOnMount?: boolean;
     /** ⌘/Ctrl-Enter — open the full todo modal pre-filled with the title and
-        the resolved target collection. */
-    onopenmodal: (
-      prefillTitle: string,
-      collectionId: string | undefined,
-    ) => void;
+        the resolved target collection. `null` when that target is Unfiled: the
+        chip is a visible choice, so the modal must not swap in a remembered
+        collection behind it. */
+    onopenmodal: (prefillTitle: string, collectionId: string | null) => void;
   } = $props();
 
   let quickTitle = $state('');
@@ -293,7 +292,7 @@
         canCaptureTodo(quickTitle)
       ) {
         e.preventDefault();
-        onopenmodal(quickTitle, targetCollectionId);
+        onopenmodal(quickTitle, targetCollectionId ?? null);
         quickTitle = '';
       }
     }}

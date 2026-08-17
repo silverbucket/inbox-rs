@@ -130,6 +130,40 @@ export function makeUnfiledTodo(
   };
 }
 
+/**
+ * Whether a new item's destination should pre-select the most recently used
+ * collection. Only todos do: repeat todo captures usually file to the same
+ * place. Refs deliberately don't — capturing from the inbox should land in the
+ * Inbox rather than jumping to wherever something was last filed. Recency still
+ * ranks the picker's suggestions either way, so that target stays one tap away.
+ */
+export function shouldUseRecentDestination(
+  isEdit: boolean,
+  type: InboxItemType,
+): boolean {
+  return !isEdit && type === 'todo';
+}
+
+/**
+ * Resolve where a new item starts out filed. The caller's `explicit` value
+ * carries three distinct meanings, and collapsing the last two is what makes
+ * the default feel like it has a mind of its own:
+ *
+ *   - a collection id — the add happened inside that collection; it wins.
+ *   - `null` — the caller deliberately chose no collection (the quick-add chip
+ *     set to Unfiled, an unfiled row's "+"). An explicit choice, so recency
+ *     must not override it.
+ *   - `undefined` — the caller had no destination in mind at all (a bare Fab
+ *     tap). Only here may the remembered target fill in.
+ */
+export function initialDestination(
+  explicit: string | null | undefined,
+  remembered: string | undefined,
+): string | undefined {
+  if (explicit !== undefined) return explicit ?? undefined;
+  return remembered;
+}
+
 export function shouldShowCollectionPicker(
   isEdit: boolean,
   type: InboxItemType,
