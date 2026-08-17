@@ -41,8 +41,9 @@
   let GroupFormModalComponent = $state<LazyComponent | null>(null);
   // Collection to pre-select when opening the add-entry modal. Used by the
   // per-row quick-add on the Todos page so the new todo lands in the same
-  // collection as the row the user is adding alongside.
-  let preselectedCollectionId = $state<string | undefined>(undefined);
+  // collection as the row the user is adding alongside. `null` is an explicit
+  // "unfiled" from such a caller; `undefined` means no destination context.
+  let preselectedCollectionId = $state<string | null | undefined>(undefined);
 
   let captureSheetOpen = $state(false);
   let notePrefillTitle = $state('');
@@ -329,7 +330,10 @@
   /** Open the add-todo modal, optionally pre-filling the title and target
       collection (⌘/Ctrl-Enter or the Fab from the Todos quick-add, so the
       modal mirrors the quick-add's title + collection selection). */
-  function openAddTodo(prefillTitle = '', collectionId: string | undefined = undefined) {
+  function openAddTodo(
+    prefillTitle = '',
+    collectionId: string | null | undefined = undefined,
+  ) {
     editingItem = undefined;
     preselectedCollectionId = collectionId;
     prefillFile = undefined;
@@ -341,8 +345,8 @@
 
   /** Open the add-todo modal with a specific collection pre-selected.
       Callers pass a real collection id to target that collection, or
-      `undefined` to keep the new todo unfiled. */
-  function openAddTodoInCollection(collectionId: string | undefined) {
+      `null` to keep the new todo unfiled. */
+  function openAddTodoInCollection(collectionId: string | null) {
     editingItem = undefined;
     preselectedCollectionId = collectionId;
     prefillFile = undefined;

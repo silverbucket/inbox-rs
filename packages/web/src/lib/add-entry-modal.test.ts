@@ -4,11 +4,13 @@ import {
   canCaptureTodo,
   formatRecordingTimer,
   getFileExtension,
+  initialDestination,
   loadMarkdownEditorComponent,
   makeUnfiledTodo,
   shouldLoadMarkdownEditor,
   shouldShowCollectionPicker,
   shouldSubmitAddEntryForm,
+  shouldUseRecentDestination,
 } from './add-entry-modal';
 
 describe('shouldSubmitAddEntryForm', () => {
@@ -106,6 +108,38 @@ describe('collection picker todo capture rules', () => {
 
   it('keeps the collection picker visible for non-todo refs', () => {
     expect(shouldShowCollectionPicker(false, 'note', false)).toBe(true);
+  });
+});
+
+describe('shouldUseRecentDestination', () => {
+  it('carries the last filing target forward for new todos', () => {
+    expect(shouldUseRecentDestination(false, 'todo')).toBe(true);
+  });
+
+  it('keeps new refs in the Inbox instead of the last filing target', () => {
+    expect(shouldUseRecentDestination(false, 'bookmark')).toBe(false);
+    expect(shouldUseRecentDestination(false, 'note')).toBe(false);
+    expect(shouldUseRecentDestination(false, 'image')).toBe(false);
+  });
+
+  it('never pre-selects a destination when editing', () => {
+    expect(shouldUseRecentDestination(true, 'todo')).toBe(false);
+    expect(shouldUseRecentDestination(true, 'note')).toBe(false);
+  });
+});
+
+describe('initialDestination', () => {
+  it('keeps the add inside the collection it started from', () => {
+    expect(initialDestination('col-a', 'col-b')).toBe('col-a');
+  });
+
+  it('respects an explicit Unfiled over the remembered collection', () => {
+    expect(initialDestination(null, 'col-b')).toBe(undefined);
+  });
+
+  it('falls back to the remembered collection only without context', () => {
+    expect(initialDestination(undefined, 'col-b')).toBe('col-b');
+    expect(initialDestination(undefined, undefined)).toBe(undefined);
   });
 });
 
