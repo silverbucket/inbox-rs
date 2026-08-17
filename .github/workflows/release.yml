@@ -117,9 +117,21 @@ jobs:
         # `git add -u` picks up exactly what release-bump.mjs touched — which
         # may or may not include the extension manifests depending on what
         # changed since the previous tag.
+        #
+        # Skipped when the tag already exists: a re-run of this job replays the
+        # bump from the dispatched commit and arrives at the same version, so
+        # without this guard `git tag` aborts the whole job (exit 128) and the
+        # steps after it never get their retry. An existing tag means a prior
+        # attempt already committed and pushed this exact release.
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null \
+            || git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" >/dev/null 2>&1; then
+            echo "::notice::v${VERSION} is already committed and tagged by an earlier attempt — skipping the bump commit."
+            exit 0
+          fi
+
           git add -u
           git commit -m "release v${VERSION}"
           git tag "v${VERSION}"
@@ -164,6 +176,28 @@ jobs:
           git checkout master
 
       - name: Create GitHub Release
+        # Last step of the release, and the one most exposed to a transient
+        # GitHub API blip (a 503 here once left a tagged, deployed version with
+        # no release entry). Retry the call, and treat an already-created
+        # release as done so a re-run of the job doesn't fail on it.
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "v${{ steps.version.outputs.version }}" --generate-notes
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "v${VERSION}" >/dev/null 2>&1; then
+            echo "::notice::Release v${VERSION} already exists — nothing to create."
+            exit 0
+          fi
+
+          for attempt in 1 2 3; do
+            if gh release create "v${VERSION}" --generate-notes; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::gh release create failed (attempt ${attempt}/3); retrying in $((attempt * 15))s."
+              sleep $((attempt * 15))
+            fi
+          done
+
+          echo "::error::Could not create the GitHub Release for v${VERSION}. The tag is pushed and the deploy is live — create the release with: gh release create v${VERSION} --generate-notes"
+          exit 1
