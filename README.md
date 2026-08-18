@@ -1,79 +1,117 @@
 # Inbox RS
 
-A universal inbox for saving URLs, notes, images, emails, and audio — backed by [remoteStorage](https://remotestorage.io). Your data stays on your own storage server, not someone else's cloud.
+**Capture anything. Own everything.**
 
-## What it does
+One inbox for everything you save — and everything you do with it. Save a link,
+a note, a photo, a voice memo, a document, or an email from wherever you happen
+to be, then file it, schedule it, and act on it. Backed by
+[remoteStorage](https://remotestorage.io): there is no server, no API, and no
+account. The app runs entirely in your browser and syncs straight to a storage
+server you control.
 
-**Web App** — A Svelte app that displays all your saved items in a card grid. Connect to any remoteStorage-compatible server to view, browse, and manage your inbox items. Click any card to view full details, edit, convert to a todo, or delete. The header also links to a Plugins page with downloadable browser and Thunderbird builds.
+## How it works
 
-**Browser Extension** — A Chrome/Firefox extension for quickly saving things while browsing:
+**Capture** — Everything lands in one inbox as a card. Paste a URL or type into
+the quick-capture bar and it becomes a bookmark or a note automatically; add
+images, audio, documents, and emails from any of the clients below. Bookmarks
+fill in their own title, description, and preview image; audio is transcribed
+on-device.
 
-- **Save Page** — Saves the current page as a bookmark with title, og:image preview, favicon, and site name. For tweets, it captures the full tweet text and any attached images.
-- **Quick Note** — Jot down a note with no page context needed.
-- **Right-click: Save Link** — Save any link to your inbox.
-- **Right-click: Save Image** — Downloads and saves the actual image binary (not just the URL).
-- **Right-click: Save Selection** — Saves highlighted text as a note with a link back to the source page.
+**Organize** — File cards into collections, group related collections together,
+and filter the view down to what you're working on. Any card can become a todo,
+and todos get their own page with drag-to-order and a collapsed completed
+section.
 
-**[Mobile App](https://github.com/silverbucket/inbox-rs-mobile)** — A native iOS/Android app (Flutter) for quick capture on the go. Drop in text notes, audio recordings, or photos and send to your remoteStorage inbox. Includes offline queue with automatic sync.
+**Act** — Give a card a time and it becomes a scheduled event or task, with an
+in-app alert when it comes due. From there it can be published to a real
+calendar over CalDAV or downloaded as an `.ics` file. The card stays the
+editor — the calendar entry is a projection of it.
 
-**Thunderbird Extension** — A Thunderbird MailExtension (128+) for saving emails to your inbox:
+## Where you capture from
 
-- Opens from the message toolbar when reading an email.
-- Pre-fills subject, sender, and body from the current email.
-- Includes an optional notes field for your own annotations.
-- Saves a `mid:` URI link back to the original email in your mail client.
+| Client | What it's for |
+|---|---|
+| **Web app** | The full inbox. Installs as a PWA and registers as a system share target, so "Share → Inbox RS" from any app opens a quick-capture window. Works offline. |
+| **Browser extension** | Chrome MV3 + Firefox. Save the current page, jot a quick note, or right-click to save a link, an image (the actual binary, not the URL), or a text selection. Tweets capture their full text and attached images. |
+| **Thunderbird extension** | MailExtension for Thunderbird 128+. Saves an email with its subject, sender, and body, plus your own notes and a `mid:` link back to the original message. |
+| **[Mobile app](https://github.com/silverbucket/inbox-rs-mobile)** | Native iOS/Android (Flutter) for capture on the go — notes, audio, photos — with an offline queue that syncs automatically. |
+
+The web app's **Plugins** page (`#/plugins`) serves the browser and Thunderbird
+builds as direct downloads.
 
 ## Architecture
 
+Client-side only. No backend of our own — the browser talks directly to your
+remoteStorage server. The two things a browser genuinely can't do alone
+(fetching link metadata across origins, speaking CalDAV) relay through
+[Sockethub](https://sockethub.org); CalDAV credentials stay on the device and
+are passed per-request, never stored server-side.
+
 ```
 packages/
-  rs-module/    # Shared remoteStorage data module (types, schemas, CRUD)
-  web/          # Svelte web app (card grid, view modal, todos)
+  rs-module/    # Shared remoteStorage data module (types, schemas, CRUD, migrations)
+  web/          # Svelte 5 web app + quick-capture PWA
   extension/    # Chrome MV3 + Firefox WebExtension (popup, context menus, content script)
-  thunderbird/  # Thunderbird MailExtension (message toolbar popup, email saving)
+  thunderbird/  # Thunderbird MailExtension (message toolbar popup)
 ```
 
-All four packages share the `@inbox-rs/rs-module` for consistent data types and storage layout.
+All four packages share `@inbox-rs/rs-module` for consistent data types and
+storage layout.
 
 ### Storage layout
 
+Everything lives under the `inbox` scope on your remoteStorage server:
+
 ```
-/inbox/items/{uuid}          # JSON metadata for each item
-/inbox/files/{uuid}.{ext}    # Binary files (images, audio)
+items/{uuid}                 # JSON metadata for each item
+files/{uuid}.{ext}           # Binary files (images, audio, video, documents)
+files/{uuid}.thumb.jpg       # Downscaled image previews for the card grid
+collections/{uuid}           # Collection definitions and their item order
+groups/{uuid}                # Collection groups
+config/app                   # UI state: ordering, filters, expanded sections
+config/user                  # User settings: theme, link previews, calendar mode
 ```
 
 ### Item types
 
 | Type | Description |
-|------|-------------|
-| `bookmark` | URL with title, description, og:image, favicon. Optionally includes `body` (embedded content like tweet text) and `filePath` (downloaded image). |
-| `note` | Freeform text with title and body. |
-| `image` | Downloaded image binary with metadata and optional source URL. |
-| `audio` | Audio recording with duration. |
-| `document` | Uploaded file with metadata. |
-| `email` | Email with subject, body, sender, optional notes, and `mid:` URI link. |
-| `todo` | Task with title, completion status, and optional notes. Any item can be converted to a todo. |
+|---|---|
+| `bookmark` | URL with title, description, og:image, favicon, site name. May carry `body` (embedded content like tweet text) and `filePath` (a downloaded image). |
+| `note` | Freeform Markdown text with title and body. |
+| `image` | Image binary with metadata, optional source URL, and optional thumbnail. |
+| `audio` | Audio recording with duration and transcription text. |
+| `video` | Video file with duration and optional transcription. |
+| `document` | Uploaded file with name, size, and mime type. |
+| `email` | Subject, body, sender, your notes, and a `mid:` URI back to the message. |
+| `todo` | Task with completion status and notes. Any item can be converted to a todo. |
+
+Every type shares the same base: collection membership, pinning, and the
+scheduling fields (`startsAt`, `endsAt`, `allDay`, `scheduleKind`) that drive
+alerts and calendar publishing.
 
 ## Quick start
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for full setup instructions.
-
 ```bash
 npm install
-docker compose up -d          # Start local remoteStorage server
-npm run dev -w packages/web   # Start web app on localhost:5173
-npm run build                 # Build web app and package downloadable plugin artifacts into dist/
-npm run build:extension       # Build browser extension only
-npm run build:thunderbird     # Build Thunderbird extension only
+docker compose up -d   # Local remoteStorage server (Armadietto) on :8000
+npm run dev            # Web app on http://localhost:5173
 ```
 
-After `npm run build`, the web app output in `packages/web/dist/` includes:
+Sign up a test user at `http://localhost:8000/signup`, then connect the app with
+`testuser@localhost:8000`. See [DEVELOPMENT.md](DEVELOPMENT.md) for extension
+loading, Firefox builds, and the full setup.
 
-- `downloads/inbox-rs-chromium-<version>.zip`
-- `downloads/inbox-rs-firefox-<version>.xpi`
-- `downloads/inbox-rs-thunderbird-<version>.xpi`
+```bash
+npm run build             # Web app + packaged plugin downloads into packages/web/dist/
+npm run build:extension   # Browser extension only
+npm run build:thunderbird # Thunderbird extension only
+npm test                  # Unit tests (all packages)
+npm run test:e2e          # Playwright end-to-end suite
+npm run check             # Biome lint + format
+```
 
-That makes the built `dist/` folder self-contained for static hosting.
+`npm run build` emits a self-contained `packages/web/dist/` for static hosting,
+including `downloads/inbox-rs-{chromium,firefox,thunderbird}-<version>.{zip,xpi}`.
 
 ## Releasing
 
@@ -81,17 +119,18 @@ That makes the built `dist/` folder self-contained for static hosting.
 gh workflow run release.yml -f bump=patch    # or minor / major
 ```
 
-The web app version tracks the root `package.json`. The browser and
-Thunderbird extensions have their own version namespaces and only move
-when their bundle changed since the previous tag — see
-[`docs/RELEASING.md`](docs/RELEASING.md) for the runbook.
+The web app version tracks the root `package.json`. The browser and Thunderbird
+extensions have their own version namespaces and only move when their bundle
+changed since the previous tag — see [`docs/RELEASING.md`](docs/RELEASING.md).
 
 ## Tech stack
 
 - **Svelte 5** with runes (`$state`, `$derived`, `$effect`, `$props`)
-- **Vite 5** for both web app and extension builds
-- **remotestorage.js** for data sync + **remotestorage-module-shares** for Sharesome integration
-- **TypeScript** throughout
+- **Vite 6** for every package; **vite-plugin-pwa** for offline + share target
+- **remotestorage.js** for sync, **remotestorage-module-shares** for public share links
+- **TipTap** + **marked** for Markdown editing and rendering
+- **transformers.js** (Whisper tiny, WASM) for on-device audio transcription
+- **TypeScript** throughout, **Biome** for lint/format, **Vitest** + **Playwright** for tests
 - **Chrome Manifest V3** / Firefox WebExtension APIs / **Thunderbird Manifest V2**
 - **Armadietto** as the local dev remoteStorage server
 
