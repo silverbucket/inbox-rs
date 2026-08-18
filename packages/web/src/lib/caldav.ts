@@ -3,9 +3,12 @@
  *
  * The browser can't speak CalDAV directly (no CORS on calendar servers), so
  * every operation relays through Sockethub's HTTP actions endpoint: one POST
- * carrying `[credentials, message]` — the request-scoped credentials store
- * is torn down when the request completes, so the password is never stored
- * server-side. Responses stream back as NDJSON.
+ * carrying `[credentials, message]`. The relay holds the password only for
+ * the life of that request — encrypted, in a request-scoped store that is
+ * purged on teardown — so nothing is persisted server-side, though the relay
+ * operator is trusted for that window (hence the per-account pinned endpoint
+ * and the insistence on revocable app-specific passwords).
+ * Responses stream back as NDJSON.
  *
  * Contract (see sockethub packages/platform-caldav):
  * - timed values must carry a UTC offset — our ISO `...Z` strings qualify

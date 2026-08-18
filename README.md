@@ -9,7 +9,7 @@
 ### Capture anything. Own everything.
 
 One inbox for everything you save — and everything you do with it.<br>
-No server, no API, no account. Your data lives on storage you control.
+No backend, no API, no account of ours. Your data lives on storage you control.
 
 [![CI](https://github.com/silverbucket/inbox-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/silverbucket/inbox-rs/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/silverbucket/inbox-rs?color=6366f1)](https://github.com/silverbucket/inbox-rs/releases)
@@ -25,7 +25,7 @@ you happen to be — then file it, schedule it, and act on it. Inbox RS runs
 entirely in your browser and syncs straight to a
 [remoteStorage](https://remotestorage.io) server you control, reaching the
 outside world only through [Sockethub](https://sockethub.org). There is no
-backend to run, nothing to sign up for, and nobody in the middle.
+backend of ours to run, no Inbox RS account, and nobody in the middle.
 
 ## How it works
 
@@ -33,7 +33,9 @@ backend to run, nothing to sign up for, and nobody in the middle.
 the quick-capture bar and it becomes a bookmark or a note automatically; add
 images, audio, documents, and emails from any of the clients below. Bookmarks
 fill in their own title, description, and preview image. Audio is transcribed
-on-device — the recording never leaves your machine to become searchable text.
+on-device with a local Whisper model, so a recording is never handed to a
+third-party speech-to-text service to become searchable text — it syncs to your
+storage server like any other file, and nowhere else.
 
 **Organize** — File cards into collections, group related collections together,
 and filter the view down to what you're working on. Any card can become a todo,
@@ -92,7 +94,7 @@ Client-side only. The browser talks directly to your remoteStorage server —
 there is no backend of our own, and no request ever passes through infrastructure
 we run.
 
-```
+```text
 packages/
   rs-module/    # Shared remoteStorage data module (types, schemas, CRUD, migrations)
   web/          # Svelte 5 web app + quick-capture PWA
@@ -111,19 +113,22 @@ headers. Rather than stand up a backend for them, Inbox RS relays both through
 **[Sockethub](https://sockethub.org)**, an open-source protocol gateway that
 turns messy external protocols into one consistent ActivityStreams message
 format. It handles link enrichment (above) and CalDAV calendar discovery and
-publishing; calendar credentials are sent per request from a store that is torn
-down when the request completes, so no password is ever held server-side, and
-they stay on your device rather than syncing.
+publishing. Calendar credentials live on your device and are deliberately not
+synced through remoteStorage; they are sent with each request, held by the relay
+only for that request — encrypted, in a request-scoped store that is purged on
+teardown — and never written to your storage. You are trusting whoever runs the
+relay for that window, which is why the endpoint is pinned per account at connect
+time and the UI insists on app-specific passwords you can revoke.
 
-Sockethub is the *only* path this app has to the internet, and you can point it
-at your own instance in settings. Everything else is your browser and your
-storage server.
+Apart from your storage server, Sockethub is the *only* thing this app talks
+to — and you can point it at your own instance in settings. There is no other
+host in the loop.
 
 ### Storage layout
 
 Everything lives under the `inbox` scope on your remoteStorage server:
 
-```
+```text
 items/{uuid}                 # JSON metadata for each item
 files/{uuid}.{ext}           # Binary files (images, audio, video, documents)
 files/{uuid}.thumb.jpg       # Downscaled image previews for the card grid
@@ -156,16 +161,25 @@ npm run check             # Biome lint + format
 ```
 
 `npm run build` emits a self-contained `packages/web/dist/` for static hosting,
-including `downloads/inbox-rs-{chromium,firefox,thunderbird}-<version>.{zip,xpi}`.
+including the plugin artifacts. The browser and Thunderbird extensions carry
+separate version namespaces, so their filenames don't move in lockstep:
+
+```text
+downloads/inbox-rs-chromium-<extension-version>.zip
+downloads/inbox-rs-firefox-<extension-version>.xpi
+downloads/inbox-rs-thunderbird-<thunderbird-version>.xpi
+```
 
 ## Tech stack
 
 - **Svelte 5** with runes (`$state`, `$derived`, `$effect`, `$props`)
-- **Vite 6** for every package; **vite-plugin-pwa** for offline + share target
+- **Vite 6** for the web app and both extensions (`rs-module` compiles with `tsc`);
+  **vite-plugin-pwa** for offline + share target
 - **remotestorage.js** for sync, **remotestorage-module-shares** for public share links
 - **TipTap** + **marked** for Markdown editing and rendering
 - **transformers.js** (Whisper tiny, WASM) for on-device audio transcription
-- **TypeScript** throughout, **Biome** for lint/format, **Vitest** + **Playwright** for tests
+- **TypeScript** across all four packages (build scripts are plain ESM),
+  **Biome** for lint/format, **Vitest** + **Playwright** for tests
 - **Chrome Manifest V3** / Firefox WebExtension APIs / **Thunderbird Manifest V2**
 - **Armadietto** as the local dev remoteStorage server
 
