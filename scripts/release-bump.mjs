@@ -10,9 +10,11 @@
  * (Chrome Web Store / AMO / Thunderbird ATN). Stores reject re-uploads of
  * an existing version, so burning a version number on a no-op release
  * costs us a real version we can't reuse later. This script bumps each
- * extension only when its effective bundle has actually changed since the
- * previous tag — that is, when something under its package directory or
- * the shared rs-module changed.
+ * extension only when something under its package directory or the shared
+ * rs-module changed since the previous tag. That's a path check, not a
+ * comparison of the built artifact, so it deliberately over-bumps (a
+ * test-only edit still burns a version) rather than risk shipping changed
+ * bytes under a version a store has already seen.
  *
  * Usage (called from .github/workflows/release.yml):
  *   node scripts/release-bump.mjs <new-version>
