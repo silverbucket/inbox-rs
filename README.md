@@ -1,21 +1,38 @@
-# Inbox RS
+<div align="center">
 
-**Capture anything. Own everything.**
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/inbox-rs-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/inbox-rs-light.svg">
+  <img alt="Inbox RS" src="docs/assets/inbox-rs.svg" width="340">
+</picture>
 
-One inbox for everything you save — and everything you do with it. Save a link,
-a note, a photo, a voice memo, a document, or an email from wherever you happen
-to be, then file it, schedule it, and act on it. Backed by
-[remoteStorage](https://remotestorage.io): there is no server, no API, and no
-account. The app runs entirely in your browser and syncs straight to a storage
-server you control.
+### Capture anything. Own everything.
+
+One inbox for everything you save — and everything you do with it.<br>
+No server, no API, no account. Your data lives on storage you control.
+
+[![CI](https://github.com/silverbucket/inbox-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/silverbucket/inbox-rs/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/silverbucket/inbox-rs?color=6366f1)](https://github.com/silverbucket/inbox-rs/releases)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-6366f1)](#license)
+[![remoteStorage](https://img.shields.io/badge/storage-remoteStorage-FF4B03)](https://remotestorage.io)
+
+</div>
+
+---
+
+Save a link, a note, a photo, a voice memo, a document, or an email from wherever
+you happen to be — then file it, schedule it, and act on it. Inbox RS runs
+entirely in your browser and syncs straight to a
+[remoteStorage](https://remotestorage.io) server you control. There is no
+backend to run, nothing to sign up for, and nobody in the middle.
 
 ## How it works
 
 **Capture** — Everything lands in one inbox as a card. Paste a URL or type into
 the quick-capture bar and it becomes a bookmark or a note automatically; add
 images, audio, documents, and emails from any of the clients below. Bookmarks
-fill in their own title, description, and preview image; audio is transcribed
-on-device.
+fill in their own title, description, and preview image. Audio is transcribed
+on-device — the recording never leaves your machine to become searchable text.
 
 **Organize** — File cards into collections, group related collections together,
 and filter the view down to what you're working on. Any card can become a todo,
@@ -41,11 +58,9 @@ builds as direct downloads.
 
 ## Architecture
 
-Client-side only. No backend of our own — the browser talks directly to your
-remoteStorage server. The two things a browser genuinely can't do alone
-(fetching link metadata across origins, speaking CalDAV) relay through
-[Sockethub](https://sockethub.org); CalDAV credentials stay on the device and
-are passed per-request, never stored server-side.
+Client-side only. The browser talks directly to your remoteStorage server —
+there is no backend of our own, and no request ever passes through infrastructure
+we run.
 
 ```
 packages/
@@ -57,6 +72,26 @@ packages/
 
 All four packages share `@inbox-rs/rs-module` for consistent data types and
 storage layout.
+
+### Reaching the outside world with Sockethub
+
+A browser tab can't fetch a page's Open Graph tags across origins, and it can't
+speak CalDAV — no calendar server sends CORS headers. Rather than stand up a
+backend for those two jobs, Inbox RS relays them through
+**[Sockethub](https://sockethub.org)**, an open-source protocol gateway that
+turns messy external protocols into one consistent ActivityStreams message
+format:
+
+- **Link enrichment** — a bookmark's title, description, and preview image are
+  fetched by Sockethub and handed back as an ActivityStreams object.
+- **Calendars** — CalDAV discovery and publishing. Credentials are sent per
+  request from a credential store that is torn down when the request completes,
+  so no password is ever stored server-side. They stay on your device and are
+  never synced.
+
+Sockethub is the *only* way this app reaches the internet, and you can point it
+at your own instance in settings. Everything else is your browser and your
+storage server.
 
 ### Storage layout
 
@@ -137,3 +172,27 @@ changed since the previous tag — see [`docs/RELEASING.md`](docs/RELEASING.md).
 ## License
 
 GPL-3.0
+
+---
+
+<div align="center">
+
+**Built on open protocols**
+
+<a href="https://remotestorage.io">
+  <img alt="remoteStorage" src="docs/assets/remotestorage.svg" height="56">
+</a>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<a href="https://sockethub.org">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/sockethub-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/sockethub-light.svg">
+    <img alt="Sockethub" src="docs/assets/sockethub.svg" height="42">
+  </picture>
+</a>
+
+<br>
+
+<sub><a href="https://remotestorage.io">remoteStorage</a> keeps your data yours&nbsp; ·&nbsp; <a href="https://sockethub.org">Sockethub</a> talks to everything else</sub>
+
+</div>
