@@ -60,6 +60,7 @@ import {
   activeGroupIds,
   allTodos,
   appConfig,
+  appConfigLoaded,
   blobUrls,
   collectionItems,
   collections,
@@ -647,6 +648,24 @@ describe('collection todo consistency', () => {
     mockInbox.getAllCollections.mockResolvedValue({});
     mockInbox.getAllGroups.mockResolvedValue({});
     mockInbox.getUserSettings.mockResolvedValue(undefined);
+  });
+
+  it('marks config loaded only after the saved collection filters are hydrated', async () => {
+    appConfigLoaded.set(false);
+    mockInbox.getConfig.mockResolvedValue({
+      activeGroupFilters: ['g1'],
+      inactiveCollectionFilters: ['c2'],
+    });
+
+    const connectedLoad = rsHandlers.connected();
+
+    expect(get(appConfigLoaded)).toBe(false);
+    await connectedLoad;
+    expect(get(appConfigLoaded)).toBe(true);
+    expect(get(appConfig)).toEqual({
+      activeGroupFilters: ['g1'],
+      inactiveCollectionFilters: ['c2'],
+    });
   });
 
   it('ignores item records whose storage key does not match the item id', async () => {

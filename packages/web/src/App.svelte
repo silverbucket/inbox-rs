@@ -12,7 +12,7 @@
   import {
     connected, deleteItem, items, visibleOpenTodos, openTodos, pendingMigrationCount, runAllMigrations,
     createCollection, storeGroup,
-    appConfig, setActiveGroupFilters,
+    appConfig, appConfigLoaded, setActiveGroupFilters,
   } from './lib/stores';
   import { initAlerts, setAlertOpenHandler } from './lib/alerts';
   import { captureDetected, captureFile } from './lib/capture';
@@ -114,6 +114,10 @@
   // are an optional override applied once on load (or when the URL changes).
   let lastAppliedFilterHash = $state<string | undefined>(undefined);
   $effect(() => {
+    // Wait until the saved config (including per-collection deny-list state)
+    // has loaded. Applying `?g=` against the initial empty store would persist
+    // a group-only config and turn a soloed collection into its whole group.
+    if (!$appConfigLoaded) return;
     if (!pageUsesFilters(route.page)) return;
     const filters = route.groupFilters;
     if (filters === undefined) return;

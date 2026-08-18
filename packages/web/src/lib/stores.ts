@@ -63,6 +63,8 @@ function clearBlobLoadFailed(filePath: string) {
 
 export const connected = writable(false);
 export const syncing = writable(false);
+/** True once the initial config read has completed, including an empty/missing config. */
+export const appConfigLoaded = writable(false);
 
 function readStoredUserAddress(): string {
   try {
@@ -291,6 +293,8 @@ async function loadConfig() {
     }
   } catch (e) {
     console.error('[inbox] loadConfig failed:', e);
+  } finally {
+    appConfigLoaded.set(true);
   }
 }
 
@@ -453,6 +457,7 @@ rs.on('disconnected', () => {
   items.set({});
   rawItems.set({});
   appConfig.set({});
+  appConfigLoaded.set(false);
   userSettings.set({});
   collections.set({});
   groups.set({});
