@@ -17,6 +17,7 @@
     soloGroupFilter,
     toggleCollectionFilter,
     enableCollectionFilter,
+    soloCollectionFilter,
     moveItemToCollection,
     createCollection,
     storeGroup,
@@ -145,9 +146,11 @@
     return isGroupActive(group) ? `Hide ${group.name}` : `Show ${group.name}`;
   }
 
-  async function onToggleCollection(group: CollectionGroup, col: Collection) {
+  async function onToggleCollection(e: MouseEvent, group: CollectionGroup, col: Collection) {
     try {
-      if (isCollectionActive(group, col)) {
+      if (isSoloModifier(e)) {
+        await soloCollectionFilter(col.id);
+      } else if (isCollectionActive(group, col)) {
         // Currently visible → hide it (deny-list).
         await toggleCollectionFilter(col.id);
       } else {
@@ -465,7 +468,7 @@
                           style="--entity-color: {col.color || group.color || 'var(--accent)'}"
                           aria-pressed={colActive}
                           title={colActive ? `Hide ${col.name}` : `Show ${col.name}`}
-                          onclick={() => onToggleCollection(group, col)}
+                          onclick={(e) => onToggleCollection(e, group, col)}
                           ondragover={(e) => onColDragOver(e, col)}
                           ondragleave={() => onColDragLeave(col)}
                           ondrop={(e) => onColDrop(e, col)}
