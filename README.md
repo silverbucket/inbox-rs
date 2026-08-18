@@ -13,7 +13,7 @@ No backend, no API, no account of ours. Your data lives on storage you control.
 
 [![CI](https://github.com/silverbucket/inbox-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/silverbucket/inbox-rs/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/silverbucket/inbox-rs?color=6366f1)](https://github.com/silverbucket/inbox-rs/releases)
-[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-6366f1)](#license)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-6366f1)](LICENSE)
 [![remoteStorage](https://img.shields.io/badge/storage-remoteStorage-FF4B03)](https://remotestorage.io)
 
 </div>
@@ -185,7 +185,12 @@ downloads/inbox-rs-thunderbird-<thunderbird-version>.xpi
 
 ## License
 
-GPL-3.0
+[GPL-3.0-or-later](LICENSE) — © 2026 Nick Jennings.
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option)
+any later version.
 
 ---
 
