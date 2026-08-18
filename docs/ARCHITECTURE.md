@@ -1,9 +1,10 @@
 # Architecture
 
 Inbox RS is a client-side application. There is no backend of the project's
-own in the data path: the browser holds the data, talks to your remoteStorage
-server directly, and reaches everything else through a relay you can point
-wherever you like.
+own in the data path: the browser holds the data and talks to your
+remoteStorage server directly. A relay you can point wherever you like covers
+the two jobs a browser tab can't do — and it is not the only other host the
+browser reaches, which the table below sets out in full.
 
 This document covers the operational detail. [README.md](../README.md) has the
 short version.
@@ -28,10 +29,10 @@ outbound paths exist, and only the first is unavoidable:
 
 | Destination | When | Notes |
 |---|---|---|
-| **Your remoteStorage server** | All reads and writes | Whichever host you connected. The only party that sees your data. |
+| **Your remoteStorage server** | All reads and writes | Whichever host you connected. The only party that holds your complete inbox — the others below each see a fragment. |
 | **Your provider's WebFinger + OAuth endpoints** | Connect time | `GET https://<your-host>/.well-known/webfinger` to discover the storage API, then the OAuth authorize redirect. Same organisation as your storage. |
-| **A Sockethub relay** | Link enrichment, CalDAV | Defaults to `sockethub.silverbucket.net`, which the Inbox RS author operates. Changeable in settings — see below. |
-| **Sites you bookmarked** | Rendering the inbox | Bookmark cards load `favicon` and `ogImage` straight from their origin, so scrolling the grid issues requests to those sites. Turn off link previews to stop enrichment fetching them; already-stored URLs still load unless the image was downloaded to your storage. |
+| **A Sockethub relay** | Link enrichment, CalDAV | Defaults to `sockethub.silverbucket.net`, which the Inbox RS author operates. Sees the URL of each link you enrich, and — when you publish — your calendar credentials and the event being written. Never sees the rest of your inbox. Changeable in settings; see below. |
+| **Sites you bookmarked** | Rendering the inbox | Bookmark cards load `favicon` and `ogImage` straight from their origin, so scrolling the grid issues requests to those sites — each learns your IP and that you are looking at their page again, though not what else you saved. Turn off link previews to stop enrichment fetching new ones; already-stored URLs still load unless the image was downloaded to your storage. |
 | **A calendar server** | Publishing an event | Reached *through* the relay, never directly. |
 
 No analytics, telemetry, error reporting, or ad hosts. Nothing else is

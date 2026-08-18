@@ -23,10 +23,10 @@ No backend, no API, no account of ours. Your data lives on storage you control.
 Save a link, a note, a photo, a voice memo, a document, or an email from wherever
 you happen to be — then file it, schedule it, and act on it. Inbox RS runs
 entirely in your browser and syncs straight to a
-[remoteStorage](https://remotestorage.io) server you control, reaching anything
-else through a [Sockethub](https://sockethub.org) relay you can host yourself.
-There is no backend of ours in the data path, no Inbox RS account, and no
-analytics or telemetry anywhere.
+[remoteStorage](https://remotestorage.io) server you control. The two things a
+browser can't do alone go through a [Sockethub](https://sockethub.org) relay you
+can host yourself. There is no backend of ours in the data path, no Inbox RS
+account, and no analytics or telemetry anywhere.
 
 ## How it works
 
@@ -199,6 +199,6 @@ any later version.
 
 <br>
 
-<sub><a href="https://remotestorage.io">remoteStorage</a> keeps your data yours&nbsp; ·&nbsp; <a href="https://sockethub.org">Sockethub</a> talks to everything else</sub>
+<sub><a href="https://remotestorage.io">remoteStorage</a> keeps your data yours&nbsp; ·&nbsp; <a href="https://sockethub.org">Sockethub</a> reaches what the browser can't</sub>
 
 </div>
