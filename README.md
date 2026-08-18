@@ -23,7 +23,8 @@ No server, no API, no account. Your data lives on storage you control.
 Save a link, a note, a photo, a voice memo, a document, or an email from wherever
 you happen to be — then file it, schedule it, and act on it. Inbox RS runs
 entirely in your browser and syncs straight to a
-[remoteStorage](https://remotestorage.io) server you control. There is no
+[remoteStorage](https://remotestorage.io) server you control, reaching the
+outside world only through [Sockethub](https://sockethub.org). There is no
 backend to run, nothing to sign up for, and nobody in the middle.
 
 ## How it works
@@ -43,6 +44,35 @@ section.
 in-app alert when it comes due. From there it can be published to a real
 calendar over CalDAV or downloaded as an `.ics` file. The card stays the
 editor — the calendar entry is a projection of it.
+
+Whatever a card holds — a link, a note, a photo, a recording, a document, an
+email — it shares one shape underneath, so filing, pinning, scheduling, and
+completing all behave the same way. There is no per-type workflow to learn.
+
+## Links keep their context
+
+A traditional bookmark is a URL and a title. When the page goes away — the post
+deleted, the account gone, the site reorganized — that is all you are left with,
+and it is rarely enough to remember why you saved it.
+
+Inbox RS saves the *content*, not just the pointer, and writes it into your own
+storage:
+
+- **Every link, from every client.** [Sockethub](https://sockethub.org) fetches
+  the page's title, description, site name, and preview image and hands them
+  back as an ActivityStreams object; that text is written into your storage as
+  your own copy of it. A browser tab can't do this itself — CORS blocks
+  cross-origin page fetches — so Sockethub is what lets a link arrive with its
+  context already attached from the mobile app, the system share sheet, or a URL
+  pasted into the capture bar, anywhere there is no extension to read the page
+  for you.
+- **Posts and threads, through the browser extension.** On X, Mastodon, Reddit,
+  and Hacker News the content script reads the post text out of the page and
+  stores it in the card body, and the preview or attached image is downloaded
+  and stored as an actual file rather than a hotlink. Highlight a passage before
+  saving and that selection becomes the note.
+
+A saved tweet still reads as the tweet a year later, after the account is gone.
 
 ## Where you capture from
 
@@ -73,23 +103,19 @@ packages/
 All four packages share `@inbox-rs/rs-module` for consistent data types and
 storage layout.
 
-### Reaching the outside world with Sockethub
+### The one hop outward: Sockethub
 
-A browser tab can't fetch a page's Open Graph tags across origins, and it can't
-speak CalDAV — no calendar server sends CORS headers. Rather than stand up a
-backend for those two jobs, Inbox RS relays them through
+Two jobs are impossible from a browser tab alone: fetching a page's Open Graph
+tags across origins, and speaking CalDAV — no calendar server sends CORS
+headers. Rather than stand up a backend for them, Inbox RS relays both through
 **[Sockethub](https://sockethub.org)**, an open-source protocol gateway that
 turns messy external protocols into one consistent ActivityStreams message
-format:
+format. It handles link enrichment (above) and CalDAV calendar discovery and
+publishing; calendar credentials are sent per request from a store that is torn
+down when the request completes, so no password is ever held server-side, and
+they stay on your device rather than syncing.
 
-- **Link enrichment** — a bookmark's title, description, and preview image are
-  fetched by Sockethub and handed back as an ActivityStreams object.
-- **Calendars** — CalDAV discovery and publishing. Credentials are sent per
-  request from a credential store that is torn down when the request completes,
-  so no password is ever stored server-side. They stay on your device and are
-  never synced.
-
-Sockethub is the *only* way this app reaches the internet, and you can point it
+Sockethub is the *only* path this app has to the internet, and you can point it
 at your own instance in settings. Everything else is your browser and your
 storage server.
 
@@ -106,23 +132,6 @@ groups/{uuid}                # Collection groups
 config/app                   # UI state: ordering, filters, expanded sections
 config/user                  # User settings: theme, link previews, calendar mode
 ```
-
-### Item types
-
-| Type | Description |
-|---|---|
-| `bookmark` | URL with title, description, og:image, favicon, site name. May carry `body` (embedded content like tweet text) and `filePath` (a downloaded image). |
-| `note` | Freeform Markdown text with title and body. |
-| `image` | Image binary with metadata, optional source URL, and optional thumbnail. |
-| `audio` | Audio recording with duration and transcription text. |
-| `video` | Video file with duration and optional transcription. |
-| `document` | Uploaded file with name, size, and mime type. |
-| `email` | Subject, body, sender, your notes, and a `mid:` URI back to the message. |
-| `todo` | Task with completion status and notes. Any item can be converted to a todo. |
-
-Every type shares the same base: collection membership, pinning, and the
-scheduling fields (`startsAt`, `endsAt`, `allDay`, `scheduleKind`) that drive
-alerts and calendar publishing.
 
 ## Quick start
 
@@ -180,7 +189,11 @@ GPL-3.0
 **Built on open protocols**
 
 <a href="https://remotestorage.io">
-  <img alt="remoteStorage" src="docs/assets/remotestorage.svg" height="56">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/remotestorage-text-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/remotestorage-text-light.png">
+    <img alt="remoteStorage" src="docs/assets/remotestorage-text.png" height="52">
+  </picture>
 </a>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
 <a href="https://sockethub.org">
