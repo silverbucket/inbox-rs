@@ -61,7 +61,7 @@ and it is rarely enough to remember why you saved it.
 Inbox RS saves the *content*, not just the pointer, and writes it into your own
 storage:
 
-- **Every link, from every client.** [Sockethub](https://sockethub.org) fetches
+- **Links captured without the extension.** [Sockethub](https://sockethub.org) fetches
   the page's title, description, site name, and preview image and hands them
   back as an ActivityStreams object; that text is written into your storage as
   your own copy of it. A browser tab can't do this itself — CORS blocks
@@ -114,9 +114,9 @@ instance in settings. Calendar credentials stay on your device, are never
 synced to your storage, and are held by the relay only for the life of a single
 request.
 
-Beyond your storage server and the relay, the browser contacts your provider's
-WebFinger and OAuth endpoints when you connect, and loads favicons and preview
-images straight from the sites you bookmarked.
+Beyond your storage server and the relay, the browser contacts the WebFinger
+and OAuth endpoints your address resolves to when you connect, and loads
+favicons and preview images straight from the sites you bookmarked.
 
 **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** has the full picture: every
 outbound request, how the relay handles credentials, and the storage layout.
