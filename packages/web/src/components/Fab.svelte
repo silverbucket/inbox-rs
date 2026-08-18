@@ -18,7 +18,7 @@
    *
    * Mobile-only behaviour: the button slides upward as the page footer
    * enters the viewport, so it never sits on top of the footer links
-   * (GitHub, Downloads). The shift is driven by a scroll listener that
+   * (GitHub, Plugins). The shift is driven by a scroll listener that
    * reads `.app-footer`'s bounding rect — if the footer isn't in view, the
    * offset is zero and the FAB sits at its normal resting position. The
    * listener is only attached when the viewport matches the mobile

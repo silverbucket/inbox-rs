@@ -143,7 +143,8 @@ npm run dev            # Web app on http://localhost:5173
 
 Sign up a test user at `http://localhost:8000/signup`, then connect the app with
 `testuser@localhost:8000`. See [DEVELOPMENT.md](DEVELOPMENT.md) for extension
-loading, Firefox builds, and the full setup.
+loading, Firefox builds, and the full setup, and
+[`docs/RELEASING.md`](docs/RELEASING.md) for the release runbook.
 
 ```bash
 npm run build             # Web app + packaged plugin downloads into packages/web/dist/
@@ -156,16 +157,6 @@ npm run check             # Biome lint + format
 
 `npm run build` emits a self-contained `packages/web/dist/` for static hosting,
 including `downloads/inbox-rs-{chromium,firefox,thunderbird}-<version>.{zip,xpi}`.
-
-## Releasing
-
-```bash
-gh workflow run release.yml -f bump=patch    # or minor / major
-```
-
-The web app version tracks the root `package.json`. The browser and Thunderbird
-extensions have their own version namespaces and only move when their bundle
-changed since the previous tag — see [`docs/RELEASING.md`](docs/RELEASING.md).
 
 ## Tech stack
 
@@ -192,7 +183,7 @@ GPL-3.0
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/remotestorage-text-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="docs/assets/remotestorage-text-light.svg">
-    <img alt="remoteStorage" src="docs/assets/remotestorage-text.svg" height="52">
+    <img alt="remoteStorage" src="docs/assets/remotestorage-text.svg" height="48">
   </picture>
 </a>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
@@ -200,7 +191,7 @@ GPL-3.0
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/sockethub-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="docs/assets/sockethub-light.svg">
-    <img alt="Sockethub" src="docs/assets/sockethub.svg" height="42">
+    <img alt="Sockethub" src="docs/assets/sockethub.svg" height="48">
   </picture>
 </a>
 

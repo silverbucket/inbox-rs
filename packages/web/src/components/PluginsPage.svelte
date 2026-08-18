@@ -2,7 +2,6 @@
   import chromeLogo from '../assets/logos/chrome.svg';
   import firefoxLogo from '../assets/logos/firefox.svg';
   import thunderbirdLogo from '../assets/logos/thunderbird.svg';
-  import inboxRsMobileLogo from '../assets/logos/inbox-rs-mobile.svg';
   import captureLogo from '../assets/logos/favicon-shield.svg';
   import { pluginArtifacts } from '../lib/plugin-downloads.generated';
 
@@ -53,22 +52,6 @@
       logoSrc: firefoxLogo,
     },
   ];
-
-  type MobileDownload = {
-    name: string;
-    compatibility: string;
-    repoUrl: string;
-    accentClass: string;
-    logoSrc: string;
-  };
-
-  const mobileDownload: MobileDownload = {
-    name: 'Inbox RS Mobile',
-    compatibility: 'Standalone native app · iOS & Android',
-    repoUrl: 'https://github.com/silverbucket/inbox-rs-mobile',
-    accentClass: 'mobile',
-    logoSrc: inboxRsMobileLogo,
-  };
 
   const thunderbirdDownload: DownloadOption = {
     name: 'Thunderbird',
@@ -215,26 +198,24 @@
     <div class="section-header">
       <h2>Mobile</h2>
       <p class="section-lede">
-        Two ways to capture from your phone. <strong>Inbox RS Mobile</strong>
-        is a separate, standalone native app (its own download, built with
-        Flutter). <strong>Quick Capture</strong> is built into Inbox RS — a PWA
-        that opens in your browser and adds to your home screen with no app
-        store and no system install.
+        <strong>Quick Capture</strong> is built into Inbox RS — a PWA that
+        opens in your browser and adds to your home screen with no app store
+        and no system install.
       </p>
     </div>
 
     <ul class="feature-list">
       <li>
-        <strong>Inbox RS Mobile</strong> — native iOS &amp; Android, with
-        share-sheet integration to send from any app
+        <strong>No install</strong> — runs in any modern browser and adds to
+        your home screen
       </li>
       <li>
-        <strong>Quick Capture</strong> — no install; runs in any modern browser
-        and adds to your home screen
+        <strong>Share sheet</strong> — send a link or a note straight from any
+        app on your phone
       </li>
       <li>
-        <strong>Note, Voice &amp; Image</strong> — both capture notes, voice
-        memos, and photos to your inbox
+        <strong>Note, Voice &amp; Image</strong> — capture notes, voice memos,
+        and photos to your inbox
       </li>
       <li>
         <strong>Offline-first</strong> — captures queue locally and sync once
@@ -243,43 +224,6 @@
     </ul>
 
     <div class="download-grid">
-      <p class="grid-label">Choose your capture app</p>
-
-      <article class={`download-card ${mobileDownload.accentClass}`}>
-        <div class="card-topline">
-          <div class="card-heading">
-            <div class={`logo-badge ${mobileDownload.accentClass}`} aria-hidden="true">
-              <img src={mobileDownload.logoSrc} alt="" />
-            </div>
-            <div class="card-title-group">
-              <h3>{mobileDownload.name}</h3>
-              <span class="compatibility">{mobileDownload.compatibility}</span>
-            </div>
-          </div>
-          <span class="file-pill">NATIVE</span>
-        </div>
-
-        <a class="download-button" href={mobileDownload.repoUrl} target="_blank" rel="noopener noreferrer">
-          View on GitHub
-        </a>
-
-        <details class="install-details">
-          <summary>Build instructions</summary>
-          <p class="install-note">
-            A standalone app from the inbox-rs-mobile repository, built from
-            source with Flutter; pre-built binaries aren't provided. It likely
-            won't be published to the App Store or Play Store for now — the
-            annual developer fees aren't justified at this stage. Prefer no
-            install? Use Quick Capture instead.
-          </p>
-          <ol class="steps">
-            <li>Clone the inbox-rs-mobile repository from GitHub.</li>
-            <li>Install Flutter and run <code>flutter pub get</code>.</li>
-            <li>Build for your target platform, e.g. <code>flutter build apk</code> or <code>flutter build ios</code>.</li>
-          </ol>
-        </details>
-      </article>
-
       <article class="download-card capture">
         <div class="card-topline">
           <div class="card-heading">
@@ -493,10 +437,6 @@
     background: linear-gradient(135deg, rgba(89, 116, 242, 0.2), transparent 48%);
   }
 
-  .download-card.mobile::before {
-    background: linear-gradient(135deg, rgba(79, 70, 229, 0.18), transparent 48%);
-  }
-
   .download-card.capture::before {
     background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), transparent 48%);
   }
@@ -626,20 +566,6 @@
       radial-gradient(circle at 50% 18%, rgba(219, 228, 255, 0.44), transparent 24%),
       radial-gradient(circle at 50% 80%, rgba(89, 116, 242, 0.28), transparent 34%),
       linear-gradient(180deg, rgba(89, 116, 242, 0.7), rgba(37, 52, 140, 0.42) 58%, rgba(20, 22, 30, 0.18));
-  }
-
-  .logo-badge.mobile {
-    border-color: rgba(79, 70, 229, 0.42);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.08),
-      0 18px 34px rgba(79, 70, 229, 0.2);
-  }
-
-  .logo-badge.mobile::before {
-    background:
-      radial-gradient(circle at 40% 28%, rgba(99, 102, 241, 0.5), transparent 32%),
-      radial-gradient(circle at 64% 74%, rgba(79, 70, 229, 0.4), transparent 36%),
-      linear-gradient(180deg, rgba(79, 70, 229, 0.5), rgba(49, 46, 129, 0.38) 60%, rgba(20, 22, 30, 0.18));
   }
 
   .logo-badge.capture {

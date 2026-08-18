@@ -26,15 +26,15 @@ test('default route renders inbox empty state', async ({ page, webOrigin }) => {
 });
 
 test('plugins page loads when disconnected', async ({ page, webOrigin }) => {
-  // The Plugins / Downloads page is the one route that should work
-  // *without* a connection — it's how users get the extension.
+  // The Plugins page is the one route that should work *without* a
+  // connection — it's how users get the extension.
   await page.goto(`${webOrigin}/#/plugins`);
   await page.waitForLoadState('networkidle');
 
-  // The footer Downloads link, when active, mirrors the route — confirm
+  // The footer Plugins link, when active, mirrors the route — confirm
   // it's marked active so we know route parsing landed on plugins.
-  const downloads = page.locator('.footer-link', { hasText: 'Downloads' });
-  await expect(downloads).toHaveClass(/active/);
+  const plugins = page.locator('.footer-link', { hasText: 'Plugins' });
+  await expect(plugins).toHaveClass(/active/);
 });
 
 test('plugins page spans the full width in the sidebar layout', async ({
