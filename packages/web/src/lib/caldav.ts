@@ -1,8 +1,9 @@
 /**
  * CalDAV client for the sockethub `caldav` platform.
  *
- * The browser can't speak CalDAV directly (no CORS on calendar servers), so
- * every operation relays through Sockethub's HTTP actions endpoint: one POST
+ * The browser can't speak CalDAV directly (most calendar servers don't expose
+ * browser-compatible CORS headers), so every operation relays through
+ * Sockethub's HTTP actions endpoint: one POST
  * carrying `[credentials, message]`. The relay holds the password only for
  * the life of that request — encrypted, in a request-scoped store that is
  * purged on teardown — so nothing is persisted server-side, though the relay

@@ -23,9 +23,10 @@ No backend, no API, no account of ours. Your data lives on storage you control.
 Save a link, a note, a photo, a voice memo, a document, or an email from wherever
 you happen to be — then file it, schedule it, and act on it. Inbox RS runs
 entirely in your browser and syncs straight to a
-[remoteStorage](https://remotestorage.io) server you control, reaching the
-outside world only through [Sockethub](https://sockethub.org). There is no
-backend of ours to run, no Inbox RS account, and nobody in the middle.
+[remoteStorage](https://remotestorage.io) server you control, reaching anything
+else through a [Sockethub](https://sockethub.org) relay you can host yourself.
+There is no backend of ours in the data path, no Inbox RS account, and no
+analytics or telemetry anywhere.
 
 ## How it works
 
@@ -90,9 +91,9 @@ builds as direct downloads.
 
 ## Architecture
 
-Client-side only. The browser talks directly to your remoteStorage server —
-there is no backend of our own, and no request ever passes through infrastructure
-we run.
+Client-side only. The browser holds your data and talks to your remoteStorage
+server directly — there is no backend of ours in the data path, and no
+analytics, telemetry or error reporting anywhere.
 
 ```text
 packages/
@@ -105,38 +106,20 @@ packages/
 All four packages share `@inbox-rs/rs-module` for consistent data types and
 storage layout.
 
-### The one hop outward: Sockethub
+Two things a browser tab genuinely cannot do — read a page's Open Graph tags
+across origins, and speak CalDAV — are relayed through
+**[Sockethub](https://sockethub.org)** instead of a backend of our own. That
+relay defaults to a host the author runs, and you can point it at your own
+instance in settings. Calendar credentials stay on your device, are never
+synced to your storage, and are held by the relay only for the life of a single
+request.
 
-Two jobs are impossible from a browser tab alone: fetching a page's Open Graph
-tags across origins, and speaking CalDAV — no calendar server sends CORS
-headers. Rather than stand up a backend for them, Inbox RS relays both through
-**[Sockethub](https://sockethub.org)**, an open-source protocol gateway that
-turns messy external protocols into one consistent ActivityStreams message
-format. It handles link enrichment (above) and CalDAV calendar discovery and
-publishing. Calendar credentials live on your device and are deliberately not
-synced through remoteStorage; they are sent with each request, held by the relay
-only for that request — encrypted, in a request-scoped store that is purged on
-teardown — and never written to your storage. You are trusting whoever runs the
-relay for that window, which is why the endpoint is pinned per account at connect
-time and the UI insists on app-specific passwords you can revoke.
+Beyond your storage server and the relay, the browser contacts your provider's
+WebFinger and OAuth endpoints when you connect, and loads favicons and preview
+images straight from the sites you bookmarked.
 
-Apart from your storage server, Sockethub is the *only* thing this app talks
-to — and you can point it at your own instance in settings. There is no other
-host in the loop.
-
-### Storage layout
-
-Everything lives under the `inbox` scope on your remoteStorage server:
-
-```text
-items/{uuid}                 # JSON metadata for each item
-files/{uuid}.{ext}           # Binary files (images, audio, video, documents)
-files/{uuid}.thumb.jpg       # Downscaled image previews for the card grid
-collections/{uuid}           # Collection definitions and their item order
-groups/{uuid}                # Collection groups
-config/app                   # UI state: ordering, filters, expanded sections
-config/user                  # User settings: theme, link previews, calendar mode
-```
+**[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** has the full picture: every
+outbound request, how the relay handles credentials, and the storage layout.
 
 ## Quick start
 
