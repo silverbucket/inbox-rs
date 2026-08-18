@@ -31,17 +31,20 @@ Three independent versions:
 | Surface | Source of truth | Moves when |
 |---|---|---|
 | Web app (root, `packages/web`, `packages/rs-module`, `scripts`) | Root `package.json` | Every release |
-| Browser extension (`packages/extension`) | `packages/extension/package.json` + manifests | Effective bundle changed |
-| Thunderbird extension (`packages/thunderbird`) | `packages/thunderbird/package.json` + manifest | Effective bundle changed |
+| Browser extension (`packages/extension`) | `packages/extension/package.json` + manifests | Anything under its package, `rs-module`, or the lockfile changed |
+| Thunderbird extension (`packages/thunderbird`) | `packages/thunderbird/package.json` + manifest | Anything under its package, `rs-module`, or the lockfile changed |
 
 Extensions lag the root on web-only releases. This is on purpose: each
 extension store (Chrome Web Store / AMO / Thunderbird ATN) rejects
 re-uploading a different artifact under an existing version.
 
-### What counts as "bundle changed"
+### What counts as a change
 
 [`scripts/release-bump.mjs`](../scripts/release-bump.mjs) decides per
-release by `git diff`-ing against the previous tag.
+release by `git diff`-ing against the previous tag. The check is on **paths**,
+not on the content of the built artifact: `classifyChanges` asks whether any
+changed path starts with `packages/extension/`, `packages/thunderbird/` or
+`packages/rs-module/`, plus an exact match on `package-lock.json`.
 
 | Change since previous tag | Chromium + Firefox | Thunderbird |
 |---|---|---|
@@ -51,6 +54,12 @@ release by `git diff`-ing against the previous tag.
 | `packages/rs-module/**` | bumps | bumps |
 | `package-lock.json` | bumps | bumps |
 | Root config / docs / `.github/` / `scripts/` | pinned | pinned |
+
+Because it matches on paths, a change that can't reach the shipped
+artifact still bumps: editing only `packages/extension/src/*.test.ts`
+burns an extension version on a byte-identical ZIP. That over-bump is
+deliberate — a wasted version number is recoverable, a store rejecting a
+changed artifact under an existing version is not.
 
 The policy is exercised by
 [`scripts/release-bump.test.mjs`](../scripts/release-bump.test.mjs) — if

@@ -94,9 +94,9 @@ jobs:
         id: version
         # `npm version` updates the root package.json. Per-package + manifest
         # bumps are delegated to scripts/release-bump.mjs, which only bumps
-        # the browser extensions when their effective bundle (their own
-        # package directory + rs-module) changed since the previous tag.
-        # This avoids burning store-version numbers on web-only releases.
+        # the browser extensions when a path under their own package
+        # directory, rs-module, or the lockfile changed since the previous
+        # tag. This avoids burning store-version numbers on web-only releases.
         env:
           BUMP: ${{ inputs.bump }}
         run: |
