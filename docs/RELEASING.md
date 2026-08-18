@@ -41,10 +41,10 @@ re-uploading a different artifact under an existing version.
 ### What counts as a change
 
 [`scripts/release-bump.mjs`](../scripts/release-bump.mjs) decides per
-release by `git diff`-ing against the previous tag. The check is a **path
-prefix match**, not a content comparison of the built artifact —
-`classifyChanges` asks whether any changed path starts with
-`packages/extension/`, `packages/thunderbird/` or `packages/rs-module/`.
+release by `git diff`-ing against the previous tag. The check is on **paths**,
+not on the content of the built artifact: `classifyChanges` asks whether any
+changed path starts with `packages/extension/`, `packages/thunderbird/` or
+`packages/rs-module/`, plus an exact match on `package-lock.json`.
 
 | Change since previous tag | Chromium + Firefox | Thunderbird |
 |---|---|---|

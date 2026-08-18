@@ -81,7 +81,7 @@ A saved tweet still reads as the tweet a year later, after the account is gone.
 | Client | What it's for |
 |---|---|
 | **Web app** | The full inbox — browsing, filing, scheduling, editing. Installs as a PWA and keeps working offline. |
-| **Quick Capture** | A second, separately installable PWA at `/capture/`, built for a phone in one hand: a note, a voice memo, or a photo in a couple of taps. It registers as a system share target, so "Share → Capture" works from any app, and captures queue on device and drain once connectivity returns. |
+| **Quick Capture** | A second, separately installable PWA at `/capture/`, built for a phone in one hand: a note, a voice memo, or a photo in a couple of taps. It registers as a system share target, so "Share → Capture" works from any app, and anything captured offline is queued on the device and delivered once connectivity returns. |
 | **Browser extension** | Chrome MV3 + Firefox. Save the current page, jot a quick note, or right-click to save a link, an image (the actual binary, not the URL), or a text selection. Tweets capture their full text and attached images. |
 | **Thunderbird extension** | MailExtension for Thunderbird 128+. Saves an email with its subject, sender, and body, plus your own notes and a `mid:` link back to the original message. |
 
