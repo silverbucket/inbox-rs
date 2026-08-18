@@ -1803,6 +1803,50 @@ export async function enableCollectionFilter(
   await updateConfig(patch);
 }
 
+/**
+ * Show only one collection — the ⌘/Ctrl-click gesture on a sidebar
+ * collection row. The collection's parent becomes the only active group and
+ * every sibling collection is hidden.
+ *
+ * Repeating the gesture when the collection is already alone restores all
+ * groups and all collections in its group. Deny-list entries belonging to
+ * other groups are preserved.
+ */
+export async function soloCollectionFilter(
+  collectionId: string,
+): Promise<void> {
+  const collection = get(collections)[collectionId];
+  const groupId = collection?.groupId;
+  if (!groupId) return;
+
+  const siblings = (get(groupCollections)[groupId] ?? []).filter(
+    (col) => col.id !== collectionId,
+  );
+  const effectiveGroups = get(activeGroupIds);
+  const inactive = new Set(get(appConfig).inactiveCollectionFilters ?? []);
+  const alreadySoloed =
+    effectiveGroups.size === 1 &&
+    effectiveGroups.has(groupId) &&
+    !inactive.has(collectionId) &&
+    siblings.every((col) => inactive.has(col.id));
+
+  if (alreadySoloed) {
+    for (const col of siblings) inactive.delete(col.id);
+    await updateConfig({
+      activeGroupFilters: undefined,
+      inactiveCollectionFilters: Array.from(inactive),
+    });
+    return;
+  }
+
+  for (const col of siblings) inactive.add(col.id);
+  inactive.delete(collectionId);
+  await updateConfig({
+    activeGroupFilters: [groupId],
+    inactiveCollectionFilters: Array.from(inactive),
+  });
+}
+
 // ---- Flat Todos page: all todos across all collections ----
 
 /**

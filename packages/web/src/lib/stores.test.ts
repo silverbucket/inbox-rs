@@ -86,6 +86,7 @@ import {
   reorderTodosGlobal,
   reorderUnfiledTodos,
   setActiveGroupFilters,
+  soloCollectionFilter,
   soloGroupFilter,
   storeCollection,
   storeGroup,
@@ -1796,6 +1797,41 @@ describe('enableCollectionFilter', () => {
 
     expect(get(appConfig).activeGroupFilters).toBeUndefined();
     expect(get(appConfig).inactiveCollectionFilters).toEqual([]);
+  });
+});
+
+describe('soloCollectionFilter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    collections.set({
+      c1: makeCollection('c1', 'g1'),
+      c2: makeCollection('c2', 'g1'),
+      c3: makeCollection('c3', 'g2'),
+    });
+    groups.set({
+      g1: makeGroup('g1', ['c1', 'c2']),
+      g2: makeGroup('g2', ['c3']),
+    });
+    appConfig.set({});
+  });
+
+  it('hides every other group and sibling collection', async () => {
+    await soloCollectionFilter('c1');
+
+    expect(get(appConfig).activeGroupFilters).toEqual(['g1']);
+    expect(get(appConfig).inactiveCollectionFilters).toEqual(['c2']);
+  });
+
+  it('restores all groups when the collection is already alone', async () => {
+    appConfig.set({
+      activeGroupFilters: ['g1'],
+      inactiveCollectionFilters: ['c2', 'c3'],
+    });
+
+    await soloCollectionFilter('c1');
+
+    expect(get(appConfig).activeGroupFilters).toBeUndefined();
+    expect(get(appConfig).inactiveCollectionFilters).toEqual(['c3']);
   });
 });
 
