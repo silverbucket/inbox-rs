@@ -333,6 +333,9 @@
                 style="background: {sugg.collection.color || '#6366f1'}"
               ></span>
               <span class="col-name">{sugg.collection.name}</span>
+              <span class="suggestion-group">
+                {$groups[sugg.collection.groupId ?? '']?.name ?? 'Other'}
+              </span>
               <span class="reason">{REASON_LABEL[sugg.reason]}</span>
             </button>
           {/each}
@@ -571,6 +574,15 @@
     font-size: 0.72rem;
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
+  }
+
+  .suggestion-group {
+    max-width: 35%;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* Amber "why" tag. Dark is the app default; light overrides mirror the
