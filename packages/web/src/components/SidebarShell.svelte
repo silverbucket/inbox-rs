@@ -66,6 +66,8 @@
   let justFiledColId = $state<string | null>(null);
   let draggingCollectionId = $state<string | null>(null);
   let dragOverGroupId = $state<string | null>(null);
+  let collectionDragX = $state(0);
+  let collectionDragY = $state(0);
   let springGroupId: string | null = null;
   let springTimer: ReturnType<typeof setTimeout> | null = null;
   let collectionPointerDrag: {
@@ -81,6 +83,12 @@
   const inactiveCols = $derived($inactiveCollectionIds);
   const dragging = $derived($draggingItemId !== null);
   const movingCollection = $derived(draggingCollectionId !== null);
+  const draggedCollection = $derived.by(() => {
+    if (!draggingCollectionId) return undefined;
+    return groups
+      .flatMap((group) => grouped[group.id] ?? [])
+      .find(({ id }) => id === draggingCollectionId);
+  });
   // The plugins page has no groups to filter — the sidebar is
   // omitted entirely and the body grid must collapse to a single column.
   const noSidebar = $derived(route.page === 'plugins');
@@ -332,6 +340,8 @@
       if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 4) return;
       draggingCollectionId = drag.collectionId;
     }
+    collectionDragX = e.clientX;
+    collectionDragY = e.clientY;
     const group = groupAtPoint(e.clientX, e.clientY);
     dragOverGroupId =
       group && !(grouped[group.id] ?? []).some(({ id }) => id === drag.collectionId)
@@ -551,6 +561,7 @@
                         {@const colActive = isCollectionActive(group, col)}
                         <div
                           class="collection-drag-row"
+                          class:is-moving={draggingCollectionId === col.id}
                           style="--entity-color: {col.color || group.color || 'var(--accent)'}"
                         >
                           <button
@@ -643,6 +654,18 @@
     {@render children()}
   </main>
 </div>
+
+{#if draggedCollection}
+  <div
+    class="collection-drag-preview"
+    style="left: {collectionDragX}px; top: {collectionDragY}px; --entity-color: {draggedCollection.color || 'var(--accent)'}"
+    aria-hidden="true"
+  >
+    <span class="dot"></span>
+    <span class="drag-preview-name">{draggedCollection.name}</span>
+    <span class="drag-preview-count">{draggedCollection.itemIds.length}</span>
+  </div>
+{/if}
 
 <footer class="app-footer">
   <div class="app-footer-inner">
@@ -1034,6 +1057,45 @@
     display: flex;
     align-items: center;
     margin-left: 1.55rem;
+  }
+
+  .collection-drag-row.is-moving {
+    opacity: 0.35;
+  }
+
+  .collection-drag-preview {
+    position: fixed;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 180px;
+    max-width: 260px;
+    min-height: 2.25rem;
+    padding: 0.35rem 0.65rem;
+    border: 1px solid var(--entity-color);
+    border-radius: 0.55rem;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 10px 28px var(--shadow);
+    pointer-events: none;
+    transform: translate(12px, 10px) rotate(1deg);
+  }
+
+  .drag-preview-name {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 0.86rem;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .drag-preview-count {
+    margin-left: auto;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
   }
 
   .collection-entity {
