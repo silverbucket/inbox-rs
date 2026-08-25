@@ -310,15 +310,18 @@
   }
 
   function onGroupCollectionDragOver(e: DragEvent, group: CollectionGroup) {
-    if (!draggingCollectionId) {
-      onGroupDragOver(group);
-      return;
-    }
+    if (!draggingCollectionId) return;
     const col = grouped[group.id]?.find(({ id }) => id === draggingCollectionId);
     if (col) return;
     e.preventDefault();
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
     dragOverGroupId = group.id;
+  }
+
+  function onGroupCollectionDragLeave(e: DragEvent, group: CollectionGroup) {
+    const destination = e.currentTarget as HTMLElement;
+    if (e.relatedTarget instanceof Node && destination.contains(e.relatedTarget)) return;
+    if (dragOverGroupId === group.id) dragOverGroupId = null;
   }
 
   async function onGroupDrop(e: DragEvent, group: CollectionGroup) {
@@ -469,15 +472,19 @@
               {@const cols = grouped[group.id] ?? []}
               {@const groupActive = isGroupActive(group)}
               {@const groupOpen = expandedGroups.has(group.id)}
-              <div class="group">
+              <div
+                class="group"
+                ondragover={(e) => onGroupCollectionDragOver(e, group)}
+                ondragleave={(e) => onGroupCollectionDragLeave(e, group)}
+                ondrop={(e) => onGroupDrop(e, group)}
+              >
                 <div
                   class="group-row"
                   class:collection-drop-target={movingCollection && !cols.some(({ id }) => id === draggingCollectionId)}
                   class:collection-drop-over={dragOverGroupId === group.id}
                   role="presentation"
-                  ondragover={(e) => onGroupCollectionDragOver(e, group)}
+                  ondragover={() => onGroupDragOver(group)}
                   ondragleave={() => onGroupDragLeave(group)}
-                  ondrop={(e) => onGroupDrop(e, group)}
                 >
                   <button
                     class="chevron"
