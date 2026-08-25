@@ -501,15 +501,14 @@
           {/each}
         </div>
       {:else}
-        {#if dragging}
-          <div class="filing">Filing mode — drop on a collection</div>
-        {:else if movingCollection}
-          <div class="filing">Moving collection — drop on a group</div>
-        {/if}
         <div class="sidebar-head">
           <!-- The hint takes the header's slot rather than adding a line, so
                holding the modifier doesn't shove the group list down. -->
-          {#if soloing}
+          {#if dragging}
+            <span class="filing">Drop on a collection</span>
+          {:else if movingCollection}
+            <span class="filing">Drop on a group</span>
+          {:else if soloing}
             <span class="solo-hint">{soloHint}</span>
           {:else}
             <span class="sidebar-title">Groups</span>
@@ -969,13 +968,13 @@
   }
 
   .filing {
-    margin: 0 0.25rem 0.5rem;
-    padding: 0.4rem 0.6rem;
-    border-radius: 0.5rem;
-    font-size: 0.76rem;
-    font-weight: 600;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 0.7rem;
+    font-weight: 700;
     color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .sidebar-head {
