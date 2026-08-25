@@ -69,6 +69,7 @@
   let collectionDragX = $state(0);
   let collectionDragY = $state(0);
   let keyboardMoveCollectionId = $state<string | null>(null);
+  let collectionMoveInFlight = $state(false);
   let suppressMoveHandleClick = false;
   let springGroupId: string | null = null;
   let springTimer: ReturnType<typeof setTimeout> | null = null;
@@ -324,7 +325,7 @@
   }
 
   function onCollectionPointerDown(e: PointerEvent, col: Collection) {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || collectionMoveInFlight) return;
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     collectionPointerDrag = {
@@ -372,11 +373,12 @@
   }
 
   function toggleKeyboardMove(collectionId: string) {
-    if (suppressMoveHandleClick) return;
+    if (suppressMoveHandleClick || collectionMoveInFlight) return;
     keyboardMoveCollectionId = keyboardMoveCollectionId === collectionId ? null : collectionId;
   }
 
   async function moveCollection(collectionId: string, group: CollectionGroup) {
+    if (collectionMoveInFlight) return;
     const sourceGroup = groups.find((candidate) =>
       (grouped[candidate.id] ?? []).some(({ id }) => id === collectionId),
     );
@@ -384,24 +386,32 @@
     keyboardMoveCollectionId = null;
     onCollectionDragEnd();
     if (!collection || sourceGroup?.id === group.id) return;
+    collectionMoveInFlight = true;
     try {
       await moveCollectionToGroup(collectionId, group.id);
       expandGroup(group.id);
       showToast(`Moved ${collection.name} to ${group.name}`, {
         label: 'Undo',
         run: () => {
-          if (!sourceGroup) return;
+          if (!sourceGroup || collectionMoveInFlight) return;
           // This toast can outlive a subsequent move. Only reverse the move
           // that created it; never overwrite the collection's newer home.
           if (!(grouped[group.id] ?? []).some(({ id }) => id === collectionId)) return;
-          void moveCollectionToGroup(collectionId, sourceGroup.id).catch(() => {
-            showToast("Couldn't undo the collection move.");
-          });
+          collectionMoveInFlight = true;
+          void moveCollectionToGroup(collectionId, sourceGroup.id)
+            .catch(() => {
+              showToast("Couldn't undo the collection move.");
+            })
+            .finally(() => {
+              collectionMoveInFlight = false;
+            });
         },
       });
     } catch (error) {
       console.error('Failed to move collection to group', error);
       showToast(`Couldn't move ${collection.name}.`);
+    } finally {
+      collectionMoveInFlight = false;
     }
   }
 
@@ -610,6 +620,7 @@
                             title={`Drag ${col.name} to another group`}
                             aria-label={`Drag ${col.name} to another group`}
                             aria-expanded={keyboardMoveCollectionId === col.id}
+                            disabled={collectionMoveInFlight}
                             onclick={() => toggleKeyboardMove(col.id)}
                             onpointerdown={(e) => onCollectionPointerDown(e, col)}
                             onpointermove={onCollectionPointerMove}
@@ -636,6 +647,7 @@
                               <button
                                 type="button"
                                 use:autofocusIf={index === 0}
+                                disabled={collectionMoveInFlight}
                                 onclick={() => void moveCollection(col.id, destination)}
                               >{destination.name}</button>
                             {/each}
