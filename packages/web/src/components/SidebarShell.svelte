@@ -7,7 +7,7 @@
   import LogoShield from './LogoShield.svelte';
   import type { Page, Route } from '../lib/route';
   import { appVersion } from '../lib/plugin-downloads.generated';
-  import { autofocus } from '../lib/actions';
+  import { autofocus, autofocusIf } from '../lib/actions';
   import {
     sortedGroups,
     groupCollections,
@@ -19,6 +19,7 @@
     enableCollectionFilter,
     soloCollectionFilter,
     moveItemToCollection,
+    moveCollectionToGroup,
     createCollection,
     storeGroup,
     items,
@@ -63,14 +64,34 @@
   // Drag-to-file state.
   let dragOverColId = $state<string | null>(null);
   let justFiledColId = $state<string | null>(null);
+  let draggingCollectionId = $state<string | null>(null);
+  let dragOverGroupId = $state<string | null>(null);
+  let collectionDragX = $state(0);
+  let collectionDragY = $state(0);
+  let keyboardMoveCollectionId = $state<string | null>(null);
+  let collectionMoveInFlight = $state(false);
+  let suppressMoveHandleClick = false;
   let springGroupId: string | null = null;
   let springTimer: ReturnType<typeof setTimeout> | null = null;
+  let collectionPointerDrag: {
+    pointerId: number;
+    collectionId: string;
+    startX: number;
+    startY: number;
+  } | null = null;
 
   const groups = $derived($sortedGroups);
   const grouped = $derived($groupCollections);
   const activeGroups = $derived($activeGroupIds);
   const inactiveCols = $derived($inactiveCollectionIds);
   const dragging = $derived($draggingItemId !== null);
+  const movingCollection = $derived(draggingCollectionId !== null);
+  const draggedCollection = $derived.by(() => {
+    if (!draggingCollectionId) return undefined;
+    return groups
+      .flatMap((group) => grouped[group.id] ?? [])
+      .find(({ id }) => id === draggingCollectionId);
+  });
   // The plugins page has no groups to filter — the sidebar is
   // omitted entirely and the body grid must collapse to a single column.
   const noSidebar = $derived(route.page === 'plugins');
@@ -289,7 +310,118 @@
 
   function onGroupDragLeave(group: CollectionGroup) {
     if (springGroupId === group.id) clearSpring();
+    if (dragOverGroupId === group.id) dragOverGroupId = null;
   }
+
+  function onCollectionDragEnd() {
+    draggingCollectionId = null;
+    dragOverGroupId = null;
+  }
+
+  function groupAtPoint(x: number, y: number): CollectionGroup | undefined {
+    const target = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-group-id]');
+    const groupId = target?.dataset.groupId;
+    return groups.find(({ id }) => id === groupId);
+  }
+
+  function onCollectionPointerDown(e: PointerEvent, col: Collection) {
+    if (e.button !== 0 || collectionMoveInFlight) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    collectionPointerDrag = {
+      pointerId: e.pointerId,
+      collectionId: col.id,
+      startX: e.clientX,
+      startY: e.clientY,
+    };
+  }
+
+  function onCollectionPointerMove(e: PointerEvent) {
+    const drag = collectionPointerDrag;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    if (!draggingCollectionId) {
+      if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 4) return;
+      draggingCollectionId = drag.collectionId;
+    }
+    collectionDragX = e.clientX;
+    collectionDragY = e.clientY;
+    const group = groupAtPoint(e.clientX, e.clientY);
+    dragOverGroupId =
+      group && !(grouped[group.id] ?? []).some(({ id }) => id === drag.collectionId)
+        ? group.id
+        : null;
+  }
+
+  function onCollectionPointerUp(e: PointerEvent) {
+    const drag = collectionPointerDrag;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    const destination = groupAtPoint(e.clientX, e.clientY);
+    const didStart = draggingCollectionId === drag.collectionId;
+    collectionPointerDrag = null;
+    if (didStart) {
+      suppressMoveHandleClick = true;
+      setTimeout(() => (suppressMoveHandleClick = false), 0);
+    }
+    if (didStart && destination) void moveCollection(drag.collectionId, destination);
+    else onCollectionDragEnd();
+  }
+
+  function onCollectionPointerCancel(e: PointerEvent) {
+    if (collectionPointerDrag?.pointerId !== e.pointerId) return;
+    collectionPointerDrag = null;
+    onCollectionDragEnd();
+  }
+
+  function toggleKeyboardMove(collectionId: string) {
+    if (suppressMoveHandleClick || collectionMoveInFlight) return;
+    keyboardMoveCollectionId = keyboardMoveCollectionId === collectionId ? null : collectionId;
+  }
+
+  function closeKeyboardMove(collectionId: string) {
+    keyboardMoveCollectionId = null;
+    requestAnimationFrame(() => {
+      document.getElementById(`collection-move-handle-${collectionId}`)?.focus();
+    });
+  }
+
+  async function moveCollection(collectionId: string, group: CollectionGroup) {
+    if (collectionMoveInFlight) return;
+    const sourceGroup = groups.find((candidate) =>
+      (grouped[candidate.id] ?? []).some(({ id }) => id === collectionId),
+    );
+    const collection = (grouped[sourceGroup?.id ?? ''] ?? []).find(({ id }) => id === collectionId);
+    keyboardMoveCollectionId = null;
+    onCollectionDragEnd();
+    if (!collection || sourceGroup?.id === group.id) return;
+    collectionMoveInFlight = true;
+    try {
+      await moveCollectionToGroup(collectionId, group.id);
+      expandGroup(group.id);
+      showToast(`Moved ${collection.name} to ${group.name}`, {
+        label: 'Undo',
+        run: () => {
+          if (!sourceGroup || collectionMoveInFlight) return;
+          // This toast can outlive a subsequent move. Only reverse the move
+          // that created it; never overwrite the collection's newer home.
+          if (!(grouped[group.id] ?? []).some(({ id }) => id === collectionId)) return;
+          collectionMoveInFlight = true;
+          void moveCollectionToGroup(collectionId, sourceGroup.id)
+            .catch(() => {
+              showToast("Couldn't undo the collection move.");
+            })
+            .finally(() => {
+              collectionMoveInFlight = false;
+            });
+        },
+      });
+    } catch (error) {
+      console.error('Failed to move collection to group', error);
+      showToast(`Couldn't move ${collection.name}.`);
+    } finally {
+      collectionMoveInFlight = false;
+    }
+  }
+
 </script>
 
 <header>
@@ -376,13 +508,14 @@
           {/each}
         </div>
       {:else}
-        {#if dragging}
-          <div class="filing">Filing mode — drop on a collection</div>
-        {/if}
         <div class="sidebar-head">
           <!-- The hint takes the header's slot rather than adding a line, so
                holding the modifier doesn't shove the group list down. -->
-          {#if soloing}
+          {#if dragging}
+            <span class="filing">Drop on a collection</span>
+          {:else if movingCollection}
+            <span class="filing">Drop on a group</span>
+          {:else if soloing}
             <span class="solo-hint">{soloHint}</span>
           {:else}
             <span class="sidebar-title">Groups</span>
@@ -409,9 +542,14 @@
               {@const cols = grouped[group.id] ?? []}
               {@const groupActive = isGroupActive(group)}
               {@const groupOpen = expandedGroups.has(group.id)}
-              <div class="group">
+              <div
+                class="group"
+                data-group-id={group.id}
+              >
                 <div
                   class="group-row"
+                  class:collection-drop-target={movingCollection && !cols.some(({ id }) => id === draggingCollectionId)}
+                  class:collection-drop-over={dragOverGroupId === group.id}
                   role="presentation"
                   ondragover={() => onGroupDragOver(group)}
                   ondragleave={() => onGroupDragLeave(group)}
@@ -458,26 +596,76 @@
                     {:else}
                       {#each cols as col (col.id)}
                         {@const colActive = isCollectionActive(group, col)}
-                        <button
-                          class="entity collection-entity"
-                          class:inactive={!colActive}
-                          class:drop-target={dragging}
-                          class:drop-over={dragOverColId === col.id}
-                          class:just-filed={justFiledColId === col.id}
-                          type="button"
+                        <div
+                          class="collection-drag-row"
+                          class:is-moving={draggingCollectionId === col.id}
                           style="--entity-color: {col.color || group.color || 'var(--accent)'}"
-                          aria-pressed={colActive}
-                          title={colActive ? `Hide ${col.name}` : `Show ${col.name}`}
-                          onclick={(e) => onToggleCollection(e, group, col)}
-                          ondragover={(e) => onColDragOver(e, col)}
-                          ondragleave={() => onColDragLeave(col)}
-                          ondrop={(e) => onColDrop(e, col)}
                         >
-                          <span class="dot"></span>
-                          <span class="entity-name">{col.name}</span>
-                          <span class="drop-label">File here</span>
-                          <span class="count">{col.itemIds.length}</span>
-                        </button>
+                          <button
+                            class="entity collection-entity"
+                            class:inactive={!colActive}
+                            class:drop-target={dragging}
+                            class:drop-over={dragOverColId === col.id}
+                            class:just-filed={justFiledColId === col.id}
+                            type="button"
+                            aria-pressed={colActive}
+                            title={colActive ? `Hide ${col.name}` : `Show ${col.name}`}
+                            onclick={(e) => onToggleCollection(e, group, col)}
+                            ondragover={(e) => onColDragOver(e, col)}
+                            ondragleave={() => onColDragLeave(col)}
+                            ondrop={(e) => onColDrop(e, col)}
+                          >
+                            <span class="dot"></span>
+                            <span class="entity-name">{col.name}</span>
+                            <span class="drop-label">File here</span>
+                            <span class="count">{col.itemIds.length}</span>
+                          </button>
+                          <button
+                            type="button"
+                            id={`collection-move-handle-${col.id}`}
+                            class="collection-drag-handle"
+                            title={`Drag ${col.name} to another group`}
+                            aria-label={`Drag ${col.name} to another group`}
+                            aria-expanded={keyboardMoveCollectionId === col.id}
+                            disabled={collectionMoveInFlight}
+                            onclick={() => toggleKeyboardMove(col.id)}
+                            onpointerdown={(e) => onCollectionPointerDown(e, col)}
+                            onpointermove={onCollectionPointerMove}
+                            onpointerup={onCollectionPointerUp}
+                            onpointercancel={onCollectionPointerCancel}
+                          >
+                            <svg aria-hidden="true" width="14" height="18" viewBox="0 0 14 18" fill="currentColor">
+                              <circle cx="4" cy="4" r="1.5"/><circle cx="10" cy="4" r="1.5"/>
+                              <circle cx="4" cy="9" r="1.5"/><circle cx="10" cy="9" r="1.5"/>
+                              <circle cx="4" cy="14" r="1.5"/><circle cx="10" cy="14" r="1.5"/>
+                            </svg>
+                          </button>
+                        </div>
+                        {#if keyboardMoveCollectionId === col.id}
+                          <div
+                            class="collection-move-menu"
+                            aria-label={`Move ${col.name} to group`}
+                            onkeydown={(e) => {
+                              if (e.key === 'Escape') {
+                                e.preventDefault();
+                                closeKeyboardMove(col.id);
+                              }
+                            }}
+                          >
+                            <span class="move-menu-label">Move to</span>
+                            {#each groups.filter(({ id }) => id !== group.id) as destination, index (destination.id)}
+                              <button
+                                type="button"
+                                use:autofocusIf={index === 0}
+                                disabled={collectionMoveInFlight}
+                                onclick={() => void moveCollection(col.id, destination)}
+                              >{destination.name}</button>
+                            {/each}
+                            <button type="button" class="move-menu-cancel" onclick={() => closeKeyboardMove(col.id)}>
+                              Cancel
+                            </button>
+                          </div>
+                        {/if}
                       {/each}
                     {/if}
 
@@ -533,6 +721,18 @@
     {@render children()}
   </main>
 </div>
+
+{#if draggedCollection}
+  <div
+    class="collection-drag-preview"
+    style="left: {collectionDragX}px; top: {collectionDragY}px; --entity-color: {draggedCollection.color || 'var(--accent)'}"
+    aria-hidden="true"
+  >
+    <span class="dot"></span>
+    <span class="drag-preview-name">{draggedCollection.name}</span>
+    <span class="drag-preview-count">{draggedCollection.itemIds.length}</span>
+  </div>
+{/if}
 
 <footer class="app-footer">
   <div class="app-footer-inner">
@@ -779,13 +979,13 @@
   }
 
   .filing {
-    margin: 0 0.25rem 0.5rem;
-    padding: 0.4rem 0.6rem;
-    border-radius: 0.5rem;
-    font-size: 0.76rem;
-    font-weight: 600;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 0.7rem;
+    font-weight: 700;
     color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .sidebar-head {
@@ -860,6 +1060,16 @@
     background: var(--surface-hover);
   }
 
+  .group-row.collection-drop-target {
+    outline: 1px dashed color-mix(in srgb, var(--entity-color, var(--accent)) 55%, var(--border));
+    outline-offset: -1px;
+  }
+
+  .group-row.collection-drop-over {
+    background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+    outline: 2px solid var(--accent);
+  }
+
   .chevron {
     display: inline-flex;
     align-items: center;
@@ -910,10 +1120,126 @@
     font-weight: 700;
   }
 
+  .collection-drag-row {
+    display: flex;
+    align-items: center;
+    margin-left: 1.55rem;
+  }
+
+  .collection-drag-row.is-moving {
+    opacity: 0.35;
+  }
+
+  .collection-drag-preview {
+    position: fixed;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 180px;
+    max-width: 260px;
+    min-height: 2.25rem;
+    padding: 0.35rem 0.65rem;
+    border: 1px solid var(--entity-color);
+    border-radius: 0.55rem;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 10px 28px var(--shadow);
+    pointer-events: none;
+    transform: translate(12px, 10px) rotate(1deg);
+  }
+
+  .drag-preview-name {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 0.86rem;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .drag-preview-count {
+    margin-left: auto;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
   .collection-entity {
     font-weight: 500;
     font-size: 0.86rem;
-    margin-left: 1.55rem;
+  }
+
+  .collection-drag-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    min-height: 1.9rem;
+    flex: 0 0 24px;
+    padding: 0;
+    border: none;
+    border-radius: 0.35rem;
+    background: none;
+    color: var(--text-muted);
+    cursor: grab;
+    opacity: 0.55;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .collection-drag-handle:hover,
+  .collection-drag-handle:focus-visible {
+    color: var(--entity-color);
+    background: var(--surface-hover);
+    opacity: 1;
+  }
+
+  .collection-drag-handle:active {
+    cursor: grabbing;
+  }
+
+  .collection-move-menu {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+    margin: 0.15rem 0 0.35rem 1.55rem;
+    padding: 0.45rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--surface);
+  }
+
+  .move-menu-label {
+    width: 100%;
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .collection-move-menu button {
+    padding: 0.25rem 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+    color: var(--text);
+    font: inherit;
+    font-size: 0.76rem;
+    cursor: pointer;
+  }
+
+  .collection-move-menu button:hover,
+  .collection-move-menu button:focus-visible {
+    border-color: var(--accent);
+    outline: none;
+  }
+
+  .collection-move-menu .move-menu-cancel {
+    border-color: var(--border);
+    background: none;
+    color: var(--text-muted);
   }
 
   .entity.inactive {

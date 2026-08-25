@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Collection } from '@inbox-rs/rs-module';
+  import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
   import { get } from 'svelte/store';
   import {
     appConfig,
@@ -9,6 +9,7 @@
     items,
     orphanCollections,
     sortedGroups,
+    storeGroup,
     updateConfig,
   } from '../lib/stores';
   import {
@@ -43,6 +44,8 @@
   let createName = $state('');
   let creating = $state(false);
   let createError = $state('');
+  let creatingNewGroup = $state(false);
+  let createGroupName = $state('');
 
   // Autofocusing the search field pops the keyboard over half the sheet on
   // touch devices — desktop-only.
@@ -128,28 +131,43 @@
   function openCreate() {
     createName = query.trim();
     createGroupId = pickInitialGroupId();
+    creatingNewGroup = get(sortedGroups).length === 0;
+    createGroupName = '';
     createError = '';
     showCreate = true;
   }
 
   async function handleCreate() {
     const name = createName.trim();
-    if (!name || !createGroupId || creating) return;
+    const groupName = createGroupName.trim();
+    if (!name || creating || (creatingNewGroup ? !groupName : !createGroupId)) return;
     creating = true;
     createError = '';
     try {
+      let destinationGroupId = createGroupId;
+      if (creatingNewGroup) {
+        const group: CollectionGroup = {
+          id: crypto.randomUUID(),
+          name: groupName,
+          collectionIds: [],
+          createdAt: new Date().toISOString(),
+          color: randomPresetColor(),
+        };
+        await storeGroup(group);
+        destinationGroupId = group.id;
+      }
       const col: Collection = {
         id: crypto.randomUUID(),
         name,
         itemIds: [],
         createdAt: new Date().toISOString(),
         color: randomPresetColor(),
-        groupId: createGroupId,
+        groupId: destinationGroupId,
       };
       await createCollection(col);
       // Remember the group like CollectionFormModal does — best-effort.
       try {
-        await updateConfig({ lastSelectedGroupId: createGroupId });
+        await updateConfig({ lastSelectedGroupId: destinationGroupId });
       } catch (e) {
         console.error('Failed to persist lastSelectedGroupId', e);
       }
@@ -231,17 +249,45 @@
           }}
         />
         {#if $sortedGroups.length > 0}
-          <select
-            class="create-select"
-            aria-label="Group"
-            bind:value={createGroupId}
-          >
-            {#each $sortedGroups as g (g.id)}
-              <option value={g.id}>{g.name}</option>
-            {/each}
-          </select>
+          {#if creatingNewGroup}
+            <input
+              type="text"
+              class="create-input"
+              bind:value={createGroupName}
+              placeholder="Group name"
+              aria-label="New group name"
+              onkeydown={(e) => {
+                if (e.key === 'Enter') handleCreate();
+              }}
+            />
+            <button type="button" class="group-switch" onclick={() => (creatingNewGroup = false)}>
+              Choose an existing group
+            </button>
+          {:else}
+            <select
+              class="create-select"
+              aria-label="Group"
+              bind:value={createGroupId}
+            >
+              {#each $sortedGroups as g (g.id)}
+                <option value={g.id}>{g.name}</option>
+              {/each}
+            </select>
+            <button type="button" class="group-switch" onclick={() => (creatingNewGroup = true)}>
+              Create a new group
+            </button>
+          {/if}
         {:else}
-          <p class="empty">No groups yet — create one in the filter bar first.</p>
+          <input
+            type="text"
+            class="create-input"
+            bind:value={createGroupName}
+            placeholder="Group name"
+            aria-label="New group name"
+            onkeydown={(e) => {
+              if (e.key === 'Enter') handleCreate();
+            }}
+          />
         {/if}
         {#if createError}
           <p class="error" role="status" aria-live="polite">{createError}</p>
@@ -255,7 +301,7 @@
           <button
             type="button"
             class="btn-create"
-            disabled={!createName.trim() || !createGroupId || creating}
+            disabled={!createName.trim() || (creatingNewGroup ? !createGroupName.trim() : !createGroupId) || creating}
             onclick={handleCreate}
           >
             {creating ? 'Creating…' : 'Create & file'}
@@ -688,6 +734,17 @@
     justify-content: flex-end;
     gap: 0.5rem;
     margin-top: 0.2rem;
+  }
+
+  .group-switch {
+    align-self: flex-start;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
   }
 
   .btn-cancel {
