@@ -373,6 +373,9 @@
         label: 'Undo',
         run: () => {
           if (!sourceGroup) return;
+          // This toast can outlive a subsequent move. Only reverse the move
+          // that created it; never overwrite the collection's newer home.
+          if (!(grouped[group.id] ?? []).some(({ id }) => id === collectionId)) return;
           void moveCollectionToGroup(collectionId, sourceGroup.id).catch(() => {
             showToast("Couldn't undo the collection move.");
           });
