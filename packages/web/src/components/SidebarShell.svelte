@@ -377,6 +377,13 @@
     keyboardMoveCollectionId = keyboardMoveCollectionId === collectionId ? null : collectionId;
   }
 
+  function closeKeyboardMove(collectionId: string) {
+    keyboardMoveCollectionId = null;
+    requestAnimationFrame(() => {
+      document.getElementById(`collection-move-handle-${collectionId}`)?.focus();
+    });
+  }
+
   async function moveCollection(collectionId: string, group: CollectionGroup) {
     if (collectionMoveInFlight) return;
     const sourceGroup = groups.find((candidate) =>
@@ -615,6 +622,7 @@
                           </button>
                           <button
                             type="button"
+                            id={`collection-move-handle-${col.id}`}
                             class="collection-drag-handle"
                             title={`Drag ${col.name} to another group`}
                             aria-label={`Drag ${col.name} to another group`}
@@ -638,7 +646,10 @@
                             class="collection-move-menu"
                             aria-label={`Move ${col.name} to group`}
                             onkeydown={(e) => {
-                              if (e.key === 'Escape') keyboardMoveCollectionId = null;
+                              if (e.key === 'Escape') {
+                                e.preventDefault();
+                                closeKeyboardMove(col.id);
+                              }
                             }}
                           >
                             <span class="move-menu-label">Move to</span>
@@ -650,7 +661,7 @@
                                 onclick={() => void moveCollection(col.id, destination)}
                               >{destination.name}</button>
                             {/each}
-                            <button type="button" class="move-menu-cancel" onclick={() => (keyboardMoveCollectionId = null)}>
+                            <button type="button" class="move-menu-cancel" onclick={() => closeKeyboardMove(col.id)}>
                               Cancel
                             </button>
                           </div>
