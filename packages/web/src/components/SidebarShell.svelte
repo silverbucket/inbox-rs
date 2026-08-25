@@ -68,6 +68,12 @@
   let dragOverGroupId = $state<string | null>(null);
   let springGroupId: string | null = null;
   let springTimer: ReturnType<typeof setTimeout> | null = null;
+  let collectionPointerDrag: {
+    pointerId: number;
+    collectionId: string;
+    startX: number;
+    startY: number;
+  } | null = null;
 
   const groups = $derived($sortedGroups);
   const grouped = $derived($groupCollections);
@@ -296,38 +302,54 @@
     if (dragOverGroupId === group.id) dragOverGroupId = null;
   }
 
-  function onCollectionDragStart(e: DragEvent, col: Collection) {
-    if (!e.dataTransfer) return;
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('application/x-inbox-collection', col.id);
-    e.dataTransfer.setData('text/plain', col.name);
-    draggingCollectionId = col.id;
-  }
-
   function onCollectionDragEnd() {
     draggingCollectionId = null;
     dragOverGroupId = null;
   }
 
-  function onGroupCollectionDragOver(e: DragEvent, group: CollectionGroup) {
-    if (!draggingCollectionId) return;
-    const col = grouped[group.id]?.find(({ id }) => id === draggingCollectionId);
-    if (col) return;
-    e.preventDefault();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-    dragOverGroupId = group.id;
+  function groupAtPoint(x: number, y: number): CollectionGroup | undefined {
+    const target = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-group-id]');
+    const groupId = target?.dataset.groupId;
+    return groups.find(({ id }) => id === groupId);
   }
 
-  function onGroupCollectionDragLeave(e: DragEvent, group: CollectionGroup) {
-    const destination = e.currentTarget as HTMLElement;
-    if (e.relatedTarget instanceof Node && destination.contains(e.relatedTarget)) return;
-    if (dragOverGroupId === group.id) dragOverGroupId = null;
+  function onCollectionPointerDown(e: PointerEvent, col: Collection) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    collectionPointerDrag = {
+      pointerId: e.pointerId,
+      collectionId: col.id,
+      startX: e.clientX,
+      startY: e.clientY,
+    };
   }
 
-  async function onGroupDrop(e: DragEvent, group: CollectionGroup) {
-    if (!draggingCollectionId) return;
-    e.preventDefault();
-    const collectionId = draggingCollectionId;
+  function onCollectionPointerMove(e: PointerEvent) {
+    const drag = collectionPointerDrag;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    if (!draggingCollectionId) {
+      if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 4) return;
+      draggingCollectionId = drag.collectionId;
+    }
+    const group = groupAtPoint(e.clientX, e.clientY);
+    dragOverGroupId =
+      group && !(grouped[group.id] ?? []).some(({ id }) => id === drag.collectionId)
+        ? group.id
+        : null;
+  }
+
+  function onCollectionPointerUp(e: PointerEvent) {
+    const drag = collectionPointerDrag;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    const destination = groupAtPoint(e.clientX, e.clientY);
+    const didStart = draggingCollectionId === drag.collectionId;
+    collectionPointerDrag = null;
+    if (didStart && destination) void moveCollection(drag.collectionId, destination);
+    else onCollectionDragEnd();
+  }
+
+  async function moveCollection(collectionId: string, group: CollectionGroup) {
     const sourceGroup = groups.find((candidate) =>
       (grouped[candidate.id] ?? []).some(({ id }) => id === collectionId),
     );
@@ -351,6 +373,7 @@
       showToast(`Couldn't move ${collection.name}.`);
     }
   }
+
 </script>
 
 <header>
@@ -474,9 +497,7 @@
               {@const groupOpen = expandedGroups.has(group.id)}
               <div
                 class="group"
-                ondragover={(e) => onGroupCollectionDragOver(e, group)}
-                ondragleave={(e) => onGroupCollectionDragLeave(e, group)}
-                ondrop={(e) => onGroupDrop(e, group)}
+                data-group-id={group.id}
               >
                 <div
                   class="group-row"
@@ -553,11 +574,12 @@
                           </button>
                           <span
                             class="collection-drag-handle"
-                            draggable="true"
                             title={`Drag ${col.name} to another group`}
                             aria-label={`Drag ${col.name} to another group`}
-                            ondragstart={(e) => onCollectionDragStart(e, col)}
-                            ondragend={onCollectionDragEnd}
+                            onpointerdown={(e) => onCollectionPointerDown(e, col)}
+                            onpointermove={onCollectionPointerMove}
+                            onpointerup={onCollectionPointerUp}
+                            onpointercancel={onCollectionPointerUp}
                           >
                             <svg aria-hidden="true" width="14" height="18" viewBox="0 0 14 18" fill="currentColor">
                               <circle cx="4" cy="4" r="1.5"/><circle cx="10" cy="4" r="1.5"/>
@@ -1030,6 +1052,8 @@
     color: var(--text-muted);
     cursor: grab;
     opacity: 0.55;
+    touch-action: none;
+    user-select: none;
   }
 
   .collection-drag-handle:hover,
