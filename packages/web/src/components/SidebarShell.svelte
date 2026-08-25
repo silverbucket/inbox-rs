@@ -528,29 +528,44 @@
                     {:else}
                       {#each cols as col (col.id)}
                         {@const colActive = isCollectionActive(group, col)}
-                        <button
-                          class="entity collection-entity"
-                          class:inactive={!colActive}
-                          class:drop-target={dragging}
-                          class:drop-over={dragOverColId === col.id}
-                          class:just-filed={justFiledColId === col.id}
-                          type="button"
-                          draggable="true"
+                        <div
+                          class="collection-drag-row"
                           style="--entity-color: {col.color || group.color || 'var(--accent)'}"
-                          aria-pressed={colActive}
-                          title={colActive ? `Hide ${col.name}` : `Show ${col.name}`}
-                          onclick={(e) => onToggleCollection(e, group, col)}
-                          ondragover={(e) => onColDragOver(e, col)}
-                          ondragleave={() => onColDragLeave(col)}
-                          ondrop={(e) => onColDrop(e, col)}
-                          ondragstart={(e) => onCollectionDragStart(e, col)}
-                          ondragend={onCollectionDragEnd}
                         >
-                          <span class="dot"></span>
-                          <span class="entity-name">{col.name}</span>
-                          <span class="drop-label">File here</span>
-                          <span class="count">{col.itemIds.length}</span>
-                        </button>
+                          <button
+                            class="entity collection-entity"
+                            class:inactive={!colActive}
+                            class:drop-target={dragging}
+                            class:drop-over={dragOverColId === col.id}
+                            class:just-filed={justFiledColId === col.id}
+                            type="button"
+                            aria-pressed={colActive}
+                            title={colActive ? `Hide ${col.name}` : `Show ${col.name}`}
+                            onclick={(e) => onToggleCollection(e, group, col)}
+                            ondragover={(e) => onColDragOver(e, col)}
+                            ondragleave={() => onColDragLeave(col)}
+                            ondrop={(e) => onColDrop(e, col)}
+                          >
+                            <span class="dot"></span>
+                            <span class="entity-name">{col.name}</span>
+                            <span class="drop-label">File here</span>
+                            <span class="count">{col.itemIds.length}</span>
+                          </button>
+                          <span
+                            class="collection-drag-handle"
+                            draggable="true"
+                            title={`Drag ${col.name} to another group`}
+                            aria-label={`Drag ${col.name} to another group`}
+                            ondragstart={(e) => onCollectionDragStart(e, col)}
+                            ondragend={onCollectionDragEnd}
+                          >
+                            <svg aria-hidden="true" width="14" height="18" viewBox="0 0 14 18" fill="currentColor">
+                              <circle cx="4" cy="4" r="1.5"/><circle cx="10" cy="4" r="1.5"/>
+                              <circle cx="4" cy="9" r="1.5"/><circle cx="10" cy="9" r="1.5"/>
+                              <circle cx="4" cy="14" r="1.5"/><circle cx="10" cy="14" r="1.5"/>
+                            </svg>
+                          </span>
+                        </div>
                       {/each}
                     {/if}
 
@@ -993,17 +1008,38 @@
     font-weight: 700;
   }
 
-  .collection-entity {
-    font-weight: 500;
-    font-size: 0.86rem;
+  .collection-drag-row {
+    display: flex;
+    align-items: center;
     margin-left: 1.55rem;
   }
 
-  .collection-entity[draggable='true'] {
-    cursor: grab;
+  .collection-entity {
+    font-weight: 500;
+    font-size: 0.86rem;
   }
 
-  .collection-entity[draggable='true']:active {
+  .collection-drag-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    min-height: 1.9rem;
+    flex: 0 0 24px;
+    border-radius: 0.35rem;
+    color: var(--text-muted);
+    cursor: grab;
+    opacity: 0.55;
+  }
+
+  .collection-drag-handle:hover,
+  .collection-drag-handle:focus-visible {
+    color: var(--entity-color);
+    background: var(--surface-hover);
+    opacity: 1;
+  }
+
+  .collection-drag-handle:active {
     cursor: grabbing;
   }
 
