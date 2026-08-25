@@ -14,11 +14,18 @@ vi.mock('../lib/stores', async () => {
     items: writable({}),
     orphanCollections: writable([]),
     sortedGroups: writable([]),
+    storeGroup: vi.fn().mockResolvedValue(undefined),
     updateConfig: vi.fn().mockResolvedValue(undefined),
   };
 });
 
-import { groupCollections, groups, sortedGroups } from '../lib/stores';
+import {
+  createCollection,
+  groupCollections,
+  groups,
+  sortedGroups,
+  storeGroup,
+} from '../lib/stores';
 import CollectionPicker from './CollectionPicker.svelte';
 
 const writableStore = <T>(store: unknown) => store as Writable<T>;
@@ -28,6 +35,10 @@ describe('CollectionPicker', () => {
   let component: ReturnType<typeof mount> | undefined;
 
   beforeEach(() => {
+    vi.clearAllMocks();
+    writableStore<Record<string, CollectionGroup>>(groups).set({});
+    writableStore<CollectionGroup[]>(sortedGroups).set([]);
+    writableStore<Record<string, Collection[]>>(groupCollections).set({});
     localStorage.clear();
     host = document.createElement('div');
     document.body.appendChild(host);
@@ -99,5 +110,34 @@ describe('CollectionPicker', () => {
     expect(
       suggestedRows[1]?.querySelector('.suggestion-group')?.textContent.trim(),
     ).toBe('Personal');
+  });
+
+  it('creates a group and collection together when filing without groups', async () => {
+    const onpick = vi.fn();
+    component = mount(CollectionPicker, {
+      target: host,
+      props: { item: { title: 'First item' }, onpick, onclose: vi.fn() },
+    });
+    flushSync();
+
+    host.querySelector<HTMLButtonElement>('.create-option')?.click();
+    flushSync();
+    const inputs = host.querySelectorAll<HTMLInputElement>('.create-input');
+    inputs[0]!.value = 'Reading';
+    inputs[0]!.dispatchEvent(new Event('input', { bubbles: true }));
+    inputs[1]!.value = 'Personal';
+    inputs[1]!.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+    host.querySelector<HTMLButtonElement>('.btn-create')?.click();
+    await vi.waitFor(() => expect(onpick).toHaveBeenCalledOnce());
+
+    expect(storeGroup).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Personal' }),
+    );
+    const createdGroup = vi.mocked(storeGroup).mock.calls[0]![0];
+    expect(createCollection).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Reading', groupId: createdGroup.id }),
+    );
+    expect(onpick).toHaveBeenCalledWith(expect.any(String));
   });
 });

@@ -19,6 +19,7 @@
     enableCollectionFilter,
     soloCollectionFilter,
     moveItemToCollection,
+    moveCollectionToGroup,
     createCollection,
     storeGroup,
     items,
@@ -63,6 +64,8 @@
   // Drag-to-file state.
   let dragOverColId = $state<string | null>(null);
   let justFiledColId = $state<string | null>(null);
+  let draggingCollectionId = $state<string | null>(null);
+  let dragOverGroupId = $state<string | null>(null);
   let springGroupId: string | null = null;
   let springTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -71,6 +74,7 @@
   const activeGroups = $derived($activeGroupIds);
   const inactiveCols = $derived($inactiveCollectionIds);
   const dragging = $derived($draggingItemId !== null);
+  const movingCollection = $derived(draggingCollectionId !== null);
   // The plugins page has no groups to filter — the sidebar is
   // omitted entirely and the body grid must collapse to a single column.
   const noSidebar = $derived(route.page === 'plugins');
@@ -289,6 +293,60 @@
 
   function onGroupDragLeave(group: CollectionGroup) {
     if (springGroupId === group.id) clearSpring();
+    if (dragOverGroupId === group.id) dragOverGroupId = null;
+  }
+
+  function onCollectionDragStart(e: DragEvent, col: Collection) {
+    if (!e.dataTransfer) return;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('application/x-inbox-collection', col.id);
+    e.dataTransfer.setData('text/plain', col.name);
+    draggingCollectionId = col.id;
+  }
+
+  function onCollectionDragEnd() {
+    draggingCollectionId = null;
+    dragOverGroupId = null;
+  }
+
+  function onGroupCollectionDragOver(e: DragEvent, group: CollectionGroup) {
+    if (!draggingCollectionId) {
+      onGroupDragOver(group);
+      return;
+    }
+    const col = grouped[group.id]?.find(({ id }) => id === draggingCollectionId);
+    if (col) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    dragOverGroupId = group.id;
+  }
+
+  async function onGroupDrop(e: DragEvent, group: CollectionGroup) {
+    if (!draggingCollectionId) return;
+    e.preventDefault();
+    const collectionId = draggingCollectionId;
+    const sourceGroup = groups.find((candidate) =>
+      (grouped[candidate.id] ?? []).some(({ id }) => id === collectionId),
+    );
+    const collection = (grouped[sourceGroup?.id ?? ''] ?? []).find(({ id }) => id === collectionId);
+    onCollectionDragEnd();
+    if (!collection || sourceGroup?.id === group.id) return;
+    try {
+      await moveCollectionToGroup(collectionId, group.id);
+      expandGroup(group.id);
+      showToast(`Moved ${collection.name} to ${group.name}`, {
+        label: 'Undo',
+        run: () => {
+          if (!sourceGroup) return;
+          void moveCollectionToGroup(collectionId, sourceGroup.id).catch(() => {
+            showToast("Couldn't undo the collection move.");
+          });
+        },
+      });
+    } catch (error) {
+      console.error('Failed to move collection to group', error);
+      showToast(`Couldn't move ${collection.name}.`);
+    }
   }
 </script>
 
@@ -378,6 +436,8 @@
       {:else}
         {#if dragging}
           <div class="filing">Filing mode — drop on a collection</div>
+        {:else if movingCollection}
+          <div class="filing">Moving collection — drop on a group</div>
         {/if}
         <div class="sidebar-head">
           <!-- The hint takes the header's slot rather than adding a line, so
@@ -412,9 +472,12 @@
               <div class="group">
                 <div
                   class="group-row"
+                  class:collection-drop-target={movingCollection && !cols.some(({ id }) => id === draggingCollectionId)}
+                  class:collection-drop-over={dragOverGroupId === group.id}
                   role="presentation"
-                  ondragover={() => onGroupDragOver(group)}
+                  ondragover={(e) => onGroupCollectionDragOver(e, group)}
                   ondragleave={() => onGroupDragLeave(group)}
+                  ondrop={(e) => onGroupDrop(e, group)}
                 >
                   <button
                     class="chevron"
@@ -465,6 +528,7 @@
                           class:drop-over={dragOverColId === col.id}
                           class:just-filed={justFiledColId === col.id}
                           type="button"
+                          draggable="true"
                           style="--entity-color: {col.color || group.color || 'var(--accent)'}"
                           aria-pressed={colActive}
                           title={colActive ? `Hide ${col.name}` : `Show ${col.name}`}
@@ -472,6 +536,8 @@
                           ondragover={(e) => onColDragOver(e, col)}
                           ondragleave={() => onColDragLeave(col)}
                           ondrop={(e) => onColDrop(e, col)}
+                          ondragstart={(e) => onCollectionDragStart(e, col)}
+                          ondragend={onCollectionDragEnd}
                         >
                           <span class="dot"></span>
                           <span class="entity-name">{col.name}</span>
@@ -860,6 +926,16 @@
     background: var(--surface-hover);
   }
 
+  .group-row.collection-drop-target {
+    outline: 1px dashed color-mix(in srgb, var(--entity-color, var(--accent)) 55%, var(--border));
+    outline-offset: -1px;
+  }
+
+  .group-row.collection-drop-over {
+    background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+    outline: 2px solid var(--accent);
+  }
+
   .chevron {
     display: inline-flex;
     align-items: center;
@@ -914,6 +990,14 @@
     font-weight: 500;
     font-size: 0.86rem;
     margin-left: 1.55rem;
+  }
+
+  .collection-entity[draggable='true'] {
+    cursor: grab;
+  }
+
+  .collection-entity[draggable='true']:active {
+    cursor: grabbing;
   }
 
   .entity.inactive {
