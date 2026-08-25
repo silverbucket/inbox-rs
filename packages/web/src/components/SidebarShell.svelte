@@ -7,7 +7,7 @@
   import LogoShield from './LogoShield.svelte';
   import type { Page, Route } from '../lib/route';
   import { appVersion } from '../lib/plugin-downloads.generated';
-  import { autofocus } from '../lib/actions';
+  import { autofocus, autofocusIf } from '../lib/actions';
   import {
     sortedGroups,
     groupCollections,
@@ -68,6 +68,8 @@
   let dragOverGroupId = $state<string | null>(null);
   let collectionDragX = $state(0);
   let collectionDragY = $state(0);
+  let keyboardMoveCollectionId = $state<string | null>(null);
+  let suppressMoveHandleClick = false;
   let springGroupId: string | null = null;
   let springTimer: ReturnType<typeof setTimeout> | null = null;
   let collectionPointerDrag: {
@@ -355,8 +357,23 @@
     const destination = groupAtPoint(e.clientX, e.clientY);
     const didStart = draggingCollectionId === drag.collectionId;
     collectionPointerDrag = null;
+    if (didStart) {
+      suppressMoveHandleClick = true;
+      setTimeout(() => (suppressMoveHandleClick = false), 0);
+    }
     if (didStart && destination) void moveCollection(drag.collectionId, destination);
     else onCollectionDragEnd();
+  }
+
+  function onCollectionPointerCancel(e: PointerEvent) {
+    if (collectionPointerDrag?.pointerId !== e.pointerId) return;
+    collectionPointerDrag = null;
+    onCollectionDragEnd();
+  }
+
+  function toggleKeyboardMove(collectionId: string) {
+    if (suppressMoveHandleClick) return;
+    keyboardMoveCollectionId = keyboardMoveCollectionId === collectionId ? null : collectionId;
   }
 
   async function moveCollection(collectionId: string, group: CollectionGroup) {
@@ -364,6 +381,7 @@
       (grouped[candidate.id] ?? []).some(({ id }) => id === collectionId),
     );
     const collection = (grouped[sourceGroup?.id ?? ''] ?? []).find(({ id }) => id === collectionId);
+    keyboardMoveCollectionId = null;
     onCollectionDragEnd();
     if (!collection || sourceGroup?.id === group.id) return;
     try {
@@ -586,22 +604,46 @@
                             <span class="drop-label">File here</span>
                             <span class="count">{col.itemIds.length}</span>
                           </button>
-                          <span
+                          <button
+                            type="button"
                             class="collection-drag-handle"
                             title={`Drag ${col.name} to another group`}
                             aria-label={`Drag ${col.name} to another group`}
+                            aria-expanded={keyboardMoveCollectionId === col.id}
+                            onclick={() => toggleKeyboardMove(col.id)}
                             onpointerdown={(e) => onCollectionPointerDown(e, col)}
                             onpointermove={onCollectionPointerMove}
                             onpointerup={onCollectionPointerUp}
-                            onpointercancel={onCollectionPointerUp}
+                            onpointercancel={onCollectionPointerCancel}
                           >
                             <svg aria-hidden="true" width="14" height="18" viewBox="0 0 14 18" fill="currentColor">
                               <circle cx="4" cy="4" r="1.5"/><circle cx="10" cy="4" r="1.5"/>
                               <circle cx="4" cy="9" r="1.5"/><circle cx="10" cy="9" r="1.5"/>
                               <circle cx="4" cy="14" r="1.5"/><circle cx="10" cy="14" r="1.5"/>
                             </svg>
-                          </span>
+                          </button>
                         </div>
+                        {#if keyboardMoveCollectionId === col.id}
+                          <div
+                            class="collection-move-menu"
+                            aria-label={`Move ${col.name} to group`}
+                            onkeydown={(e) => {
+                              if (e.key === 'Escape') keyboardMoveCollectionId = null;
+                            }}
+                          >
+                            <span class="move-menu-label">Move to</span>
+                            {#each groups.filter(({ id }) => id !== group.id) as destination, index (destination.id)}
+                              <button
+                                type="button"
+                                use:autofocusIf={index === 0}
+                                onclick={() => void moveCollection(col.id, destination)}
+                              >{destination.name}</button>
+                            {/each}
+                            <button type="button" class="move-menu-cancel" onclick={() => (keyboardMoveCollectionId = null)}>
+                              Cancel
+                            </button>
+                          </div>
+                        {/if}
                       {/each}
                     {/if}
 
@@ -1113,7 +1155,10 @@
     width: 24px;
     min-height: 1.9rem;
     flex: 0 0 24px;
+    padding: 0;
+    border: none;
     border-radius: 0.35rem;
+    background: none;
     color: var(--text-muted);
     cursor: grab;
     opacity: 0.55;
@@ -1130,6 +1175,49 @@
 
   .collection-drag-handle:active {
     cursor: grabbing;
+  }
+
+  .collection-move-menu {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+    margin: 0.15rem 0 0.35rem 1.55rem;
+    padding: 0.45rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--surface);
+  }
+
+  .move-menu-label {
+    width: 100%;
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .collection-move-menu button {
+    padding: 0.25rem 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+    color: var(--text);
+    font: inherit;
+    font-size: 0.76rem;
+    cursor: pointer;
+  }
+
+  .collection-move-menu button:hover,
+  .collection-move-menu button:focus-visible {
+    border-color: var(--accent);
+    outline: none;
+  }
+
+  .collection-move-menu .move-menu-cancel {
+    border-color: var(--border);
+    background: none;
+    color: var(--text-muted);
   }
 
   .entity.inactive {
