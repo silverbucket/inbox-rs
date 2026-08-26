@@ -46,7 +46,8 @@ export function applyCardDraft(
   const record = updated as unknown as Record<string, unknown>;
 
   if (item.type === 'bookmark') {
-    record.body = draft.body || undefined;
+    record.body =
+      draft.body === undefined ? item.body : draft.body || undefined;
   } else if ('body' in item) {
     record.body = draft.body ?? '';
   }

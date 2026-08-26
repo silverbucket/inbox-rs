@@ -77,6 +77,39 @@ describe('card drafts', () => {
     });
   });
 
+  it('preserves bookmark notes when a recovered draft omits body', () => {
+    const bookmark: InboxItem = {
+      id: 'bm-1',
+      type: 'bookmark',
+      title: 'Example',
+      url: 'https://example.org',
+      body: 'Existing notes',
+      createdAt: note.createdAt,
+    };
+    const draft = createCardDraft(bookmark);
+    delete draft.body;
+
+    expect(applyCardDraft(bookmark, draft)).toEqual(bookmark);
+  });
+
+  it('clears bookmark notes only when body is explicitly empty', () => {
+    const bookmark: InboxItem = {
+      id: 'bm-1',
+      type: 'bookmark',
+      title: 'Example',
+      url: 'https://example.org',
+      body: 'Existing notes',
+      createdAt: note.createdAt,
+    };
+    const draft = createCardDraft(bookmark);
+    draft.body = '';
+
+    expect(applyCardDraft(bookmark, draft)).toEqual({
+      ...bookmark,
+      body: undefined,
+    });
+  });
+
   it('merges external updates only into untouched draft fields', () => {
     const bookmark: InboxItem = {
       id: 'bm-1',
