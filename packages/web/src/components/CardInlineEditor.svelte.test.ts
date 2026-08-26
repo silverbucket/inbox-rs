@@ -99,6 +99,23 @@ describe('CardInlineEditor autosave', () => {
     );
   });
 
+  it('collapses an empty image description behind More details', () => {
+    const imageWithoutDescription: ImageItem = {
+      ...item,
+      description: undefined,
+    };
+    component = mount(CardInlineEditor, {
+      target: host,
+      props: { item: imageWithoutDescription },
+    });
+    flushSync();
+
+    const moreDetails = host.querySelector('details.more-fields');
+    expect(moreDetails).toBeInstanceOf(HTMLDetailsElement);
+    expect((moreDetails as HTMLDetailsElement).open).toBe(false);
+    expect(host.querySelector('.description-primary')).toBeNull();
+  });
+
   it('keeps a merged external update pending when an older save is in flight', async () => {
     let releaseSave: (() => void) | undefined;
     const saveGate = new Promise<void>((resolve) => {
