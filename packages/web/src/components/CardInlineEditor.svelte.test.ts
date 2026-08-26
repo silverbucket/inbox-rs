@@ -114,6 +114,9 @@ describe('CardInlineEditor autosave', () => {
     expect(moreDetails).toBeInstanceOf(HTMLDetailsElement);
     expect((moreDetails as HTMLDetailsElement).open).toBe(false);
     expect(host.querySelector('.description-primary')).toBeNull();
+    expect(host.querySelector('section.editor')?.classList).toContain(
+      'compact',
+    );
   });
 
   it('keeps a merged external update pending when an older save is in flight', async () => {
