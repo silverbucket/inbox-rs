@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { BookmarkItem } from '@inbox-rs/rs-module';
+  import { convertBookmarkToImage } from '../../lib/bookmark-image';
   import {
     describeLinkPreviewError,
     enrichBookmark,
@@ -58,6 +59,7 @@
     previewStatus = '';
     previewError = '';
     try {
+      if (await convertBookmarkToImage(item)) return;
       const result = await enrichBookmark(item);
       // The enriched fields flow back reactively through the items store;
       // only "nothing new" needs an explicit signal.
