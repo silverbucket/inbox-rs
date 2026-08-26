@@ -10,6 +10,59 @@ import { detectCaptureKind } from './capture-detect';
 import { enrichBookmark } from './enrich';
 import { collections, moveItemToCollection, storeItem } from './stores';
 
+const MAX_DIRECT_IMAGE_BYTES = 25 * 1024 * 1024;
+const DIRECT_IMAGE_TIMEOUT_MS = 20_000;
+const IMAGE_PATH_PATTERN = /\.(?:avif|gif|jpe?g|png|svg|webp)$/i;
+
+/**
+ * Download an apparent direct-image URL for local-first storage. The file
+ * extension is only a cheap candidate filter; the response Content-Type is
+ * authoritative. Any CORS/network/type/size failure falls back to a bookmark.
+ */
+export async function downloadDirectImage(url: string): Promise<File | null> {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!IMAGE_PATH_PATTERN.test(parsed.pathname)) return null;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DIRECT_IMAGE_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) return null;
+
+    const mimeType = response.headers.get('content-type')?.split(';')[0].trim();
+    if (!mimeType?.startsWith('image/')) return null;
+
+    const length = response.headers.get('content-length')?.trim();
+    if (
+      length &&
+      /^\d+$/.test(length) &&
+      Number(length) > MAX_DIRECT_IMAGE_BYTES
+    ) {
+      return null;
+    }
+
+    const blob = await response.blob();
+    if (blob.size > MAX_DIRECT_IMAGE_BYTES) return null;
+    const encodedName = parsed.pathname.split('/').pop() || 'image';
+    let filename = encodedName;
+    try {
+      filename = decodeURIComponent(encodedName);
+    } catch {
+      // Keep the encoded URL segment when it contains malformed escapes.
+    }
+    return new File([blob], filename, { type: mimeType });
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 /** Detect, build and store a quick capture. Returns the created item so the
  *  caller can offer Undo; null when there's nothing to capture. When a
  *  collectionId is given (capturing from a collection view), the item is filed
@@ -31,8 +84,17 @@ export async function captureDetected(
     throw new Error('Target collection no longer exists');
   }
 
-  const built =
+  const directImage =
     detected.kind === 'bookmark'
+      ? await downloadDirectImage(detected.url)
+      : null;
+  const built = directImage
+    ? await buildImageItem(ctx, {
+        title: directImage.name,
+        description: '',
+        file: directImage,
+      })
+    : detected.kind === 'bookmark'
       ? buildBookmarkItem(ctx, {
           url: detected.url,
           title: '',
@@ -40,7 +102,13 @@ export async function captureDetected(
         })
       : buildNoteItem(ctx, { title: '', body: detected.body, description: '' });
 
-  await storeItem(built.item);
+  if (!built) return null;
+  if (directImage && built.item.type === 'image') {
+    built.item.sourceUrl =
+      detected.kind === 'bookmark' ? detected.url : undefined;
+  }
+
+  await storeItem(built.item, built.fileData, built.thumbData);
   if (collectionId) {
     await moveItemToCollection(built.item.id, collectionId);
   }
