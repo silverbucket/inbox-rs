@@ -57,7 +57,7 @@ describe('convertBookmarkToImage', () => {
 
     await expect(convertBookmarkToImage(bookmark)).resolves.toBe(true);
 
-    expect(downloadDirectImage).toHaveBeenCalledWith(bookmark.url, false);
+    expect(downloadDirectImage).toHaveBeenCalledWith(bookmark.url);
     const converted = storeItem.mock.calls[0][0] as Record<string, unknown>;
     expect(converted).toMatchObject({
       id: bookmark.id,

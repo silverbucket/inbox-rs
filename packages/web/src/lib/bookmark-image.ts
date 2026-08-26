@@ -10,7 +10,10 @@ import { items, storeItem } from './stores';
 export async function convertBookmarkToImage(
   item: BookmarkItem,
 ): Promise<boolean> {
-  const file = await downloadDirectImage(item.url, false);
+  // Only probe URLs whose path looks like an image. Probing every ordinary
+  // page from the browser produces unavoidable CORS errors in Chrome; the
+  // normal Sockethub metadata path handles those bookmarks instead.
+  const file = await downloadDirectImage(item.url);
   if (!file) return false;
 
   const current = get(items)[item.id];
