@@ -11,6 +11,7 @@
     loadFileBlobUrl,
     userSettings,
   } from '../../lib/stores';
+  import { renderMarkdown } from '../../lib/markdown';
   import Lightbox from '../Lightbox.svelte';
 
   let {
@@ -29,6 +30,19 @@
   let fetchingPreview = $state(false);
   let previewStatus = $state<'' | 'none'>('');
   let previewError = $state('');
+  let renderedBody = $state('');
+
+  $effect(() => {
+    const currentItem = item;
+    const currentBody = currentItem.body;
+    renderedBody = '';
+    if (!currentBody) return;
+    renderMarkdown(currentBody).then((html) => {
+      if (item.id === currentItem.id && item.body === currentBody) {
+        renderedBody = html;
+      }
+    });
+  });
 
   // Fetch the page's metadata on demand for bookmarks saved before this
   // feature (or whose auto-fetch failed). Mirrors AudioView's transcribe
@@ -163,16 +177,15 @@
   />
 {/if}
 
-<!--
-  Embedded body content captured by the extension (tweet text, article
-  excerpt, etc.). We render it after the image so the bookmark's primary
-  visual cue stays at the top, but before description so the user-supplied
-  caption (if any) reads as a follow-up to the captured content.
--->
 {#if item.body}
   <div class="content-block">
-    <span class="content-label">Body</span>
-    <p class="content-text">{item.body}</p>
+    <span class="content-label">Notes</span>
+    {#if renderedBody}
+      <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+      <div class="markdown-body">{@html renderedBody}</div>
+    {:else}
+      <p class="content-text">{item.body}</p>
+    {/if}
   </div>
 {/if}
 </section>

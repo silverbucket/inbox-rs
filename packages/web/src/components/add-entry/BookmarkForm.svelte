@@ -3,6 +3,7 @@
   import { autofocus } from '../../lib/actions';
   import type { BuildItemFn } from '../../lib/add-entry-modal';
   import { buildBookmarkItem } from '../../lib/build-item';
+  import MarkdownContentField from './MarkdownContentField.svelte';
 
   let {
     editItem,
@@ -28,6 +29,9 @@
     draftUrl = url;
   });
   let description = $state(editItem?.description ?? '');
+  let body = $state(
+    editItem && 'body' in editItem ? (editItem.body ?? '') : '',
+  );
 
   // The URL field is the only required input — title falls back to the URL
   // and description is optional. Surface readiness to the shell so the Save
@@ -43,7 +47,7 @@
   buildItem = ({ id, createdAt, editItem: ctxEditItem }) =>
     buildBookmarkItem(
       { id, createdAt, editItem: ctxEditItem },
-      { url, title, description },
+      { url, title, description, body },
     );
 </script>
 
@@ -60,7 +64,12 @@
   <input type="text" bind:value={title} placeholder="Page title" />
 </label>
 <label class="field">
-  <span>Note</span>
-  <textarea bind:value={description} rows="2" placeholder="Optional note..."
+  <span>Page description</span>
+  <textarea bind:value={description} rows="2" placeholder="Fetched automatically when left blank..."
   ></textarea>
 </label>
+<MarkdownContentField
+  bind:value={body}
+  label="Notes"
+  placeholder="Add personal notes about this bookmark..."
+/>
