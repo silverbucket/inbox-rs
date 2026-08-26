@@ -151,9 +151,7 @@
           ? 'Add a transcription or notes…'
           : 'Start writing…',
   );
-  const descriptionIsPrimary = $derived(
-    item.type === 'image' || item.type === 'document',
-  );
+  const descriptionIsPrimary = $derived(item.type === 'document');
 </script>
 
 <section
