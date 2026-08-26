@@ -85,6 +85,35 @@ describe('captureDetected', () => {
     expect(file?.type).toBe('image/jpeg');
   });
 
+  it('can verify an extensionless image by its response type', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(new Uint8Array([1]), {
+          headers: { 'content-type': 'image/jpeg' },
+        }),
+      ),
+    );
+
+    const file = await downloadDirectImage(
+      'https://example.com/media/123',
+      false,
+    );
+
+    expect(file).toBeInstanceOf(File);
+    expect(file?.type).toBe('image/jpeg');
+  });
+
+  it('does not request an ordinary page when image-path filtering is enabled', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      downloadDirectImage('https://example.org/article'),
+    ).resolves.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('cancels an image stream when an unannounced body exceeds 25 MB', async () => {
     const cancel = vi.fn();
     const stream = new ReadableStream<Uint8Array>({

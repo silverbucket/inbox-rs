@@ -156,7 +156,7 @@
 
 <section
   class="editor"
-  class:compact={item.type === 'bookmark'}
+  class:compact={item.type === 'bookmark' || item.type === 'image'}
   aria-label="Card content"
 >
   <div class="title-row">
@@ -247,8 +247,8 @@
     min-height: 0;
   }
 
-  /* Bookmark fields are short. Letting this section grow pushed the actual
-     preview to the bottom of the full-height modal. */
+  /* Bookmark and image fields are short. Letting this section grow pushes the
+     actual preview below the initial viewport of the full-height modal. */
   .editor.compact {
     flex: 0 0 auto;
   }

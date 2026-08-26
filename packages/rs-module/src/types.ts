@@ -68,6 +68,7 @@ export interface ImageItem extends InboxItemBase {
   filePath: string;
   mimeType: string;
   sourceUrl?: string; // original URL the image was saved from
+  body?: string; // markdown notes retained when converting a bookmark
   /**
    * Optional downscaled preview stored alongside the original (grid cards
    * load this; the lightbox loads filePath). Absent on items captured by
