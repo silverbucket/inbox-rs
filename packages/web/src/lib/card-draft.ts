@@ -23,6 +23,7 @@ export function createCardDraft(item: InboxItem): CardDraft {
   };
   if (item.type === 'bookmark' || 'body' in item) draft.body = item.body ?? '';
   if (item.type === 'bookmark') draft.url = item.url;
+  if (item.type === 'image') draft.url = item.sourceUrl ?? '';
   if (item.type === 'email') {
     draft.from = item.from ?? '';
     draft.notes = item.notes ?? '';
@@ -52,6 +53,7 @@ export function applyCardDraft(
     record.body = draft.body ?? '';
   }
   if (item.type === 'bookmark') record.url = draft.url ?? '';
+  if (item.type === 'image') record.sourceUrl = draft.url || undefined;
   if (item.type === 'email') {
     record.from = draft.from || undefined;
     record.notes = draft.notes || undefined;

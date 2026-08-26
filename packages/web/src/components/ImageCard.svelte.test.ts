@@ -25,6 +25,7 @@ vi.mock('../lib/rs', () => ({
 import type { ImageItem } from '@inbox-rs/rs-module';
 import { blobUrls, connected, loadFileBlobUrl } from '../lib/stores';
 import ImageCard from './ImageCard.svelte';
+import ImageCardTestHarness from './ImageCardTestHarness.svelte';
 
 const item: ImageItem = {
   id: 'img1',
@@ -72,5 +73,56 @@ describe('ImageCard offline display', () => {
       'blob:cache/img1',
     );
     expect(host.textContent).not.toContain('Not connected');
+  });
+
+  it('uses the source URL when an image has no locally captured file', () => {
+    const remoteItem: ImageItem = {
+      id: 'remote-image',
+      type: 'image',
+      title: 'Remote image',
+      sourceUrl: 'https://example.com/remote.jpg',
+      createdAt: '2026-08-26T10:00:00.000Z',
+    };
+
+    component = mount(ImageCard, {
+      target: host,
+      props: { item: remoteItem },
+    });
+    flushSync();
+
+    expect(host.querySelector('img')?.getAttribute('src')).toBe(
+      remoteItem.sourceUrl,
+    );
+    expect(loadFileBlobUrl).not.toHaveBeenCalled();
+  });
+
+  it('retries a remote image after its source URL is corrected', () => {
+    const remoteItem: ImageItem = {
+      id: 'remote-image',
+      type: 'image',
+      title: 'Remote image',
+      sourceUrl: 'https://example.com/broken.jpg',
+      createdAt: '2026-08-26T10:00:00.000Z',
+    };
+
+    component = mount(ImageCardTestHarness, {
+      target: host,
+      props: { initialItem: remoteItem },
+    });
+    flushSync();
+
+    host.querySelector('img')?.dispatchEvent(new Event('error'));
+    flushSync();
+    expect(host.querySelector('img')).toBeNull();
+
+    const correctedUrl = 'https://example.com/corrected.jpg';
+    (
+      component as ReturnType<typeof mount> & {
+        updateSourceUrl: (sourceUrl: string) => void;
+      }
+    ).updateSourceUrl(correctedUrl);
+    flushSync();
+
+    expect(host.querySelector('img')?.getAttribute('src')).toBe(correctedUrl);
   });
 });

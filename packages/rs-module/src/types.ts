@@ -65,8 +65,8 @@ export interface NoteItem extends InboxItemBase {
 
 export interface ImageItem extends InboxItemBase {
   type: 'image';
-  filePath: string;
-  mimeType: string;
+  filePath?: string; // absent when a source host blocks local capture
+  mimeType?: string;
   sourceUrl?: string; // original URL the image was saved from
   body?: string; // markdown notes retained when converting a bookmark
   /**

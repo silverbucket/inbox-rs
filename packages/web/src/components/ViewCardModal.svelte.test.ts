@@ -10,10 +10,13 @@ const { storeItem } = vi.hoisted(() => ({
 vi.mock('../lib/stores', async () => {
   const { writable } = await import('svelte/store');
   return {
+    blobUrls: writable({ 'files/image-1.jpg': 'blob:image-1' }),
+    connected: writable(false),
     collections: writable({}),
     groups: writable({}),
     deleteItem: vi.fn().mockResolvedValue(undefined),
     moveItemToCollection: vi.fn().mockResolvedValue(undefined),
+    loadFileBlobUrl: vi.fn(),
     storeItem,
   };
 });
@@ -117,5 +120,25 @@ describe('ViewCardModal actions menu', () => {
         }),
       );
     });
+  });
+
+  it('places primary image content before the shared More details widget', () => {
+    render({
+      id: 'image-1',
+      type: 'image',
+      title: 'Image',
+      description: 'Context about the image',
+      filePath: 'files/image-1.jpg',
+      mimeType: 'image/jpeg',
+      createdAt: '2026-08-10T13:59:00.000Z',
+    });
+
+    const image = host.querySelector('.view-image-link');
+    const moreDetails = host.querySelector('details.more-fields');
+    expect(image).not.toBeNull();
+    expect(moreDetails).not.toBeNull();
+    expect(image?.compareDocumentPosition(moreDetails as Node) ?? 0).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
   });
 });

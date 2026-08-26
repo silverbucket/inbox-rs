@@ -1,7 +1,11 @@
 import type { BookmarkItem, ImageItem } from '@inbox-rs/rs-module';
 import { get } from 'svelte/store';
 import { buildImageItem } from './build-item';
-import { downloadDirectImage } from './direct-image';
+import {
+  downloadDirectImage,
+  imageNameFromUrl,
+  isDirectImageUrl,
+} from './direct-image';
 import { items, storeItem } from './stores';
 
 /** Convert a bookmark whose response is an image while retaining its identity
@@ -14,27 +18,33 @@ export async function convertBookmarkToImage(
   // page from the browser produces unavoidable CORS errors in Chrome; the
   // normal Sockethub metadata path handles those bookmarks instead.
   const file = await downloadDirectImage(item.url);
-  if (!file) return false;
+  if (!file && !isDirectImageUrl(item.url)) return false;
 
   const current = get(items)[item.id];
   if (!current || current.type !== 'bookmark' || current.url !== item.url) {
     return false;
   }
 
-  const built = await buildImageItem(
-    { id: current.id, createdAt: current.createdAt, editItem: current },
-    {
-      title: current.title === current.url ? file.name : current.title,
-      description: current.description || '',
-      file,
-    },
-  );
-  if (!built || built.item.type !== 'image') return false;
+  const built = file
+    ? await buildImageItem(
+        { id: current.id, createdAt: current.createdAt, editItem: current },
+        {
+          title: current.title === current.url ? file.name : current.title,
+          description: current.description || '',
+          file,
+        },
+      )
+    : null;
+  if (file && (!built || built.item.type !== 'image')) return false;
 
   const converted: ImageItem = {
     ...current,
-    ...built.item,
+    ...(built?.item ?? {}),
     type: 'image',
+    title:
+      current.title === current.url
+        ? imageNameFromUrl(current.url)
+        : current.title,
     sourceUrl: current.url,
     body: current.body,
   };
@@ -43,7 +53,11 @@ export async function convertBookmarkToImage(
   delete bookmarkFields.favicon;
   delete bookmarkFields.ogImage;
   delete bookmarkFields.siteName;
+  if (!file) {
+    delete bookmarkFields.filePath;
+    delete bookmarkFields.mimeType;
+  }
 
-  await storeItem(converted, built.fileData, built.thumbData);
+  await storeItem(converted, built?.fileData, built?.thumbData);
   return true;
 }

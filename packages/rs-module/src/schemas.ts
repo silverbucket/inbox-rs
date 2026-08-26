@@ -95,7 +95,7 @@ export const imageMetaSchema = {
     ...collectionFields,
     ...migrateFields,
   },
-  required: ['id', 'type', 'title', 'filePath', 'mimeType', 'createdAt'],
+  required: ['id', 'type', 'title', 'createdAt'],
 };
 
 export const audioMetaSchema = {

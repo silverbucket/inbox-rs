@@ -2,10 +2,19 @@
 import type { BookmarkItem, InboxItem } from '@inbox-rs/rs-module';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { downloadDirectImage, storeItem, itemValues, items } = vi.hoisted(() => {
+const {
+  downloadDirectImage,
+  imageNameFromUrl,
+  isDirectImageUrl,
+  storeItem,
+  itemValues,
+  items,
+} = vi.hoisted(() => {
   let itemValues: Record<string, InboxItem> = {};
   return {
     downloadDirectImage: vi.fn(),
+    imageNameFromUrl: vi.fn((url: string) => url.split('/').pop() || 'Image'),
+    isDirectImageUrl: vi.fn((url: string) => /\.(?:jpg|png)$/i.test(url)),
     storeItem: vi.fn().mockResolvedValue(undefined),
     itemValues: {
       set(value: Record<string, InboxItem>) {
@@ -21,7 +30,11 @@ const { downloadDirectImage, storeItem, itemValues, items } = vi.hoisted(() => {
   };
 });
 
-vi.mock('./direct-image', () => ({ downloadDirectImage }));
+vi.mock('./direct-image', () => ({
+  downloadDirectImage,
+  imageNameFromUrl,
+  isDirectImageUrl,
+}));
 vi.mock('./stores', () => ({ items, storeItem }));
 
 import { convertBookmarkToImage } from './bookmark-image';
@@ -83,6 +96,28 @@ describe('convertBookmarkToImage', () => {
 
     await expect(convertBookmarkToImage(bookmark)).resolves.toBe(false);
     expect(storeItem).not.toHaveBeenCalled();
+  });
+
+  it('converts an image-path bookmark when its host blocks byte download', async () => {
+    const blocked = {
+      ...bookmark,
+      title: 'https://example.com/photo.jpg',
+      url: 'https://example.com/photo.jpg',
+    };
+    itemValues.set({ [blocked.id]: blocked });
+    downloadDirectImage.mockResolvedValue(null);
+
+    await expect(convertBookmarkToImage(blocked)).resolves.toBe(true);
+    expect(storeItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: blocked.id,
+        type: 'image',
+        title: 'photo.jpg',
+        sourceUrl: blocked.url,
+      }),
+      undefined,
+      undefined,
+    );
   });
 
   it('does not overwrite a bookmark changed during the image download', async () => {

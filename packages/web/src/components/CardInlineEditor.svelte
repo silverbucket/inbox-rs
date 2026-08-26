@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
-  import { onDestroy, untrack } from 'svelte';
+  import { onDestroy, untrack, type Snippet } from 'svelte';
   import {
     applyCardDraft,
     clearCardDraft,
@@ -23,6 +23,7 @@
     retry = $bindable<() => void>(() => {}),
     onfetchurlpreview = undefined,
     fetchingUrlPreview = false,
+    children,
   }: {
     item: InboxItem;
     status?: SaveStatus;
@@ -30,6 +31,7 @@
     retry?: () => void;
     onfetchurlpreview?: () => void;
     fetchingUrlPreview?: boolean;
+    children?: Snippet;
   } = $props();
 
   const initialItem = untrack(() => item);
@@ -152,6 +154,7 @@
           : 'Start writing…',
   );
   const descriptionIsPrimary = $derived(item.type === 'document');
+  const hasUrl = $derived(item.type === 'bookmark' || item.type === 'image');
 </script>
 
 <section
@@ -174,7 +177,7 @@
       aria-label="Title"
       placeholder="Untitled"
     />
-    {#if item.type === 'bookmark' && draft.url}
+    {#if hasUrl && draft.url}
       <a class="source-link" href={draft.url} target="_blank" rel="noopener noreferrer">Open link ↗</a>
     {:else if item.type === 'email' && item.messageUrl}
       <a class="source-link" href={item.messageUrl}>Open email ↗</a>
@@ -194,7 +197,7 @@
     </div>
   {/if}
 
-  {#if item.type === 'bookmark'}
+  {#if hasUrl}
     <label class="compact-field">
       <span class="field-label">URL</span>
       <input type="url" bind:value={draft.url} oninput={scheduleSave} placeholder="https://…" />
@@ -221,6 +224,8 @@
       <textarea bind:value={draft.notes} oninput={scheduleSave} rows="3" placeholder="Your notes about this email…"></textarea>
     </label>
   {/if}
+
+  {@render children?.()}
 
   {#if descriptionIsPrimary}
     <label class="text-field description-primary">

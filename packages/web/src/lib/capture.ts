@@ -7,7 +7,11 @@ import {
   buildNoteItem,
 } from './build-item';
 import { detectCaptureKind } from './capture-detect';
-import { downloadDirectImage } from './direct-image';
+import {
+  downloadDirectImage,
+  imageNameFromUrl,
+  isDirectImageUrl,
+} from './direct-image';
 import { enrichBookmark } from './enrich';
 import { collections, moveItemToCollection, storeItem } from './stores';
 
@@ -38,19 +42,39 @@ export async function captureDetected(
     detected.kind === 'bookmark'
       ? await downloadDirectImage(detected.url)
       : null;
+  const remoteImageUrl =
+    detected.kind === 'bookmark' &&
+    !directImage &&
+    isDirectImageUrl(detected.url)
+      ? detected.url
+      : null;
   const built = directImage
     ? await buildImageItem(ctx, {
         title: directImage.name,
         description: '',
         file: directImage,
       })
-    : detected.kind === 'bookmark'
-      ? buildBookmarkItem(ctx, {
-          url: detected.url,
-          title: '',
-          description: '',
-        })
-      : buildNoteItem(ctx, { title: '', body: detected.body, description: '' });
+    : remoteImageUrl
+      ? {
+          item: {
+            id: ctx.id,
+            type: 'image' as const,
+            title: imageNameFromUrl(remoteImageUrl),
+            sourceUrl: remoteImageUrl,
+            createdAt: ctx.createdAt,
+          },
+        }
+      : detected.kind === 'bookmark'
+        ? buildBookmarkItem(ctx, {
+            url: detected.url,
+            title: '',
+            description: '',
+          })
+        : buildNoteItem(ctx, {
+            title: '',
+            body: detected.body,
+            description: '',
+          });
 
   if (!built) return null;
   if (directImage && built.item.type === 'image') {
