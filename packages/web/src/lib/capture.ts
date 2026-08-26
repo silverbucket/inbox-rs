@@ -34,7 +34,11 @@ export async function downloadDirectImage(url: string): Promise<File | null> {
     const response = await fetch(url, { signal: controller.signal });
     if (!response.ok) return null;
 
-    const mimeType = response.headers.get('content-type')?.split(';')[0].trim();
+    const mimeType = response.headers
+      .get('content-type')
+      ?.split(';')[0]
+      .trim()
+      .toLowerCase();
     if (!mimeType?.startsWith('image/')) return null;
 
     const length = response.headers.get('content-length')?.trim();
@@ -46,8 +50,23 @@ export async function downloadDirectImage(url: string): Promise<File | null> {
       return null;
     }
 
-    const blob = await response.blob();
-    if (blob.size > MAX_DIRECT_IMAGE_BYTES) return null;
+    if (!response.body) return null;
+    const reader = response.body.getReader();
+    const chunks: ArrayBuffer[] = [];
+    let receivedBytes = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      receivedBytes += value.byteLength;
+      if (receivedBytes > MAX_DIRECT_IMAGE_BYTES) {
+        await reader.cancel();
+        return null;
+      }
+      const chunk = new Uint8Array(value.byteLength);
+      chunk.set(value);
+      chunks.push(chunk.buffer);
+    }
+    const blob = new Blob(chunks, { type: mimeType });
     const encodedName = parsed.pathname.split('/').pop() || 'image';
     let filename = encodedName;
     try {

@@ -24,7 +24,7 @@ const { enrichBookmark } = vi.hoisted(() => ({
 }));
 vi.mock('./enrich', () => ({ enrichBookmark }));
 
-import { captureDetected, captureFile } from './capture';
+import { captureDetected, captureFile, downloadDirectImage } from './capture';
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -49,7 +49,7 @@ describe('captureDetected', () => {
         new Response(imageBytes, {
           status: 200,
           headers: {
-            'content-type': 'image/jpeg',
+            'content-type': 'IMAGE/JPEG; charset=binary',
             'content-length': String(imageBytes.byteLength),
           },
         }),
@@ -67,6 +67,46 @@ describe('captureDetected', () => {
     });
     expect(storeItem.mock.calls[0][1]).toBeInstanceOf(ArrayBuffer);
     expect(enrichBookmark).not.toHaveBeenCalled();
+  });
+
+  it('normalizes an uppercase image MIME type', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(new Uint8Array([1]), {
+          headers: { 'content-type': 'IMAGE/JPEG' },
+        }),
+      ),
+    );
+
+    const file = await downloadDirectImage('https://example.com/photo.jpg');
+
+    expect(file).toBeInstanceOf(File);
+    expect(file?.type).toBe('image/jpeg');
+  });
+
+  it('cancels an image stream when an unannounced body exceeds 25 MB', async () => {
+    const cancel = vi.fn();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(20 * 1024 * 1024));
+        controller.enqueue(new Uint8Array(6 * 1024 * 1024));
+      },
+      cancel,
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(stream, {
+          headers: { 'content-type': 'image/jpeg' },
+        }),
+      ),
+    );
+
+    const file = await downloadDirectImage('https://example.com/large.jpg');
+
+    expect(file).toBeNull();
+    expect(cancel).toHaveBeenCalledOnce();
   });
 
   it('falls back to a bookmark when an image-looking URL is not an image', async () => {
