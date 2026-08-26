@@ -130,16 +130,20 @@
     });
   });
 
-  const hasBody = $derived('body' in item && item.type !== 'bookmark');
+  const hasBody = $derived(item.type === 'bookmark' || 'body' in item);
   const bodyLabel = $derived(
-    item.type === 'todo'
+    item.type === 'bookmark'
+      ? 'Notes'
+      : item.type === 'todo'
       ? 'Details'
       : item.type === 'audio' || item.type === 'video'
         ? 'Transcription or notes'
         : 'Content',
   );
   const bodyPlaceholder = $derived(
-    item.type === 'todo'
+    item.type === 'bookmark'
+      ? 'Add personal notes about this bookmark…'
+      : item.type === 'todo'
       ? 'Add details…'
       : item.type === 'email'
         ? 'Email body…'

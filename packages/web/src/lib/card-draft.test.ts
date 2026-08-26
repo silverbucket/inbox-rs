@@ -60,6 +60,23 @@ describe('card drafts', () => {
     });
   });
 
+  it('adds Markdown notes to a bookmark that did not already have a body', () => {
+    const bookmark: InboxItem = {
+      id: 'bm-1',
+      type: 'bookmark',
+      title: 'Example',
+      url: 'https://example.org',
+      createdAt: note.createdAt,
+    };
+    const draft = createCardDraft(bookmark);
+    draft.body = '## Remember\n\nUseful reference.';
+
+    expect(applyCardDraft(bookmark, draft)).toEqual({
+      ...bookmark,
+      body: '## Remember\n\nUseful reference.',
+    });
+  });
+
   it('merges external updates only into untouched draft fields', () => {
     const bookmark: InboxItem = {
       id: 'bm-1',

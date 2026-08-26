@@ -21,7 +21,7 @@ export function createCardDraft(item: InboxItem): CardDraft {
     title: item.title,
     description: item.description ?? '',
   };
-  if ('body' in item) draft.body = item.body ?? '';
+  if (item.type === 'bookmark' || 'body' in item) draft.body = item.body ?? '';
   if (item.type === 'bookmark') draft.url = item.url;
   if (item.type === 'email') {
     draft.from = item.from ?? '';
@@ -45,7 +45,11 @@ export function applyCardDraft(
   } as InboxItem;
   const record = updated as unknown as Record<string, unknown>;
 
-  if ('body' in item) record.body = draft.body ?? '';
+  if (item.type === 'bookmark') {
+    record.body = draft.body || undefined;
+  } else if ('body' in item) {
+    record.body = draft.body ?? '';
+  }
   if (item.type === 'bookmark') record.url = draft.url ?? '';
   if (item.type === 'email') {
     record.from = draft.from || undefined;

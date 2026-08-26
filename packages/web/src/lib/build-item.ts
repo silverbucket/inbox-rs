@@ -74,6 +74,7 @@ export interface BookmarkFormData {
   url: string;
   title: string;
   description: string;
+  body?: string;
 }
 
 export function buildBookmarkItem(
@@ -86,17 +87,20 @@ export function buildBookmarkItem(
     title: data.title || data.url,
     url: data.url,
     description: data.description || undefined,
+    body: data.body || undefined,
     createdAt: ctx.createdAt,
   };
   // Preserve enrichment metadata fetched by the extension (favicon,
-  // ogImage, siteName, embedded body, downloaded image) — the web form
-  // doesn't surface these fields, so we'd lose them if we didn't copy
-  // them through on edit.
+  // ogImage, siteName, downloaded image). Older callers do not pass body,
+  // so preserve extension-captured content for those callers; the bookmark
+  // form passes body explicitly and can therefore edit or clear it.
   if (ctx.editItem && ctx.editItem.type === 'bookmark') {
     if (ctx.editItem.favicon) bookmark.favicon = ctx.editItem.favicon;
     if (ctx.editItem.ogImage) bookmark.ogImage = ctx.editItem.ogImage;
     if (ctx.editItem.siteName) bookmark.siteName = ctx.editItem.siteName;
-    if (ctx.editItem.body) bookmark.body = ctx.editItem.body;
+    if (data.body === undefined && ctx.editItem.body) {
+      bookmark.body = ctx.editItem.body;
+    }
     if (ctx.editItem.filePath) bookmark.filePath = ctx.editItem.filePath;
     if (ctx.editItem.mimeType) bookmark.mimeType = ctx.editItem.mimeType;
   }

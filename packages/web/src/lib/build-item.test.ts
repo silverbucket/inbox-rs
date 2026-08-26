@@ -71,6 +71,39 @@ describe('buildBookmarkItem', () => {
     expect((result.item as BookmarkItem).description).toBe('   ');
   });
 
+  it('stores Markdown notes separately from the fetched page description', () => {
+    const result = buildBookmarkItem(ctx(), {
+      url: 'https://example.com',
+      title: 'Example',
+      description: 'Page summary',
+      body: '## My notes\n\nRemember **this**.',
+    });
+
+    expect(result.item).toMatchObject({
+      description: 'Page summary',
+      body: '## My notes\n\nRemember **this**.',
+    });
+  });
+
+  it('can clear an existing bookmark body', () => {
+    const editItem: BookmarkItem = {
+      id: 'item-1',
+      type: 'bookmark',
+      title: 'Example',
+      url: 'https://example.com',
+      body: 'Old captured content',
+      createdAt: '2026-04-29T08:00:00.000Z',
+    };
+    const result = buildBookmarkItem(ctx({ editItem }), {
+      url: editItem.url,
+      title: editItem.title,
+      description: '',
+      body: '',
+    });
+
+    expect((result.item as BookmarkItem).body).toBeUndefined();
+  });
+
   it('preserves extension-fetched metadata across edits', () => {
     const editItem: BookmarkItem = {
       id: 'item-1',
