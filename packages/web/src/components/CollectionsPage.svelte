@@ -248,31 +248,6 @@
     <Fab onclick={() => openAddCollection(undefined)} label="New collection" />
   </div>
 
-  {#if archiveCount > 0}
-    <section class="archive-section" aria-label="Archived collections and groups">
-      <button type="button" class="archive-toggle" aria-expanded={archiveExpanded} onclick={() => archiveExpanded = !archiveExpanded}>
-        <span>Archive</span>
-        <span class="archive-count">{archiveCount}</span>
-      </button>
-      {#if archiveExpanded}
-        <div class="archive-list">
-          {#each $archivedGroups as group (group.id)}
-            <div class="archive-row">
-              <span><strong>{group.name}</strong> · group</span>
-              <button type="button" onclick={() => void handleRestoreGroup(group.id)}>Restore</button>
-            </div>
-          {/each}
-          {#each $archivedCollections as collection (collection.id)}
-            <div class="archive-row">
-              <span><strong>{collection.name}</strong> · collection</span>
-              <button type="button" onclick={() => void handleRestoreCollection(collection.id)}>Restore</button>
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </section>
-  {/if}
-
   {#each sections as section (section.group.id)}
     {@const realCount = dndByGroup[section.group.id]?.length ?? 0}
     <GroupSection
@@ -377,6 +352,31 @@
     <p class="page-empty">
       All groups are filtered out. Toggle one on in the filter bar to see collections.
     </p>
+  {/if}
+
+  {#if archiveCount > 0}
+    <section class="archive-section" aria-label="Archived collections and groups">
+      <button type="button" class="archive-toggle" aria-expanded={archiveExpanded} onclick={() => archiveExpanded = !archiveExpanded}>
+        <span>Archive</span>
+        <span class="archive-count">{archiveCount}</span>
+      </button>
+      {#if archiveExpanded}
+        <div class="archive-list">
+          {#each $archivedGroups as group (group.id)}
+            <div class="archive-row">
+              <span><strong>{group.name}</strong> · group</span>
+              <button type="button" onclick={() => void handleRestoreGroup(group.id)}>Restore</button>
+            </div>
+          {/each}
+          {#each $archivedCollections as collection (collection.id)}
+            <div class="archive-row">
+              <span><strong>{collection.name}</strong> · collection</span>
+              <button type="button" onclick={() => void handleRestoreCollection(collection.id)}>Restore</button>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </section>
   {/if}
 </div>
 
