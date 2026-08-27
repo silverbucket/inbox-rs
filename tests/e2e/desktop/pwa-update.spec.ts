@@ -1,4 +1,5 @@
 import { expect, test } from '../helpers/fixtures';
+import { waitForServiceWorkerController } from '../helpers/pwa';
 
 test.describe('PWA release transitions', () => {
   test('HTML shells depend only on the stable bootloader', async ({
@@ -26,6 +27,63 @@ test.describe('PWA release transitions', () => {
       await expect(
         page.getByRole('button', { name: 'Settings' }),
       ).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('capture boots from cached manifest without waiting on the network manifest', async ({
+    browser,
+    webOrigin,
+  }) => {
+    const context = await browser.newContext({ serviceWorkers: 'block' });
+    try {
+      const page = await context.newPage();
+      await page.goto(`${webOrigin}/capture/`);
+      await expect(
+        page.getByText('Quick Capture', { exact: true }),
+      ).toBeVisible();
+
+      await page.route('**/asset-manifest.json*', async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        await route.continue();
+      });
+
+      const start = Date.now();
+      await page.reload();
+      await expect(
+        page.getByText('Quick Capture', { exact: true }),
+      ).toBeVisible();
+      expect(Date.now() - start).toBeLessThan(2500);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('capture query-string navigation serves the capture shell from the service worker', async ({
+    browser,
+    webOrigin,
+  }) => {
+    const context = await browser.newContext();
+    try {
+      const page = await context.newPage();
+      await page.goto(`${webOrigin}/capture/`);
+      await waitForServiceWorkerController(page);
+
+      let captureDocumentFromNetwork = false;
+      await page.route('**/capture/**', async (route) => {
+        if (route.request().resourceType() === 'document') {
+          captureDocumentFromNetwork = true;
+        }
+        await route.continue();
+      });
+
+      await page.goto(`${webOrigin}/capture/?title=Shared&text=hello`);
+      await expect(
+        page.getByText('Quick Capture', { exact: true }),
+      ).toBeVisible();
+      await expect(page.locator('#app')).toHaveCount(0);
+      expect(captureDocumentFromNetwork).toBe(false);
     } finally {
       await context.close();
     }
