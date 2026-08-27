@@ -52,6 +52,10 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,json,png,svg,webmanifest,wasm}'],
         globIgnores: [
           'ml/**/*',
+          // Boot manifest must stay network-only: app-loader fetches it with
+          // cache: no-store (?t=…) to detect new releases. Precaching it would
+          // let ignoreURLParametersMatching below serve a stale manifest.
+          'asset-manifest.json',
           // Lazy-only heavyweights (~1.4 MB minified combined). They're
           // dynamic-imported and most sessions never execute them, yet
           // precaching forces every visitor to download them on install and

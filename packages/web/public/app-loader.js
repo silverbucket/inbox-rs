@@ -246,8 +246,8 @@
     candidates.push(...readHistory());
 
     try {
-      await tryManifestCandidates(candidates);
-      return;
+      if (await tryManifestCandidates(candidates)) return;
+      throw new Error('No application release is available');
     } catch (lastError) {
       if (
         manifestUnavailable &&
