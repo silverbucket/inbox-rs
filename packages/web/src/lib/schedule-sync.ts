@@ -99,6 +99,7 @@ export async function addItemToCalendar(
       ...posted,
       archived: true,
       archivedAt: new Date().toISOString(),
+      archiveReason: 'calendar',
     };
   }
   try {
@@ -121,6 +122,7 @@ export async function reEnableFromCalendar(
     ...item,
     archived: undefined,
     archivedAt: undefined,
+    archiveReason: undefined,
   };
   await storeItem(cleanForStorage(updated));
   return updated;

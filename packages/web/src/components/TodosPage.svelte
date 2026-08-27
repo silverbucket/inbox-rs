@@ -252,7 +252,7 @@
           <svg aria-hidden="true" class="chevron" class:open={onCalendarExpanded} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="6 9 12 15 18 9"></polyline>
           </svg>
-          {onCalendarTodos.length} on calendar
+          {onCalendarTodos.length} archived
         </button>
 
         {#if onCalendarExpanded}

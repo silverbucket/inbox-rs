@@ -9,6 +9,7 @@
     deleteItem,
     groups,
     moveItemToCollection,
+    setItemArchived,
     storeItem,
   } from '../lib/stores';
   import { recordCollectionUse } from '../lib/collection-suggest';
@@ -40,6 +41,7 @@
   let deleteAction = $state<HTMLButtonElement>();
   let showDelete = $state(false);
   let deleting = $state(false);
+  let changingArchiveState = $state(false);
 
   // One CollectionPicker serves both flows: re-filing the card ('move') and
   // choosing where a converted todo lands ('todo').
@@ -105,6 +107,23 @@
     onclose();
   }
 
+  async function toggleArchived() {
+    if (changingArchiveState) return;
+    const willArchive = !item.archived;
+    changingArchiveState = true;
+    try {
+      await prepareAction();
+      await setItemArchived(item.id, willArchive);
+      showToast(willArchive ? 'Card archived' : 'Card restored');
+      onclose();
+    } catch (error) {
+      console.error('Failed to change archive state', error);
+      showToast('Could not change archive state');
+    } finally {
+      changingArchiveState = false;
+    }
+  }
+
   /**
    * A todo↔reference conversion changes the card's kind, so a posted
    * calendar entry no longer matches what the receipt claims (a VEVENT for
@@ -122,6 +141,7 @@
     delete updated.eventEtag;
     delete updated.archived;
     delete updated.archivedAt;
+    delete updated.archiveReason;
     if (updated.startsAt) updated.scheduleKind = newKind;
   }
 
@@ -694,6 +714,14 @@
     </button>
 
     <div class="action-list">
+      <button type="button" class="action-row" disabled={changingArchiveState} onclick={() => void toggleArchived()}>
+        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="21 8 21 21 3 21 3 8"></polyline>
+          <rect x="1" y="3" width="22" height="5"></rect>
+          <line x1="10" y1="12" x2="14" y2="12"></line>
+        </svg>
+        {changingArchiveState ? 'Saving…' : item.archived ? 'Restore from archive' : 'Archive card'}
+      </button>
       {#if canMakeTodo}
         <button
           type="button"

@@ -60,6 +60,8 @@ import {
   activeGroupIds,
   allTodos,
   appConfig,
+  archivedCollections,
+  archivedGroups,
   blobUrls,
   collectionItems,
   collections,
@@ -86,6 +88,9 @@ import {
   reorderTodosGlobal,
   reorderUnfiledTodos,
   setActiveGroupFilters,
+  setCollectionArchived,
+  setGroupArchived,
+  setItemArchived,
   soloCollectionFilter,
   soloGroupFilter,
   storeCollection,
@@ -428,6 +433,63 @@ function makeLegacyVoiceMemo(id: string): InboxItem {
     mimeType: 'audio/mp4',
   } as unknown as InboxItem;
 }
+
+describe('archive operations', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    items.set({});
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('archives and restores cards with a manual archive reason', async () => {
+    items.set({ t1: makeTodo('t1') });
+
+    await setItemArchived('t1', true);
+    expect(get(items).t1).toMatchObject({
+      archived: true,
+      archiveReason: 'manual',
+    });
+    expect(get(items).t1.archivedAt).toBeTruthy();
+
+    await setItemArchived('t1', false);
+    expect(get(items).t1.archived).toBeUndefined();
+    expect(get(items).t1.archivedAt).toBeUndefined();
+    expect(get(items).t1.archiveReason).toBeUndefined();
+  });
+
+  it('hides archived collections and exposes them for restoration', async () => {
+    groups.set({ g1: makeGroup('g1', ['c1']) });
+    collections.set({ c1: makeCollection('c1', 'g1') });
+    items.set({ t1: makeTodo('t1', { collectionId: 'c1' }) });
+
+    await setCollectionArchived('c1', true);
+    expect(get(groupCollections).g1).toEqual([]);
+    expect(get(visibleTodos)).toEqual([]);
+    expect(get(archivedCollections).map((collection) => collection.id)).toEqual(
+      ['c1'],
+    );
+
+    await setCollectionArchived('c1', false);
+    expect(get(groupCollections).g1.map((collection) => collection.id)).toEqual(
+      ['c1'],
+    );
+  });
+
+  it('hides archived groups as a unit without changing their children', async () => {
+    groups.set({ g1: makeGroup('g1', ['c1']) });
+    collections.set({ c1: makeCollection('c1', 'g1') });
+
+    await setGroupArchived('g1', true);
+    expect(get(visibleGroupedCollections)).toEqual([]);
+    expect(get(archivedGroups).map((group) => group.id)).toEqual(['g1']);
+    expect(get(collections).c1.archived).toBeUndefined();
+
+    await setGroupArchived('g1', false);
+    expect(get(visibleGroupedCollections)[0]?.collections[0]?.id).toBe('c1');
+  });
+});
 
 function makeVersionedNote(id: string, version: number): InboxItem {
   return {
