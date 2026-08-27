@@ -380,7 +380,7 @@
       </section>
 
       {#if onCalendarItems.length > 0}
-        <section class="on-calendar-section" aria-label="On calendar in {collection.name}">
+        <section class="on-calendar-section" aria-label="Archived in {collection.name}">
           <button type="button"
             class="btn-completed-toggle"
             onclick={() => (onCalendarExpanded = !onCalendarExpanded)}
@@ -389,7 +389,7 @@
             <svg aria-hidden="true" class="chevron-sm" class:open={onCalendarExpanded} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="6 9 12 15 18 9"></polyline>
             </svg>
-            {onCalendarItems.length} on calendar
+            {onCalendarItems.length} archived
           </button>
           {#if onCalendarExpanded}
             <div class="on-calendar-body" transition:slide={{ duration: isTouchDevice ? 0 : 200 }}>

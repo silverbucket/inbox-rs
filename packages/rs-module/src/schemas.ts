@@ -26,6 +26,7 @@ const scheduleFields = {
   eventEtag: { type: 'string' },
   archived: { type: 'boolean' },
   archivedAt: { type: 'string' },
+  archiveReason: { type: 'string', enum: ['manual', 'calendar'] },
 };
 
 // rs-migrate version stamp — must be in every item schema so remoteStorage persists it
@@ -238,6 +239,8 @@ export const collectionSchema = {
     createdAt: { type: 'string' },
     color: { type: 'string' },
     groupId: { type: 'string' },
+    archived: { type: 'boolean' },
+    archivedAt: { type: 'string' },
   },
   required: ['id', 'name', 'itemIds', 'createdAt'],
 };
@@ -250,6 +253,8 @@ export const collectionGroupSchema = {
     collectionIds: { type: 'array', items: { type: 'string' } },
     createdAt: { type: 'string' },
     color: { type: 'string' },
+    archived: { type: 'boolean' },
+    archivedAt: { type: 'string' },
   },
   required: ['id', 'name', 'collectionIds', 'createdAt'],
 };

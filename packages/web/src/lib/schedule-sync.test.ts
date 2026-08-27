@@ -68,6 +68,7 @@ describe('addItemToCalendar — the archive ownership rule', () => {
     const result = await addItemToCalendar(note(), CAL.id);
     expect(result.archived).toBe(true);
     expect(result.archivedAt).toBeTruthy();
+    expect(result.archiveReason).toBe('calendar');
     expect(lastStored().archived).toBe(true);
   });
 

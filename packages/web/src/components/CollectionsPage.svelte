@@ -6,6 +6,7 @@
     visibleGroupedCollections, sortedGroups, storeGroup, deleteGroup,
     appConfig, updateConfig, reorderGroupCollections, setExpandedCollections,
     collectionItems, groups, orphanCollections,
+    archivedCollections, archivedGroups, setCollectionArchived, setGroupArchived,
   } from '../lib/stores';
   import CollectionView from './CollectionView.svelte';
   import GroupSection from './GroupSection.svelte';
@@ -21,6 +22,7 @@
   let editingGroup = $state<CollectionGroup | null>(null);
   let collectionFormGroupId = $state<string | undefined>(undefined);
   let creatingCollection = $state(false);
+  let archiveExpanded = $state(false);
 
   let isTouchDevice = $state(false);
   $effect(() => {
@@ -150,6 +152,17 @@
     }
   }
 
+  async function handleArchiveCollection() {
+    if (!editingCollection) return;
+    const id = editingCollection.id;
+    editingCollection = null;
+    try {
+      await setCollectionArchived(id, true);
+    } catch (error) {
+      console.error('Failed to archive collection', error);
+    }
+  }
+
   async function handleEditGroup(group: CollectionGroup) {
     try {
       await storeGroup(group);
@@ -169,6 +182,19 @@
       console.error('Failed to delete group', error);
     }
   }
+
+  async function handleArchiveGroup() {
+    if (!editingGroup) return;
+    const id = editingGroup.id;
+    editingGroup = null;
+    try {
+      await setGroupArchived(id, true);
+    } catch (error) {
+      console.error('Failed to archive group', error);
+    }
+  }
+
+  const archiveCount = $derived($archivedCollections.length + $archivedGroups.length);
 
   const editingGroupIsEmpty = $derived.by(() => {
     if (!editingGroup) return false;
@@ -205,6 +231,31 @@
     {/if}
     <Fab onclick={() => openAddCollection(undefined)} label="New collection" />
   </div>
+
+  {#if archiveCount > 0}
+    <section class="archive-section" aria-label="Archived collections and groups">
+      <button type="button" class="archive-toggle" aria-expanded={archiveExpanded} onclick={() => archiveExpanded = !archiveExpanded}>
+        <span>Archive</span>
+        <span class="archive-count">{archiveCount}</span>
+      </button>
+      {#if archiveExpanded}
+        <div class="archive-list">
+          {#each $archivedGroups as group (group.id)}
+            <div class="archive-row">
+              <span><strong>{group.name}</strong> · group</span>
+              <button type="button" onclick={() => void setGroupArchived(group.id, false)}>Restore</button>
+            </div>
+          {/each}
+          {#each $archivedCollections as collection (collection.id)}
+            <div class="archive-row">
+              <span><strong>{collection.name}</strong> · collection</span>
+              <button type="button" onclick={() => void setCollectionArchived(collection.id, false)}>Restore</button>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </section>
+  {/if}
 
   {#each sections as section (section.group.id)}
     {@const realCount = dndByGroup[section.group.id]?.length ?? 0}
@@ -327,6 +378,7 @@
     onclose={() => editingCollection = null}
     onsave={handleEditCollection}
     ondelete={editingCollectionIsEmpty ? handleDeleteCollection : undefined}
+    onarchive={handleArchiveCollection}
   />
 {/if}
 
@@ -336,6 +388,7 @@
     onclose={() => editingGroup = null}
     onsave={handleEditGroup}
     ondelete={editingGroupIsEmpty ? handleDeleteGroup : undefined}
+    onarchive={handleArchiveGroup}
   />
 {/if}
 
@@ -394,6 +447,54 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+  }
+
+  .archive-section {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+
+  .archive-toggle, .archive-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .archive-toggle {
+    border: none;
+    background: var(--surface-tint);
+    color: var(--text-muted);
+    padding: 0.65rem 0.85rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+
+  .archive-count {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .archive-list {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .archive-row {
+    padding: 0.6rem 0.85rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.82rem;
+  }
+
+  .archive-row button {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text);
+    padding: 0.3rem 0.6rem;
+    cursor: pointer;
   }
 
   .group-empty {

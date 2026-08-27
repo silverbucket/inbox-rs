@@ -45,6 +45,8 @@ export interface InboxItemBase {
    */
   archived?: boolean;
   archivedAt?: string;
+  /** Why the card was archived. Missing on legacy calendar-moved cards. */
+  archiveReason?: 'manual' | 'calendar';
 }
 
 export interface BookmarkItem extends InboxItemBase {
@@ -190,6 +192,8 @@ export interface Collection {
   createdAt: string; // ISO 8601
   color?: string; // optional accent color
   groupId?: string; // optional group membership
+  archived?: boolean;
+  archivedAt?: string;
 }
 
 export interface CollectionGroup {
@@ -198,4 +202,6 @@ export interface CollectionGroup {
   collectionIds: string[]; // ordered list of collection IDs in this group
   createdAt: string; // ISO 8601
   color?: string; // optional accent color
+  archived?: boolean;
+  archivedAt?: string;
 }

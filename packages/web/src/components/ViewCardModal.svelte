@@ -9,6 +9,7 @@
     deleteItem,
     groups,
     moveItemToCollection,
+    setItemArchived,
     storeItem,
   } from '../lib/stores';
   import { recordCollectionUse } from '../lib/collection-suggest';
@@ -105,6 +106,18 @@
     onclose();
   }
 
+  async function toggleArchived() {
+    try {
+      await prepareAction();
+      await setItemArchived(item.id, !item.archived);
+      showToast(item.archived ? 'Card restored' : 'Card archived');
+      onclose();
+    } catch (error) {
+      console.error('Failed to change archive state', error);
+      showToast('Could not change archive state');
+    }
+  }
+
   /**
    * A todo↔reference conversion changes the card's kind, so a posted
    * calendar entry no longer matches what the receipt claims (a VEVENT for
@@ -122,6 +135,7 @@
     delete updated.eventEtag;
     delete updated.archived;
     delete updated.archivedAt;
+    delete updated.archiveReason;
     if (updated.startsAt) updated.scheduleKind = newKind;
   }
 
@@ -694,6 +708,14 @@
     </button>
 
     <div class="action-list">
+      <button type="button" class="action-row" onclick={() => void toggleArchived()}>
+        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="21 8 21 21 3 21 3 8"></polyline>
+          <rect x="1" y="3" width="22" height="5"></rect>
+          <line x1="10" y1="12" x2="14" y2="12"></line>
+        </svg>
+        {item.archived ? 'Restore from archive' : 'Archive card'}
+      </button>
       {#if canMakeTodo}
         <button
           type="button"

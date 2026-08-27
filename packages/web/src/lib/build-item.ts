@@ -60,6 +60,7 @@ function preserveCollection<T extends InboxItem>(
       'eventEtag',
       'archived',
       'archivedAt',
+      'archiveReason',
     ] as const) {
       if (ctx.editItem[key] !== undefined) {
         (schedule as Record<string, unknown>)[key] = ctx.editItem[key];

@@ -1070,6 +1070,27 @@ export async function storeCollection(collection: Collection) {
   collections.update((current) => ({ ...current, [clean.id]: clean }));
 }
 
+export async function setItemArchived(id: string, archived: boolean) {
+  const item = get(items)[id];
+  if (!item) return;
+  await storeItem({
+    ...item,
+    archived: archived || undefined,
+    archivedAt: archived ? new Date().toISOString() : undefined,
+    archiveReason: archived ? 'manual' : undefined,
+  });
+}
+
+export async function setCollectionArchived(id: string, archived: boolean) {
+  const collection = get(collections)[id];
+  if (!collection) return;
+  await storeCollection({
+    ...collection,
+    archived: archived || undefined,
+    archivedAt: archived ? new Date().toISOString() : undefined,
+  });
+}
+
 /**
  * Delete a collection. Refuses if the collection still contains items — the
  * caller is expected to either move items out (drag/drop, picker) or delete
@@ -1254,9 +1275,29 @@ export async function setExpandedCollections(ids: string[]) {
 
 // ---- Group operations ----
 
-export const sortedGroups = orderedDerived<CollectionGroup>(
-  groups,
-  'groupsOrder',
+const allSortedGroups = orderedDerived<CollectionGroup>(groups, 'groupsOrder');
+
+export const sortedGroups = derived(allSortedGroups, ($groups) =>
+  $groups.filter((group) => !group.archived),
+);
+
+export const archivedGroups = derived(allSortedGroups, ($groups) =>
+  $groups.filter((group) => group.archived),
+);
+
+export const archivedCollections = derived(
+  [collections, groups],
+  ([$collections, $groups]) =>
+    Object.values($collections)
+      .filter(
+        (collection) =>
+          collection.archived && !$groups[collection.groupId ?? '']?.archived,
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.archivedAt ?? b.createdAt).getTime() -
+          new Date(a.archivedAt ?? a.createdAt).getTime(),
+      ),
 );
 
 export const groupCollections = derived(
@@ -1266,14 +1307,14 @@ export const groupCollections = derived(
     for (const [gid, group] of Object.entries($groups)) {
       const orderedIds = group.collectionIds.filter((cid) => {
         const col = $collections[cid];
-        return col !== undefined && col.groupId === gid;
+        return col !== undefined && col.groupId === gid && !col.archived;
       });
       const orderedSet = new Set(orderedIds);
       // Start with ordered collections whose groupId matches
       const cols: Collection[] = orderedIds.map((cid) => $collections[cid]);
       // Append any collections whose groupId points here but missing from collectionIds
       for (const col of Object.values($collections)) {
-        if (col.groupId === gid && !orderedSet.has(col.id)) {
+        if (col.groupId === gid && !col.archived && !orderedSet.has(col.id)) {
           cols.push(col);
         }
       }
@@ -1299,6 +1340,16 @@ export async function storeGroup(group: CollectionGroup) {
       await updateConfig({ activeGroupFilters: [...existing, clean.id] });
     }
   }
+}
+
+export async function setGroupArchived(id: string, archived: boolean) {
+  const group = get(groups)[id];
+  if (!group) return;
+  await storeGroup({
+    ...group,
+    archived: archived || undefined,
+    archivedAt: archived ? new Date().toISOString() : undefined,
+  });
 }
 
 export async function deleteGroup(id: string): Promise<boolean> {
@@ -1625,7 +1676,7 @@ export const orphanCollections = derived(
   [collections, groups],
   ([$collections, $groups]): Collection[] => {
     return Object.values($collections)
-      .filter((col) => !col.groupId || !$groups[col.groupId])
+      .filter((col) => !col.archived && (!col.groupId || !$groups[col.groupId]))
       .sort(
         (a, b) =>
           new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
@@ -1877,6 +1928,7 @@ function todoPassesGroupFilter(
   if (!todo.collectionId) return true;
   const col = $collections[todo.collectionId];
   if (!col) return true;
+  if (col.archived) return false;
   if (!col.groupId) return false;
   if (!$activeGroupIds.has(col.groupId)) return false;
   return !$inactiveCollectionIds.has(col.id);

@@ -3,11 +3,12 @@
   import EntityFormModal from './EntityFormModal.svelte';
   import { randomPresetColor } from '../lib/constants';
 
-  let { group = undefined, onclose, onsave, ondelete = undefined }: {
+  let { group = undefined, onclose, onsave, ondelete = undefined, onarchive = undefined }: {
     group?: CollectionGroup;
     onclose: () => void;
     onsave: (group: CollectionGroup) => void;
     ondelete?: () => void;
+    onarchive?: () => void;
   } = $props();
 
   let name = $state(group?.name ?? '');
@@ -35,4 +36,5 @@
   {onclose}
   onsubmit={handleSubmit}
   {ondelete}
+  {onarchive}
 />

@@ -17,6 +17,7 @@
     onclose,
     onsubmit: handleFormSubmit,
     ondelete = undefined,
+    onarchive = undefined,
     extraFields = undefined,
     canSubmit = true,
   }: {
@@ -33,6 +34,7 @@
     onclose: () => void;
     onsubmit: () => void;
     ondelete?: () => void;
+    onarchive?: () => void;
     /** Optional extra fields rendered between description and color palette.
         Consumers use this to inject entity-specific controls (e.g. the
         Collection form's group picker) without subclassing the whole modal. */
@@ -108,6 +110,9 @@
       </fieldset>
 
       <div class="actions">
+        {#if isEdit && onarchive && !confirmingDelete}
+          <button type="button" class="btn-archive" onclick={onarchive}>Archive</button>
+        {/if}
         {#if isEdit && ondelete}
           {#if confirmingDelete}
             <span class="delete-confirm-text">Delete this {entityName.toLowerCase()}?</span>
@@ -252,6 +257,22 @@
     border-radius: var(--radius-sm);
     font-size: 0.85rem;
     cursor: pointer;
+  }
+
+  .btn-archive {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 0.45rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    cursor: pointer;
+    margin-right: auto;
+  }
+
+  .btn-archive:hover {
+    color: var(--text);
+    border-color: var(--text-muted);
   }
 
   .btn-cancel:hover {

@@ -192,6 +192,7 @@ function clearPostedEntryFields() {
     eventEtag: undefined,
     archived: undefined,
     archivedAt: undefined,
+    archiveReason: undefined,
   };
 }
 

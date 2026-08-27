@@ -165,7 +165,7 @@
   style="--group-color: {groupColor}; --collection-color: {collectionColor}"
 >
   {#if readonly}
-    <span class="cal-marker" title="On calendar" role="img" aria-label="On calendar">
+    <span class="cal-marker" title={todo.eventUrl ? 'On calendar' : 'Archived'} role="img" aria-label={todo.eventUrl ? 'On calendar' : 'Archived'}>
       <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="3" y="4" width="18" height="18" rx="2"></rect>
         <line x1="16" y1="2" x2="16" y2="6"></line>

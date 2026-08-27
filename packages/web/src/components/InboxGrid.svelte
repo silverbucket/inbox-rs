@@ -103,7 +103,7 @@
       >
         <polyline points="9 18 15 12 9 6"></polyline>
       </svg>
-      {archived.length} archived — on your calendar
+      {archived.length} archived
     </button>
     {#if archivedExpanded}
       <div class="grid-wrap">

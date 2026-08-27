@@ -5,7 +5,7 @@
   import EntityFormModal from './EntityFormModal.svelte';
   import { randomPresetColor } from '../lib/constants';
 
-  let { collection = undefined, groupId = undefined, onclose, onsave, ondelete = undefined }: {
+  let { collection = undefined, groupId = undefined, onclose, onsave, ondelete = undefined, onarchive = undefined }: {
     collection?: Collection;
     /** Pre-selected group for the create path — e.g. when the user clicks
         "Add collection" inside a specific GroupSection. Ignored in edit mode
@@ -14,6 +14,7 @@
     onclose: () => void;
     onsave: (col: Collection) => void;
     ondelete?: () => void;
+    onarchive?: () => void;
   } = $props();
 
   const isEdit = $derived(!!collection);
@@ -41,22 +42,26 @@
   function pickInitialGroupId(): string {
     if (collection?.groupId) return collection.groupId;
     if (groupId) return groupId;
-    const allGroups = get(groups);
-    const last = get(appConfig).lastSelectedGroupId;
-    if (last && allGroups[last]) return last;
     const ordered = get(sortedGroups);
+    const activeIds = new Set(ordered.map((group) => group.id));
+    const last = get(appConfig).lastSelectedGroupId;
+    if (last && activeIds.has(last)) return last;
     return ordered[0]?.id ?? '';
   }
 
   let selectedGroupId = $state<string>(pickInitialGroupId());
 
   const hasGroups = $derived($sortedGroups.length > 0);
-  const canSubmit = $derived(!!selectedGroupId && !!$groups[selectedGroupId]);
+  const canSubmit = $derived(
+    !!selectedGroupId &&
+      !!$groups[selectedGroupId] &&
+      !$groups[selectedGroupId].archived,
+  );
 
   async function handleSubmit() {
     if (!name.trim()) return;
     if (!selectedGroupId) return;
-    if (!$groups[selectedGroupId]) return;
+    if (!$groups[selectedGroupId] || $groups[selectedGroupId].archived) return;
     // Persist the picked group as the next default before the parent's
     // onsave runs. Best-effort: if the write fails the user's creation
     // still succeeds, they just lose the preference memory this once.
@@ -92,6 +97,7 @@
   {onclose}
   onsubmit={handleSubmit}
   {ondelete}
+  {onarchive}
   extraFields={groupField}
   {canSubmit}
 />
