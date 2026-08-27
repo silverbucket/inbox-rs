@@ -11,6 +11,7 @@
 
   let { item }: { item: ImageItem } = $props();
   let showLightbox = $state(false);
+  let failedImageSrc = $state<string | null>(null);
   // Only start fetching bytes once the card approaches the viewport (see the
   // inview action) — otherwise opening a large inbox fires a fetch for every
   // image at once.
@@ -34,11 +35,21 @@
   const displayMime = $derived(
     item.thumbPath && !thumbFailed ? item.thumbMimeType : item.mimeType,
   );
-  const imageSrc = $derived($blobUrls[displayPath] || null);
+  const imageSrc = $derived(
+    (displayPath && $blobUrls[displayPath] !== failedImageSrc
+      ? $blobUrls[displayPath]
+      : null) ||
+      (item.sourceUrl !== failedImageSrc ? item.sourceUrl : null) ||
+      null,
+  );
   // Lightbox shows the original at full resolution — kick off its load when
   // opened and show the thumbnail as a progressive placeholder until the
   // original's blob URL lands.
-  const fullSrc = $derived($blobUrls[item.filePath] || imageSrc);
+  const fullSrc = $derived(
+    item.filePath && $blobUrls[item.filePath] !== failedImageSrc
+      ? $blobUrls[item.filePath] || imageSrc
+      : imageSrc,
+  );
 
   // Load the image bytes once visible. loadFileBlobUrl reads the local cache
   // first (file paths are immutable) and falls back to the remote, so files
@@ -79,7 +90,7 @@
         alt={item.title || 'Image'}
         loading="lazy"
         decoding="async"
-        onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+        onerror={() => (failedImageSrc = imageSrc)}
       />
     {:else}
       <div class="placeholder">Not connected</div>
@@ -87,11 +98,6 @@
   </div>
   {#if showLightbox && imageSrc}
     <Lightbox src={fullSrc || imageSrc} alt={item.title || 'Image'} onclose={() => showLightbox = false} filePath={item.filePath} mimeType={item.mimeType} filename={item.title || undefined} />
-  {/if}
-  {#if item.sourceUrl}
-    <a class="source-link" href={item.sourceUrl} target="_blank" rel="noopener noreferrer">
-      Original source
-    </a>
   {/if}
 </div>
 
@@ -112,18 +118,6 @@
   img {
     width: 100%;
     display: block;
-  }
-
-  .source-link {
-    display: block;
-    margin-top: 0.4rem;
-    font-size: 0.75rem;
-    color: var(--accent);
-    opacity: 0.7;
-  }
-
-  .source-link:hover {
-    opacity: 1;
   }
 
   .placeholder {

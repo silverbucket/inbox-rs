@@ -92,6 +92,26 @@ describe('card drafts', () => {
     expect(applyCardDraft(bookmark, draft)).toEqual(bookmark);
   });
 
+  it('uses the shared URL draft field for an image source URL', () => {
+    const image: InboxItem = {
+      id: 'image-1',
+      type: 'image',
+      title: 'Image',
+      filePath: 'files/image-1.jpg',
+      mimeType: 'image/jpeg',
+      sourceUrl: 'https://example.org/original.jpg',
+      createdAt: note.createdAt,
+    };
+    const draft = createCardDraft(image);
+    expect(draft.url).toBe(image.sourceUrl);
+
+    draft.url = 'https://example.org/replacement.jpg';
+    expect(applyCardDraft(image, draft)).toEqual({
+      ...image,
+      sourceUrl: 'https://example.org/replacement.jpg',
+    });
+  });
+
   it('clears bookmark notes only when body is explicitly empty', () => {
     const bookmark: InboxItem = {
       id: 'bm-1',

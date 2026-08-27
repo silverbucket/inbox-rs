@@ -2,6 +2,23 @@ const MAX_DIRECT_IMAGE_BYTES = 25 * 1024 * 1024;
 const DIRECT_IMAGE_TIMEOUT_MS = 20_000;
 const IMAGE_PATH_PATTERN = /\.(?:avif|gif|jpe?g|png|svg|webp)$/i;
 
+export function isDirectImageUrl(url: string): boolean {
+  try {
+    return IMAGE_PATH_PATTERN.test(new URL(url).pathname);
+  } catch {
+    return false;
+  }
+}
+
+export function imageNameFromUrl(url: string): string {
+  try {
+    const encodedName = new URL(url).pathname.split('/').pop() || 'Image';
+    return decodeURIComponent(encodedName);
+  } catch {
+    return 'Image';
+  }
+}
+
 /**
  * Download a direct-image URL for local-first storage. New captures use the
  * pathname as a cheap candidate filter; callers checking an existing bookmark
@@ -17,8 +34,7 @@ export async function downloadDirectImage(
   } catch {
     return null;
   }
-  if (requireImagePath && !IMAGE_PATH_PATTERN.test(parsed.pathname))
-    return null;
+  if (requireImagePath && !isDirectImageUrl(url)) return null;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), DIRECT_IMAGE_TIMEOUT_MS);

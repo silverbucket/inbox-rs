@@ -20,6 +20,7 @@ const item: ImageItem = {
   description: 'Original description',
   filePath: 'files/image-1.jpg',
   mimeType: 'image/jpeg',
+  sourceUrl: 'https://example.com/original.jpg',
   createdAt: '2026-08-01T10:00:00.000Z',
   pinned: true,
 };
@@ -117,6 +118,29 @@ describe('CardInlineEditor autosave', () => {
     expect(host.querySelector('section.editor')?.classList).toContain(
       'compact',
     );
+  });
+
+  it('uses the shared URL and open-link widgets for an image source', () => {
+    render();
+
+    const urlInput = host.querySelector(
+      'input[type="url"]',
+    ) as HTMLInputElement;
+    expect(urlInput.value).toBe(item.sourceUrl);
+    const openLink = host.querySelector('.source-link');
+    expect(openLink?.textContent).toContain('Open link');
+    expect(openLink?.getAttribute('href')).toBe(item.sourceUrl);
+  });
+
+  it('does not render an open link for an active URI scheme', () => {
+    component = mount(CardInlineEditor, {
+      target: host,
+      props: { item: { ...item, sourceUrl: 'javascript:alert(1)' } },
+    });
+    flushSync();
+
+    expect(host.querySelector('input[type="url"]')).not.toBeNull();
+    expect(host.querySelector('.source-link')).toBeNull();
   });
 
   it('keeps a merged external update pending when an older save is in flight', async () => {

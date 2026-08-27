@@ -138,22 +138,29 @@ describe('captureDetected', () => {
     expect(cancel).toHaveBeenCalledOnce();
   });
 
-  it('falls back to a bookmark when an image-looking URL is not an image', async () => {
+  it('keeps an image-looking URL as a remote image when download is blocked', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
-        new Response('<html>not found</html>', {
-          status: 200,
+        new Response('<html>Cloudflare challenge</html>', {
+          status: 403,
           headers: { 'content-type': 'text/html' },
         }),
       ),
     );
 
-    const url = 'https://example.com/not-really.jpg';
+    const url =
+      'https://www.lookandlearn.com/history-images/preview/YW/YW048/YW048554VEL_A-Basque-woman-with-an-earthenware-jug-on-her-head-posing-in-front-of-a-studio-backdrop-of-the-Atlantic-Ocean.jpg';
     const res = await captureDetected(url);
 
-    expect(res?.item.type).toBe('bookmark');
-    expect(enrichBookmark).toHaveBeenCalledWith(res?.item);
+    expect(res?.item).toMatchObject({
+      type: 'image',
+      title:
+        'YW048554VEL_A-Basque-woman-with-an-earthenware-jug-on-her-head-posing-in-front-of-a-studio-backdrop-of-the-Atlantic-Ocean.jpg',
+      sourceUrl: url,
+    });
+    expect(res?.item).not.toHaveProperty('filePath');
+    expect(enrichBookmark).not.toHaveBeenCalled();
   });
 
   it('kicks off background metadata enrichment for bookmarks', async () => {

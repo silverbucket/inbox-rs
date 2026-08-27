@@ -573,21 +573,19 @@
         bind:retry={retrySave}
         onfetchurlpreview={noteBookmarkUrl ? convertNoteToBookmark : undefined}
         fetchingUrlPreview={convertingBookmark}
-      />
-    {/key}
-
-    <!-- Type-specific previews and file actions stay available beneath the
-         always-editable content without duplicating title/body fields. -->
-    {#key `${item.id}:${item.type}`}
-      {#if item.type === 'bookmark'}
-        <BookmarkView {item} titleId={TITLE_ID} showTitle={false} beforeAction={prepareAction} />
-      {:else if item.type === 'image'}
-        <ImageView {item} titleId={TITLE_ID} showTitle={false} />
-      {:else if item.type === 'audio'}
-        <AudioView {item} titleId={TITLE_ID} showTitle={false} showBody={false} beforeAction={prepareAction} />
-      {:else if item.type === 'document'}
-        <DocumentView {item} titleId={TITLE_ID} showTitle={false} />
-      {/if}
+      >
+        <!-- Primary content is composed into the shared editor so every card
+             places More details after its content, regardless of type. -->
+        {#if item.type === 'bookmark'}
+          <BookmarkView {item} titleId={TITLE_ID} showTitle={false} beforeAction={prepareAction} />
+        {:else if item.type === 'image'}
+          <ImageView {item} titleId={TITLE_ID} showTitle={false} />
+        {:else if item.type === 'audio'}
+          <AudioView {item} titleId={TITLE_ID} showTitle={false} showBody={false} beforeAction={prepareAction} />
+        {:else if item.type === 'document'}
+          <DocumentView {item} titleId={TITLE_ID} showTitle={false} />
+        {/if}
+      </CardInlineEditor>
     {/key}
 
     {#if hasFile}

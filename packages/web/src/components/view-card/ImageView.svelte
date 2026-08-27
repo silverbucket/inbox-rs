@@ -6,8 +6,15 @@
   let { item, titleId, showTitle = true }: { item: ImageItem; titleId: string; showTitle?: boolean } = $props();
 
   let showLightbox = $state(false);
+  let failedImageSrc = $state<string | null>(null);
 
-  const imageSrc = $derived($blobUrls[item.filePath] || null);
+  const imageSrc = $derived(
+    (item.filePath && $blobUrls[item.filePath] !== failedImageSrc
+      ? $blobUrls[item.filePath]
+      : null) ||
+      (item.sourceUrl !== failedImageSrc ? item.sourceUrl : null) ||
+      null,
+  );
 
   // The parent shell wraps the per-type view in `{#key item.id}`, so
   // navigating between images remounts this component — `showLightbox`
@@ -33,9 +40,12 @@
       class="view-image"
       src={imageSrc}
       alt=""
-      onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
+      onerror={() => (failedImageSrc = imageSrc)}
     />
   </div>
+{/if}
+{#if failedImageSrc === item.sourceUrl}
+  <p class="status-text">Preview blocked by source</p>
 {/if}
 {#if showLightbox && imageSrc}
   <Lightbox
