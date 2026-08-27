@@ -39,16 +39,23 @@ export default defineConfig({
           { url: '/capture/', revision: version },
         ],
         cleanupOutdatedCaches: true,
+        // Share-target and OAuth navigations hit /capture/?… — strip query
+        // params so they match the precached capture shell instead of missing
+        // the exact /capture/ key and falling through to the network.
+        ignoreURLParametersMatching: [/.*/],
         navigateFallback: '/index.html',
         // The quick-capture app is its own shell (capture/index.html). Without
         // this, any /capture/ navigation that isn't an exact precache match
-        // (query params from OAuth redirects or a future share_target, sub-
-        // paths) falls through to the MAIN app's index.html and boots the
+        // (sub-paths) falls through to the MAIN app's index.html and boots the
         // wrong app inside the capture PWA window.
         navigateFallbackDenylist: [/^\/capture\//],
         globPatterns: ['**/*.{js,css,html,json,png,svg,webmanifest,wasm}'],
         globIgnores: [
           'ml/**/*',
+          // Boot manifest must stay network-only: app-loader fetches it with
+          // cache: no-store (?t=…) to detect new releases. Precaching it would
+          // let ignoreURLParametersMatching below serve a stale manifest.
+          'asset-manifest.json',
           // Lazy-only heavyweights (~1.4 MB minified combined). They're
           // dynamic-imported and most sessions never execute them, yet
           // precaching forces every visitor to download them on install and

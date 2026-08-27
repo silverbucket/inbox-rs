@@ -162,7 +162,79 @@
     }
   }
 
-  async function loadApplication() {
+  async function tryManifestCandidates(candidates, onSuccess) {
+    const attempted = new Set();
+    let lastError;
+    for (const manifest of candidates) {
+      const fingerprint = JSON.stringify(manifest);
+      if (attempted.has(fingerprint)) continue;
+      attempted.add(fingerprint);
+      try {
+        await loadManifest(manifest);
+        rememberManifest(manifest);
+        onSuccess?.(manifest);
+        return true;
+      } catch (error) {
+        lastError = error;
+        console.warn('App release failed to load; trying a fallback', error);
+      }
+    }
+    if (lastError) throw lastError;
+    return false;
+  }
+
+  async function loadCaptureApplication() {
+    const history = readHistory();
+    let manifestUnavailable = false;
+    const networkPromise = fetchCurrentManifest().catch((error) => {
+      manifestUnavailable = true;
+      console.warn('Could not fetch the current app release', error);
+      return null;
+    });
+
+    try {
+      if (
+        await tryManifestCandidates(history, (manifest) => {
+          void networkPromise.then((current) => {
+            if (
+              current &&
+              JSON.stringify(current) !== JSON.stringify(manifest)
+            ) {
+              rememberManifest(current);
+            }
+          });
+        })
+      ) {
+        return;
+      }
+    } catch (error) {
+      console.warn(
+        'Cached capture release failed to load; checking network',
+        error,
+      );
+    }
+
+    const current = await networkPromise;
+    if (current) {
+      try {
+        await tryManifestCandidates([current]);
+        return;
+      } catch (error) {
+        console.warn('Current capture release failed to load', error);
+      }
+    }
+
+    if (
+      manifestUnavailable &&
+      (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+    ) {
+      await import(devEntry);
+      return;
+    }
+    throw new Error('No capture release is available');
+  }
+
+  async function loadMainApplication() {
     const candidates = [];
     let manifestUnavailable = false;
     try {
@@ -173,29 +245,26 @@
     }
     candidates.push(...readHistory());
 
-    const attempted = new Set();
-    let lastError;
-    for (const manifest of candidates) {
-      const fingerprint = JSON.stringify(manifest);
-      if (attempted.has(fingerprint)) continue;
-      attempted.add(fingerprint);
-      try {
-        await loadManifest(manifest);
-        rememberManifest(manifest);
+    try {
+      if (await tryManifestCandidates(candidates)) return;
+      throw new Error('No application release is available');
+    } catch (lastError) {
+      if (
+        manifestUnavailable &&
+        (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+      ) {
+        await import(devEntry);
         return;
-      } catch (error) {
-        lastError = error;
-        console.warn('App release failed to load; trying a fallback', error);
       }
+      throw lastError;
     }
-    if (
-      manifestUnavailable &&
-      (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-    ) {
-      await import(devEntry);
-      return;
+  }
+
+  async function loadApplication() {
+    if (isCapture) {
+      return loadCaptureApplication();
     }
-    throw lastError || new Error('No app release is available');
+    return loadMainApplication();
   }
 
   async function coordinateServiceWorkerUpdate() {
