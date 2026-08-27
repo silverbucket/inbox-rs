@@ -194,6 +194,22 @@
     }
   }
 
+  async function handleRestoreGroup(id: string) {
+    try {
+      await setGroupArchived(id, false);
+    } catch (error) {
+      console.error('Failed to restore group', error);
+    }
+  }
+
+  async function handleRestoreCollection(id: string) {
+    try {
+      await setCollectionArchived(id, false);
+    } catch (error) {
+      console.error('Failed to restore collection', error);
+    }
+  }
+
   const archiveCount = $derived($archivedCollections.length + $archivedGroups.length);
 
   const editingGroupIsEmpty = $derived.by(() => {
@@ -243,13 +259,13 @@
           {#each $archivedGroups as group (group.id)}
             <div class="archive-row">
               <span><strong>{group.name}</strong> · group</span>
-              <button type="button" onclick={() => void setGroupArchived(group.id, false)}>Restore</button>
+              <button type="button" onclick={() => void handleRestoreGroup(group.id)}>Restore</button>
             </div>
           {/each}
           {#each $archivedCollections as collection (collection.id)}
             <div class="archive-row">
               <span><strong>{collection.name}</strong> · collection</span>
-              <button type="button" onclick={() => void setCollectionArchived(collection.id, false)}>Restore</button>
+              <button type="button" onclick={() => void handleRestoreCollection(collection.id)}>Restore</button>
             </div>
           {/each}
         </div>
