@@ -155,6 +155,17 @@
   );
   const descriptionIsPrimary = $derived(item.type === 'document');
   const hasUrl = $derived(item.type === 'bookmark' || item.type === 'image');
+  const safeLinkUrl = $derived.by(() => {
+    if (!draft.url) return null;
+    try {
+      const parsed = new URL(draft.url);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+        ? parsed.href
+        : null;
+    } catch {
+      return null;
+    }
+  });
 </script>
 
 <section
@@ -177,8 +188,8 @@
       aria-label="Title"
       placeholder="Untitled"
     />
-    {#if hasUrl && draft.url}
-      <a class="source-link" href={draft.url} target="_blank" rel="noopener noreferrer">Open link ↗</a>
+    {#if hasUrl && safeLinkUrl}
+      <a class="source-link" href={safeLinkUrl} target="_blank" rel="noopener noreferrer">Open link ↗</a>
     {:else if item.type === 'email' && item.messageUrl}
       <a class="source-link" href={item.messageUrl}>Open email ↗</a>
     {/if}

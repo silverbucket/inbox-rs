@@ -132,6 +132,17 @@ describe('CardInlineEditor autosave', () => {
     expect(openLink?.getAttribute('href')).toBe(item.sourceUrl);
   });
 
+  it('does not render an open link for an active URI scheme', () => {
+    component = mount(CardInlineEditor, {
+      target: host,
+      props: { item: { ...item, sourceUrl: 'javascript:alert(1)' } },
+    });
+    flushSync();
+
+    expect(host.querySelector('input[type="url"]')).not.toBeNull();
+    expect(host.querySelector('.source-link')).toBeNull();
+  });
+
   it('keeps a merged external update pending when an older save is in flight', async () => {
     let releaseSave: (() => void) | undefined;
     const saveGate = new Promise<void>((resolve) => {

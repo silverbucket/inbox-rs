@@ -11,7 +11,7 @@
 
   let { item }: { item: ImageItem } = $props();
   let showLightbox = $state(false);
-  let failedSourceUrl = $state<string | null>(null);
+  let failedImageSrc = $state<string | null>(null);
   // Only start fetching bytes once the card approaches the viewport (see the
   // inview action) — otherwise opening a large inbox fires a fetch for every
   // image at once.
@@ -36,15 +36,19 @@
     item.thumbPath && !thumbFailed ? item.thumbMimeType : item.mimeType,
   );
   const imageSrc = $derived(
-    (displayPath ? $blobUrls[displayPath] : null) ||
-      (item.sourceUrl !== failedSourceUrl ? item.sourceUrl : null) ||
+    (displayPath && $blobUrls[displayPath] !== failedImageSrc
+      ? $blobUrls[displayPath]
+      : null) ||
+      (item.sourceUrl !== failedImageSrc ? item.sourceUrl : null) ||
       null,
   );
   // Lightbox shows the original at full resolution — kick off its load when
   // opened and show the thumbnail as a progressive placeholder until the
   // original's blob URL lands.
   const fullSrc = $derived(
-    (item.filePath ? $blobUrls[item.filePath] : null) || imageSrc,
+    item.filePath && $blobUrls[item.filePath] !== failedImageSrc
+      ? $blobUrls[item.filePath] || imageSrc
+      : imageSrc,
   );
 
   // Load the image bytes once visible. loadFileBlobUrl reads the local cache
@@ -86,7 +90,7 @@
         alt={item.title || 'Image'}
         loading="lazy"
         decoding="async"
-        onerror={() => (failedSourceUrl = item.sourceUrl ?? null)}
+        onerror={() => (failedImageSrc = imageSrc)}
       />
     {:else}
       <div class="placeholder">Not connected</div>

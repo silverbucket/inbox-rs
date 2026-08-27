@@ -75,6 +75,26 @@ describe('ImageCard offline display', () => {
     expect(host.textContent).not.toContain('Not connected');
   });
 
+  it('falls back to the remote source when a local blob cannot render', () => {
+    const itemWithFallback: ImageItem = {
+      ...item,
+      sourceUrl: 'https://example.com/fallback.png',
+    };
+    blobUrls.set({ 'files/img1.png': 'blob:cache/corrupt' });
+
+    component = mount(ImageCard, {
+      target: host,
+      props: { item: itemWithFallback },
+    });
+    flushSync();
+    host.querySelector('img')?.dispatchEvent(new Event('error'));
+    flushSync();
+
+    expect(host.querySelector('img')?.getAttribute('src')).toBe(
+      itemWithFallback.sourceUrl,
+    );
+  });
+
   it('uses the source URL when an image has no locally captured file', () => {
     const remoteItem: ImageItem = {
       id: 'remote-image',

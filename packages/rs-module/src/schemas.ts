@@ -82,9 +82,9 @@ export const imageMetaSchema = {
     type: { type: 'string', enum: ['image'] },
     title: { type: 'string' },
     description: { type: 'string' },
-    filePath: { type: 'string' },
-    mimeType: { type: 'string' },
-    sourceUrl: { type: 'string' },
+    filePath: { type: 'string', minLength: 1 },
+    mimeType: { type: 'string', minLength: 1 },
+    sourceUrl: { type: 'string', minLength: 1 },
     body: { type: 'string' },
     thumbPath: { type: 'string' },
     thumbMimeType: { type: 'string' },
@@ -96,6 +96,7 @@ export const imageMetaSchema = {
     ...migrateFields,
   },
   required: ['id', 'type', 'title', 'createdAt'],
+  anyOf: [{ required: ['filePath', 'mimeType'] }, { required: ['sourceUrl'] }],
 };
 
 export const audioMetaSchema = {

@@ -6,11 +6,13 @@
   let { item, titleId, showTitle = true }: { item: ImageItem; titleId: string; showTitle?: boolean } = $props();
 
   let showLightbox = $state(false);
-  let failedSourceUrl = $state<string | null>(null);
+  let failedImageSrc = $state<string | null>(null);
 
   const imageSrc = $derived(
-    (item.filePath ? $blobUrls[item.filePath] : null) ||
-      (item.sourceUrl !== failedSourceUrl ? item.sourceUrl : null) ||
+    (item.filePath && $blobUrls[item.filePath] !== failedImageSrc
+      ? $blobUrls[item.filePath]
+      : null) ||
+      (item.sourceUrl !== failedImageSrc ? item.sourceUrl : null) ||
       null,
   );
 
@@ -38,11 +40,11 @@
       class="view-image"
       src={imageSrc}
       alt=""
-      onerror={() => (failedSourceUrl = item.sourceUrl ?? null)}
+      onerror={() => (failedImageSrc = imageSrc)}
     />
   </div>
 {/if}
-{#if failedSourceUrl === item.sourceUrl && !item.filePath}
+{#if failedImageSrc === item.sourceUrl}
   <p class="status-text">Preview blocked by source</p>
 {/if}
 {#if showLightbox && imageSrc}
