@@ -121,6 +121,25 @@
     onaddincollection?.(quickAddTarget);
   }
 
+  /** Pointer target captured before dragstart — native DnD may report the `li`. */
+  let filingDragPointerTarget: EventTarget | null = null;
+
+  function onRowPointerDown(e: PointerEvent) {
+    filingDragPointerTarget = e.target;
+  }
+
+  function filingDragOriginElement(target: EventTarget | null): Element | null {
+    if (target instanceof Element) return target;
+    if (target instanceof Text) return target.parentElement;
+    return null;
+  }
+
+  function isBlockedFilingSource(target: EventTarget | null): boolean {
+    const element = filingDragOriginElement(target);
+    if (!element) return true;
+    return Boolean(element.closest('.reorder-handle, input, button, a'));
+  }
+
   // Drag the row onto a sidebar collection to re-file (same payload as InboxCard).
   // Reorder uses the grip handle + dragHandleZone so the two gestures don't fight.
   function onFileDragStart(e: DragEvent) {
@@ -128,8 +147,9 @@
       e.preventDefault();
       return;
     }
-    const target = e.target as HTMLElement;
-    if (target.closest('.reorder-handle, input, button, a')) {
+    const origin = filingDragPointerTarget ?? e.target;
+    filingDragPointerTarget = null;
+    if (isBlockedFilingSource(origin)) {
       e.preventDefault();
       return;
     }
@@ -141,11 +161,13 @@
   }
 
   function onFileDragEnd() {
+    filingDragPointerTarget = null;
     draggingItemId.set(null);
   }
 
   function handleKey(e: KeyboardEvent) {
     const target = e.target as HTMLElement;
+    if (target.closest('.reorder-handle')) return;
     // "+" shortcut triggers quick-add for this row's collection, regardless
     // of which focusable descendant has focus — this is the keyboard path for
     // the hover-reveal button so you don't have to tab to it for each new
@@ -179,18 +201,23 @@
   draggable={!readonly}
   onclick={handleClick}
   onkeydown={handleKey}
+  onpointerdown={onRowPointerDown}
   ondragstart={onFileDragStart}
   ondragend={onFileDragEnd}
   style="--group-color: {groupColor}; --collection-color: {collectionColor}"
 >
   {#if reorderable}
-    <button
-      type="button"
+    <!-- Non-form handle: svelte-dnd-action ignores nested targets with a defined
+         `value`, which includes every HTMLButtonElement. -->
+    <span
       class="reorder-handle"
+      role="button"
       use:dragHandle
       tabindex="-1"
       aria-label="Drag to reorder {todo.title}"
       title="Drag to reorder"
+      onmousedown={(e) => e.stopPropagation()}
+      ontouchstart={(e) => e.stopPropagation()}
       onpointerdown={(e) => e.stopPropagation()}
       onclick={(e) => e.stopPropagation()}
     >
@@ -199,7 +226,7 @@
         <circle cx="3" cy="8" r="1.25"/><circle cx="9" cy="8" r="1.25"/>
         <circle cx="3" cy="13" r="1.25"/><circle cx="9" cy="13" r="1.25"/>
       </svg>
-    </button>
+    </span>
   {/if}
   {#if readonly}
     <span class="cal-marker" title={todo.eventUrl ? 'On calendar' : 'Archived'} role="img" aria-label={todo.eventUrl ? 'On calendar' : 'Archived'}>
