@@ -128,6 +128,15 @@
     filingDragPointerTarget = e.target;
   }
 
+  /** Stop parent svelte-dnd-action zones from calling preventDefault on our
+      mousedown — that blocks the native HTML5 drag used for sidebar filing. */
+  function stopParentDndCapture(e: MouseEvent | TouchEvent) {
+    if (readonly) return;
+    const element = filingDragOriginElement(e.target);
+    if (!element || element.closest('.reorder-handle, input, button, a')) return;
+    e.stopPropagation();
+  }
+
   function filingDragOriginElement(target: EventTarget | null): Element | null {
     if (target instanceof Element) return target;
     if (target instanceof Text) return target.parentElement;
@@ -202,6 +211,8 @@
   onclick={handleClick}
   onkeydown={handleKey}
   onpointerdown={onRowPointerDown}
+  onmousedown={stopParentDndCapture}
+  ontouchstart={stopParentDndCapture}
   ondragstart={onFileDragStart}
   ondragend={onFileDragEnd}
   style="--group-color: {groupColor}; --collection-color: {collectionColor}"

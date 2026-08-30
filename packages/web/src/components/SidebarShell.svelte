@@ -8,6 +8,7 @@
   import type { Page, Route } from '../lib/route';
   import { appVersion } from '../lib/plugin-downloads.generated';
   import { autofocus, autofocusIf } from '../lib/actions';
+  import { dragHandleZone, dragHandle } from 'svelte-dnd-action';
   import {
     sortedGroups,
     groupCollections,
@@ -23,6 +24,8 @@
     createCollection,
     storeGroup,
     items,
+    reorderGroups,
+    reorderGroupCollections,
   } from '../lib/stores';
   import { isSoloModifier, soloHint, soloModifierHeld } from '../lib/solo-modifier';
   import { draggingItemId, DRAG_MIME } from '../lib/drag';
@@ -64,37 +67,75 @@
   // Drag-to-file state.
   let dragOverColId = $state<string | null>(null);
   let justFiledColId = $state<string | null>(null);
-  let draggingCollectionId = $state<string | null>(null);
-  let dragOverGroupId = $state<string | null>(null);
-  let collectionDragX = $state(0);
-  let collectionDragY = $state(0);
   let keyboardMoveCollectionId = $state<string | null>(null);
   let collectionMoveInFlight = $state(false);
-  let suppressMoveHandleClick = false;
   let springGroupId: string | null = null;
   let springTimer: ReturnType<typeof setTimeout> | null = null;
-  let collectionPointerDrag: {
-    pointerId: number;
-    collectionId: string;
-    startX: number;
-    startY: number;
-  } | null = null;
+
+  let isTouchDevice = $state(false);
+  $effect(() => {
+    const mql = window.matchMedia('(pointer: coarse)');
+    isTouchDevice = mql.matches;
+    const handler = (e: MediaQueryListEvent) => { isTouchDevice = e.matches; };
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  });
 
   const groups = $derived($sortedGroups);
   const grouped = $derived($groupCollections);
   const activeGroups = $derived($activeGroupIds);
   const inactiveCols = $derived($inactiveCollectionIds);
   const dragging = $derived($draggingItemId !== null);
-  const movingCollection = $derived(draggingCollectionId !== null);
-  const draggedCollection = $derived.by(() => {
-    if (!draggingCollectionId) return undefined;
-    return groups
-      .flatMap((group) => grouped[group.id] ?? [])
-      .find(({ id }) => id === draggingCollectionId);
-  });
   // The plugins page has no groups to filter — the sidebar is
   // omitted entirely and the body grid must collapse to a single column.
   const noSidebar = $derived(route.page === 'plugins');
+
+  // Sidebar reorder state — groups and per-group collections.
+  let dndGroups = $state<Array<CollectionGroup & { id: string }>>([]);
+  let dndCollectionsByGroup = $state<Record<string, Array<Collection & { id: string }>>>({});
+  $effect(() => {
+    dndGroups = groups.map((g) => ({ ...g }));
+    const next: Record<string, Array<Collection & { id: string }>> = {};
+    for (const group of groups) {
+      next[group.id] = (grouped[group.id] ?? []).map((c) => ({ ...c }));
+    }
+    dndCollectionsByGroup = next;
+  });
+
+  function handleGroupDndConsider(e: CustomEvent<{ items: Array<CollectionGroup & { id: string }> }>) {
+    dndGroups = e.detail.items;
+  }
+
+  async function handleGroupDndFinalize(e: CustomEvent<{ items: Array<CollectionGroup & { id: string }> }>) {
+    const previous = groups.map((g) => ({ ...g }));
+    dndGroups = e.detail.items;
+    try {
+      await reorderGroups(dndGroups.map((g) => g.id));
+    } catch (error) {
+      console.error('Failed to reorder sidebar groups', error);
+      dndGroups = previous;
+    }
+  }
+
+  function makeCollectionConsider(groupId: string) {
+    return (e: CustomEvent<{ items: Array<Collection & { id: string }> }>) => {
+      dndCollectionsByGroup = { ...dndCollectionsByGroup, [groupId]: e.detail.items };
+    };
+  }
+
+  function makeCollectionFinalize(groupId: string) {
+    return async (e: CustomEvent<{ items: Array<Collection & { id: string }> }>) => {
+      const previous = (grouped[groupId] ?? []).map((c) => ({ ...c }));
+      const updated = e.detail.items;
+      dndCollectionsByGroup = { ...dndCollectionsByGroup, [groupId]: updated };
+      try {
+        await reorderGroupCollections(groupId, updated.map((c) => c.id));
+      } catch (error) {
+        console.error('Failed to reorder sidebar collections', error);
+        dndCollectionsByGroup = { ...dndCollectionsByGroup, [groupId]: previous };
+      }
+    };
+  }
 
   function readCollapsed(): boolean {
     try {
@@ -310,70 +351,9 @@
 
   function onGroupDragLeave(group: CollectionGroup) {
     if (springGroupId === group.id) clearSpring();
-    if (dragOverGroupId === group.id) dragOverGroupId = null;
-  }
-
-  function onCollectionDragEnd() {
-    draggingCollectionId = null;
-    dragOverGroupId = null;
-  }
-
-  function groupAtPoint(x: number, y: number): CollectionGroup | undefined {
-    const target = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-group-id]');
-    const groupId = target?.dataset.groupId;
-    return groups.find(({ id }) => id === groupId);
-  }
-
-  function onCollectionPointerDown(e: PointerEvent, col: Collection) {
-    if (e.button !== 0 || collectionMoveInFlight) return;
-    e.preventDefault();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    collectionPointerDrag = {
-      pointerId: e.pointerId,
-      collectionId: col.id,
-      startX: e.clientX,
-      startY: e.clientY,
-    };
-  }
-
-  function onCollectionPointerMove(e: PointerEvent) {
-    const drag = collectionPointerDrag;
-    if (!drag || drag.pointerId !== e.pointerId) return;
-    if (!draggingCollectionId) {
-      if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 4) return;
-      draggingCollectionId = drag.collectionId;
-    }
-    collectionDragX = e.clientX;
-    collectionDragY = e.clientY;
-    const group = groupAtPoint(e.clientX, e.clientY);
-    dragOverGroupId =
-      group && !(grouped[group.id] ?? []).some(({ id }) => id === drag.collectionId)
-        ? group.id
-        : null;
-  }
-
-  function onCollectionPointerUp(e: PointerEvent) {
-    const drag = collectionPointerDrag;
-    if (!drag || drag.pointerId !== e.pointerId) return;
-    const destination = groupAtPoint(e.clientX, e.clientY);
-    const didStart = draggingCollectionId === drag.collectionId;
-    collectionPointerDrag = null;
-    if (didStart) {
-      suppressMoveHandleClick = true;
-      setTimeout(() => (suppressMoveHandleClick = false), 0);
-    }
-    if (didStart && destination) void moveCollection(drag.collectionId, destination);
-    else onCollectionDragEnd();
-  }
-
-  function onCollectionPointerCancel(e: PointerEvent) {
-    if (collectionPointerDrag?.pointerId !== e.pointerId) return;
-    collectionPointerDrag = null;
-    onCollectionDragEnd();
   }
 
   function toggleKeyboardMove(collectionId: string) {
-    if (suppressMoveHandleClick || collectionMoveInFlight) return;
     keyboardMoveCollectionId = keyboardMoveCollectionId === collectionId ? null : collectionId;
   }
 
@@ -391,7 +371,6 @@
     );
     const collection = (grouped[sourceGroup?.id ?? ''] ?? []).find(({ id }) => id === collectionId);
     keyboardMoveCollectionId = null;
-    onCollectionDragEnd();
     if (!collection || sourceGroup?.id === group.id) return;
     collectionMoveInFlight = true;
     try {
@@ -513,8 +492,6 @@
                holding the modifier doesn't shove the group list down. -->
           {#if dragging}
             <span class="filing">Drop on a collection</span>
-          {:else if movingCollection}
-            <span class="filing">Drop on a group</span>
           {:else if soloing}
             <span class="solo-hint">{soloHint}</span>
           {:else}
@@ -538,8 +515,20 @@
           </button>
         {:else}
           <div class="groups">
-            {#each groups as group (group.id)}
-              {@const cols = grouped[group.id] ?? []}
+            <div
+              class="groups-dnd"
+              use:dragHandleZone={{
+                items: dndGroups,
+                flipDurationMs: 200,
+                dropTargetStyle: {},
+                dragDisabled: isTouchDevice,
+                type: 'sidebar-groups',
+              }}
+              onconsider={handleGroupDndConsider}
+              onfinalize={handleGroupDndFinalize}
+            >
+              {#each dndGroups as group (group.id)}
+              {@const cols = dndCollectionsByGroup[group.id] ?? []}
               {@const groupActive = isGroupActive(group)}
               {@const groupOpen = expandedGroups.has(group.id)}
               <div
@@ -548,12 +537,28 @@
               >
                 <div
                   class="group-row"
-                  class:collection-drop-target={movingCollection && !cols.some(({ id }) => id === draggingCollectionId)}
-                  class:collection-drop-over={dragOverGroupId === group.id}
                   role="presentation"
                   ondragover={() => onGroupDragOver(group)}
                   ondragleave={() => onGroupDragLeave(group)}
                 >
+                  <span
+                    class="group-reorder-handle"
+                    role="button"
+                    use:dragHandle
+                    tabindex="-1"
+                    aria-label="Drag to reorder {group.name}"
+                    title="Drag to reorder"
+                    onmousedown={(e) => e.stopPropagation()}
+                    ontouchstart={(e) => e.stopPropagation()}
+                    onpointerdown={(e) => e.stopPropagation()}
+                    onclick={(e) => e.stopPropagation()}
+                  >
+                    <svg aria-hidden="true" width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
+                      <circle cx="3" cy="3" r="1.25"/><circle cx="9" cy="3" r="1.25"/>
+                      <circle cx="3" cy="8" r="1.25"/><circle cx="9" cy="8" r="1.25"/>
+                      <circle cx="3" cy="13" r="1.25"/><circle cx="9" cy="13" r="1.25"/>
+                    </svg>
+                  </span>
                   <button
                     class="chevron"
                     type="button"
@@ -593,54 +598,82 @@
                   <div class="collections">
                     {#if cols.length === 0 && addingCollectionFor !== group.id}
                       <p class="collections-empty">No collections</p>
-                    {:else}
+                    {:else if cols.length > 0}
+                      <div
+                        class="collections-dnd"
+                        use:dragHandleZone={{
+                          items: cols,
+                          flipDurationMs: 200,
+                          dropTargetStyle: {},
+                          dragDisabled: isTouchDevice,
+                          type: `sidebar-cols-${group.id}`,
+                        }}
+                        onconsider={makeCollectionConsider(group.id)}
+                        onfinalize={makeCollectionFinalize(group.id)}
+                      >
+                        {#each cols as col (col.id)}
+                          {@const colActive = isCollectionActive(group, col)}
+                          <div
+                            class="collection-drag-row"
+                            style="--entity-color: {col.color || group.color || 'var(--accent)'}"
+                          >
+                            <button
+                              class="entity collection-entity"
+                              class:inactive={!colActive}
+                              class:drop-target={dragging}
+                              class:drop-over={dragOverColId === col.id}
+                              class:just-filed={justFiledColId === col.id}
+                              type="button"
+                              aria-pressed={colActive}
+                              title={colActive ? `Hide ${col.name}` : `Show ${col.name}`}
+                              onclick={(e) => onToggleCollection(e, group, col)}
+                              ondragover={(e) => onColDragOver(e, col)}
+                              ondragleave={() => onColDragLeave(col)}
+                              ondrop={(e) => onColDrop(e, col)}
+                            >
+                              <span class="dot"></span>
+                              <span class="entity-name">{col.name}</span>
+                              <span class="drop-label">File here</span>
+                              <span class="count">{col.itemIds.length}</span>
+                            </button>
+                            <span
+                              class="collection-reorder-handle"
+                              role="button"
+                              use:dragHandle
+                              tabindex="-1"
+                              aria-label="Drag to reorder {col.name}"
+                              title="Drag to reorder"
+                              onmousedown={(e) => e.stopPropagation()}
+                              ontouchstart={(e) => e.stopPropagation()}
+                              onpointerdown={(e) => e.stopPropagation()}
+                              onclick={(e) => e.stopPropagation()}
+                            >
+                              <svg aria-hidden="true" width="14" height="18" viewBox="0 0 14 18" fill="currentColor">
+                                <circle cx="4" cy="4" r="1.5"/><circle cx="10" cy="4" r="1.5"/>
+                                <circle cx="4" cy="9" r="1.5"/><circle cx="10" cy="9" r="1.5"/>
+                                <circle cx="4" cy="14" r="1.5"/><circle cx="10" cy="14" r="1.5"/>
+                              </svg>
+                            </span>
+                            <button
+                              type="button"
+                              id={`collection-move-handle-${col.id}`}
+                              class="collection-move-btn"
+                              title={`Move ${col.name} to another group`}
+                              aria-label={`Move ${col.name} to another group`}
+                              aria-expanded={keyboardMoveCollectionId === col.id}
+                              disabled={collectionMoveInFlight}
+                              onclick={() => toggleKeyboardMove(col.id)}
+                            >
+                              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                <line x1="12" y1="11" x2="12" y2="17"></line>
+                                <polyline points="9 14 12 11 15 14"></polyline>
+                              </svg>
+                            </button>
+                          </div>
+                        {/each}
+                      </div>
                       {#each cols as col (col.id)}
-                        {@const colActive = isCollectionActive(group, col)}
-                        <div
-                          class="collection-drag-row"
-                          class:is-moving={draggingCollectionId === col.id}
-                          style="--entity-color: {col.color || group.color || 'var(--accent)'}"
-                        >
-                          <button
-                            class="entity collection-entity"
-                            class:inactive={!colActive}
-                            class:drop-target={dragging}
-                            class:drop-over={dragOverColId === col.id}
-                            class:just-filed={justFiledColId === col.id}
-                            type="button"
-                            aria-pressed={colActive}
-                            title={colActive ? `Hide ${col.name}` : `Show ${col.name}`}
-                            onclick={(e) => onToggleCollection(e, group, col)}
-                            ondragover={(e) => onColDragOver(e, col)}
-                            ondragleave={() => onColDragLeave(col)}
-                            ondrop={(e) => onColDrop(e, col)}
-                          >
-                            <span class="dot"></span>
-                            <span class="entity-name">{col.name}</span>
-                            <span class="drop-label">File here</span>
-                            <span class="count">{col.itemIds.length}</span>
-                          </button>
-                          <button
-                            type="button"
-                            id={`collection-move-handle-${col.id}`}
-                            class="collection-drag-handle"
-                            title={`Drag ${col.name} to another group`}
-                            aria-label={`Drag ${col.name} to another group`}
-                            aria-expanded={keyboardMoveCollectionId === col.id}
-                            disabled={collectionMoveInFlight}
-                            onclick={() => toggleKeyboardMove(col.id)}
-                            onpointerdown={(e) => onCollectionPointerDown(e, col)}
-                            onpointermove={onCollectionPointerMove}
-                            onpointerup={onCollectionPointerUp}
-                            onpointercancel={onCollectionPointerCancel}
-                          >
-                            <svg aria-hidden="true" width="14" height="18" viewBox="0 0 14 18" fill="currentColor">
-                              <circle cx="4" cy="4" r="1.5"/><circle cx="10" cy="4" r="1.5"/>
-                              <circle cx="4" cy="9" r="1.5"/><circle cx="10" cy="9" r="1.5"/>
-                              <circle cx="4" cy="14" r="1.5"/><circle cx="10" cy="14" r="1.5"/>
-                            </svg>
-                          </button>
-                        </div>
                         {#if keyboardMoveCollectionId === col.id}
                           <div
                             class="collection-move-menu"
@@ -689,6 +722,7 @@
                 {/if}
               </div>
             {/each}
+            </div>
 
             {#if addingGroup}
               <div class="inline-add inline-add--group">
@@ -721,18 +755,6 @@
     {@render children()}
   </main>
 </div>
-
-{#if draggedCollection}
-  <div
-    class="collection-drag-preview"
-    style="left: {collectionDragX}px; top: {collectionDragY}px; --entity-color: {draggedCollection.color || 'var(--accent)'}"
-    aria-hidden="true"
-  >
-    <span class="dot"></span>
-    <span class="drag-preview-name">{draggedCollection.name}</span>
-    <span class="drag-preview-count">{draggedCollection.itemIds.length}</span>
-  </div>
-{/if}
 
 <footer class="app-footer">
   <div class="app-footer-inner">
@@ -1060,16 +1082,6 @@
     background: var(--surface-hover);
   }
 
-  .group-row.collection-drop-target {
-    outline: 1px dashed color-mix(in srgb, var(--entity-color, var(--accent)) 55%, var(--border));
-    outline-offset: -1px;
-  }
-
-  .group-row.collection-drop-over {
-    background: color-mix(in srgb, var(--accent) 18%, var(--surface));
-    outline: 2px solid var(--accent);
-  }
-
   .chevron {
     display: inline-flex;
     align-items: center;
@@ -1126,43 +1138,30 @@
     margin-left: 1.55rem;
   }
 
-  .collection-drag-row.is-moving {
-    opacity: 0.35;
-  }
-
-  .collection-drag-preview {
-    position: fixed;
-    z-index: 1000;
-    display: flex;
+  .group-reorder-handle,
+  .collection-reorder-handle {
+    display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    min-width: 180px;
-    max-width: 260px;
-    min-height: 2.25rem;
-    padding: 0.35rem 0.65rem;
-    border: 1px solid var(--entity-color);
-    border-radius: 0.55rem;
-    background: var(--surface);
-    color: var(--text);
-    box-shadow: 0 10px 28px var(--shadow);
-    pointer-events: none;
-    transform: translate(12px, 10px) rotate(1deg);
-  }
-
-  .drag-preview-name {
-    min-width: 0;
-    overflow: hidden;
-    font-size: 0.86rem;
-    font-weight: 650;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .drag-preview-count {
-    margin-left: auto;
+    justify-content: center;
+    width: 20px;
+    min-height: 1.9rem;
+    flex: 0 0 20px;
+    padding: 0;
+    border: 0;
+    background: none;
     color: var(--text-muted);
-    font-size: 0.72rem;
-    font-weight: 700;
+    cursor: grab;
+    opacity: 0.45;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .group-reorder-handle:hover,
+  .group-reorder-handle:focus-visible,
+  .collection-reorder-handle:hover,
+  .collection-reorder-handle:focus-visible {
+    color: var(--entity-color, var(--accent));
+    opacity: 1;
   }
 
   .collection-entity {
@@ -1170,7 +1169,7 @@
     font-size: 0.86rem;
   }
 
-  .collection-drag-handle {
+  .collection-move-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1182,21 +1181,15 @@
     border-radius: 0.35rem;
     background: none;
     color: var(--text-muted);
-    cursor: grab;
+    cursor: pointer;
     opacity: 0.55;
-    touch-action: none;
-    user-select: none;
   }
 
-  .collection-drag-handle:hover,
-  .collection-drag-handle:focus-visible {
+  .collection-move-btn:hover,
+  .collection-move-btn:focus-visible {
     color: var(--entity-color);
     background: var(--surface-hover);
     opacity: 1;
-  }
-
-  .collection-drag-handle:active {
-    cursor: grabbing;
   }
 
   .collection-move-menu {

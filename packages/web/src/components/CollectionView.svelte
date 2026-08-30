@@ -19,7 +19,7 @@
   } from '../lib/collection-todos';
   import { slide, fade } from 'svelte/transition';
   import { flip } from 'svelte/animate';
-  import { dragHandleZone } from 'svelte-dnd-action';
+  import { dragHandleZone, dragHandle } from 'svelte-dnd-action';
   import { captureDetected, captureFile } from '../lib/capture';
   import { showToast } from '../lib/toast';
   import InboxCard from './InboxCard.svelte';
@@ -28,13 +28,15 @@
   import TodoQuickAdd from './TodoQuickAdd.svelte';
   import TodoRow from './TodoRow.svelte';
 
-  let { collection, expanded = false, onselect, onedit, ontoggle, isTouchDevice = false }: {
+  let { collection, expanded = false, onselect, onedit, ontoggle, isTouchDevice = false, reorderable = false }: {
     collection: Collection;
     expanded?: boolean;
     onselect: (item: InboxItem) => void;
     onedit: () => void;
     ontoggle: () => void;
     isTouchDevice?: boolean;
+    /** When true, show a grip on the header for drag-sorting on the Collections page. */
+    reorderable?: boolean;
   } = $props();
 
   // Collection body renders both todos (at the top, drag-sortable) and
@@ -198,7 +200,7 @@
   }
 </script>
 
-<div class="collection" style="--col-color: {collection.color || '#6366f1'}" class:expanded>
+<div class="collection" class:reorderable style="--col-color: {collection.color || '#6366f1'}" class:expanded>
   <!-- Header bar -->
   <div
     class="collection-header"
@@ -209,6 +211,26 @@
     aria-expanded={expanded}
     aria-label="{expanded ? 'Collapse' : 'Expand'} {collection.name}"
   >
+    {#if reorderable}
+      <span
+        class="collection-reorder-handle"
+        role="button"
+        use:dragHandle
+        tabindex="-1"
+        aria-label="Drag to reorder {collection.name}"
+        title="Drag to reorder"
+        onmousedown={(e) => e.stopPropagation()}
+        ontouchstart={(e) => e.stopPropagation()}
+        onpointerdown={(e) => e.stopPropagation()}
+        onclick={(e) => e.stopPropagation()}
+      >
+        <svg aria-hidden="true" width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
+          <circle cx="3" cy="3" r="1.25"/><circle cx="9" cy="3" r="1.25"/>
+          <circle cx="3" cy="8" r="1.25"/><circle cx="9" cy="8" r="1.25"/>
+          <circle cx="3" cy="13" r="1.25"/><circle cx="9" cy="13" r="1.25"/>
+        </svg>
+      </span>
+    {/if}
     <span class="color-indicator"></span>
     <svg aria-hidden="true" class="chevron" class:open={expanded} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="6 9 12 15 18 9"></polyline>
@@ -284,7 +306,18 @@
        new items regardless of current contents — empty states sit quietly
        under the headers instead of replacing them. -->
   {#if expanded}
-    <div class="collection-body" transition:slide={{ duration: isTouchDevice ? 0 : 200 }}>
+    <div
+      class="collection-body"
+      transition:slide={{ duration: isTouchDevice ? 0 : 200 }}
+      onmousedown={(e) => {
+        const t = e.target as HTMLElement;
+        if (!t.closest('input, button, a, .reorder-handle')) e.stopPropagation();
+      }}
+      ontouchstart={(e) => {
+        const t = e.target as HTMLElement;
+        if (!t.closest('input, button, a, .reorder-handle')) e.stopPropagation();
+      }}
+    >
       <section class="todos-section" aria-label="Todos in {collection.name}">
         <div class="section-header">
           <h4>Todos</h4>
@@ -562,6 +595,34 @@
 
   .collection-header:hover .header-actions {
     opacity: 1;
+  }
+
+  .collection-reorder-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 28px;
+    flex-shrink: 0;
+    margin: -0.15rem 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    opacity: 0.35;
+    cursor: grab;
+    touch-action: none;
+    transition: opacity 150ms, color 150ms;
+  }
+
+  .collection-header:hover .collection-reorder-handle,
+  .collection-reorder-handle:focus-visible {
+    opacity: 1;
+  }
+
+  .collection-reorder-handle:hover,
+  .collection-reorder-handle:focus-visible {
+    color: var(--accent);
   }
 
   /* On touch devices, always show actions */

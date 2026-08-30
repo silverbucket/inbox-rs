@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
-  import { dndzone } from 'svelte-dnd-action';
+  import { dragHandleZone } from 'svelte-dnd-action';
   import {
     createCollection, storeCollection, deleteCollection, moveCollectionToGroup,
     visibleGroupedCollections, sortedGroups, storeGroup, deleteGroup,
@@ -258,7 +258,7 @@
       {#if realCount > 0}
         <div
           class="collection-list"
-          use:dndzone={{
+          use:dragHandleZone={{
             items: dndByGroup[section.group.id],
             flipDurationMs: 200,
             dropTargetStyle: {},
@@ -272,6 +272,7 @@
             <CollectionView
               collection={col}
               expanded={isExpanded(col)}
+              reorderable
               {onselect}
               {isTouchDevice}
               onedit={() => editingCollection = col}
