@@ -8,7 +8,7 @@
  */
 import { writable } from 'svelte/store';
 
-/** Id of the inbox item currently being dragged, or null when no drag. */
+/** Id of the item currently being dragged onto a sidebar collection, or null. */
 export const draggingItemId = writable<string | null>(null);
 
 /** Custom MIME so only our item drags activate collection drop targets. */

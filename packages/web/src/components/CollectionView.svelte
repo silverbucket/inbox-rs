@@ -19,7 +19,7 @@
   } from '../lib/collection-todos';
   import { slide, fade } from 'svelte/transition';
   import { flip } from 'svelte/animate';
-  import { dndzone } from 'svelte-dnd-action';
+  import { dragHandleZone } from 'svelte-dnd-action';
   import { captureDetected, captureFile } from '../lib/capture';
   import { showToast } from '../lib/toast';
   import InboxCard from './InboxCard.svelte';
@@ -300,7 +300,7 @@
         {#if dndOpen.length > 0}
           <ul
             class="todo-list" role="list"
-            use:dndzone={{
+            use:dragHandleZone={{
               items: dndOpen,
               flipDurationMs: 200,
               dropTargetStyle: {},
@@ -312,7 +312,7 @@
           >
             {#each dndOpen as todo (todo.id)}
               <div animate:flip={{ duration: 200 }} in:fade={{ duration: 180 }} out:fade={{ duration: 120 }}>
-                <TodoRow {todo} {collection} {group} {onselect} />
+                <TodoRow {todo} {collection} {group} reorderable {onselect} />
               </div>
             {/each}
           </ul>

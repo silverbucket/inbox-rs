@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
-  import { dndzone } from 'svelte-dnd-action';
+  import { dragHandleZone } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import { slide, fade } from 'svelte/transition';
   import {
@@ -180,7 +180,7 @@
 
     <ul
       class="todo-list" role="list"
-      use:dndzone={{
+      use:dragHandleZone={{
         items: dndOpen,
         flipDurationMs: 200,
         dropTargetStyle: {},
@@ -200,6 +200,7 @@
             {todo}
             collection={lookupCollection(todo.collectionId)}
             group={lookupGroup(todo.collectionId)}
+            reorderable
             {onselect}
             onaddincollection={onaddtodoincollection}
           />
