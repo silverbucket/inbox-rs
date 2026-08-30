@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
+  import { dragHandle } from 'svelte-dnd-action';
   import { setItemCompleted } from '../lib/schedule-sync';
   import { typeIconPath } from '../lib/item-utils';
   import { draggingItemId, DRAG_MIME } from '../lib/drag';
@@ -8,7 +9,15 @@
   import { formatScheduled, isOverdue } from '../lib/schedule';
   import { setItemPinned } from '../lib/stores';
 
-  let { todo, collection, group, onselect, onaddincollection, readonly = false }: {
+  let {
+    todo,
+    collection,
+    group,
+    onselect,
+    onaddincollection,
+    readonly = false,
+    reorderable = false,
+  }: {
     todo: InboxItem;
     /** The collection this todo belongs to, or null when unfiled. */
     collection: Collection | null;
@@ -25,6 +34,9 @@
         The row still opens the card, where "Re-enable" brings it back under
         the app's management (without touching the calendar). */
     readonly?: boolean;
+    /** When true, show a grip handle for svelte-dnd-action reorder inside a
+        dragHandleZone. Row-body drags file onto sidebar collections instead. */
+    reorderable?: boolean;
   } = $props();
 
   // Show the underlying item type as an icon for items that are "todos by flag"
@@ -109,12 +121,15 @@
     onaddincollection?.(quickAddTarget);
   }
 
-  // Drag the collection pill onto a sidebar collection to re-file this todo.
-  // The pill (not the whole row) is the handle so it doesn't fight the
-  // svelte-dnd-action reorder gesture, which owns row-body drags.
+  // Drag the row onto a sidebar collection to re-file (same payload as InboxCard).
+  // Reorder uses the grip handle + dragHandleZone so the two gestures don't fight.
   function onFileDragStart(e: DragEvent) {
-    // Receipt rows are read-only end to end — no re-filing from here.
     if (readonly) {
+      e.preventDefault();
+      return;
+    }
+    const target = e.target as HTMLElement;
+    if (target.closest('.reorder-handle, input, button, a')) {
       e.preventDefault();
       return;
     }
@@ -157,13 +172,35 @@
   class="todo-row"
   class:completed={todo.completed}
   class:unfiled={isUnfiled}
+  class:reorderable
   data-priority-item
   role="button"
   tabindex="0"
+  draggable={!readonly}
   onclick={handleClick}
   onkeydown={handleKey}
+  ondragstart={onFileDragStart}
+  ondragend={onFileDragEnd}
   style="--group-color: {groupColor}; --collection-color: {collectionColor}"
 >
+  {#if reorderable}
+    <button
+      type="button"
+      class="reorder-handle"
+      use:dragHandle
+      tabindex="-1"
+      aria-label="Drag to reorder {todo.title}"
+      title="Drag to reorder"
+      onpointerdown={(e) => e.stopPropagation()}
+      onclick={(e) => e.stopPropagation()}
+    >
+      <svg aria-hidden="true" width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
+        <circle cx="3" cy="3" r="1.25"/><circle cx="9" cy="3" r="1.25"/>
+        <circle cx="3" cy="8" r="1.25"/><circle cx="9" cy="8" r="1.25"/>
+        <circle cx="3" cy="13" r="1.25"/><circle cx="9" cy="13" r="1.25"/>
+      </svg>
+    </button>
+  {/if}
   {#if readonly}
     <span class="cal-marker" title={todo.eventUrl ? 'On calendar' : 'Archived'} role="img" aria-label={todo.eventUrl ? 'On calendar' : 'Archived'}>
       <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -217,22 +254,14 @@
         {scheduledLabel}
       </span>
     {/if}
-    <button
+    <span
       class="collection-pill"
-      type="button"
-      tabindex="-1"
-      draggable={!readonly}
-      title={readonly ? collectionName : `Drag to refile · ${collectionName}`}
-      aria-label={readonly
-        ? `Filed in ${collectionName}`
-        : `Drag ${todo.title} onto a collection to refile it`}
-      onpointerdown={(e) => e.stopPropagation()}
-      ondragstart={onFileDragStart}
-      ondragend={onFileDragEnd}
+      title={collectionName}
+      aria-label={`Filed in ${collectionName}`}
     >
       <span class="pill-dot"></span>
       <span class="pill-name">{collectionName}</span>
-    </button>
+    </span>
     {#if showTypeIcon}
       <span class="type-pill" title={typeLabel} aria-label={typeLabel}>
         <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -276,6 +305,48 @@
     transition: background 150ms, border-color 150ms, box-shadow 150ms;
     -webkit-tap-highlight-color: transparent;
     min-width: 0;
+  }
+
+  .todo-row.reorderable {
+    cursor: grab;
+  }
+
+  .todo-row.reorderable:active {
+    cursor: grabbing;
+  }
+
+  .reorder-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 28px;
+    flex-shrink: 0;
+    margin: -0.15rem 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    opacity: 0.35;
+    cursor: grab;
+    touch-action: none;
+    transition: opacity 150ms, color 150ms;
+  }
+
+  .todo-row:hover .reorder-handle,
+  .reorder-handle:focus-visible {
+    opacity: 1;
+  }
+
+  .reorder-handle:hover,
+  .reorder-handle:focus-visible {
+    color: var(--accent);
+  }
+
+  .reorder-handle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+    border-radius: 4px;
   }
 
   /* Row-level tint uses the *group* colour so scanning down a list groups
@@ -382,7 +453,6 @@
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    font-family: inherit;
     font-size: 0.75rem;
     color: var(--text-muted);
     padding: 0.15rem 0.55rem;
@@ -391,18 +461,6 @@
     border-radius: 999px;
     max-width: 12rem;
     min-width: 0;
-    /* Draggable handle for re-filing (see onFileDragStart). */
-    cursor: grab;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .collection-pill:active {
-    cursor: grabbing;
-  }
-
-  .collection-pill:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
   }
 
   .unfiled .collection-pill {
@@ -541,7 +599,23 @@
       padding: 0.55rem 0.65rem;
     }
 
-    .checkbox {
+    .todo-row.reorderable {
+      grid-template-columns: auto auto 1fr auto;
+    }
+
+    .reorder-handle {
+      grid-column: 1;
+      grid-row: 1 / span 2;
+      align-self: center;
+    }
+
+    .todo-row.reorderable .checkbox {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      align-self: center;
+    }
+
+    .todo-row:not(.reorderable) .checkbox {
       grid-column: 1;
       grid-row: 1 / span 2;
       align-self: center;
@@ -553,10 +627,18 @@
       font-size: 0.9rem;
     }
 
+    .todo-row.reorderable .title {
+      grid-column: 3;
+    }
+
     .pin-button {
       grid-column: 3;
       grid-row: 1 / span 2;
       align-self: center;
+    }
+
+    .todo-row.reorderable .pin-button {
+      grid-column: 4;
     }
 
     .meta {
@@ -564,6 +646,10 @@
       grid-row: 2;
       gap: 0.4rem;
       flex-wrap: wrap;
+    }
+
+    .todo-row.reorderable .meta {
+      grid-column: 3;
     }
 
     .collection-pill {
