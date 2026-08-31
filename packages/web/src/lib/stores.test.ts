@@ -85,6 +85,7 @@ import {
   reorderCollectionItems,
   reorderGroupCollections,
   reorderGroups,
+  spliceIntoOrder,
   reorderTodosGlobal,
   reorderUnfiledTodos,
   setActiveGroupFilters,
@@ -1237,6 +1238,22 @@ describe('reorderGroupCollections with invalid group ids', () => {
 
     expect(get(groups).g1.collectionIds).toEqual(['c2', 'c1']);
     expect(mockInbox.storeGroup).toHaveBeenCalled();
+  });
+
+  it('keeps a collection the caller could not see in its own slot', async () => {
+    // `groupCollections` filters archived collections out, so `archived` is
+    // never in the list the sidebar or the Collections page hands back.
+    const group = makeGroup('g1', ['c1', 'archived', 'c2']);
+    collections.set({
+      c1: makeCollection('c1', 'g1'),
+      c2: makeCollection('c2', 'g1'),
+      archived: { ...makeCollection('archived', 'g1'), archived: true },
+    });
+    groups.set({ g1: group });
+
+    await reorderGroupCollections('g1', ['c2', 'c1']);
+
+    expect(get(groups).g1.collectionIds).toEqual(['c2', 'archived', 'c1']);
   });
 });
 
@@ -2628,6 +2645,50 @@ describe('reorderCollectionItems', () => {
   });
 });
 
+/**
+ * Every list a user drags is a filtered view — archived collections and groups
+ * are never in it, and the Collections page also drops whatever the filter row
+ * has switched off. Persisting the dragged list verbatim would evict all of
+ * those from the stored order.
+ */
+describe('spliceIntoOrder', () => {
+  it('applies the new order when the caller saw everything', () => {
+    expect(spliceIntoOrder(['a', 'b', 'c'], ['c', 'a', 'b'])).toEqual([
+      'c',
+      'a',
+      'b',
+    ]);
+  });
+
+  it('keeps ids the caller never saw in their own slots', () => {
+    // `hidden` sat second and stays second; the visible ids move around it.
+    expect(spliceIntoOrder(['a', 'hidden', 'b', 'c'], ['c', 'b', 'a'])).toEqual(
+      ['c', 'hidden', 'b', 'a'],
+    );
+  });
+
+  it('never drops a hidden id, however the visible ones move', () => {
+    const existing = ['archived1', 'a', 'b', 'archived2', 'c'];
+    const result = spliceIntoOrder(existing, ['c', 'b', 'a']);
+    expect(result).toContain('archived1');
+    expect(result).toContain('archived2');
+    expect(result).toHaveLength(existing.length);
+  });
+
+  it('appends ids that had no slot yet', () => {
+    // A collection reachable through `groupId` but missing from
+    // `collectionIds` — `groupCollections` shows it, storage hasn't filed it.
+    expect(spliceIntoOrder(['a'], ['a', 'newcomer'])).toEqual([
+      'a',
+      'newcomer',
+    ]);
+  });
+
+  it('takes the new order wholesale when nothing is stored yet', () => {
+    expect(spliceIntoOrder([], ['b', 'a'])).toEqual(['b', 'a']);
+  });
+});
+
 describe('reorderGroups', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -2658,15 +2719,26 @@ describe('reorderGroups', () => {
     expect(get(appConfig).groupsOrder).toEqual(['g2', 'g1']);
   });
 
-  it('accepts an empty order array', async () => {
+  it('leaves the stored order alone when given an empty array', async () => {
+    // The caller passes the order of what it had on screen, which is always a
+    // filtered view. Seeing nothing is not an instruction to forget the order
+    // of everything — deletion goes through `removeFromOrderConfig`.
     appConfig.set({ groupsOrder: ['g1', 'g2'] });
 
     await reorderGroups([]);
 
-    expect(get(appConfig).groupsOrder).toEqual([]);
-    expect(mockInbox.setConfig).toHaveBeenCalledWith(
-      expect.objectContaining({ groupsOrder: [] }),
-    );
+    expect(get(appConfig).groupsOrder).toEqual(['g1', 'g2']);
+  });
+
+  it('keeps archived groups in place while the visible ones move', async () => {
+    // `sortedGroups` filters archived groups out, so they are never in the
+    // list the sidebar hands back. Persisting that list verbatim would evict
+    // them, and unarchiving would find the group dumped at the end.
+    appConfig.set({ groupsOrder: ['g1', 'archived', 'g2'] });
+
+    await reorderGroups(['g2', 'g1']);
+
+    expect(get(appConfig).groupsOrder).toEqual(['g2', 'archived', 'g1']);
   });
 
   it('does not touch other config keys', async () => {
