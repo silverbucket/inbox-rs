@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
-  import { dragHandleZone, TRIGGERS } from 'svelte-dnd-action';
+  import { onDestroy } from 'svelte';
+  import { type DndEvent, dragHandleZone, TRIGGERS } from 'svelte-dnd-action';
   import { watchCollectionPointerDrag } from '../lib/collection-drop';
   import { requestCollectionMove } from '../lib/drag';
   import {
@@ -94,16 +95,10 @@
   // hit-tested against the sidebar — see `watchCollectionPointerDrag`.
   let pointerDrag: { collectionId: string; stop: () => string | null } | null = null;
 
-  /** The `consider`/`finalize` payload, narrowed to the parts used here. */
-  type CollectionDndEvent = CustomEvent<{
-    items: Array<Collection & { id: string }>;
-    info?: { trigger: string; id: string };
-  }>;
-
   function makeConsider(groupId: string) {
-    return (e: CollectionDndEvent) => {
+    return (e: CustomEvent<DndEvent<Collection & { id: string }>>) => {
       const info = e.detail.info;
-      if (info?.trigger === TRIGGERS.DRAG_STARTED && info.id && !pointerDrag) {
+      if (info.trigger === TRIGGERS.DRAG_STARTED && info.id && !pointerDrag) {
         pointerDrag = {
           collectionId: info.id,
           // A group that already holds this collection is not a move target;
@@ -118,7 +113,7 @@
   }
 
   function makeFinalize(groupId: string) {
-    return async (e: CollectionDndEvent) => {
+    return async (e: CustomEvent<DndEvent<Collection & { id: string }>>) => {
       const drag = pointerDrag;
       pointerDrag = null;
       const droppedOnGroup = drag?.stop() ?? null;
@@ -146,6 +141,15 @@
       }
     };
   }
+
+  // This page is lazily mounted and unmounts on navigation, so a drag can very
+  // plausibly outlive it. Without this the watcher's window listeners stay
+  // attached and `draggingCollectionId` stays set — only `finalize` calls
+  // `stop()`, and it never arrives if the component goes first.
+  onDestroy(() => {
+    pointerDrag?.stop();
+    pointerDrag = null;
+  });
 
   function openAddCollection(groupId: string | undefined) {
     // `undefined` means the user triggered creation outside any group (e.g.

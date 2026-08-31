@@ -14,7 +14,7 @@
     startNativeDrag,
     watchCollectionPointerDrag,
   } from '../lib/collection-drop';
-  import { dragHandleZone, TRIGGERS } from 'svelte-dnd-action';
+  import { type DndEvent, dragHandleZone, TRIGGERS } from 'svelte-dnd-action';
   import ReorderGrip from './ReorderGrip.svelte';
   import {
     sortedGroups,
@@ -134,12 +134,6 @@
     }
   }
 
-  /** The `consider`/`finalize` payload, narrowed to the parts used here. */
-  type CollectionDndEvent = CustomEvent<{
-    items: Array<Collection & { id: string }>;
-    info?: { trigger: string; id: string };
-  }>;
-
   // A grip drag that leaves its own list and lands on another group's row moves
   // the collection there — the same gesture the Collections page has, in the
   // place it is most natural, since both rows are already in the sidebar. The
@@ -148,9 +142,9 @@
   let collectionPointerDrag: { collectionId: string; stop: () => string | null } | null = null;
 
   function makeCollectionConsider(groupId: string) {
-    return (e: CollectionDndEvent) => {
+    return (e: CustomEvent<DndEvent<Collection & { id: string }>>) => {
       const info = e.detail.info;
-      if (info?.trigger === TRIGGERS.DRAG_STARTED && info.id && !collectionPointerDrag) {
+      if (info.trigger === TRIGGERS.DRAG_STARTED && info.id && !collectionPointerDrag) {
         collectionPointerDrag = {
           collectionId: info.id,
           // The group it already lives in is not a move target; leaving that
@@ -165,7 +159,7 @@
   }
 
   function makeCollectionFinalize(groupId: string) {
-    return async (e: CollectionDndEvent) => {
+    return async (e: CustomEvent<DndEvent<Collection & { id: string }>>) => {
       const drag = collectionPointerDrag;
       collectionPointerDrag = null;
       const droppedOnGroup = drag?.stop() ?? null;
@@ -193,6 +187,15 @@
       }
     };
   }
+
+  // A drag in flight when this unmounts would otherwise leave the watcher's
+  // window listeners attached and `draggingCollectionId` set, which outlines
+  // every group row for good. Only `finalize` calls `stop()`, and it never
+  // arrives if the component goes first.
+  onDestroy(() => {
+    collectionPointerDrag?.stop();
+    collectionPointerDrag = null;
+  });
 
   function readCollapsed(): boolean {
     try {
