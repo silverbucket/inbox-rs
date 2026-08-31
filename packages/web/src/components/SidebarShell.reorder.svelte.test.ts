@@ -14,12 +14,14 @@ const fixtures = vi.hoisted(() => {
     name: 'Alpha',
     color: '#6366f1',
     collectionIds: ['c1', 'c2'],
+    createdAt: '2026-01-01T00:00:00.000Z',
   };
   const g2: CollectionGroup = {
     id: 'g2',
     name: 'Beta',
     color: '#22c55e',
     collectionIds: ['c3'],
+    createdAt: '2026-01-01T00:00:00.000Z',
   };
   const c1: Collection = {
     id: 'c1',
@@ -27,6 +29,7 @@ const fixtures = vi.hoisted(() => {
     color: '#6366f1',
     groupId: 'g1',
     itemIds: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
   };
   const c2: Collection = {
     id: 'c2',
@@ -34,6 +37,7 @@ const fixtures = vi.hoisted(() => {
     color: '#818cf8',
     groupId: 'g1',
     itemIds: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
   };
   const c3: Collection = {
     id: 'c3',
@@ -41,6 +45,7 @@ const fixtures = vi.hoisted(() => {
     color: '#22c55e',
     groupId: 'g2',
     itemIds: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
   };
   return { g1, g2, c1, c2, c3 };
 });

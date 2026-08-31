@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -17,11 +15,11 @@ import { describe, expect, it } from 'vitest';
  * item is draggable, the flag is local to that zone, and disabling it on touch
  * is the right call. So this only polices `dragHandleZone`.
  */
-const COMPONENTS = join(import.meta.dirname, '.');
-
-function svelteFiles(): string[] {
-  return readdirSync(COMPONENTS).filter((f) => f.endsWith('.svelte'));
-}
+const SOURCES: Record<string, string> = import.meta.glob('../**/*.svelte', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+});
 
 /** The text of each `use:dragHandleZone={{ ... }}` block in `source`. */
 function handleZoneOptions(source: string): string[] {
@@ -43,10 +41,8 @@ function handleZoneOptions(source: string): string[] {
 
 describe('dragHandleZone options', () => {
   it('finds the handle zones it is meant to police', () => {
-    const total = svelteFiles().reduce(
-      (n, file) =>
-        n +
-        handleZoneOptions(readFileSync(join(COMPONENTS, file), 'utf8')).length,
+    const total = Object.values(SOURCES).reduce(
+      (n, source) => n + handleZoneOptions(source).length,
       0,
     );
     expect(total).toBeGreaterThan(0);
@@ -54,8 +50,7 @@ describe('dragHandleZone options', () => {
 
   it('never passes dragDisabled, which is global to all handle zones', () => {
     const offenders: string[] = [];
-    for (const file of svelteFiles()) {
-      const source = readFileSync(join(COMPONENTS, file), 'utf8');
+    for (const [file, source] of Object.entries(SOURCES)) {
       for (const block of handleZoneOptions(source)) {
         // Strip `//` comments — they explain precisely why the flag is absent.
         const code = block.replace(/\/\/[^\n]*/g, '');

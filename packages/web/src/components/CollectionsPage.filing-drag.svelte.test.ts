@@ -24,6 +24,7 @@ const fixtures = vi.hoisted(() => {
     name: 'Work',
     color: '#6366f1',
     collectionIds: ['c1'],
+    createdAt: '2026-01-01T00:00:00.000Z',
   };
   const collection: Collection = {
     id: 'c1',
@@ -31,6 +32,7 @@ const fixtures = vi.hoisted(() => {
     color: '#22c55e',
     groupId: 'g1',
     itemIds: ['todo-1'],
+    createdAt: '2026-01-01T00:00:00.000Z',
   };
   const todo: InboxItem = {
     id: 'todo-1',
