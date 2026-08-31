@@ -17,7 +17,12 @@
     ACCENT_SWATCHES,
     ACCENTS,
     applyAccent,
+    applyPalette,
     isAccent,
+    isPalette,
+    type Palette,
+    PALETTE_LABELS,
+    PALETTES,
   } from '../lib/theme';
   import { layout, setLayoutPersisted } from '../lib/layout';
   import { loadLazy } from '../lib/lazy-load';
@@ -102,6 +107,16 @@
     accent = a;
     localStorage.setItem('inbox-rs:accent', a);
     applyAccent(a);
+  }
+
+  // Neutral palette — local-only, like the accent.
+  const storedPalette = localStorage.getItem('inbox-rs:palette');
+  let palette = $state<Palette>(isPalette(storedPalette) ? storedPalette : 'solarized');
+
+  function setPalette(p: Palette) {
+    palette = p;
+    localStorage.setItem('inbox-rs:palette', p);
+    applyPalette(p);
   }
 
   function toggle() {
@@ -561,6 +576,21 @@
           </svg>
           Dark
         </button>
+      </div>
+
+      <!-- Palette — device-local, named neutral palettes -->
+      <div class="section-label">Palette</div>
+      <div class="theme-switcher" role="group" aria-label="Palette">
+        {#each PALETTES as p (p)}
+          <button type="button"
+            class="theme-option"
+            class:active={palette === p}
+            aria-pressed={palette === p}
+            onclick={() => setPalette(p)}
+          >
+            {PALETTE_LABELS[p]}
+          </button>
+        {/each}
       </div>
 
       <!-- Layout — device-local, opt-in sidebar shell -->

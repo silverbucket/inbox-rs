@@ -1,4 +1,5 @@
 @import "./theme-accents.css";
+@import "./theme-palettes.css";
 
 :root {
   /* Accent comes from data-accent (theme-accents.css); these are fallbacks
@@ -6,20 +7,25 @@
   --accent: #4f46e5;
   --accent-deep: #3f38c4;
 
-  --bg: #0f1117;
-  --surface: #1a1d27;
-  --surface-hover: #222632;
-  --border: #2a2e3a;
-  --text: #e4e6eb;
-  --text-muted: #8b8f9a;
-  --danger: #ef4444;
-  --danger-hover: #f87171;
+  /* Solarized-style neutrals: the dark base is a deep desaturated blue-green
+     rather than near-black, and text is a muted grey-cyan rather than white,
+     keeping overall contrast moderate. The sidebar gets its own (darker)
+     background so it reads as a separate zone from the content area. */
+  --bg: #002b36;
+  --sidebar-bg: #00222b;
+  --surface: #073642;
+  --surface-hover: #0d4152;
+  --border: #1a4a5a;
+  --text: #93a1a1;
+  --text-muted: #657b83;
+  --danger: #dc322f;
+  --danger-hover: #e5615e;
   --radius: 12px;
   --radius-sm: 8px;
-  --overlay: rgba(0, 0, 0, 0.6);
-  --shadow: rgba(0, 0, 0, 0.3);
-  --surface-tint: rgba(255, 255, 255, 0.06);
-  --surface-tint-hover: rgba(255, 255, 255, 0.1);
+  --overlay: rgba(0, 17, 22, 0.6);
+  --shadow: rgba(0, 13, 17, 0.35);
+  --surface-tint: rgba(147, 161, 161, 0.07);
+  --surface-tint-hover: rgba(147, 161, 161, 0.12);
 
   /* Accent-derived — these track whatever --accent the theme sets. */
   --accent-hover: color-mix(in srgb, var(--accent) 72%, white);
@@ -33,35 +39,37 @@
    tokens are accent-mixed-with-transparent in :root, so they hold in both modes. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --bg: #f8f9fb;
-    --surface: #ffffff;
-    --surface-hover: #f0f1f4;
-    --border: #d8dbe3;
-    --text: #1a1d27;
-    --text-muted: #6b7084;
-    --danger: #dc2626;
-    --danger-hover: #b91c1c;
-    --overlay: rgba(0, 0, 0, 0.4);
-    --shadow: rgba(0, 0, 0, 0.1);
-    --surface-tint: rgba(0, 0, 0, 0.04);
-    --surface-tint-hover: rgba(0, 0, 0, 0.07);
+    --bg: #f6efdc;
+    --sidebar-bg: #eee8d5;
+    --surface: #fdf6e3;
+    --surface-hover: #f3ebd5;
+    --border: #d9d2ba;
+    --text: #586e75;
+    --text-muted: #7c8e93;
+    --danger: #dc322f;
+    --danger-hover: #b0221f;
+    --overlay: rgba(60, 54, 34, 0.4);
+    --shadow: rgba(88, 74, 32, 0.14);
+    --surface-tint: rgba(88, 110, 117, 0.06);
+    --surface-tint-hover: rgba(88, 110, 117, 0.1);
     --accent-hover: color-mix(in srgb, var(--accent) 84%, black);
   }
 }
 
 :root[data-theme="light"] {
-  --bg: #f8f9fb;
-  --surface: #ffffff;
-  --surface-hover: #f0f1f4;
-  --border: #d8dbe3;
-  --text: #1a1d27;
-  --text-muted: #6b7084;
-  --danger: #dc2626;
-  --danger-hover: #b91c1c;
-  --overlay: rgba(0, 0, 0, 0.4);
-  --shadow: rgba(0, 0, 0, 0.1);
-  --surface-tint: rgba(0, 0, 0, 0.04);
-  --surface-tint-hover: rgba(0, 0, 0, 0.07);
+  --bg: #f6efdc;
+  --sidebar-bg: #eee8d5;
+  --surface: #fdf6e3;
+  --surface-hover: #f3ebd5;
+  --border: #d9d2ba;
+  --text: #586e75;
+  --text-muted: #7c8e93;
+  --danger: #dc322f;
+  --danger-hover: #b0221f;
+  --overlay: rgba(60, 54, 34, 0.4);
+  --shadow: rgba(88, 74, 32, 0.14);
+  --surface-tint: rgba(88, 110, 117, 0.06);
+  --surface-tint-hover: rgba(88, 110, 117, 0.1);
   --accent-hover: color-mix(in srgb, var(--accent) 84%, black);
 }
 

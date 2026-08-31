@@ -1,6 +1,14 @@
 import { mount } from 'svelte';
 import { installPreloadErrorReload } from './lib/preload-error';
-import { type Accent, applyTheme, isAccent, type Mode } from './lib/theme';
+import {
+  type Accent,
+  applyPalette,
+  applyTheme,
+  isAccent,
+  isPalette,
+  type Mode,
+  type Palette,
+} from './lib/theme';
 import './styles/global.css';
 
 // Recover if a lazy chunk is temporarily unavailable during publication or a
@@ -15,16 +23,20 @@ installPreloadErrorReload();
 // blocked cookies, sandboxed iframe); fall back to defaults so mount proceeds.
 let storedAccent: string | null = null;
 let storedMode: string | null = null;
+let storedPalette: string | null = null;
 try {
   storedAccent = localStorage.getItem('inbox-rs:accent');
   storedMode = localStorage.getItem('inbox-rs:theme');
+  storedPalette = localStorage.getItem('inbox-rs:palette');
 } catch {
   // storage unavailable — keep defaults below
 }
 const accent: Accent = isAccent(storedAccent) ? storedAccent : 'indigo';
 const mode: Mode =
   storedMode === 'light' || storedMode === 'dark' ? storedMode : 'system';
+const palette: Palette = isPalette(storedPalette) ? storedPalette : 'solarized';
 applyTheme(accent, mode);
+applyPalette(palette);
 
 const target = document.getElementById('app');
 if (!target) throw new Error('Mount target #app not found');

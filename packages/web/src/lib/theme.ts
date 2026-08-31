@@ -1,10 +1,14 @@
 /**
  * Shared theme system for Inbox RS — used by both the main web app and the
  * quick-capture PWA. A theme is an **accent** (one of {@link ACCENTS}) plus a
- * light/dark **mode**. The accent palettes live in styles/theme-accents.css,
- * keyed off the `data-accent` attribute; light/dark neutrals are keyed off
- * `data-theme`. This module is the single source of truth for the accent list
- * and the apply helpers — each app layers its own persistence on top.
+ * light/dark **mode** plus a neutral **palette** (one of {@link PALETTES}).
+ * The accent palettes live in styles/theme-accents.css, keyed off the
+ * `data-accent` attribute; light/dark neutrals are keyed off `data-theme`;
+ * named neutral palettes are keyed off `data-palette` (styles/
+ * theme-palettes.css, with the default palette inlined in global.css for
+ * first paint). This module is the single source of truth for the accent and
+ * palette lists and the apply helpers — each app layers its own persistence
+ * on top.
  */
 
 export const ACCENTS = [
@@ -65,6 +69,29 @@ export const ACCENT_SWATCHES: Record<Accent, string> = {
 
 export function isAccent(value: string | null | undefined): value is Accent {
   return !!value && (ACCENTS as readonly string[]).includes(value);
+}
+
+/**
+ * Neutral palettes — each is a full light+dark set of background/surface/
+ * text/border tokens. 'solarized' is the default (low-contrast, warm light /
+ * blue-green dark); 'classic' is the original high-contrast cool grey.
+ */
+export const PALETTES = ['solarized', 'classic'] as const;
+
+export type Palette = (typeof PALETTES)[number];
+
+export const PALETTE_LABELS: Record<Palette, string> = {
+  solarized: 'Solarized',
+  classic: 'Classic',
+};
+
+export function isPalette(value: string | null | undefined): value is Palette {
+  return !!value && (PALETTES as readonly string[]).includes(value);
+}
+
+/** Set the neutral palette on the document root (styles/theme-palettes.css). */
+export function applyPalette(palette: Palette): void {
+  document.documentElement.dataset.palette = palette;
 }
 
 /** Set the accent on the document root (palette comes from theme-accents.css). */

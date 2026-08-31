@@ -1077,8 +1077,8 @@
     min-height: calc(100vh - 70px);
     background: linear-gradient(
       180deg,
-      color-mix(in srgb, var(--accent) 3%, var(--bg)),
-      var(--bg)
+      color-mix(in srgb, var(--accent) 3%, var(--sidebar-bg)),
+      var(--sidebar-bg)
     );
   }
 
