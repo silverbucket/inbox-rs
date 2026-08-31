@@ -89,9 +89,32 @@ export function isPalette(value: string | null | undefined): value is Palette {
   return !!value && (PALETTES as readonly string[]).includes(value);
 }
 
-/** Set the neutral palette on the document root (styles/theme-palettes.css). */
+/**
+ * Browser-chrome tint per palette — kept in sync with each palette's `--bg`
+ * (global.css for solarized, theme-palettes.css for the rest). index.html
+ * ships the solarized values for first paint.
+ */
+export const PALETTE_THEME_COLORS: Record<
+  Palette,
+  { light: string; dark: string }
+> = {
+  solarized: { light: '#f6efdc', dark: '#002b36' },
+  classic: { light: '#f8f9fb', dark: '#0f1117' },
+};
+
+/**
+ * Set the neutral palette on the document root (styles/theme-palettes.css)
+ * and retint the `theme-color` metas so the browser chrome follows it.
+ */
 export function applyPalette(palette: Palette): void {
   document.documentElement.dataset.palette = palette;
+  const colors = PALETTE_THEME_COLORS[palette];
+  for (const meta of document.querySelectorAll<HTMLMetaElement>(
+    'meta[name="theme-color"]',
+  )) {
+    const media = meta.getAttribute('media') ?? '';
+    meta.content = media.includes('light') ? colors.light : colors.dark;
+  }
 }
 
 /** Set the accent on the document root (palette comes from theme-accents.css). */

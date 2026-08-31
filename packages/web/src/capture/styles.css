@@ -38,6 +38,7 @@
   --ink-soft: #7b8e93;
   --ink-faint: #657b83;
   --line: #1a4a5a;
+
   color-scheme: dark;
 }
 
@@ -51,6 +52,7 @@
     --ink-soft: #7b8e93;
     --ink-faint: #657b83;
     --line: #1a4a5a;
+
     color-scheme: dark;
   }
 }

@@ -1071,7 +1071,11 @@
   .sidebar {
     position: sticky;
     top: 70px;
-    align-self: start;
+    /* Stretch, not start: the item must span the full grid column so its
+       background and border keep painting when the content column is taller
+       than the sidebar — with `start` the column below the sidebar showed the
+       page background once the user scrolled. */
+    align-self: stretch;
     padding: 1rem 0.65rem 1rem 1rem;
     border-right: 1px solid var(--border);
     min-height: calc(100vh - 70px);
