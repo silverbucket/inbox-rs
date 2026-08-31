@@ -184,7 +184,10 @@
         items: dndOpen,
         flipDurationMs: 200,
         dropTargetStyle: {},
-        dragDisabled: isTouchDevice,
+        // No `dragDisabled` — see the note in SidebarShell. Every
+        // `dragHandleZone` shares one module-global copy of that flag, so
+        // setting it here disabled every grip on the page. Reorder is gated on
+        // the handle anyway.
         type: 'todos-global',
       }}
       onconsider={handleDndConsider}

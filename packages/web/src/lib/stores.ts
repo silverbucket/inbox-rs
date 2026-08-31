@@ -220,6 +220,41 @@ function orderedDerived<T extends { id: string; createdAt: string }>(
   });
 }
 
+/**
+ * Weave a reordered subset back into a stored order, leaving ids the caller
+ * never saw where they already were.
+ *
+ * Every list a user drags is a *filtered* view: archived collections are
+ * absent from `groupCollections`, archived groups from `sortedGroups`, and the
+ * Collections page additionally hides whatever the filter row has switched
+ * off. Persisting the dragged list verbatim would silently evict all of those
+ * from the stored order, so a later unarchive or filter-clear would find them
+ * dumped at the end.
+ *
+ * So: each slot in `existing` that held a *visible* id is refilled from
+ * `newOrder` in turn, and slots held by ids the caller couldn't see keep their
+ * occupant. Ids in `newOrder` with no slot yet (a collection reachable through
+ * `groupId` but missing from `collectionIds`) are appended.
+ */
+export function spliceIntoOrder(
+  existing: readonly string[],
+  newOrder: readonly string[],
+): string[] {
+  const incoming = new Set(newOrder);
+  const queue = [...newOrder];
+  const result: string[] = [];
+  for (const id of existing) {
+    if (!incoming.has(id)) {
+      result.push(id);
+      continue;
+    }
+    const next = queue.shift();
+    if (next !== undefined) result.push(next);
+  }
+  result.push(...queue);
+  return result;
+}
+
 async function removeFromOrderConfig(
   id: string,
   key: 'collectionsOrder' | 'groupsOrder',
@@ -1497,6 +1532,14 @@ export async function createCollection(col: Collection): Promise<Collection> {
   return col;
 }
 
+/**
+ * Persist a new order for one group's collections.
+ *
+ * `newCollectionIds` is whatever the caller had on screen, which never
+ * includes archived collections and — on the Collections page — excludes
+ * anything the filter row has switched off. It's spliced into the stored
+ * order rather than replacing it, so those keep their places.
+ */
 export async function reorderGroupCollections(
   groupId: string,
   newCollectionIds: string[],
@@ -1508,7 +1551,13 @@ export async function reorderGroupCollections(
     if (grp) {
       return {
         ...current,
-        [groupId]: { ...grp, collectionIds: newCollectionIds },
+        [groupId]: {
+          ...grp,
+          collectionIds: spliceIntoOrder(
+            grp.collectionIds ?? [],
+            newCollectionIds,
+          ),
+        },
       };
     }
     return current;
@@ -1525,8 +1574,14 @@ export async function reorderGroupCollections(
   }
 }
 
+/**
+ * Persist a new order for the groups. `newOrder` omits archived groups (they
+ * aren't in `sortedGroups`), so it's spliced into the stored order to keep
+ * their positions for whenever they come back.
+ */
 export async function reorderGroups(newOrder: string[]) {
-  await updateConfig({ groupsOrder: newOrder });
+  const existing = get(appConfig).groupsOrder ?? [];
+  await updateConfig({ groupsOrder: spliceIntoOrder(existing, newOrder) });
 }
 
 /**

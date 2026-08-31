@@ -128,6 +128,15 @@
     filingDragPointerTarget = e.target;
   }
 
+  /** Stop parent svelte-dnd-action zones from calling preventDefault on our
+      mousedown — that blocks the native HTML5 drag used for sidebar filing. */
+  function stopParentDndCapture(e: MouseEvent | TouchEvent) {
+    if (readonly) return;
+    const element = filingDragOriginElement(e.target);
+    if (!element || element.closest('.reorder-handle, input, button, a')) return;
+    e.stopPropagation();
+  }
+
   function filingDragOriginElement(target: EventTarget | null): Element | null {
     if (target instanceof Element) return target;
     if (target instanceof Text) return target.parentElement;
@@ -154,6 +163,10 @@
       return;
     }
     if (!e.dataTransfer) return;
+    // svelte-dnd-action sets `ondragstart = () => false` on every direct child
+    // of a drop zone. Every list that renders these rows is such a zone, so an
+    // un-stopped dragstart bubbles into that handler and cancels the drag.
+    e.stopPropagation();
     e.dataTransfer.setData(DRAG_MIME, todo.id);
     e.dataTransfer.setData('text/plain', todo.title || todo.id);
     e.dataTransfer.effectAllowed = 'move';
@@ -202,6 +215,8 @@
   onclick={handleClick}
   onkeydown={handleKey}
   onpointerdown={onRowPointerDown}
+  onmousedown={stopParentDndCapture}
+  ontouchstart={stopParentDndCapture}
   ondragstart={onFileDragStart}
   ondragend={onFileDragEnd}
   style="--group-color: {groupColor}; --collection-color: {collectionColor}"

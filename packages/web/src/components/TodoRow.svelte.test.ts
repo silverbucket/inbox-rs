@@ -16,6 +16,11 @@ vi.mock('../lib/schedule-sync', () => ({
 
 import type { InboxItem } from '@inbox-rs/rs-module';
 import { DRAG_MIME, draggingItemId } from '../lib/drag';
+import {
+  dragStartFrom,
+  mousedownReachesZoneUncancelled,
+  stubMatchMedia,
+} from '../test/filing-drag-helpers';
 import TodoRow from './TodoRow.svelte';
 
 function todo(overrides: Partial<InboxItem> = {}): InboxItem {
@@ -28,52 +33,12 @@ function todo(overrides: Partial<InboxItem> = {}): InboxItem {
   } as InboxItem;
 }
 
-function makeDataTransfer() {
-  const data = new Map<string, string>();
-  return {
-    effectAllowed: '',
-    dropEffect: '',
-    setData(type: string, value: string) {
-      data.set(type, value);
-    },
-    getData(type: string) {
-      return data.get(type) ?? '';
-    },
-  } as DataTransfer;
-}
-
-function dragStartFrom(
-  row: HTMLElement,
-  options?: { target?: EventTarget; pointerTarget?: EventTarget },
-) {
-  if (options?.pointerTarget) {
-    const pointer = new PointerEvent('pointerdown', {
-      bubbles: true,
-      cancelable: true,
-    });
-    Object.defineProperty(pointer, 'target', { value: options.pointerTarget });
-    row.dispatchEvent(pointer);
-  }
-
-  const dataTransfer = makeDataTransfer();
-  const event = new DragEvent('dragstart', {
-    bubbles: true,
-    cancelable: true,
-    dataTransfer,
-  });
-  if (options?.target) {
-    Object.defineProperty(event, 'target', { value: options.target });
-  }
-  row.dispatchEvent(event);
-  flushSync();
-  return dataTransfer;
-}
-
 describe('TodoRow sidebar filing drag', () => {
   let host: HTMLElement;
   let component: ReturnType<typeof mount> | undefined;
 
   beforeEach(() => {
+    stubMatchMedia();
     if (typeof DragEvent === 'undefined') {
       class PolyDragEvent extends Event {
         dataTransfer: DataTransfer | null;
@@ -115,6 +80,7 @@ describe('TodoRow sidebar filing drag', () => {
 
     const row = host.querySelector('.todo-row') as HTMLElement;
     const dataTransfer = dragStartFrom(row);
+    flushSync();
 
     expect(dataTransfer.getData(DRAG_MIME)).toBe('todo-1');
     expect(get(draggingItemId)).toBe('todo-1');
@@ -158,6 +124,7 @@ describe('TodoRow sidebar filing drag', () => {
       pointerTarget: handle,
       target: row,
     });
+    flushSync();
 
     expect(dataTransfer.getData(DRAG_MIME)).toBe('');
     expect(get(draggingItemId)).toBeNull();
@@ -182,6 +149,7 @@ describe('TodoRow sidebar filing drag', () => {
       pointerTarget: pin,
       target: row,
     });
+    flushSync();
 
     expect(dataTransfer.getData(DRAG_MIME)).toBe('');
     expect(get(draggingItemId)).toBeNull();
@@ -205,6 +173,7 @@ describe('TodoRow sidebar filing drag', () => {
       pointerTarget: checkbox,
       target: row,
     });
+    flushSync();
 
     expect(dataTransfer.getData(DRAG_MIME)).toBe('');
     expect(get(draggingItemId)).toBeNull();
@@ -228,9 +197,30 @@ describe('TodoRow sidebar filing drag', () => {
       pointerTarget: titleText,
       target: titleText,
     });
+    flushSync();
 
     expect(dataTransfer.getData(DRAG_MIME)).toBe('todo-1');
     expect(get(draggingItemId)).toBe('todo-1');
+  });
+
+  it('does not let parent reorder zones cancel todo mousedown', () => {
+    component = mount(TodoRow, {
+      target: host,
+      props: {
+        todo: todo(),
+        collection: null,
+        group: null,
+        reorderable: true,
+        onselect: vi.fn(),
+      },
+    });
+    flushSync();
+
+    const zone = document.createElement('div');
+    zone.addEventListener('mousedown', (e) => e.preventDefault());
+    zone.appendChild(host);
+    const title = host.querySelector('.title') as HTMLElement;
+    expect(mousedownReachesZoneUncancelled(zone, title)).toBe(true);
   });
 
   it('clears filing drag state on dragend', () => {

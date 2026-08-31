@@ -1,6 +1,9 @@
 <script lang="ts">
   import type { InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
-  import { dndzone } from 'svelte-dnd-action';
+  import { onDestroy } from 'svelte';
+  import { type DndEvent, dragHandleZone, TRIGGERS } from 'svelte-dnd-action';
+  import { watchCollectionPointerDrag } from '../lib/collection-drop';
+  import { requestCollectionMove } from '../lib/drag';
   import {
     createCollection, storeCollection, deleteCollection, moveCollectionToGroup,
     visibleGroupedCollections, sortedGroups, storeGroup, deleteGroup,
@@ -86,16 +89,49 @@
     dndByGroup = next;
   });
 
+  // A grip drag that leaves this list and lands on a sidebar group row moves
+  // the collection into that group. The zone only ever reports "dropped
+  // outside of any" for that, so the cursor is tracked alongside the drag and
+  // hit-tested against the sidebar — see `watchCollectionPointerDrag`.
+  let pointerDrag: { collectionId: string; stop: () => string | null } | null = null;
+
   function makeConsider(groupId: string) {
-    return (e: CustomEvent<{ items: Array<Collection & { id: string }> }>) => {
+    return (e: CustomEvent<DndEvent<Collection & { id: string }>>) => {
+      const info = e.detail.info;
+      if (info.trigger === TRIGGERS.DRAG_STARTED && info.id && !pointerDrag) {
+        pointerDrag = {
+          collectionId: info.id,
+          // A group that already holds this collection is not a move target;
+          // leaving it unhighlighted is what says "this would do nothing".
+          ...watchCollectionPointerDrag(info.id, {
+            accepts: (candidate) => candidate !== groupId,
+          }),
+        };
+      }
       dndByGroup = { ...dndByGroup, [groupId]: e.detail.items };
     };
   }
 
   function makeFinalize(groupId: string) {
-    return async (e: CustomEvent<{ items: Array<Collection & { id: string }> }>) => {
+    return async (e: CustomEvent<DndEvent<Collection & { id: string }>>) => {
+      const drag = pointerDrag;
+      pointerDrag = null;
+      const droppedOnGroup = drag?.stop() ?? null;
+
       const previous = (sections.find(s => s.group.id === groupId)?.collections ?? []).map(c => ({ ...c }));
       const updated = e.detail.items;
+
+      // Dropped on a sidebar group: the zone has already reverted its own
+      // order, so persisting `updated` here would just rewrite what it was.
+      // The move is the whole gesture.
+      if (drag && droppedOnGroup && droppedOnGroup !== groupId) {
+        // Handed to the sidebar rather than done here: it expands the
+        // destination (an empty group renders no list, so the collection would
+        // otherwise appear to vanish) and raises the move's toast and Undo.
+        requestCollectionMove(drag.collectionId, droppedOnGroup);
+        return;
+      }
+
       dndByGroup = { ...dndByGroup, [groupId]: updated };
       try {
         await reorderGroupCollections(groupId, updated.map(c => c.id));
@@ -105,6 +141,15 @@
       }
     };
   }
+
+  // This page is lazily mounted and unmounts on navigation, so a drag can very
+  // plausibly outlive it. Without this the watcher's window listeners stay
+  // attached and `draggingCollectionId` stays set — only `finalize` calls
+  // `stop()`, and it never arrives if the component goes first.
+  onDestroy(() => {
+    pointerDrag?.stop();
+    pointerDrag = null;
+  });
 
   function openAddCollection(groupId: string | undefined) {
     // `undefined` means the user triggered creation outside any group (e.g.
@@ -258,11 +303,27 @@
       {#if realCount > 0}
         <div
           class="collection-list"
-          use:dndzone={{
+          use:dragHandleZone={{
             items: dndByGroup[section.group.id],
             flipDurationMs: 200,
             dropTargetStyle: {},
-            dragDisabled: isTouchDevice,
+            // Not a control in its own right — the header grips carry the
+            // keyboard flow. Left at the library's default of 0 this becomes
+            // an empty tab stop per group.
+            zoneTabIndex: -1,
+            // No `dragDisabled` — see the note in SidebarShell. The flag lives
+            // in a module-global inside svelte-dnd-action, shared by every
+            // `dragHandleZone` on the page, so setting it here disabled the
+            // grips everywhere, sidebar included. A handle zone doesn't need
+            // it: a touch that isn't on a grip never starts a drag.
+            //
+            // Track the cursor, not the centre of the dragged element — the
+            // same fix the sidebar zones carry, and it matters more here: these
+            // cards are whole panels, and an expanded one is taller still, so
+            // the dragged element's centre trails the cursor by most of a card.
+            // Judged by that centre, dropping one card past its neighbour never
+            // registers and the reorder silently does nothing.
+            useCursorForDetection: true,
             type: `cols-${section.group.id}`,
           }}
           onconsider={makeConsider(section.group.id)}
@@ -272,6 +333,7 @@
             <CollectionView
               collection={col}
               expanded={isExpanded(col)}
+              reorderable
               {onselect}
               {isTouchDevice}
               onedit={() => editingCollection = col}

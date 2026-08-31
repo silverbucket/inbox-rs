@@ -20,7 +20,11 @@
   import { slide, fade } from 'svelte/transition';
   import { flip } from 'svelte/animate';
   import { dragHandleZone } from 'svelte-dnd-action';
+  import ReorderGrip from './ReorderGrip.svelte';
   import { captureDetected, captureFile } from '../lib/capture';
+  import { collectionDropTarget, startNativeDrag } from '../lib/collection-drop';
+  import { COLLECTION_DRAG_MIME, draggingCollectionId, draggingItemId } from '../lib/drag';
+  import { moveItemToCollection } from '../lib/stores';
   import { showToast } from '../lib/toast';
   import InboxCard from './InboxCard.svelte';
   import CaptureBar from './CaptureBar.svelte';
@@ -28,13 +32,15 @@
   import TodoQuickAdd from './TodoQuickAdd.svelte';
   import TodoRow from './TodoRow.svelte';
 
-  let { collection, expanded = false, onselect, onedit, ontoggle, isTouchDevice = false }: {
+  let { collection, expanded = false, onselect, onedit, ontoggle, isTouchDevice = false, reorderable = false }: {
     collection: Collection;
     expanded?: boolean;
     onselect: (item: InboxItem) => void;
     onedit: () => void;
     ontoggle: () => void;
     isTouchDevice?: boolean;
+    /** When true, show a grip on the header for drag-sorting on the Collections page. */
+    reorderable?: boolean;
   } = $props();
 
   // Collection body renders both todos (at the top, drag-sortable) and
@@ -163,6 +169,37 @@
     await moveCollectionToGroup(collection.id, groupId);
   }
 
+  // ── Drag this collection onto a sidebar group to move it there ───────────
+  // The sidebar's group rows have always accepted this drop — `groupDropTarget`
+  // gates on whether a collection drag is in flight, not on which page is
+  // showing — but until now the only thing that could *start* one was a
+  // sidebar row. This is the second source, so the gesture works from the
+  // Collections page too.
+  //
+  // It hangs off the move button rather than the header for the same reason it
+  // does in the sidebar: a native drag source swallows its own click once the
+  // pointer travels a few pixels, and the header's click is expand/collapse.
+  // Here that click opens the group menu, which is the same gesture by another
+  // route — so losing it to a deliberate drag costs nothing.
+  const beingMoved = $derived($draggingCollectionId === collection.id);
+
+  function onCollectionDragStart(e: DragEvent) {
+    showMoveMenu = false;
+    // `stopPropagation` inside `startNativeDrag` is load-bearing here:
+    // svelte-dnd-action puts `ondragstart = () => false` on every direct child
+    // of a drop zone, and on the Collections page this card is one.
+    const started = startNativeDrag(e, {
+      mime: COLLECTION_DRAG_MIME,
+      id: collection.id,
+      label: collection.name,
+    });
+    if (started) draggingCollectionId.set(collection.id);
+  }
+
+  function onCollectionDragEnd() {
+    draggingCollectionId.set(null);
+  }
+
   // ---- Drag-and-drop reordering of open todos ----
   let dndOpen = $state<Array<InboxItem & { id: string }>>([]);
   $effect(() => {
@@ -189,6 +226,25 @@
     }
   }
 
+  // ── Drop an item on the header to file it here ───────────────────────────
+  // The classic layout has no sidebar, so this header is the only collection
+  // drop target those users get. It's live in both layouts.
+  let filingDragOver = $state(false);
+  const filingDrag = $derived($draggingItemId !== null);
+
+  async function fileItemHere(itemId: string) {
+    filingDragOver = false;
+    draggingItemId.set(null);
+    if (!itemId || items.some(({ id }) => id === itemId)) return;
+    try {
+      await moveItemToCollection(itemId, collection.id);
+      showToast(`Filed in ${collection.name}`);
+    } catch (error) {
+      console.error('Failed to file item into collection', error);
+      showToast(`Couldn't file into ${collection.name}.`);
+    }
+  }
+
   async function toggleCompletedSection() {
     try {
       await updateConfig({ completedTodosExpanded: !completedExpanded });
@@ -198,17 +254,26 @@
   }
 </script>
 
-<div class="collection" style="--col-color: {collection.color || '#6366f1'}" class:expanded>
+<div class="collection" class:reorderable class:being-moved={beingMoved} style="--col-color: {collection.color || '#6366f1'}" class:expanded>
   <!-- Header bar -->
   <div
     class="collection-header"
+    class:filing={filingDrag}
+    class:filing-over={filingDragOver}
     role="button"
     tabindex="0"
     onclick={ontoggle}
     onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ontoggle(); } }}
     aria-expanded={expanded}
     aria-label="{expanded ? 'Collapse' : 'Expand'} {collection.name}"
+    use:collectionDropTarget={{
+      ondrop: (itemId) => void fileItemHere(itemId),
+      onhover: (isOver) => { filingDragOver = isOver; },
+    }}
   >
+    {#if reorderable}
+      <ReorderGrip label="Drag to reorder {collection.name}" />
+    {/if}
     <span class="color-indicator"></span>
     <svg aria-hidden="true" class="chevron" class:open={expanded} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="6 9 12 15 18 9"></polyline>
@@ -242,7 +307,19 @@
       </button>
       {#if availableGroups.length > 0}
         <div class="move-menu-wrapper">
-          <button type="button" class="btn-header" bind:this={moveButtonEl} aria-label="Move to group" aria-haspopup="menu" aria-expanded={showMoveMenu} title="Move to group" onclick={toggleMoveMenu}>
+          <button
+            type="button"
+            class="btn-header collection-move-btn"
+            bind:this={moveButtonEl}
+            draggable="true"
+            aria-label="Move to group"
+            aria-haspopup="menu"
+            aria-expanded={showMoveMenu}
+            title="Drag onto a group in the sidebar, or click to choose one"
+            onclick={toggleMoveMenu}
+            ondragstart={onCollectionDragStart}
+            ondragend={onCollectionDragEnd}
+          >
             <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
               <line x1="12" y1="11" x2="12" y2="17"></line>
@@ -284,7 +361,18 @@
        new items regardless of current contents — empty states sit quietly
        under the headers instead of replacing them. -->
   {#if expanded}
-    <div class="collection-body" transition:slide={{ duration: isTouchDevice ? 0 : 200 }}>
+    <div
+      class="collection-body"
+      transition:slide={{ duration: isTouchDevice ? 0 : 200 }}
+      onmousedown={(e) => {
+        const t = e.target as HTMLElement;
+        if (!t.closest('input, button, a, .reorder-handle')) e.stopPropagation();
+      }}
+      ontouchstart={(e) => {
+        const t = e.target as HTMLElement;
+        if (!t.closest('input, button, a, .reorder-handle')) e.stopPropagation();
+      }}
+    >
       <section class="todos-section" aria-label="Todos in {collection.name}">
         <div class="section-header">
           <h4>Todos</h4>
@@ -304,7 +392,10 @@
               items: dndOpen,
               flipDurationMs: 200,
               dropTargetStyle: {},
-              dragDisabled: isTouchDevice,
+              // No `dragDisabled` — see the note in SidebarShell. Every
+              // `dragHandleZone` shares one module-global copy of that flag,
+              // so setting it here disabled every grip on the page. Reorder is
+              // gated on the handle anyway.
               type: `todos-collection-${collection.id}`,
             }}
             onconsider={handleDndConsider}
@@ -438,6 +529,12 @@
     transition: box-shadow 250ms ease;
   }
 
+  /* Dims in place while it's being carried to a sidebar group, so it's obvious
+     which card the drag picked up. Matches the sidebar row's own feedback. */
+  .collection.being-moved {
+    opacity: 0.4;
+  }
+
   @media (pointer: fine) {
     .collection {
       overflow: hidden;
@@ -472,6 +569,26 @@
 
   .collection-header:hover {
     border-color: color-mix(in srgb, var(--_col) 40%, var(--border) 60%);
+  }
+
+  /* Filing-drag feedback. Layout-neutral on purpose (colour and outline only):
+     anything that reflows the header would move the subtree under the cursor
+     mid-drag and the browser would cancel the drop instead of delivering it. */
+  .collection-header.filing {
+    outline: 1px dashed color-mix(in srgb, var(--_col) 55%, var(--border));
+    outline-offset: -1px;
+  }
+
+  /* The header must be the only hit-test target in its subtree while a filing
+     drag is in flight, or every crossing onto the chevron, a badge or an icon
+     button fires dragleave/dragenter and the drop state flickers. */
+  .collection-header.filing > * {
+    pointer-events: none;
+  }
+
+  .collection-header.filing-over {
+    background: color-mix(in srgb, var(--_col) 18%, var(--surface));
+    outline: 2px solid var(--_col);
   }
 
   .color-indicator {
@@ -562,6 +679,24 @@
 
   .collection-header:hover .header-actions {
     opacity: 1;
+  }
+
+  /* Same reveal rule as `.header-actions` below: quiet until you're on the
+     header, and always on for touch, where there is no hover to reveal it
+     with and the grip is the only way to reorder. */
+  .collection-header:hover,
+  .collection-header:focus-within {
+    --row-action-opacity: 1;
+  }
+
+  .collection-header {
+    --row-action-color: var(--_col, var(--accent));
+  }
+
+  @media (hover: none) {
+    .collection-header {
+      --row-action-opacity: 1;
+    }
   }
 
   /* On touch devices, always show actions */
