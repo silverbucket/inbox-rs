@@ -20,7 +20,7 @@ import {
   dragStartFrom,
   mousedownReachesZoneUncancelled,
   stubMatchMedia,
-} from '../lib/filing-drag-helpers';
+} from '../test/filing-drag-helpers';
 import TodoRow from './TodoRow.svelte';
 
 function todo(overrides: Partial<InboxItem> = {}): InboxItem {

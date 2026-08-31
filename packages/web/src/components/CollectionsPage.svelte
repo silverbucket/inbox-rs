@@ -262,7 +262,15 @@
             items: dndByGroup[section.group.id],
             flipDurationMs: 200,
             dropTargetStyle: {},
-            dragDisabled: isTouchDevice,
+            // Not a control in its own right — the header grips carry the
+            // keyboard flow. Left at the library's default of 0 this becomes
+            // an empty tab stop per group.
+            zoneTabIndex: -1,
+            // No `dragDisabled` — see the note in SidebarShell. The flag lives
+            // in a module-global inside svelte-dnd-action, shared by every
+            // `dragHandleZone` on the page, so setting it here disabled the
+            // grips everywhere, sidebar included. A handle zone doesn't need
+            // it: a touch that isn't on a grip never starts a drag.
             type: `cols-${section.group.id}`,
           }}
           onconsider={makeConsider(section.group.id)}

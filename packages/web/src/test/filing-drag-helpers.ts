@@ -1,4 +1,4 @@
-import { DRAG_MIME } from './drag';
+import { DRAG_MIME } from '../lib/drag';
 
 /** Minimal DataTransfer stub for jsdom drag tests. */
 export function makeDataTransfer() {

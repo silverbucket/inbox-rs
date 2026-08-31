@@ -16,7 +16,7 @@ import {
   filingDragSurvivesNeuteredAncestor,
   mousedownReachesZoneUncancelled,
   stubMatchMedia,
-} from '../lib/filing-drag-helpers';
+} from '../test/filing-drag-helpers';
 
 const fixtures = vi.hoisted(() => {
   const group: CollectionGroup = {
@@ -156,7 +156,7 @@ describe('CollectionsPage filing drag', () => {
   it('uses dragHandleZone for collection reorder (grip handle present)', () => {
     render();
     const handle = host.querySelector(
-      '.collection-reorder-handle',
+      '.reorder-grip',
     ) as HTMLElement;
     expect(handle).toBeTruthy();
     expect(handle.tagName).toBe('SPAN');

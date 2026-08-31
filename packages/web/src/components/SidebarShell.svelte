@@ -13,7 +13,8 @@
     groupDropTarget,
     startNativeDrag,
   } from '../lib/collection-drop';
-  import { dragHandleZone, dragHandle } from 'svelte-dnd-action';
+  import { dragHandleZone } from 'svelte-dnd-action';
+  import ReorderGrip from './ReorderGrip.svelte';
   import {
     sortedGroups,
     groupCollections,
@@ -83,14 +84,12 @@
   let springGroupId: string | null = null;
   let springTimer: ReturnType<typeof setTimeout> | null = null;
 
-  let isTouchDevice = $state(false);
-  $effect(() => {
-    const mql = window.matchMedia('(pointer: coarse)');
-    isTouchDevice = mql.matches;
-    const handler = (e: MediaQueryListEvent) => { isTouchDevice = e.matches; };
-    mql.addEventListener('change', handler);
-    return () => mql.removeEventListener('change', handler);
-  });
+  // Note: no `dragDisabled` on the zones below, on touch or otherwise.
+  // svelte-dnd-action keeps that flag in a *module-global* store, written by
+  // every `dragHandleZone` as it mounts and updates, so a value set here does
+  // not stay here — the Collections page renders inside this shell and its own
+  // zone would fight over it, whichever rendered last winning. Reorder is
+  // handle-driven anyway and `dragHandle` binds touchstart, so touch works.
 
   const groups = $derived($sortedGroups);
   const grouped = $derived($groupCollections);
@@ -572,8 +571,12 @@
                 items: dndGroups,
                 flipDurationMs: 200,
                 dropTargetStyle: {},
-                dragDisabled: isTouchDevice,
                 type: 'sidebar-groups',
+                // The zone container is not itself an interactive control, and
+                // the grips carry the keyboard flow. Left at the library's
+                // default of 0 it becomes a tab stop with nothing to show for
+                // it, one per expanded group.
+                zoneTabIndex: -1,
                 // Track the cursor, not the centre of the dragged element. An
                 // expanded group is several times taller than a collapsed one,
                 // and centre-tracking means its centre leaves the zone long
@@ -609,24 +612,6 @@
                     enabled: acceptsDraggedCollection(group),
                   }}
                 >
-                  <span
-                    class="group-reorder-handle"
-                    role="button"
-                    use:dragHandle
-                    tabindex="-1"
-                    aria-label="Drag to reorder {group.name}"
-                    title="Drag to reorder"
-                    onmousedown={(e) => e.stopPropagation()}
-                    ontouchstart={(e) => e.stopPropagation()}
-                    onpointerdown={(e) => e.stopPropagation()}
-                    onclick={(e) => e.stopPropagation()}
-                  >
-                    <svg aria-hidden="true" width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
-                      <circle cx="3" cy="3" r="1.25"/><circle cx="9" cy="3" r="1.25"/>
-                      <circle cx="3" cy="8" r="1.25"/><circle cx="9" cy="8" r="1.25"/>
-                      <circle cx="3" cy="13" r="1.25"/><circle cx="9" cy="13" r="1.25"/>
-                    </svg>
-                  </span>
                   <button
                     class="chevron"
                     type="button"
@@ -651,6 +636,10 @@
                     <span class="entity-name">{group.name}</span>
                     <span class="count">{groupCount(group)}</span>
                   </button>
+                  <!-- Grip then action button, the same order and the same
+                       widths as a collection row below, so both grips line up
+                       in one column down the right edge. -->
+                  <ReorderGrip label="Drag to reorder {group.name}" />
                   <button
                     class="row-add"
                     type="button"
@@ -673,9 +662,9 @@
                           items: cols,
                           flipDurationMs: 200,
                           dropTargetStyle: {},
-                          dragDisabled: isTouchDevice,
                           type: `sidebar-cols-${group.id}`,
                           useCursorForDetection: true,
+                          zoneTabIndex: -1,
                         }}
                         onconsider={makeCollectionConsider(group.id)}
                         onfinalize={makeCollectionFinalize(group.id)}
@@ -688,7 +677,14 @@
                                must still be able to drop. Children are made
                                pointer-transparent while a filing drag is in
                                flight (see `.filing` below) so drag events
-                               never retarget mid-gesture. -->
+                               never retarget mid-gesture.
+
+                               The row is also the zone's direct child, so it
+                               has to stay 1:1 with `cols` — which is why the
+                               "Move to" menu lives *inside* it rather than as
+                               a sibling. Hoisting the menu out of the loop put
+                               it below the last collection in the group,
+                               nowhere near the row it belongs to. -->
                           <div
                             class="collection-drag-row"
                             class:filing={dragging}
@@ -700,89 +696,81 @@
                               onhover: (isOver) => setColHover(col, isOver),
                             }}
                           >
-                            <!-- Draggable onto another group's row to move it
-                                 there. The grip beside it reorders within this
-                                 group; this is the cross-group gesture. -->
-                            <button
-                              class="entity collection-entity"
-                              class:inactive={!colActive}
-                              class:being-moved={$draggingCollectionId === col.id}
-                              type="button"
-                              draggable="true"
-                              aria-pressed={colActive}
-                              title={colActive ? `Hide ${col.name}` : `Show ${col.name}`}
-                              onclick={(e) => onToggleCollection(e, group, col)}
-                              ondragstart={(e) => onCollectionDragStart(e, col)}
-                              ondragend={onCollectionDragEnd}
-                            >
-                              <span class="dot"></span>
-                              <span class="entity-name">{col.name}</span>
-                              <span class="count">{col.itemIds.length}</span>
-                            </button>
-                            <span
-                              class="collection-reorder-handle"
-                              role="button"
-                              use:dragHandle
-                              tabindex="-1"
-                              aria-label="Drag to reorder {col.name}"
-                              title="Drag to reorder"
-                              onmousedown={(e) => e.stopPropagation()}
-                              ontouchstart={(e) => e.stopPropagation()}
-                              onpointerdown={(e) => e.stopPropagation()}
-                              onclick={(e) => e.stopPropagation()}
-                            >
-                              <svg aria-hidden="true" width="14" height="18" viewBox="0 0 14 18" fill="currentColor">
-                                <circle cx="4" cy="4" r="1.5"/><circle cx="10" cy="4" r="1.5"/>
-                                <circle cx="4" cy="9" r="1.5"/><circle cx="10" cy="9" r="1.5"/>
-                                <circle cx="4" cy="14" r="1.5"/><circle cx="10" cy="14" r="1.5"/>
-                              </svg>
-                            </span>
-                            <button
-                              type="button"
-                              id={`collection-move-handle-${col.id}`}
-                              class="collection-move-btn"
-                              title={`Move ${col.name} to another group`}
-                              aria-label={`Move ${col.name} to another group`}
-                              aria-expanded={keyboardMoveCollectionId === col.id}
-                              disabled={collectionMoveInFlight}
-                              onclick={() => toggleKeyboardMove(col.id)}
-                            >
-                              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                                <line x1="12" y1="11" x2="12" y2="17"></line>
-                                <polyline points="9 14 12 11 15 14"></polyline>
-                              </svg>
-                            </button>
+                            <div class="collection-row-main">
+                              <button
+                                class="entity collection-entity"
+                                class:inactive={!colActive}
+                                class:being-moved={$draggingCollectionId === col.id}
+                                type="button"
+                                aria-pressed={colActive}
+                                title={colActive ? `Hide ${col.name}` : `Show ${col.name}`}
+                                onclick={(e) => onToggleCollection(e, group, col)}
+                              >
+                                <span class="dot"></span>
+                                <span class="entity-name">{col.name}</span>
+                                <span class="count">{col.itemIds.length}</span>
+                              </button>
+                              <ReorderGrip label="Drag to reorder {col.name}" />
+                              <!-- Both halves of "move to another group" live
+                                   on this one button: drag it onto a group
+                                   row, or click it for the menu.
+
+                                   Deliberately not on the row body. A native
+                                   drag source suppresses the click once the
+                                   pointer travels ~3px, and the row body's
+                                   click is the show/hide filter toggle — the
+                                   most-used control in the sidebar. Making it
+                                   draggable both ate that click and let a
+                                   ~56px slip onto a neighbouring group row
+                                   move the collection with no warning. -->
+                              <button
+                                type="button"
+                                id={`collection-move-handle-${col.id}`}
+                                class="collection-move-btn"
+                                draggable="true"
+                                title={`Drag ${col.name} onto a group, or click to choose one`}
+                                aria-label={`Move ${col.name} to another group`}
+                                aria-expanded={keyboardMoveCollectionId === col.id}
+                                disabled={collectionMoveInFlight}
+                                onclick={() => toggleKeyboardMove(col.id)}
+                                ondragstart={(e) => onCollectionDragStart(e, col)}
+                                ondragend={onCollectionDragEnd}
+                              >
+                                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                  <line x1="12" y1="11" x2="12" y2="17"></line>
+                                  <polyline points="9 14 12 11 15 14"></polyline>
+                                </svg>
+                              </button>
+                            </div>
+                            {#if keyboardMoveCollectionId === col.id}
+                              <div
+                                class="collection-move-menu"
+                                aria-label={`Move ${col.name} to group`}
+                                onkeydown={(e) => {
+                                  if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    closeKeyboardMove(col.id);
+                                  }
+                                }}
+                              >
+                                <span class="move-menu-label">Move to</span>
+                                {#each groups.filter(({ id }) => id !== group.id) as destination, index (destination.id)}
+                                  <button
+                                    type="button"
+                                    use:autofocusIf={index === 0}
+                                    disabled={collectionMoveInFlight}
+                                    onclick={() => void moveCollection(col.id, destination)}
+                                  >{destination.name}</button>
+                                {/each}
+                                <button type="button" class="move-menu-cancel" onclick={() => closeKeyboardMove(col.id)}>
+                                  Cancel
+                                </button>
+                              </div>
+                            {/if}
                           </div>
                         {/each}
                       </div>
-                      {#each cols as col (col.id)}
-                        {#if keyboardMoveCollectionId === col.id}
-                          <div
-                            class="collection-move-menu"
-                            aria-label={`Move ${col.name} to group`}
-                            onkeydown={(e) => {
-                              if (e.key === 'Escape') {
-                                e.preventDefault();
-                                closeKeyboardMove(col.id);
-                              }
-                            }}
-                          >
-                            <span class="move-menu-label">Move to</span>
-                            {#each groups.filter(({ id }) => id !== group.id) as destination, index (destination.id)}
-                              <button
-                                type="button"
-                                use:autofocusIf={index === 0}
-                                disabled={collectionMoveInFlight}
-                                onclick={() => void moveCollection(col.id, destination)}
-                              >{destination.name}</button>
-                            {/each}
-                            <button type="button" class="move-menu-cancel" onclick={() => closeKeyboardMove(col.id)}>
-                              Cancel
-                            </button>
-                          </div>
-                        {/if}
-                      {/each}
                     {/if}
 
                     {#if addingCollectionFor === group.id}
@@ -1225,36 +1213,44 @@
     font-weight: 700;
   }
 
+  /* The row is a column: the controls, and the "Move to" menu underneath when
+     it's open. The menu has to live in here because the row is the drop
+     zone's direct child and those must stay 1:1 with the collections. */
   .collection-drag-row {
     display: flex;
-    align-items: center;
+    flex-direction: column;
     margin-left: 1.55rem;
   }
 
-  .group-reorder-handle,
-  .collection-reorder-handle {
-    display: inline-flex;
+  /* Same gap as `.group-row`, so the grip and the action button beside it land
+     on exactly the same two columns in both kinds of row. */
+  .collection-row-main {
+    display: flex;
     align-items: center;
-    justify-content: center;
-    width: 20px;
-    min-height: 1.9rem;
-    flex: 0 0 20px;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--text-muted);
-    cursor: grab;
-    opacity: 0.45;
-    touch-action: none;
-    user-select: none;
+    gap: 0.05rem;
   }
 
-  .group-reorder-handle:hover,
-  .group-reorder-handle:focus-visible,
-  .collection-reorder-handle:hover,
-  .collection-reorder-handle:focus-visible {
-    color: var(--entity-color, var(--accent));
-    opacity: 1;
+  /* Grips follow the sidebar's existing rule for secondary controls (see
+     `.row-add`): quiet until you're on the row, always on for touch, and
+     always on while focused so they're reachable by keyboard. They hold their
+     space either way, so revealing one never shifts the row. */
+  .group-row:hover,
+  .group-row:focus-within,
+  .collection-drag-row:hover,
+  .collection-drag-row:focus-within {
+    --row-action-opacity: 1;
+  }
+
+  .group-row,
+  .collection-drag-row {
+    --row-action-color: var(--entity-color, var(--accent));
+  }
+
+  @media (hover: none) {
+    .group-row,
+    .collection-drag-row {
+      --row-action-opacity: 1;
+    }
   }
 
   .collection-entity {
@@ -1262,6 +1258,8 @@
     font-size: 0.86rem;
   }
 
+  /* Reveals on the same rule as the grip beside it, so a resting collection
+     row is just its dot, name and count. Pinned on while its menu is open. */
   .collection-move-btn {
     display: inline-flex;
     align-items: center;
@@ -1275,7 +1273,12 @@
     background: none;
     color: var(--text-muted);
     cursor: pointer;
-    opacity: 0.55;
+    opacity: var(--row-action-opacity, 0);
+    transition: opacity 150ms, color 150ms, background 150ms;
+  }
+
+  .collection-move-btn[aria-expanded='true'] {
+    opacity: 1;
   }
 
   .collection-move-btn:hover,
@@ -1285,12 +1288,14 @@
     opacity: 1;
   }
 
+  /* Sits directly under the row it belongs to. The row already carries the
+     collection indent, so no left margin of its own. */
   .collection-move-menu {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.3rem;
-    margin: 0.15rem 0 0.35rem 1.55rem;
+    margin: 0.15rem 0 0.35rem;
     padding: 0.45rem;
     border: 1px solid var(--border);
     border-radius: 0.5rem;

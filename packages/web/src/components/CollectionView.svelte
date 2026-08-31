@@ -19,7 +19,8 @@
   } from '../lib/collection-todos';
   import { slide, fade } from 'svelte/transition';
   import { flip } from 'svelte/animate';
-  import { dragHandleZone, dragHandle } from 'svelte-dnd-action';
+  import { dragHandleZone } from 'svelte-dnd-action';
+  import ReorderGrip from './ReorderGrip.svelte';
   import { captureDetected, captureFile } from '../lib/capture';
   import { collectionDropTarget } from '../lib/collection-drop';
   import { draggingItemId } from '../lib/drag';
@@ -240,24 +241,7 @@
     }}
   >
     {#if reorderable}
-      <span
-        class="collection-reorder-handle"
-        role="button"
-        use:dragHandle
-        tabindex="-1"
-        aria-label="Drag to reorder {collection.name}"
-        title="Drag to reorder"
-        onmousedown={(e) => e.stopPropagation()}
-        ontouchstart={(e) => e.stopPropagation()}
-        onpointerdown={(e) => e.stopPropagation()}
-        onclick={(e) => e.stopPropagation()}
-      >
-        <svg aria-hidden="true" width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
-          <circle cx="3" cy="3" r="1.25"/><circle cx="9" cy="3" r="1.25"/>
-          <circle cx="3" cy="8" r="1.25"/><circle cx="9" cy="8" r="1.25"/>
-          <circle cx="3" cy="13" r="1.25"/><circle cx="9" cy="13" r="1.25"/>
-        </svg>
-      </span>
+      <ReorderGrip label="Drag to reorder {collection.name}" />
     {/if}
     <span class="color-indicator"></span>
     <svg aria-hidden="true" class="chevron" class:open={expanded} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -365,7 +349,10 @@
               items: dndOpen,
               flipDurationMs: 200,
               dropTargetStyle: {},
-              dragDisabled: isTouchDevice,
+              // No `dragDisabled` — see the note in SidebarShell. Every
+              // `dragHandleZone` shares one module-global copy of that flag,
+              // so setting it here disabled every grip on the page. Reorder is
+              // gated on the handle anyway.
               type: `todos-collection-${collection.id}`,
             }}
             onconsider={handleDndConsider}
@@ -645,32 +632,22 @@
     opacity: 1;
   }
 
-  .collection-reorder-handle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 28px;
-    flex-shrink: 0;
-    margin: -0.15rem 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--text-muted);
-    opacity: 0.35;
-    cursor: grab;
-    touch-action: none;
-    transition: opacity 150ms, color 150ms;
+  /* Same reveal rule as `.header-actions` below: quiet until you're on the
+     header, and always on for touch, where there is no hover to reveal it
+     with and the grip is the only way to reorder. */
+  .collection-header:hover,
+  .collection-header:focus-within {
+    --row-action-opacity: 1;
   }
 
-  .collection-header:hover .collection-reorder-handle,
-  .collection-reorder-handle:focus-visible {
-    opacity: 1;
+  .collection-header {
+    --row-action-color: var(--_col, var(--accent));
   }
 
-  .collection-reorder-handle:hover,
-  .collection-reorder-handle:focus-visible {
-    color: var(--accent);
+  @media (hover: none) {
+    .collection-header {
+      --row-action-opacity: 1;
+    }
   }
 
   /* On touch devices, always show actions */

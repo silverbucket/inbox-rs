@@ -3,8 +3,8 @@
  *
  * - `collectionDropTarget` — an inbox item picked up from a card or a todo row
  *   and dropped onto a collection, filing it there.
- * - `groupDropTarget` — a collection picked up by its row and dropped onto a
- *   group, moving it into that group.
+ * - `groupDropTarget` — a collection picked up by its move button and dropped
+ *   onto a group, moving it into that group.
  *
  * Both share one implementation because three things here are load-bearing and
  * were each, at some point, the reason drag-and-drop didn't work for real mouse

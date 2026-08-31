@@ -164,7 +164,7 @@ test('sidebar collections reorder when dragged by their grip', async () => {
 
   await dragGripPast(
     page,
-    sidebarCollectionRow(page, ALPHA).locator('.collection-reorder-handle'),
+    sidebarCollectionRow(page, ALPHA).locator('.reorder-grip'),
     sidebarCollectionRow(page, GAMMA),
   );
 
@@ -181,7 +181,7 @@ test('sidebar groups reorder when dragged by their grip', async () => {
 
   await dragGripPast(
     page,
-    sidebarGroupRow(page, WORK).locator('.group-reorder-handle'),
+    sidebarGroupRow(page, WORK).locator('.reorder-grip'),
     sidebarGroupRow(page, HOME),
   );
 
@@ -207,10 +207,36 @@ test('a collection dragged onto another group moves into it', async () => {
     .toEqual({ [WORK]: [ALPHA, GAMMA], [HOME]: [BETA] });
 });
 
+test('a sloppy click on a collection toggles its filter and moves nothing', async () => {
+  // Chrome starts a native drag once the pointer travels ~3px with the button
+  // down, and suppresses the click that would otherwise follow. So a native
+  // drag source on the row body ate the show/hide filter toggle — the sidebar's
+  // most-used control — for anyone whose hand moved a few pixels, and let a
+  // slip onto a neighbouring group row move the collection with no warning.
+  // Both gestures now start from the move button instead.
+  //
+  // Only a real mouse can catch this: a synthetic `.click()` reports success
+  // whether or not the browser would have cancelled it.
+  const entity = sidebarCollectionRow(page, BETA).locator('.collection-entity');
+  const before = await entity.getAttribute('aria-pressed');
+  const box = await entity.boundingBox();
+  if (!box) throw new Error('the collection row must be laid out');
+
+  await page.mouse.move(box.x + box.width * 0.4, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.4 + 12, box.y + box.height / 2 + 6);
+  await page.mouse.up();
+
+  await expect(entity).not.toHaveAttribute('aria-pressed', before ?? '');
+  await expect
+    .poll(() => sidebarCollectionsByGroup(page))
+    .toEqual({ [WORK]: [ALPHA, BETA, GAMMA], [HOME]: [] });
+});
+
 test('moving a collection between groups leaves reordering intact', async () => {
-  // The two gestures share a row: the grip reorders within the group, the row
-  // body moves it across groups. Exercising both in sequence guards against a
-  // fix for one silently disabling the other.
+  // The two gestures share a row: the grip reorders within the group, the move
+  // button beside it carries the collection across groups. Exercising both in
+  // sequence guards against a fix for one silently disabling the other.
   await dragCollectionOntoGroup(
     page,
     sidebarCollectionRow(page, ALPHA),
@@ -222,7 +248,7 @@ test('moving a collection between groups leaves reordering intact', async () => 
 
   await dragGripPast(
     page,
-    sidebarCollectionRow(page, BETA).locator('.collection-reorder-handle'),
+    sidebarCollectionRow(page, BETA).locator('.reorder-grip'),
     sidebarCollectionRow(page, GAMMA),
   );
   await expect
@@ -241,7 +267,7 @@ test('a group released just past the last row still reorders', async () => {
 
   await dragGripPast(
     page,
-    sidebarGroupRow(page, WORK).locator('.group-reorder-handle'),
+    sidebarGroupRow(page, WORK).locator('.reorder-grip'),
     sidebarGroupRow(page, HOME),
     { overshootPx: 16 },
   );

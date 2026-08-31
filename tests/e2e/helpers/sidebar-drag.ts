@@ -30,6 +30,21 @@ export function sidebarCollection(page: Page, name: string): Locator {
   return sidebarCollectionRow(page, name).locator('.collection-entity');
 }
 
+/**
+ * The move button on a sidebar collection row.
+ *
+ * Both halves of "move to another group" hang off this one control: drag it
+ * onto a group row, or click it to open the menu of groups. It is deliberately
+ * the only drag source for that gesture — a native drag on the row body would
+ * swallow the row's own click, which is the show/hide filter toggle.
+ */
+export function sidebarCollectionMoveButton(
+  page: Page,
+  name: string,
+): Locator {
+  return sidebarCollectionRow(page, name).locator('.collection-move-btn');
+}
+
 /** A sidebar group row: reorder grip, expand chevron, filter button. */
 export function sidebarGroupRow(page: Page, name: string): Locator {
   return page.locator('.group-row', { has: exactName(page, name) });
@@ -311,12 +326,12 @@ export async function dragItemOnto(
 }
 
 /**
- * Drag a collection's row body onto a group row, moving it into that group.
+ * Drag a collection onto a group row, moving it into that group.
  *
- * Grabs the row body rather than the grip on purpose: the grip runs
- * svelte-dnd-action's pointer reorder, while the body is a native drag that
- * groups accept. Both gestures live on the same row and this is the one that
- * crosses groups.
+ * Grabs the move button, which is the only drag source for this gesture. Not
+ * the grip (that runs svelte-dnd-action's pointer reorder within the group)
+ * and not the row body (a native drag there suppresses the row's click, which
+ * is the show/hide filter toggle).
  */
 export async function dragCollectionOntoGroup(
   page: Page,
@@ -324,13 +339,13 @@ export async function dragCollectionOntoGroup(
   groupRow: Locator,
 ): Promise<void> {
   const from = await boxOf(
-    collectionRow.locator('.collection-entity'),
+    collectionRow.locator('.collection-move-btn'),
     'the dragged collection',
   );
   const to = await boxOf(groupRow, 'the destination group row');
   await steppedDrag(
     page,
-    { x: from.x + from.width * 0.45, y: from.y + from.height / 2 },
+    { x: from.x + from.width / 2, y: from.y + from.height / 2 },
     { x: to.x + to.width / 2, y: to.y + to.height / 2 },
   );
 }

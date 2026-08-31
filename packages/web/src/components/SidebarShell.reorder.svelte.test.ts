@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   dispatchDndFinalize,
   stubMatchMedia,
-} from '../lib/filing-drag-helpers';
+} from '../test/filing-drag-helpers';
 
 const fixtures = vi.hoisted(() => {
   const g1: CollectionGroup = {
@@ -49,6 +49,7 @@ const storeFns = vi.hoisted(() => ({
   reorderGroups: vi.fn().mockResolvedValue(undefined),
   reorderGroupCollections: vi.fn().mockResolvedValue(undefined),
   moveItemToCollection: vi.fn().mockResolvedValue(undefined),
+  toggleCollectionFilter: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../lib/stores', async () => {
@@ -64,7 +65,6 @@ vi.mock('../lib/stores', async () => {
     inactiveCollectionIds: w(new Set<string>()),
     toggleGroupFilter: vi.fn(),
     soloGroupFilter: vi.fn(),
-    toggleCollectionFilter: vi.fn(),
     enableCollectionFilter: vi.fn(),
     soloCollectionFilter: vi.fn(),
     moveCollectionToGroup: vi.fn(),
@@ -78,7 +78,7 @@ vi.mock('../lib/stores', async () => {
 vi.mock('../lib/toast', () => ({ showToast: vi.fn() }));
 vi.mock('./UserMenu.svelte', () => import('./__mocks__/UserMenuStub.svelte'));
 
-import SidebarShellTestHost from './SidebarShell.test-host.svelte';
+import SidebarShellTestHost from '../test/SidebarShell.test-host.svelte';
 
 describe('SidebarShell drag reorder', () => {
   let host: HTMLElement;
@@ -119,8 +119,69 @@ describe('SidebarShell drag reorder', () => {
 
   it('exposes grip handles for reordering groups and collections', () => {
     render();
-    expect(host.querySelectorAll('.group-reorder-handle').length).toBe(2);
-    expect(host.querySelectorAll('.collection-reorder-handle').length).toBe(3);
+    expect(host.querySelectorAll('.group-row .reorder-grip').length).toBe(2);
+    expect(host.querySelectorAll('.collection-drag-row .reorder-grip').length).toBe(3);
+  });
+
+  /**
+   * The row's click is the show/hide filter toggle — the most-used control in
+   * the sidebar. A native drag source suppresses the click once the pointer
+   * travels a few pixels, so nothing on the row body may be `draggable`.
+   */
+  it('leaves the collection row body clickable, not draggable', () => {
+    render();
+    const entity = host.querySelector('.collection-entity') as HTMLElement;
+    expect(entity.getAttribute('draggable')).toBeNull();
+    expect(entity.draggable).toBe(false);
+
+    entity.click();
+    expect(storeFns.toggleCollectionFilter).toHaveBeenCalledWith('c1');
+  });
+
+  it('starts the move-to-group drag from the move button', () => {
+    render();
+    const move = host.querySelector('.collection-move-btn') as HTMLElement;
+    expect(move.draggable).toBe(true);
+    expect(move.getAttribute('aria-label')).toBe('Move One to another group');
+  });
+
+  /**
+   * The menu used to be hoisted out of the drag zone into a second loop, which
+   * rendered it below the *last* collection in the group — 114px from the row
+   * whose button opened it, and further with every collection added.
+   */
+  it('renders the move menu inside the row whose button opened it', async () => {
+    render();
+    const row = host.querySelector('.collection-drag-row') as HTMLElement;
+    (row.querySelector('.collection-move-btn') as HTMLElement).click();
+    flushSync();
+
+    const menu = host.querySelector('.collection-move-menu');
+    expect(menu).toBeTruthy();
+    expect(row.contains(menu)).toBe(true);
+  });
+
+  /**
+   * `dragDisabled` lives in a module-global store inside svelte-dnd-action, so
+   * a value set here would be overwritten by any other zone on the page — the
+   * Collections page renders inside this shell. Reorder is handle-driven, so
+   * the flag isn't needed; `zoneTabIndex` keeps the containers out of the tab
+   * order instead of leaving empty stops behind.
+   */
+  it('leaves reorder enabled and keeps zone containers out of the tab order', () => {
+    render();
+    const zones = host.querySelectorAll<HTMLElement>(
+      '.groups-dnd, .collections-dnd',
+    );
+    expect(zones.length).toBeGreaterThan(0);
+    for (const zone of zones) expect(zone.tabIndex).toBe(-1);
+
+    // `dragHandle` parks an enabled grip at tabindex 0; a `dragDisabled` zone
+    // anywhere on the page would drive every grip to -1 through the library's
+    // module-global store.
+    for (const grip of host.querySelectorAll<HTMLElement>('.reorder-grip')) {
+      expect(grip.tabIndex).toBe(0);
+    }
   });
 
   it('persists group reorder when the sidebar groups zone finalizes', async () => {

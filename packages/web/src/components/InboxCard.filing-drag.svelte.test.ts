@@ -9,7 +9,7 @@ import {
   dragStartFrom,
   filingDragSurvivesNeuteredAncestor,
   stubMatchMedia,
-} from '../lib/filing-drag-helpers';
+} from '../test/filing-drag-helpers';
 
 vi.mock('../lib/stores', async () => {
   const { writable: w } = await import('svelte/store');

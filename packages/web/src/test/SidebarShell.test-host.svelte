@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Page, Route } from '../lib/route';
-  import SidebarShell from './SidebarShell.svelte';
+  import SidebarShell from '../components/SidebarShell.svelte';
 
   let {
     route,
