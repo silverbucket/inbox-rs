@@ -109,6 +109,9 @@ test('a card in a collection view refiles onto another sidebar collection', asyn
 
   await expect.poll(() => collectionCount(page, BETA)).toBe(betaBefore + 1);
   await expect.poll(() => collectionCount(page, ALPHA)).toBe(alphaBefore - 1);
+  // Beta is collapsed, so a refiled card must disappear from the page rather
+  // than linger in the list it was dragged out of.
+  await expect(card(page, FIXTURE.filedCard)).toHaveCount(0);
 });
 
 test('a todo in a collection view refiles onto another sidebar collection', async () => {
@@ -121,6 +124,7 @@ test('a todo in a collection view refiles onto another sidebar collection', asyn
 
   await expect.poll(() => collectionCount(page, GAMMA)).toBe(gammaBefore + 1);
   await expect.poll(() => collectionCount(page, ALPHA)).toBe(alphaBefore - 1);
+  await expect(todoRow(page, FIXTURE.filedTodo)).toHaveCount(0);
 });
 
 test('sidebar collections reorder when dragged by their grip', async () => {
