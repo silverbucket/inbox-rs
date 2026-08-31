@@ -155,9 +155,7 @@ describe('CollectionsPage filing drag', () => {
 
   it('uses dragHandleZone for collection reorder (grip handle present)', () => {
     render();
-    const handle = host.querySelector(
-      '.reorder-grip',
-    ) as HTMLElement;
+    const handle = host.querySelector('.reorder-grip') as HTMLElement;
     expect(handle).toBeTruthy();
     expect(handle.tagName).toBe('SPAN');
   });

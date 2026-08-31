@@ -38,10 +38,7 @@ export function sidebarCollection(page: Page, name: string): Locator {
  * the only drag source for that gesture — a native drag on the row body would
  * swallow the row's own click, which is the show/hide filter toggle.
  */
-export function sidebarCollectionMoveButton(
-  page: Page,
-  name: string,
-): Locator {
+export function sidebarCollectionMoveButton(page: Page, name: string): Locator {
   return sidebarCollectionRow(page, name).locator('.collection-move-btn');
 }
 

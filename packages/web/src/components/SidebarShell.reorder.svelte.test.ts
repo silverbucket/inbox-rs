@@ -120,7 +120,9 @@ describe('SidebarShell drag reorder', () => {
   it('exposes grip handles for reordering groups and collections', () => {
     render();
     expect(host.querySelectorAll('.group-row .reorder-grip').length).toBe(2);
-    expect(host.querySelectorAll('.collection-drag-row .reorder-grip').length).toBe(3);
+    expect(
+      host.querySelectorAll('.collection-drag-row .reorder-grip').length,
+    ).toBe(3);
   });
 
   /**

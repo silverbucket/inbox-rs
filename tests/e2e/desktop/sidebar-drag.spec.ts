@@ -224,7 +224,10 @@ test('a sloppy click on a collection toggles its filter and moves nothing', asyn
 
   await page.mouse.move(box.x + box.width * 0.4, box.y + box.height / 2);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width * 0.4 + 12, box.y + box.height / 2 + 6);
+  await page.mouse.move(
+    box.x + box.width * 0.4 + 12,
+    box.y + box.height / 2 + 6,
+  );
   await page.mouse.up();
 
   await expect(entity).not.toHaveAttribute('aria-pressed', before ?? '');
