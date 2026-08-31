@@ -21,6 +21,9 @@
   import { flip } from 'svelte/animate';
   import { dragHandleZone, dragHandle } from 'svelte-dnd-action';
   import { captureDetected, captureFile } from '../lib/capture';
+  import { collectionDropTarget } from '../lib/collection-drop';
+  import { draggingItemId } from '../lib/drag';
+  import { moveItemToCollection } from '../lib/stores';
   import { showToast } from '../lib/toast';
   import InboxCard from './InboxCard.svelte';
   import CaptureBar from './CaptureBar.svelte';
@@ -191,6 +194,25 @@
     }
   }
 
+  // ── Drop an item on the header to file it here ───────────────────────────
+  // The classic layout has no sidebar, so this header is the only collection
+  // drop target those users get. It's live in both layouts.
+  let filingDragOver = $state(false);
+  const filingDrag = $derived($draggingItemId !== null);
+
+  async function fileItemHere(itemId: string) {
+    filingDragOver = false;
+    draggingItemId.set(null);
+    if (!itemId || items.some(({ id }) => id === itemId)) return;
+    try {
+      await moveItemToCollection(itemId, collection.id);
+      showToast(`Filed in ${collection.name}`);
+    } catch (error) {
+      console.error('Failed to file item into collection', error);
+      showToast(`Couldn't file into ${collection.name}.`);
+    }
+  }
+
   async function toggleCompletedSection() {
     try {
       await updateConfig({ completedTodosExpanded: !completedExpanded });
@@ -204,12 +226,18 @@
   <!-- Header bar -->
   <div
     class="collection-header"
+    class:filing={filingDrag}
+    class:filing-over={filingDragOver}
     role="button"
     tabindex="0"
     onclick={ontoggle}
     onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ontoggle(); } }}
     aria-expanded={expanded}
     aria-label="{expanded ? 'Collapse' : 'Expand'} {collection.name}"
+    use:collectionDropTarget={{
+      onfile: (itemId) => void fileItemHere(itemId),
+      onhover: (isOver) => { filingDragOver = isOver; },
+    }}
   >
     {#if reorderable}
       <span
@@ -505,6 +533,26 @@
 
   .collection-header:hover {
     border-color: color-mix(in srgb, var(--_col) 40%, var(--border) 60%);
+  }
+
+  /* Filing-drag feedback. Layout-neutral on purpose (colour and outline only):
+     anything that reflows the header would move the subtree under the cursor
+     mid-drag and the browser would cancel the drop instead of delivering it. */
+  .collection-header.filing {
+    outline: 1px dashed color-mix(in srgb, var(--_col) 55%, var(--border));
+    outline-offset: -1px;
+  }
+
+  /* The header must be the only hit-test target in its subtree while a filing
+     drag is in flight, or every crossing onto the chevron, a badge or an icon
+     button fires dragleave/dragenter and the drop state flickers. */
+  .collection-header.filing > * {
+    pointer-events: none;
+  }
+
+  .collection-header.filing-over {
+    background: color-mix(in srgb, var(--_col) 18%, var(--surface));
+    outline: 2px solid var(--_col);
   }
 
   .color-indicator {

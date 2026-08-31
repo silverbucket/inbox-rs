@@ -8,6 +8,7 @@
   import type { Page, Route } from '../lib/route';
   import { appVersion } from '../lib/plugin-downloads.generated';
   import { autofocus, autofocusIf } from '../lib/actions';
+  import { collectionDropTarget } from '../lib/collection-drop';
   import { dragHandleZone, dragHandle } from 'svelte-dnd-action';
   import {
     sortedGroups,
@@ -28,7 +29,7 @@
     reorderGroupCollections,
   } from '../lib/stores';
   import { isSoloModifier, soloHint, soloModifierHeld } from '../lib/solo-modifier';
-  import { draggingItemId, DRAG_MIME } from '../lib/drag';
+  import { draggingItemId } from '../lib/drag';
   import { showToast } from '../lib/toast';
   import { randomPresetColor } from '../lib/constants';
 
@@ -286,22 +287,16 @@
   }
 
   // ── Drag an inbox item onto a collection to file it ──────────────────────
-  function onColDragOver(e: DragEvent, col: Collection) {
-    if (!dragging) return;
-    e.preventDefault();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-    dragOverColId = col.id;
+  // The whole row is the target (see `collectionDropTarget`), so this only has
+  // to track which row is lit and do the move.
+  function setColHover(col: Collection, isOver: boolean) {
+    if (isOver) dragOverColId = col.id;
+    else if (dragOverColId === col.id) dragOverColId = null;
   }
 
-  function onColDragLeave(col: Collection) {
-    if (dragOverColId === col.id) dragOverColId = null;
-  }
-
-  async function onColDrop(e: DragEvent, col: Collection) {
-    e.preventDefault();
+  async function fileItemInto(id: string, col: Collection) {
     dragOverColId = null;
     clearSpring();
-    const id = e.dataTransfer?.getData(DRAG_MIME) ?? '';
     draggingItemId.set(null);
     if (!id) return;
     const previousCollectionId = get(items)[id]?.collectionId;
@@ -613,27 +608,34 @@
                       >
                         {#each cols as col (col.id)}
                           {@const colActive = isCollectionActive(group, col)}
+                          <!-- The drop target is the whole row, not the name
+                               button: the row also holds a reorder grip and a
+                               move button, and a user aiming at any of them
+                               must still be able to drop. Children are made
+                               pointer-transparent while a filing drag is in
+                               flight (see `.filing` below) so drag events
+                               never retarget mid-gesture. -->
                           <div
                             class="collection-drag-row"
+                            class:filing={dragging}
+                            class:drop-over={dragOverColId === col.id}
+                            class:just-filed={justFiledColId === col.id}
                             style="--entity-color: {col.color || group.color || 'var(--accent)'}"
+                            use:collectionDropTarget={{
+                              onfile: (itemId) => void fileItemInto(itemId, col),
+                              onhover: (isOver) => setColHover(col, isOver),
+                            }}
                           >
                             <button
                               class="entity collection-entity"
                               class:inactive={!colActive}
-                              class:drop-target={dragging}
-                              class:drop-over={dragOverColId === col.id}
-                              class:just-filed={justFiledColId === col.id}
                               type="button"
                               aria-pressed={colActive}
                               title={colActive ? `Hide ${col.name}` : `Show ${col.name}`}
                               onclick={(e) => onToggleCollection(e, group, col)}
-                              ondragover={(e) => onColDragOver(e, col)}
-                              ondragleave={() => onColDragLeave(col)}
-                              ondrop={(e) => onColDrop(e, col)}
                             >
                               <span class="dot"></span>
                               <span class="entity-name">{col.name}</span>
-                              <span class="drop-label">File here</span>
                               <span class="count">{col.itemIds.length}</span>
                             </button>
                             <span
@@ -1321,36 +1323,39 @@
     font-style: italic;
   }
 
-  /* ── Drag-to-file affordances ── */
-  .drop-label {
-    display: none;
-    margin-left: auto;
-    font-size: 0.7rem;
-    font-weight: 700;
-    color: var(--entity-color);
+  /* ── Drag-to-file affordances ──
+     Everything here is deliberately layout-neutral: no transform, no size
+     change, and nothing appearing or disappearing inside the row. A hover
+     style that reflows the row moves the subtree under the cursor, which
+     retargets the drag and makes the browser cancel it instead of dropping
+     (the bug this replaced). Colour and outline only. */
+  .collection-drag-row {
+    border-radius: 0.5rem;
   }
 
-  .collection-entity.drop-target {
-    opacity: 1;
+  .collection-drag-row.filing {
     outline: 1px dashed
       color-mix(in srgb, var(--entity-color) 55%, var(--border));
     outline-offset: -1px;
   }
 
-  .collection-entity.drop-over {
+  /* While a filing drag is in flight the row must be the only hit-test target
+     in its subtree. Otherwise every crossing onto the name button, the count,
+     the grip or an svg fires dragleave/dragenter and the row flickers in and
+     out of the drop state. */
+  .collection-drag-row.filing > * {
+    pointer-events: none;
+  }
+
+  .collection-drag-row.filing .entity {
+    opacity: 1;
+  }
+
+  .collection-drag-row.drop-over {
     background: color-mix(in srgb, var(--entity-color) 20%, var(--surface));
     outline: 2px solid var(--entity-color);
-    transform: translateX(2px) scale(1.015);
     box-shadow: 0 4px 14px
       color-mix(in srgb, var(--entity-color) 35%, transparent);
-  }
-
-  .collection-entity.drop-over .count {
-    display: none;
-  }
-
-  .collection-entity.drop-over .drop-label {
-    display: inline;
   }
 
   /* Group rows recede while filing, since you can only drop on collections. */
@@ -1358,7 +1363,7 @@
     opacity: 0.5;
   }
 
-  .collection-entity.just-filed {
+  .collection-drag-row.just-filed {
     animation: filed-pulse 1s ease;
   }
 
