@@ -518,6 +518,12 @@
                 dropTargetStyle: {},
                 dragDisabled: isTouchDevice,
                 type: 'sidebar-groups',
+                // Track the cursor, not the centre of the dragged element. An
+                // expanded group is several times taller than a collapsed one,
+                // and centre-tracking means its centre leaves the zone long
+                // before the cursor does — the library then reports
+                // "droppedOutsideOfAny" and silently reverts the reorder.
+                useCursorForDetection: true,
               }}
               onconsider={handleGroupDndConsider}
               onfinalize={handleGroupDndFinalize}
@@ -602,6 +608,7 @@
                           dropTargetStyle: {},
                           dragDisabled: isTouchDevice,
                           type: `sidebar-cols-${group.id}`,
+                          useCursorForDetection: true,
                         }}
                         onconsider={makeCollectionConsider(group.id)}
                         onfinalize={makeCollectionFinalize(group.id)}
@@ -1071,6 +1078,12 @@
     display: flex;
     flex-direction: column;
     gap: 0.05rem;
+  }
+
+  /* Slack below the last group so dragging a little past it still counts as
+     "inside the zone" rather than a drop outside it, which reverts. */
+  .groups-dnd {
+    padding-bottom: 0.75rem;
   }
 
   .group-row {
