@@ -18,6 +18,10 @@
   // dataTransfer; the store lets drop targets highlight during the drag.
   function onDragStart(e: DragEvent) {
     if (!e.dataTransfer) return;
+    // svelte-dnd-action sets `ondragstart = () => false` on every direct child
+    // of a drop zone, so a bubbling dragstart from a card nested in one (the
+    // collections page) cancels the drag before it leaves the ground.
+    e.stopPropagation();
     e.dataTransfer.setData(DRAG_MIME, item.id);
     e.dataTransfer.setData('text/plain', item.title || item.id);
     e.dataTransfer.effectAllowed = 'move';

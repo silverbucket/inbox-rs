@@ -13,6 +13,7 @@ import {
   dispatchDndFinalize,
   dragStartFrom,
   dropOntoCollectionButton,
+  filingDragSurvivesNeuteredAncestor,
   mousedownReachesZoneUncancelled,
   stubMatchMedia,
 } from '../lib/filing-drag-helpers';
@@ -135,6 +136,21 @@ describe('CollectionsPage filing drag', () => {
     });
     expect(dataTransfer.getData(DRAG_MIME)).toBe('todo-1');
     expect(get(draggingItemId)).toBe('todo-1');
+  });
+
+  it('starts that drag even though its zone child cancels dragstart', () => {
+    render();
+    const zoneChild = host.querySelector('.collection-list > *') as HTMLElement;
+    const row = host.querySelector('.todo-row') as HTMLElement;
+    const title = host.querySelector('.todo-row .title') as HTMLElement;
+    expect(zoneChild).toBeTruthy();
+    const { survived, dataTransfer } = filingDragSurvivesNeuteredAncestor(
+      zoneChild,
+      row,
+      { pointerTarget: title, target: row },
+    );
+    expect(survived).toBe(true);
+    expect(dataTransfer.getData(DRAG_MIME)).toBe('todo-1');
   });
 
   it('uses dragHandleZone for collection reorder (grip handle present)', () => {

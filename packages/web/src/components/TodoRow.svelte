@@ -163,6 +163,10 @@
       return;
     }
     if (!e.dataTransfer) return;
+    // svelte-dnd-action sets `ondragstart = () => false` on every direct child
+    // of a drop zone. Every list that renders these rows is such a zone, so an
+    // un-stopped dragstart bubbles into that handler and cancels the drag.
+    e.stopPropagation();
     e.dataTransfer.setData(DRAG_MIME, todo.id);
     e.dataTransfer.setData('text/plain', todo.title || todo.id);
     e.dataTransfer.effectAllowed = 'move';

@@ -94,6 +94,50 @@ export function dropOntoCollectionButton(
   return onDrop(drop);
 }
 
+/**
+ * Whether a filing drag started on `source` survives a drop-zone ancestor.
+ *
+ * svelte-dnd-action's `styleDraggable` puts `draggable = false` and
+ * `ondragstart = () => false` on every direct child of a drop zone. Returning
+ * false from an event-handler IDL attribute cancels the event, so a bubbling
+ * dragstart that reaches one of those ancestors kills the native drag — the
+ * payload is set and then thrown away. Filing drag sources therefore have to
+ * stop propagation before the event gets there.
+ *
+ * This applies the same neutering to `ancestor` and reports whether the drag
+ * came out the other side intact.
+ */
+export function filingDragSurvivesNeuteredAncestor(
+  ancestor: HTMLElement,
+  source: HTMLElement,
+  options?: { target?: EventTarget; pointerTarget?: EventTarget },
+) {
+  ancestor.draggable = false;
+  ancestor.ondragstart = () => false;
+
+  if (options?.pointerTarget) {
+    const pointer = new PointerEvent('pointerdown', {
+      bubbles: true,
+      cancelable: true,
+    });
+    Object.defineProperty(pointer, 'target', { value: options.pointerTarget });
+    source.dispatchEvent(pointer);
+  }
+
+  const dataTransfer = makeDataTransfer();
+  const event = new DragEvent('dragstart', {
+    bubbles: true,
+    cancelable: true,
+    dataTransfer,
+  });
+  if (options?.target) {
+    Object.defineProperty(event, 'target', { value: options.target });
+  }
+  source.dispatchEvent(event);
+  ancestor.ondragstart = null;
+  return { survived: !event.defaultPrevented, dataTransfer };
+}
+
 /** Whether a bubbling mousedown from `source` is cancelled before `zone`. */
 export function mousedownReachesZoneUncancelled(
   zone: HTMLElement,

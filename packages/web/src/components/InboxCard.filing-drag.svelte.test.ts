@@ -2,10 +2,14 @@
 
 import type { BookmarkItem } from '@inbox-rs/rs-module';
 import { flushSync, mount, unmount } from 'svelte';
-import { get, writable } from 'svelte/store';
+import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DRAG_MIME, draggingItemId } from '../lib/drag';
-import { dragStartFrom, stubMatchMedia } from '../lib/filing-drag-helpers';
+import {
+  dragStartFrom,
+  filingDragSurvivesNeuteredAncestor,
+  stubMatchMedia,
+} from '../lib/filing-drag-helpers';
 
 vi.mock('../lib/stores', async () => {
   const { writable: w } = await import('svelte/store');
@@ -77,5 +81,21 @@ describe('InboxCard sidebar filing drag', () => {
     const dataTransfer = dragStartFrom(card);
     expect(dataTransfer.getData(DRAG_MIME)).toBe('card-1');
     expect(get(draggingItemId)).toBe('card-1');
+  });
+
+  it('survives a drop-zone ancestor that cancels bubbling dragstart', () => {
+    component = mount(InboxCard, {
+      target: host,
+      props: { item: bookmark(), onselect: vi.fn() },
+    });
+    flushSync();
+
+    const card = host.querySelector('article.card') as HTMLElement;
+    const { survived, dataTransfer } = filingDragSurvivesNeuteredAncestor(
+      host,
+      card,
+    );
+    expect(survived).toBe(true);
+    expect(dataTransfer.getData(DRAG_MIME)).toBe('card-1');
   });
 });
