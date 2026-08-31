@@ -312,28 +312,31 @@ async function boxOf(locator: Locator, what: string) {
 }
 
 /**
- * Drag a collection's grip from the Collections page onto a sidebar group row,
- * pausing on the target so `whileHeld` can assert what the user can *see*
- * mid-gesture, then releasing.
+ * Drag a collection by its grip onto a group row, pausing on the target so
+ * `whileHeld` can assert what the user can *see* mid-gesture, then releasing.
  *
- * The grip is the affordance a user actually reaches for — it looks like a
- * drag handle and svelte-dnd-action carries the whole card under the cursor,
- * so it reads as "I am holding this collection" all the way across the window.
- * Whatever it does when released over the sidebar, it has to be something.
+ * `collectionRow` is either a Collections-page header card or a sidebar
+ * collection row — both carry a `.reorder-grip`, and the gesture has to mean
+ * the same thing in both places.
+ *
+ * The grip is the affordance a user actually reaches for: it looks like a drag
+ * handle and svelte-dnd-action carries the whole element under the cursor, so
+ * it reads as "I am holding this collection" all the way across the window.
+ * Whatever it does when released over a group row, it has to be something.
  *
  * `whileHeld` runs with the button still down, which is the only moment the
  * drop cue exists; asserting after release proves nothing about feedback.
  */
-export async function dragCardGripOntoGroup(
+export async function dragGripOntoGroup(
   page: Page,
-  collectionHeader: Locator,
+  collectionRow: Locator,
   groupRow: Locator,
   whileHeld?: () => Promise<void>,
 ): Promise<void> {
-  // Header actions only appear on hover, and a hidden control has no box.
-  await collectionHeader.hover();
+  // Grips only appear on row hover, and a hidden control has no box.
+  await collectionRow.hover();
   const from = await boxOf(
-    collectionHeader.locator('.reorder-grip'),
+    collectionRow.locator('.reorder-grip'),
     'the collection grip',
   );
   const to = await boxOf(groupRow, 'the destination group row');

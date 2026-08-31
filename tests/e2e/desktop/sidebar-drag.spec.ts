@@ -37,8 +37,8 @@ import {
   card,
   collectionCount,
   collectionsPageHeader,
-  dragCardGripOntoGroup,
   dragCollectionOntoGroup,
+  dragGripOntoGroup,
   dragGripPast,
   dragItemOnto,
   expandSidebarGroup,
@@ -318,7 +318,7 @@ test('a collection card dragged by its grip lands in a sidebar group', async () 
 
   const home = sidebarGroupRow(page, HOME);
 
-  await dragCardGripOntoGroup(
+  await dragGripOntoGroup(
     page,
     collectionsPageHeader(page, BETA),
     home,
@@ -352,4 +352,29 @@ test('a grip drag that stays in the list still just reorders', async () => {
   await expect
     .poll(() => sidebarCollectionsByGroup(page))
     .toEqual({ [WORK]: [BETA, ALPHA, GAMMA], [HOME]: [] });
+});
+
+test('a sidebar collection dragged by its grip moves into another group', async () => {
+  // The same gesture as on the Collections page, in the place it is most
+  // natural: both rows are already in the sidebar, inches apart. The grip used
+  // to only ever reorder within its own group, so dragging one onto a
+  // neighbouring group row reverted with nothing to say why.
+  await expect
+    .poll(() => sidebarCollectionsByGroup(page))
+    .toEqual({ [WORK]: [ALPHA, BETA, GAMMA], [HOME]: [] });
+
+  const home = sidebarGroupRow(page, HOME);
+
+  await dragGripOntoGroup(
+    page,
+    sidebarCollectionRow(page, BETA),
+    home,
+    async () => {
+      await expect(home).toHaveClass(/collection-drop-over/);
+    },
+  );
+
+  await expect
+    .poll(() => sidebarCollectionsByGroup(page))
+    .toEqual({ [WORK]: [ALPHA, GAMMA], [HOME]: [BETA] });
 });

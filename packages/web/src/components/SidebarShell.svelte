@@ -12,8 +12,9 @@
     collectionDropTarget,
     groupDropTarget,
     startNativeDrag,
+    watchCollectionPointerDrag,
   } from '../lib/collection-drop';
-  import { dragHandleZone } from 'svelte-dnd-action';
+  import { dragHandleZone, TRIGGERS } from 'svelte-dnd-action';
   import ReorderGrip from './ReorderGrip.svelte';
   import {
     sortedGroups,
@@ -133,15 +134,55 @@
     }
   }
 
+  /** The `consider`/`finalize` payload, narrowed to the parts used here. */
+  type CollectionDndEvent = CustomEvent<{
+    items: Array<Collection & { id: string }>;
+    info?: { trigger: string; id: string };
+  }>;
+
+  // A grip drag that leaves its own list and lands on another group's row moves
+  // the collection there — the same gesture the Collections page has, in the
+  // place it is most natural, since both rows are already in the sidebar. The
+  // zone only ever reports "dropped outside of any" for it, so the cursor is
+  // tracked alongside the drag and hit-tested against the group rows.
+  let collectionPointerDrag: { collectionId: string; stop: () => string | null } | null = null;
+
   function makeCollectionConsider(groupId: string) {
-    return (e: CustomEvent<{ items: Array<Collection & { id: string }> }>) => {
+    return (e: CollectionDndEvent) => {
+      const info = e.detail.info;
+      if (info?.trigger === TRIGGERS.DRAG_STARTED && info.id && !collectionPointerDrag) {
+        collectionPointerDrag = {
+          collectionId: info.id,
+          // The group it already lives in is not a move target; leaving that
+          // one unhighlighted is what says "this would do nothing".
+          ...watchCollectionPointerDrag(info.id, {
+            accepts: (candidate) => candidate !== groupId,
+          }),
+        };
+      }
       dndCollectionsByGroup = { ...dndCollectionsByGroup, [groupId]: e.detail.items };
     };
   }
 
   function makeCollectionFinalize(groupId: string) {
-    return async (e: CustomEvent<{ items: Array<Collection & { id: string }> }>) => {
+    return async (e: CollectionDndEvent) => {
+      const drag = collectionPointerDrag;
+      collectionPointerDrag = null;
+      const droppedOnGroup = drag?.stop() ?? null;
+
       const previous = (grouped[groupId] ?? []).map((c) => ({ ...c }));
+
+      // Dropped on another group's row: the zone has already reverted its own
+      // order, so persisting `updated` would just rewrite what it was. Routed
+      // through `moveCollection` for the expand, the toast and its Undo.
+      if (drag && droppedOnGroup && droppedOnGroup !== groupId) {
+        const destination = groups.find(({ id }) => id === droppedOnGroup);
+        if (destination) {
+          await moveCollection(drag.collectionId, destination);
+          return;
+        }
+      }
+
       const updated = e.detail.items;
       dndCollectionsByGroup = { ...dndCollectionsByGroup, [groupId]: updated };
       try {
