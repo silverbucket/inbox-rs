@@ -235,7 +235,7 @@
     aria-expanded={expanded}
     aria-label="{expanded ? 'Collapse' : 'Expand'} {collection.name}"
     use:collectionDropTarget={{
-      onfile: (itemId) => void fileItemHere(itemId),
+      ondrop: (itemId) => void fileItemHere(itemId),
       onhover: (isOver) => { filingDragOver = isOver; },
     }}
   >

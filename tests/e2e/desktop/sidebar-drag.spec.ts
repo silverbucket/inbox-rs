@@ -36,6 +36,7 @@ import { expect, test } from '../helpers/fixtures';
 import {
   card,
   collectionCount,
+  dragCollectionOntoGroup,
   dragGripPast,
   dragItemOnto,
   expandSidebarGroup,
@@ -44,6 +45,7 @@ import {
   seedSidebarFixture,
   sidebarCollectionNames,
   sidebarCollectionRow,
+  sidebarCollectionsByGroup,
   sidebarGroupNames,
   sidebarGroupRow,
   todoRow,
@@ -184,6 +186,48 @@ test('sidebar groups reorder when dragged by their grip', async () => {
   );
 
   await expect.poll(() => sidebarGroupNames(page)).toEqual([HOME, WORK]);
+});
+
+test('a collection dragged onto another group moves into it', async () => {
+  // Home is empty, so its chevron is disabled and it has no collection list —
+  // the group row itself is the only thing to aim at. That is also the case
+  // that has to work for a group you have just created.
+  await expect
+    .poll(() => sidebarCollectionsByGroup(page))
+    .toEqual({ [WORK]: [ALPHA, BETA, GAMMA], [HOME]: [] });
+
+  await dragCollectionOntoGroup(
+    page,
+    sidebarCollectionRow(page, BETA),
+    sidebarGroupRow(page, HOME),
+  );
+
+  await expect
+    .poll(() => sidebarCollectionsByGroup(page))
+    .toEqual({ [WORK]: [ALPHA, GAMMA], [HOME]: [BETA] });
+});
+
+test('moving a collection between groups leaves reordering intact', async () => {
+  // The two gestures share a row: the grip reorders within the group, the row
+  // body moves it across groups. Exercising both in sequence guards against a
+  // fix for one silently disabling the other.
+  await dragCollectionOntoGroup(
+    page,
+    sidebarCollectionRow(page, ALPHA),
+    sidebarGroupRow(page, HOME),
+  );
+  await expect
+    .poll(() => sidebarCollectionsByGroup(page))
+    .toEqual({ [WORK]: [BETA, GAMMA], [HOME]: [ALPHA] });
+
+  await dragGripPast(
+    page,
+    sidebarCollectionRow(page, BETA).locator('.collection-reorder-handle'),
+    sidebarCollectionRow(page, GAMMA),
+  );
+  await expect
+    .poll(() => sidebarCollectionsByGroup(page))
+    .toEqual({ [WORK]: [GAMMA, BETA], [HOME]: [ALPHA] });
 });
 
 test('a group released just past the last row still reorders', async () => {

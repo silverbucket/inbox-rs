@@ -54,6 +54,31 @@ export function sidebarGroupNames(page: Page): Promise<string[]> {
     .then((names) => names.map((n) => n.trim()));
 }
 
+/**
+ * Which collections the sidebar lists under each group, in display order.
+ *
+ * Keyed by group name, so it proves *membership* rather than just that some
+ * count changed — the thing "move this collection into that group" is about.
+ */
+export function sidebarCollectionsByGroup(
+  page: Page,
+): Promise<Record<string, string[]>> {
+  return page.evaluate(() =>
+    Object.fromEntries(
+      Array.from(document.querySelectorAll('.groups-dnd > .group')).map(
+        (group) => [
+          (
+            group.querySelector('.group-entity .entity-name')?.textContent ?? ''
+          ).trim(),
+          Array.from(
+            group.querySelectorAll('.collection-drag-row .entity-name'),
+          ).map((name) => (name.textContent ?? '').trim()),
+        ],
+      ),
+    ),
+  );
+}
+
 /** Order of the collection names currently listed in the sidebar. */
 export function sidebarCollectionNames(page: Page): Promise<string[]> {
   return page
@@ -282,6 +307,31 @@ export async function dragItemOnto(
     // Low on the card body, clear of the title link and action buttons.
     { x: source.x + source.width / 2, y: source.y + source.height - 12 },
     { x: dest.x + dest.width * aimFraction, y: dest.y + dest.height / 2 },
+  );
+}
+
+/**
+ * Drag a collection's row body onto a group row, moving it into that group.
+ *
+ * Grabs the row body rather than the grip on purpose: the grip runs
+ * svelte-dnd-action's pointer reorder, while the body is a native drag that
+ * groups accept. Both gestures live on the same row and this is the one that
+ * crosses groups.
+ */
+export async function dragCollectionOntoGroup(
+  page: Page,
+  collectionRow: Locator,
+  groupRow: Locator,
+): Promise<void> {
+  const from = await boxOf(
+    collectionRow.locator('.collection-entity'),
+    'the dragged collection',
+  );
+  const to = await boxOf(groupRow, 'the destination group row');
+  await steppedDrag(
+    page,
+    { x: from.x + from.width * 0.45, y: from.y + from.height / 2 },
+    { x: to.x + to.width / 2, y: to.y + to.height / 2 },
   );
 }
 

@@ -8,7 +8,11 @@
   import type { Page, Route } from '../lib/route';
   import { appVersion } from '../lib/plugin-downloads.generated';
   import { autofocus, autofocusIf } from '../lib/actions';
-  import { collectionDropTarget } from '../lib/collection-drop';
+  import {
+    collectionDropTarget,
+    groupDropTarget,
+    startNativeDrag,
+  } from '../lib/collection-drop';
   import { dragHandleZone, dragHandle } from 'svelte-dnd-action';
   import {
     sortedGroups,
@@ -29,7 +33,11 @@
     reorderGroupCollections,
   } from '../lib/stores';
   import { isSoloModifier, soloHint, soloModifierHeld } from '../lib/solo-modifier';
-  import { draggingItemId } from '../lib/drag';
+  import {
+    COLLECTION_DRAG_MIME,
+    draggingCollectionId,
+    draggingItemId,
+  } from '../lib/drag';
   import { showToast } from '../lib/toast';
   import { randomPresetColor } from '../lib/constants';
 
@@ -68,6 +76,8 @@
   // Drag-to-file state.
   let dragOverColId = $state<string | null>(null);
   let justFiledColId = $state<string | null>(null);
+  // Drag-a-collection-onto-a-group state.
+  let dragOverGroupId = $state<string | null>(null);
   let keyboardMoveCollectionId = $state<string | null>(null);
   let collectionMoveInFlight = $state(false);
   let springGroupId: string | null = null;
@@ -87,6 +97,7 @@
   const activeGroups = $derived($activeGroupIds);
   const inactiveCols = $derived($inactiveCollectionIds);
   const dragging = $derived($draggingItemId !== null);
+  const movingCollection = $derived($draggingCollectionId !== null);
   // The plugins page has no groups to filter — the sidebar is
   // omitted entirely and the body grid must collapse to a single column.
   const noSidebar = $derived(route.page === 'plugins');
@@ -319,6 +330,49 @@
     }
   }
 
+  // ── Drag a collection onto a group to move it there ──────────────────────
+  // Separate gesture from the reorder grip so both are available: the grip runs
+  // svelte-dnd-action's pointer drag to reorder within the group, and dragging
+  // the row body is a native drag that lands on a group row. They can't collide
+  // because svelte-dnd-action ignores mousedown on nested form controls (the
+  // row body is a <button>), so the grip is the only thing that starts a
+  // reorder.
+  function onCollectionDragStart(e: DragEvent, col: Collection) {
+    if (collectionMoveInFlight) {
+      e.preventDefault();
+      return;
+    }
+    const started = startNativeDrag(e, {
+      mime: COLLECTION_DRAG_MIME,
+      id: col.id,
+      label: col.name,
+    });
+    if (started) draggingCollectionId.set(col.id);
+  }
+
+  function onCollectionDragEnd() {
+    draggingCollectionId.set(null);
+    dragOverGroupId = null;
+  }
+
+  function setGroupHover(group: CollectionGroup, isOver: boolean) {
+    if (isOver) dragOverGroupId = group.id;
+    else if (dragOverGroupId === group.id) dragOverGroupId = null;
+  }
+
+  /** A group is a target for the dragged collection unless it already holds it. */
+  function acceptsDraggedCollection(group: CollectionGroup): boolean {
+    const id = $draggingCollectionId;
+    if (!id) return false;
+    return !(grouped[group.id] ?? []).some((col) => col.id === id);
+  }
+
+  async function onGroupDropCollection(collectionId: string, group: CollectionGroup) {
+    draggingCollectionId.set(null);
+    dragOverGroupId = null;
+    await moveCollection(collectionId, group);
+  }
+
   // Spring-loaded groups: hovering a dragged item over a collapsed group
   // auto-expands it after a beat so you can reach a nested collection without
   // opening it first. Groups themselves are never drop targets.
@@ -487,6 +541,8 @@
                holding the modifier doesn't shove the group list down. -->
           {#if dragging}
             <span class="filing">Drop on a collection</span>
+          {:else if movingCollection}
+            <span class="filing">Drop on a group</span>
           {:else if soloing}
             <span class="solo-hint">{soloHint}</span>
           {:else}
@@ -536,11 +592,22 @@
                 class="group"
                 data-group-id={group.id}
               >
+                <!-- Also the drop target for a collection dragged out of
+                     another group. Children go pointer-transparent for the
+                     duration so the row stays the only hit-test target and the
+                     drag can't retarget onto the chevron or a badge. -->
                 <div
                   class="group-row"
+                  class:collection-drop-target={acceptsDraggedCollection(group)}
+                  class:collection-drop-over={dragOverGroupId === group.id}
                   role="presentation"
                   ondragover={() => onGroupDragOver(group)}
                   ondragleave={() => onGroupDragLeave(group)}
+                  use:groupDropTarget={{
+                    ondrop: (colId) => void onGroupDropCollection(colId, group),
+                    onhover: (isOver) => setGroupHover(group, isOver),
+                    enabled: acceptsDraggedCollection(group),
+                  }}
                 >
                   <span
                     class="group-reorder-handle"
@@ -629,17 +696,24 @@
                             class:just-filed={justFiledColId === col.id}
                             style="--entity-color: {col.color || group.color || 'var(--accent)'}"
                             use:collectionDropTarget={{
-                              onfile: (itemId) => void fileItemInto(itemId, col),
+                              ondrop: (itemId) => void fileItemInto(itemId, col),
                               onhover: (isOver) => setColHover(col, isOver),
                             }}
                           >
+                            <!-- Draggable onto another group's row to move it
+                                 there. The grip beside it reorders within this
+                                 group; this is the cross-group gesture. -->
                             <button
                               class="entity collection-entity"
                               class:inactive={!colActive}
+                              class:being-moved={$draggingCollectionId === col.id}
                               type="button"
+                              draggable="true"
                               aria-pressed={colActive}
                               title={colActive ? `Hide ${col.name}` : `Show ${col.name}`}
                               onclick={(e) => onToggleCollection(e, group, col)}
+                              ondragstart={(e) => onCollectionDragStart(e, col)}
+                              ondragend={onCollectionDragEnd}
                             >
                               <span class="dot"></span>
                               <span class="entity-name">{col.name}</span>
@@ -1378,6 +1452,28 @@
   /* Group rows recede while filing, since you can only drop on collections. */
   .sidebar.dragging .group-entity {
     opacity: 0.5;
+  }
+
+  /* ── Drag a collection onto a group ──
+     Same layout-neutral rule as the filing target: colour and outline only, and
+     the row owns hit-testing for the whole gesture. */
+  .group-row.collection-drop-target {
+    outline: 1px dashed color-mix(in srgb, var(--accent) 55%, var(--border));
+    outline-offset: -1px;
+  }
+
+  .group-row.collection-drop-target > * {
+    pointer-events: none;
+  }
+
+  .group-row.collection-drop-over {
+    background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+    outline: 2px solid var(--accent);
+  }
+
+  /* The collection being carried dims in place, so it's obvious what moved. */
+  .collection-entity.being-moved {
+    opacity: 0.4;
   }
 
   .collection-drag-row.just-filed {

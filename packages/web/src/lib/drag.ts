@@ -13,3 +13,17 @@ export const draggingItemId = writable<string | null>(null);
 
 /** Custom MIME so only our item drags activate collection drop targets. */
 export const DRAG_MIME = 'application/x-inbox-item';
+
+/**
+ * Id of the collection currently being dragged onto a sidebar group, or null.
+ *
+ * A separate gesture from the reorder grip: the grip runs svelte-dnd-action's
+ * pointer drag to reorder within a group, while dragging the collection's own
+ * row body is a native drag that moves it to whichever group it lands on. Two
+ * stores and two MIME types so neither gesture's drop targets light up for the
+ * other's drag.
+ */
+export const draggingCollectionId = writable<string | null>(null);
+
+/** Custom MIME so only collection drags activate group drop targets. */
+export const COLLECTION_DRAG_MIME = 'application/x-inbox-collection';
