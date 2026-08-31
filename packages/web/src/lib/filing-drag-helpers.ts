@@ -15,7 +15,7 @@ export function makeDataTransfer() {
     setDragImage() {
       // jsdom stub — InboxCard sets a custom drag image in browsers.
     },
-  } as DataTransfer;
+  } as unknown as DataTransfer;
 }
 
 /** Dispatch a finalize event in the shape svelte-dnd-action expects. */

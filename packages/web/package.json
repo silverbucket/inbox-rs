@@ -11,7 +11,7 @@
     "check": "svelte-check --tsconfig ./tsconfig.check.json --threshold error",
     "check:precache": "node ../../scripts/check-precache-budget.mjs",
     "preview": "vite preview",
-    "pretest": "npm run vendor:transcription-assets",
+    "pretest": "npm run vendor:transcription-assets && node ../../scripts/gen-plugin-metadata.mjs",
     "vendor:transcription-assets": "node ../../scripts/vendor-transcription-assets.mjs",
     "vendor:transcription-assets:refresh": "FORCE_VENDOR_TRANSCRIPTION_ASSETS=1 node ../../scripts/vendor-transcription-assets.mjs --refresh",
     "test": "vitest run"
