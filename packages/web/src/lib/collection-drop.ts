@@ -34,6 +34,7 @@ import type { Writable } from 'svelte/store';
 import { get } from 'svelte/store';
 import {
   COLLECTION_DRAG_MIME,
+  collectionDragOverGroupId,
   DRAG_MIME,
   draggingCollectionId,
   draggingItemId,
@@ -147,4 +148,66 @@ export function startNativeDrag(
   e.dataTransfer.setData('text/plain', label);
   e.dataTransfer.effectAllowed = 'move';
   return true;
+}
+
+/**
+ * Follow a svelte-dnd-action pointer drag of a collection so it can be dropped
+ * on a sidebar group row.
+ *
+ * The grip is the affordance people reach for — it looks like a drag handle,
+ * and svelte-dnd-action carries the whole card under the cursor, so dragging it
+ * into the sidebar reads unmistakably as "put this collection here". But that
+ * drag is pointer-driven: it fires no `dragover`, so `groupDropTarget` never
+ * hears it, and dropping outside the zone it started in used to revert in
+ * silence with nothing on the way to suggest otherwise.
+ *
+ * So the cursor is hit-tested directly, and the result is published to the same
+ * stores the native gesture writes — which is what lights the group rows up.
+ *
+ * Two details this depends on:
+ *
+ * - **`elementsFromPoint`, not `elementFromPoint`.** The element being dragged
+ *   is `position: fixed` at `z-index: 9999` with pointer events left on, so it
+ *   sits under the cursor for the whole gesture and the singular call only ever
+ *   returns *it*. Walking the stack steps past it — it lives on `<body>`, so it
+ *   has no `[data-group-id]` ancestor and can never match.
+ * - **`mousemove`/`touchmove`, not `pointermove`.** Those are the events
+ *   svelte-dnd-action itself drives the drag from; listening to the same ones
+ *   keeps the highlight in step with the card.
+ */
+export function watchCollectionPointerDrag(
+  collectionId: string,
+  { accepts }: { accepts: (groupId: string) => boolean },
+): { stop: () => string | null } {
+  draggingCollectionId.set(collectionId);
+  let overGroupId: string | null = null;
+
+  function groupAt(x: number, y: number): string | null {
+    for (const el of document.elementsFromPoint(x, y)) {
+      const host = el.closest<HTMLElement>('[data-group-id]');
+      const id = host?.dataset.groupId;
+      if (id) return accepts(id) ? id : null;
+    }
+    return null;
+  }
+
+  function onMove(e: MouseEvent | TouchEvent) {
+    const point = e instanceof MouseEvent ? e : e.touches[0];
+    if (!point) return;
+    overGroupId = groupAt(point.clientX, point.clientY);
+    collectionDragOverGroupId.set(overGroupId);
+  }
+
+  window.addEventListener('mousemove', onMove, { passive: true });
+  window.addEventListener('touchmove', onMove, { passive: true });
+
+  return {
+    stop() {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('touchmove', onMove);
+      draggingCollectionId.set(null);
+      collectionDragOverGroupId.set(null);
+      return overGroupId;
+    },
+  };
 }

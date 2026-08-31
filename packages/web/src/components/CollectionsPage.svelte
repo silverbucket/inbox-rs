@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
-  import { dragHandleZone } from 'svelte-dnd-action';
+  import { dragHandleZone, TRIGGERS } from 'svelte-dnd-action';
+  import { watchCollectionPointerDrag } from '../lib/collection-drop';
+  import { requestCollectionMove } from '../lib/drag';
   import {
     createCollection, storeCollection, deleteCollection, moveCollectionToGroup,
     visibleGroupedCollections, sortedGroups, storeGroup, deleteGroup,
@@ -86,16 +88,55 @@
     dndByGroup = next;
   });
 
+  // A grip drag that leaves this list and lands on a sidebar group row moves
+  // the collection into that group. The zone only ever reports "dropped
+  // outside of any" for that, so the cursor is tracked alongside the drag and
+  // hit-tested against the sidebar — see `watchCollectionPointerDrag`.
+  let pointerDrag: { collectionId: string; stop: () => string | null } | null = null;
+
+  /** The `consider`/`finalize` payload, narrowed to the parts used here. */
+  type CollectionDndEvent = CustomEvent<{
+    items: Array<Collection & { id: string }>;
+    info?: { trigger: string; id: string };
+  }>;
+
   function makeConsider(groupId: string) {
-    return (e: CustomEvent<{ items: Array<Collection & { id: string }> }>) => {
+    return (e: CollectionDndEvent) => {
+      const info = e.detail.info;
+      if (info?.trigger === TRIGGERS.DRAG_STARTED && info.id && !pointerDrag) {
+        pointerDrag = {
+          collectionId: info.id,
+          // A group that already holds this collection is not a move target;
+          // leaving it unhighlighted is what says "this would do nothing".
+          ...watchCollectionPointerDrag(info.id, {
+            accepts: (candidate) => candidate !== groupId,
+          }),
+        };
+      }
       dndByGroup = { ...dndByGroup, [groupId]: e.detail.items };
     };
   }
 
   function makeFinalize(groupId: string) {
-    return async (e: CustomEvent<{ items: Array<Collection & { id: string }> }>) => {
+    return async (e: CollectionDndEvent) => {
+      const drag = pointerDrag;
+      pointerDrag = null;
+      const droppedOnGroup = drag?.stop() ?? null;
+
       const previous = (sections.find(s => s.group.id === groupId)?.collections ?? []).map(c => ({ ...c }));
       const updated = e.detail.items;
+
+      // Dropped on a sidebar group: the zone has already reverted its own
+      // order, so persisting `updated` here would just rewrite what it was.
+      // The move is the whole gesture.
+      if (drag && droppedOnGroup && droppedOnGroup !== groupId) {
+        // Handed to the sidebar rather than done here: it expands the
+        // destination (an empty group renders no list, so the collection would
+        // otherwise appear to vanish) and raises the move's toast and Undo.
+        requestCollectionMove(drag.collectionId, droppedOnGroup);
+        return;
+      }
+
       dndByGroup = { ...dndByGroup, [groupId]: updated };
       try {
         await reorderGroupCollections(groupId, updated.map(c => c.id));
@@ -271,6 +312,14 @@
             // `dragHandleZone` on the page, so setting it here disabled the
             // grips everywhere, sidebar included. A handle zone doesn't need
             // it: a touch that isn't on a grip never starts a drag.
+            //
+            // Track the cursor, not the centre of the dragged element — the
+            // same fix the sidebar zones carry, and it matters more here: these
+            // cards are whole panels, and an expanded one is taller still, so
+            // the dragged element's centre trails the cursor by most of a card.
+            // Judged by that centre, dropping one card past its neighbour never
+            // registers and the reorder silently does nothing.
+            useCursorForDetection: true,
             type: `cols-${section.group.id}`,
           }}
           onconsider={makeConsider(section.group.id)}

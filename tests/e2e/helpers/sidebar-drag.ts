@@ -312,6 +312,55 @@ async function boxOf(locator: Locator, what: string) {
 }
 
 /**
+ * Drag a collection's grip from the Collections page onto a sidebar group row,
+ * pausing on the target so `whileHeld` can assert what the user can *see*
+ * mid-gesture, then releasing.
+ *
+ * The grip is the affordance a user actually reaches for — it looks like a
+ * drag handle and svelte-dnd-action carries the whole card under the cursor,
+ * so it reads as "I am holding this collection" all the way across the window.
+ * Whatever it does when released over the sidebar, it has to be something.
+ *
+ * `whileHeld` runs with the button still down, which is the only moment the
+ * drop cue exists; asserting after release proves nothing about feedback.
+ */
+export async function dragCardGripOntoGroup(
+  page: Page,
+  collectionHeader: Locator,
+  groupRow: Locator,
+  whileHeld?: () => Promise<void>,
+): Promise<void> {
+  // Header actions only appear on hover, and a hidden control has no box.
+  await collectionHeader.hover();
+  const from = await boxOf(
+    collectionHeader.locator('.reorder-grip'),
+    'the collection grip',
+  );
+  const to = await boxOf(groupRow, 'the destination group row');
+  const target = { x: to.x + to.width / 2, y: to.y + to.height / 2 };
+
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+
+  const steps = 20;
+  const start = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
+  for (let step = 1; step <= steps; step++) {
+    await page.mouse.move(
+      start.x + ((target.x - start.x) * step) / steps,
+      start.y + ((target.y - start.y) * step) / steps,
+    );
+    await page.waitForTimeout(20);
+  }
+  // Settle on the row so hover state has landed before anything is asserted.
+  await page.mouse.move(target.x + 1, target.y);
+  await page.waitForTimeout(300);
+
+  if (whileHeld) await whileHeld();
+
+  await page.mouse.up();
+}
+
+/**
  * Drag an item (card or todo row) onto a drop target with a real stepped drag.
  *
  * `aimFraction` picks where across the target's width to release: 0.5 is the

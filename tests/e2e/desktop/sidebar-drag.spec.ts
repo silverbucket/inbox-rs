@@ -37,6 +37,7 @@ import {
   card,
   collectionCount,
   collectionsPageHeader,
+  dragCardGripOntoGroup,
   dragCollectionOntoGroup,
   dragGripPast,
   dragItemOnto,
@@ -302,4 +303,53 @@ test('a collection dragged from the Collections page lands in a sidebar group', 
   await expect
     .poll(() => sidebarCollectionsByGroup(page))
     .toEqual({ [WORK]: [ALPHA, GAMMA], [HOME]: [BETA] });
+});
+
+test('a collection card dragged by its grip lands in a sidebar group', async () => {
+  // The gesture a user actually reaches for. The grip looks like a drag handle
+  // and svelte-dnd-action carries the whole card under the cursor, so dragging
+  // it into the sidebar reads as "I am holding this collection, put it here" —
+  // and it used to do nothing at all: no drop cue on the way, and a silent
+  // revert on release. The move button beside it worked, but nothing said so.
+  await gotoPage(page, 'Collections');
+  await expect
+    .poll(() => sidebarCollectionsByGroup(page))
+    .toEqual({ [WORK]: [ALPHA, BETA, GAMMA], [HOME]: [] });
+
+  const home = sidebarGroupRow(page, HOME);
+
+  await dragCardGripOntoGroup(
+    page,
+    collectionsPageHeader(page, BETA),
+    home,
+    async () => {
+      // Mid-gesture, with the button still down: the row the cursor is over
+      // has to say it will take the drop. This is the half the user reported
+      // missing, and it only exists while the drag is in flight.
+      await expect(home).toHaveClass(/collection-drop-over/);
+    },
+  );
+
+  await expect
+    .poll(() => sidebarCollectionsByGroup(page))
+    .toEqual({ [WORK]: [ALPHA, GAMMA], [HOME]: [BETA] });
+});
+
+test('a grip drag that stays in the list still just reorders', async () => {
+  // The counterpart: teaching the grip to reach the sidebar must not turn an
+  // ordinary in-list reorder into a stray group move. Adjacent on purpose —
+  // these cards are tall, and dragging onto a distant one lands mid-card
+  // without displacing it, which would test the harness rather than the app.
+  await gotoPage(page, 'Collections');
+  await collectionsPageHeader(page, ALPHA).hover();
+
+  await dragGripPast(
+    page,
+    collectionsPageHeader(page, ALPHA).locator('.reorder-grip'),
+    collectionsPageHeader(page, BETA),
+  );
+
+  await expect
+    .poll(() => sidebarCollectionsByGroup(page))
+    .toEqual({ [WORK]: [BETA, ALPHA, GAMMA], [HOME]: [] });
 });

@@ -36,8 +36,10 @@
   import { isSoloModifier, soloHint, soloModifierHeld } from '../lib/solo-modifier';
   import {
     COLLECTION_DRAG_MIME,
+    collectionDragOverGroupId,
     draggingCollectionId,
     draggingItemId,
+    requestedCollectionMove,
   } from '../lib/drag';
   import { showToast } from '../lib/toast';
   import { randomPresetColor } from '../lib/constants';
@@ -78,7 +80,10 @@
   let dragOverColId = $state<string | null>(null);
   let justFiledColId = $state<string | null>(null);
   // Drag-a-collection-onto-a-group state.
-  let dragOverGroupId = $state<string | null>(null);
+  // Lives in a store, not local state: two gestures drive this highlight — the
+  // native drag off a move button, and svelte-dnd-action's pointer drag off a
+  // grip on the Collections page, which hit-tests the cursor from outside this
+  // component. See `collectionDragOverGroupId`.
   let keyboardMoveCollectionId = $state<string | null>(null);
   let collectionMoveInFlight = $state(false);
   let springGroupId: string | null = null;
@@ -351,12 +356,12 @@
 
   function onCollectionDragEnd() {
     draggingCollectionId.set(null);
-    dragOverGroupId = null;
+    collectionDragOverGroupId.set(null);
   }
 
   function setGroupHover(group: CollectionGroup, isOver: boolean) {
-    if (isOver) dragOverGroupId = group.id;
-    else if (dragOverGroupId === group.id) dragOverGroupId = null;
+    if (isOver) collectionDragOverGroupId.set(group.id);
+    else if ($collectionDragOverGroupId === group.id) collectionDragOverGroupId.set(null);
   }
 
   /** A group is a target for the dragged collection unless it already holds it. */
@@ -368,7 +373,7 @@
 
   async function onGroupDropCollection(collectionId: string, group: CollectionGroup) {
     draggingCollectionId.set(null);
-    dragOverGroupId = null;
+    collectionDragOverGroupId.set(null);
     await moveCollection(collectionId, group);
   }
 
@@ -449,6 +454,17 @@
     }
   }
 
+  // A collection dropped on a group row from the Collections page arrives here
+  // rather than moving itself, so it gets the same expand + toast + Undo as one
+  // moved from the sidebar. See `requestedCollectionMove`.
+  let lastHandledMove = -1;
+  $effect(() => {
+    const request = $requestedCollectionMove;
+    if (!request || request.nonce === lastHandledMove) return;
+    lastHandledMove = request.nonce;
+    const destination = groups.find(({ id }) => id === request.groupId);
+    if (destination) void moveCollection(request.collectionId, destination);
+  });
 </script>
 
 <header>
@@ -602,7 +618,7 @@
                 <div
                   class="group-row"
                   class:collection-drop-target={acceptsDraggedCollection(group)}
-                  class:collection-drop-over={dragOverGroupId === group.id}
+                  class:collection-drop-over={$collectionDragOverGroupId === group.id}
                   role="presentation"
                   ondragover={() => onGroupDragOver(group)}
                   ondragleave={() => onGroupDragLeave(group)}
