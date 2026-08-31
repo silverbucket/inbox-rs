@@ -8,7 +8,12 @@ import type {
 import { flushSync, mount, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DRAG_MIME, draggingItemId } from '../lib/drag';
+import {
+  COLLECTION_DRAG_MIME,
+  DRAG_MIME,
+  draggingCollectionId,
+  draggingItemId,
+} from '../lib/drag';
 import {
   dispatchDndFinalize,
   dragStartFrom,
@@ -102,6 +107,7 @@ describe('CollectionsPage filing drag', () => {
     host = document.createElement('div');
     document.body.appendChild(host);
     draggingItemId.set(null);
+    draggingCollectionId.set(null);
   });
 
   afterEach(() => {
@@ -109,6 +115,7 @@ describe('CollectionsPage filing drag', () => {
     component = undefined;
     host.remove();
     draggingItemId.set(null);
+    draggingCollectionId.set(null);
   });
 
   function render() {
@@ -171,6 +178,55 @@ describe('CollectionsPage filing drag', () => {
         'c1',
       ]);
     });
+  });
+
+  /**
+   * The sidebar's group rows have always accepted this drop — `groupDropTarget`
+   * gates on whether a collection drag is in flight, not on which page is
+   * showing. What was missing was a drag *source* outside the sidebar, so the
+   * gesture only ever worked sidebar-to-sidebar.
+   */
+  it('starts a move-to-group drag from the header move button', () => {
+    render();
+    const move = host.querySelector('.collection-move-btn') as HTMLElement;
+    expect(move).toBeTruthy();
+    expect(move.draggable).toBe(true);
+
+    const dataTransfer = dragStartFrom(move);
+    expect(dataTransfer.getData(COLLECTION_DRAG_MIME)).toBe('c1');
+    expect(get(draggingCollectionId)).toBe('c1');
+  });
+
+  /**
+   * The card is a direct child of the reorder zone, and svelte-dnd-action puts
+   * `ondragstart = () => false` on every one of those. Without the
+   * `stopPropagation` in `startNativeDrag` the payload is set and then thrown
+   * away, with no drag following.
+   */
+  it('starts the move-to-group drag despite the zone child cancelling dragstart', () => {
+    render();
+    const move = host.querySelector('.collection-move-btn') as HTMLElement;
+    const card = host.querySelector('.collection-list > *') as HTMLElement;
+    expect(card.contains(move)).toBe(true);
+
+    const { survived, dataTransfer } = filingDragSurvivesNeuteredAncestor(
+      card,
+      move,
+    );
+    expect(survived).toBe(true);
+    expect(dataTransfer.getData(COLLECTION_DRAG_MIME)).toBe('c1');
+  });
+
+  it('still opens the group menu when the button is clicked', () => {
+    render();
+    const move = host.querySelector('.collection-move-btn') as HTMLElement;
+    expect(move.getAttribute('aria-expanded')).toBe('false');
+
+    move.click();
+    flushSync();
+
+    expect(move.getAttribute('aria-expanded')).toBe('true');
+    expect(host.querySelector('.move-menu')).toBeTruthy();
   });
 });
 

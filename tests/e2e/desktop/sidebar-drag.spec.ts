@@ -36,6 +36,7 @@ import { expect, test } from '../helpers/fixtures';
 import {
   card,
   collectionCount,
+  collectionsPageHeader,
   dragCollectionOntoGroup,
   dragGripPast,
   dragItemOnto,
@@ -276,4 +277,29 @@ test('a group released just past the last row still reorders', async () => {
   );
 
   await expect.poll(() => sidebarGroupNames(page)).toEqual([HOME, WORK]);
+});
+
+test('a collection dragged from the Collections page lands in a sidebar group', async () => {
+  // The sidebar's group rows have always accepted this drop — `groupDropTarget`
+  // gates on whether a collection drag is in flight, not on which page is
+  // showing. What was missing was a drag *source* outside the sidebar, so the
+  // gesture only worked sidebar-to-sidebar and the Collections page could only
+  // move a collection through its menu.
+  //
+  // The drag crosses the whole window, from a card on the right to a sidebar
+  // row on the left, which is the point: both live in one document and the
+  // drop target does not care where the drag began.
+  await gotoPage(page, 'Collections');
+  await expect
+    .poll(() => sidebarCollectionsByGroup(page))
+    .toEqual({ [WORK]: [ALPHA, BETA, GAMMA], [HOME]: [] });
+
+  const header = collectionsPageHeader(page, BETA);
+  // The header actions only appear on hover, and a hidden control has no box.
+  await header.hover();
+  await dragCollectionOntoGroup(page, header, sidebarGroupRow(page, HOME));
+
+  await expect
+    .poll(() => sidebarCollectionsByGroup(page))
+    .toEqual({ [WORK]: [ALPHA, GAMMA], [HOME]: [BETA] });
 });

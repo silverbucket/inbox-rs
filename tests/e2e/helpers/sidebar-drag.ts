@@ -42,6 +42,19 @@ export function sidebarCollectionMoveButton(page: Page, name: string): Locator {
   return sidebarCollectionRow(page, name).locator('.collection-move-btn');
 }
 
+/**
+ * A collection's header card on the Collections page.
+ *
+ * Distinct from `sidebarCollectionRow` — this is the wide card in the main
+ * pane, and it carries its own reorder grip and move button. Scoped to `main`
+ * so it can't accidentally match a sidebar row.
+ */
+export function collectionsPageHeader(page: Page, name: string): Locator {
+  return page.locator('main .collection-header', {
+    has: page.locator('h3', { hasText: new RegExp(`^${name}$`) }),
+  });
+}
+
 /** A sidebar group row: reorder grip, expand chevron, filter button. */
 export function sidebarGroupRow(page: Page, name: string): Locator {
   return page.locator('.group-row', { has: exactName(page, name) });

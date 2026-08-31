@@ -22,8 +22,8 @@
   import { dragHandleZone } from 'svelte-dnd-action';
   import ReorderGrip from './ReorderGrip.svelte';
   import { captureDetected, captureFile } from '../lib/capture';
-  import { collectionDropTarget } from '../lib/collection-drop';
-  import { draggingItemId } from '../lib/drag';
+  import { collectionDropTarget, startNativeDrag } from '../lib/collection-drop';
+  import { COLLECTION_DRAG_MIME, draggingCollectionId, draggingItemId } from '../lib/drag';
   import { moveItemToCollection } from '../lib/stores';
   import { showToast } from '../lib/toast';
   import InboxCard from './InboxCard.svelte';
@@ -169,6 +169,37 @@
     await moveCollectionToGroup(collection.id, groupId);
   }
 
+  // ── Drag this collection onto a sidebar group to move it there ───────────
+  // The sidebar's group rows have always accepted this drop — `groupDropTarget`
+  // gates on whether a collection drag is in flight, not on which page is
+  // showing — but until now the only thing that could *start* one was a
+  // sidebar row. This is the second source, so the gesture works from the
+  // Collections page too.
+  //
+  // It hangs off the move button rather than the header for the same reason it
+  // does in the sidebar: a native drag source swallows its own click once the
+  // pointer travels a few pixels, and the header's click is expand/collapse.
+  // Here that click opens the group menu, which is the same gesture by another
+  // route — so losing it to a deliberate drag costs nothing.
+  const beingMoved = $derived($draggingCollectionId === collection.id);
+
+  function onCollectionDragStart(e: DragEvent) {
+    showMoveMenu = false;
+    // `stopPropagation` inside `startNativeDrag` is load-bearing here:
+    // svelte-dnd-action puts `ondragstart = () => false` on every direct child
+    // of a drop zone, and on the Collections page this card is one.
+    const started = startNativeDrag(e, {
+      mime: COLLECTION_DRAG_MIME,
+      id: collection.id,
+      label: collection.name,
+    });
+    if (started) draggingCollectionId.set(collection.id);
+  }
+
+  function onCollectionDragEnd() {
+    draggingCollectionId.set(null);
+  }
+
   // ---- Drag-and-drop reordering of open todos ----
   let dndOpen = $state<Array<InboxItem & { id: string }>>([]);
   $effect(() => {
@@ -223,7 +254,7 @@
   }
 </script>
 
-<div class="collection" class:reorderable style="--col-color: {collection.color || '#6366f1'}" class:expanded>
+<div class="collection" class:reorderable class:being-moved={beingMoved} style="--col-color: {collection.color || '#6366f1'}" class:expanded>
   <!-- Header bar -->
   <div
     class="collection-header"
@@ -276,7 +307,19 @@
       </button>
       {#if availableGroups.length > 0}
         <div class="move-menu-wrapper">
-          <button type="button" class="btn-header" bind:this={moveButtonEl} aria-label="Move to group" aria-haspopup="menu" aria-expanded={showMoveMenu} title="Move to group" onclick={toggleMoveMenu}>
+          <button
+            type="button"
+            class="btn-header collection-move-btn"
+            bind:this={moveButtonEl}
+            draggable="true"
+            aria-label="Move to group"
+            aria-haspopup="menu"
+            aria-expanded={showMoveMenu}
+            title="Drag onto a group in the sidebar, or click to choose one"
+            onclick={toggleMoveMenu}
+            ondragstart={onCollectionDragStart}
+            ondragend={onCollectionDragEnd}
+          >
             <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
               <line x1="12" y1="11" x2="12" y2="17"></line>
@@ -484,6 +527,12 @@
     --_col: var(--col-color);
     border-radius: var(--radius);
     transition: box-shadow 250ms ease;
+  }
+
+  /* Dims in place while it's being carried to a sidebar group, so it's obvious
+     which card the drag picked up. Matches the sidebar row's own feedback. */
+  .collection.being-moved {
+    opacity: 0.4;
   }
 
   @media (pointer: fine) {
