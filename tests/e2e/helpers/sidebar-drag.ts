@@ -209,35 +209,106 @@ export async function seedSidebarFixture(
     .toBe(2);
 }
 
+type Point = { x: number; y: number };
+
 /**
- * Drag `handle` (a svelte-dnd-action grip) far enough past `target` that the
- * library reorders the list, then release.
+ * Walk the pointer from `from` to `to` with the button held, settle on the
+ * target, then release.
  *
- * svelte-dnd-action is pointer-driven: it needs a mousedown on the handle, a
- * few intermediate moves (it ignores movement under 3px and polls
- * intersections on a timer), and a mouseup. A single `mouse.move` jump is not
- * enough, which is why this walks the pointer in steps.
+ * Deliberately *not* `locator.dragTo()`. `dragTo` puts the pointer down, jumps
+ * to the target and releases, which produces a single `dragover` immediately
+ * followed by `drop` at one fixed coordinate. That cannot observe anything that
+ * goes wrong *during* a drag — and the real bug here was exactly that: hover
+ * feedback reflowed the row under the cursor, each reflow retargeted the drag,
+ * and the browser cancelled the gesture instead of dropping. `dragTo` reported
+ * six passing specs while the feature was unusable by hand.
+ *
+ * Stepping the pointer produces a stream of `dragover`s at moving coordinates
+ * (the same thing a mouse does) and the settle phase gives the browser time to
+ * emit a final `dragover` on the target, which is what licenses the `drop`.
+ */
+async function steppedDrag(page: Page, from: Point, to: Point): Promise<void> {
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+
+  const steps = 16;
+  for (let step = 1; step <= steps; step++) {
+    await page.mouse.move(
+      from.x + ((to.x - from.x) * step) / steps,
+      from.y + ((to.y - from.y) * step) / steps,
+    );
+    await page.waitForTimeout(20);
+  }
+
+  // Jitter and pause on the target, as a hand does. Without this the pointer
+  // can arrive on its final step and release before a `dragover` lands.
+  const jitter: ReadonlyArray<Point> = [
+    { x: 1, y: 0 },
+    { x: -1, y: 1 },
+    { x: 0, y: -1 },
+  ];
+  for (const nudge of jitter) {
+    await page.mouse.move(to.x + nudge.x, to.y + nudge.y);
+    await page.waitForTimeout(60);
+  }
+  await page.waitForTimeout(250);
+  await page.mouse.up();
+}
+
+async function boxOf(locator: Locator, what: string) {
+  const box = await locator.boundingBox();
+  if (!box) throw new Error(`${what} must be laid out to be dragged`);
+  return box;
+}
+
+/**
+ * Drag an item (card or todo row) onto a drop target with a real stepped drag.
+ *
+ * `aimFraction` picks where across the target's width to release: 0.5 is the
+ * middle, 0.85 lands on the right-hand end of a sidebar collection row where
+ * the reorder grip and move button sit. That end used to be dead space, so
+ * tests that only ever aimed at the middle never noticed.
+ */
+export async function dragItemOnto(
+  page: Page,
+  item: Locator,
+  target: Locator,
+  { aimFraction = 0.5 }: { aimFraction?: number } = {},
+): Promise<void> {
+  const source = await boxOf(item, 'the dragged item');
+  const dest = await boxOf(target, 'the drop target');
+  await steppedDrag(
+    page,
+    // Low on the card body, clear of the title link and action buttons.
+    { x: source.x + source.width / 2, y: source.y + source.height - 12 },
+    { x: dest.x + dest.width * aimFraction, y: dest.y + dest.height / 2 },
+  );
+}
+
+/**
+ * Drag a svelte-dnd-action grip onto the middle of `target` to reorder.
+ *
+ * `overshootPx` releases that far *below* the target instead, which is what a
+ * hand does when dragging something to the end of a list. svelte-dnd-action
+ * used to judge position by the centre of the dragged element rather than the
+ * cursor, so an overshoot — or merely dragging a tall expanded group — put that
+ * centre outside the zone and the library reverted the reorder as "dropped
+ * outside of any". Tests that stop neatly on the target never see it.
  */
 export async function dragGripPast(
   page: Page,
   handle: Locator,
   target: Locator,
+  { overshootPx = 0 }: { overshootPx?: number } = {},
 ): Promise<void> {
-  const from = await handle.boundingBox();
-  const to = await target.boundingBox();
-  if (!from || !to) throw new Error('drag handle and target must be laid out');
-
-  const x = from.x + from.width / 2;
-  const startY = from.y + from.height / 2;
-  const endY = to.y + to.height - 4;
-
-  await page.mouse.move(x, startY);
-  await page.mouse.down();
-  const steps = 14;
-  for (let step = 1; step <= steps; step++) {
-    await page.mouse.move(x, startY + ((endY - startY) * step) / steps);
-    await page.waitForTimeout(35);
-  }
-  await page.waitForTimeout(150);
-  await page.mouse.up();
+  const from = await boxOf(handle, 'the drag handle');
+  const to = await boxOf(target, 'the reorder target');
+  await steppedDrag(
+    page,
+    { x: from.x + from.width / 2, y: from.y + from.height / 2 },
+    {
+      x: from.x + from.width / 2,
+      y: overshootPx ? to.y + to.height + overshootPx : to.y + to.height / 2,
+    },
+  );
 }

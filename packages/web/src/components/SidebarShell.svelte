@@ -1080,10 +1080,14 @@
     gap: 0.05rem;
   }
 
-  /* Slack below the last group so dragging a little past it still counts as
-     "inside the zone" rather than a drop outside it, which reverts. */
-  .groups-dnd {
-    padding-bottom: 0.75rem;
+  /* Slack below the last row so dragging a little past it still counts as
+     "inside the zone". svelte-dnd-action reverts a drop that lands outside the
+     zone, and releasing just past the final row is the natural way to move
+     something to the end of a list. Dropping well clear of the list still
+     cancels, which is the conventional behaviour. */
+  .groups-dnd,
+  .collections-dnd {
+    padding-bottom: 1.25rem;
   }
 
   .group-row {

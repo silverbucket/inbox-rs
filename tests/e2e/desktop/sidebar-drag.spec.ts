@@ -8,17 +8,22 @@
  * 2. **Reordering** — a pointer drag of a svelte-dnd-action grip, which
  *    reorders the sidebar's groups and collections.
  *
- * The filing drag kept dying because svelte-dnd-action puts
- * `ondragstart = () => false` on every direct child of a drop zone (see
- * `styleDraggable` in the library). Cards and todo rows are nested inside
- * those zones on the todos and collections pages, so a bubbling `dragstart`
- * reached that handler and cancelled the drag before it started. Unit tests
- * that inspect the drag payload cannot see this: the payload is set correctly
- * and the drag is aborted immediately afterwards.
+ * Every assertion here is on the *outcome* — the collection's item count, the
+ * todo row's collection pill, the order of sidebar rows — after a drag driven
+ * through the browser's own drag machinery. Nothing inspects a drag payload: a
+ * correct payload says nothing about whether the drop was delivered, and both
+ * bugs this file guards against set the payload perfectly and then lost the
+ * gesture.
  *
- * So every assertion here is on the *outcome* — the collection's item count,
- * the todo row's collection pill, the order of sidebar rows — after a real
- * drag driven by the browser.
+ * Read `dragItemOnto` in the helper before changing any of these: using
+ * `locator.dragTo()` here is a false green. It emits one `dragover` and a
+ * `drop` at a single fixed coordinate, so it cannot see a drop target that
+ * misbehaves while the pointer is moving over it — which is precisely how
+ * drag-to-file was broken while six specs passed.
+ *
+ * The filing drags aim at 0.85 across the collection row on purpose. That is
+ * where the reorder grip and the move button sit, it is where a hand naturally
+ * lands, and it used to reject every single drop.
  *
  * Each spec seeds its own context. The fixture is cheap next to a 30 s test
  * budget, and sharing it would let the first broken gesture mask the rest —
@@ -32,11 +37,11 @@ import {
   card,
   collectionCount,
   dragGripPast,
+  dragItemOnto,
   expandSidebarGroup,
   FIXTURE,
   gotoPage,
   seedSidebarFixture,
-  sidebarCollection,
   sidebarCollectionNames,
   sidebarCollectionRow,
   sidebarGroupNames,
@@ -75,7 +80,16 @@ test('an inbox card dropped on a sidebar collection is filed there', async () =>
   await expect(card(page, FIXTURE.inboxCard)).toBeVisible();
 
   const before = await collectionCount(page, BETA);
-  await card(page, FIXTURE.inboxCard).dragTo(sidebarCollection(page, BETA));
+  // Aim at the right-hand end of the row, over the reorder grip and move
+  // button — the region a user hits and that used to reject every drop.
+  await dragItemOnto(
+    page,
+    card(page, FIXTURE.inboxCard),
+    sidebarCollectionRow(page, BETA),
+    {
+      aimFraction: 0.85,
+    },
+  );
 
   await expect.poll(() => collectionCount(page, BETA)).toBe(before + 1);
   // Filing removes it from the unfiled inbox list.
@@ -89,8 +103,11 @@ test('a todo dropped on a sidebar collection is filed there', async () => {
   );
 
   const before = await collectionCount(page, GAMMA);
-  await todoRow(page, FIXTURE.unfiledTodo).dragTo(
-    sidebarCollection(page, GAMMA),
+  await dragItemOnto(
+    page,
+    todoRow(page, FIXTURE.unfiledTodo),
+    sidebarCollectionRow(page, GAMMA),
+    { aimFraction: 0.85 },
   );
 
   await expect(todoRowCollectionPill(page, FIXTURE.unfiledTodo)).toHaveText(
@@ -105,7 +122,12 @@ test('a card in a collection view refiles onto another sidebar collection', asyn
 
   const alphaBefore = await collectionCount(page, ALPHA);
   const betaBefore = await collectionCount(page, BETA);
-  await card(page, FIXTURE.filedCard).dragTo(sidebarCollection(page, BETA));
+  await dragItemOnto(
+    page,
+    card(page, FIXTURE.filedCard),
+    sidebarCollectionRow(page, BETA),
+    { aimFraction: 0.85 },
+  );
 
   await expect.poll(() => collectionCount(page, BETA)).toBe(betaBefore + 1);
   await expect.poll(() => collectionCount(page, ALPHA)).toBe(alphaBefore - 1);
@@ -120,7 +142,12 @@ test('a todo in a collection view refiles onto another sidebar collection', asyn
 
   const alphaBefore = await collectionCount(page, ALPHA);
   const gammaBefore = await collectionCount(page, GAMMA);
-  await todoRow(page, FIXTURE.filedTodo).dragTo(sidebarCollection(page, GAMMA));
+  await dragItemOnto(
+    page,
+    todoRow(page, FIXTURE.filedTodo),
+    sidebarCollectionRow(page, GAMMA),
+    { aimFraction: 0.85 },
+  );
 
   await expect.poll(() => collectionCount(page, GAMMA)).toBe(gammaBefore + 1);
   await expect.poll(() => collectionCount(page, ALPHA)).toBe(alphaBefore - 1);
@@ -154,6 +181,25 @@ test('sidebar groups reorder when dragged by their grip', async () => {
     page,
     sidebarGroupRow(page, WORK).locator('.group-reorder-handle'),
     sidebarGroupRow(page, HOME),
+  );
+
+  await expect.poll(() => sidebarGroupNames(page)).toEqual([HOME, WORK]);
+});
+
+test('a group released just past the last row still reorders', async () => {
+  // `expandSidebarGroup` in beforeEach leaves Work expanded, so the dragged
+  // element is several times taller than the row it is dropped after — and
+  // this releases below the last group rather than neatly on it. Both are what
+  // a hand does when moving something to the end of a list, and together they
+  // used to revert the reorder silently. The zone carries a little slack below
+  // its last row for exactly this; releasing far from the list still cancels.
+  await expect.poll(() => sidebarGroupNames(page)).toEqual([WORK, HOME]);
+
+  await dragGripPast(
+    page,
+    sidebarGroupRow(page, WORK).locator('.group-reorder-handle'),
+    sidebarGroupRow(page, HOME),
+    { overshootPx: 16 },
   );
 
   await expect.poll(() => sidebarGroupNames(page)).toEqual([HOME, WORK]);
