@@ -66,7 +66,7 @@
   // caption, and the date already shows next to the version in the tile and
   // in the About box itself — no need for a third copy.
   function meta(section: SettingsSection): string {
-    return section.id === 'about' ? `Deployed ${buildDate}` : '';
+    return section.id === 'about' ? buildDate : '';
   }
   function stateLine(section: SettingsSection) { return `${value(section)} · ${sub(section)}`; }
 
