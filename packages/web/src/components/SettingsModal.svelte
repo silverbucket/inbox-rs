@@ -1,5 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { prefersReducedMotion } from 'svelte/motion';
+  import { slide } from 'svelte/transition';
   import { alertPermission } from '../lib/alerts';
   import { trapFocus } from '../lib/actions';
   import { calendarAccounts } from '../lib/calendar-accounts';
@@ -27,6 +29,7 @@
   let panelEl = $state<HTMLElement | null>(null);
   let backButton = $state<HTMLButtonElement | null>(null);
   let homeScroll = 0;
+  const reveal = $derived({ duration: prefersReducedMotion.current ? 0 : 200 });
 
   const read = (key: string) => { try { return localStorage.getItem(key); } catch { return null; } };
   const itemList = $derived(Object.values($items));
@@ -84,8 +87,9 @@
     if (mobile) homeScroll = panelEl?.scrollTop ?? 0;
     expanded = id;
     await tick();
-    if (mobile) backButton?.focus(); else document.getElementById(`settings-${id}`)?.scrollIntoView({ block: 'nearest' });
+    if (mobile) backButton?.focus();
   }
+  function revealSection(id: SectionId) { document.getElementById(`settings-${id}`)?.scrollIntoView({ block: 'nearest' }); }
   async function back() { expanded = null; await tick(); if (panelEl) panelEl.scrollTop = homeScroll; }
   function keydown(e: KeyboardEvent) { if (e.key !== 'Escape') return; if (expanded) { e.stopPropagation(); void back(); } else isOpen = false; }
 </script>
@@ -106,7 +110,7 @@
       <div class="tiles">
       {#each SETTINGS_SECTIONS as section (section.id)}
         <SettingsTile {section} value={value(section)} sub={sub(section)} meta={meta(section)} expanded={expanded===section.id} onclick={()=>void choose(section.id)}/>
-        {#if !mobile && expanded === section.id}<div class="expanded" id={`settings-${section.id}`}>{@render Section(section)}</div>{/if}
+        {#if !mobile && expanded === section.id}<div class="expanded" id={`settings-${section.id}`} transition:slide={reveal} onintroend={()=>revealSection(section.id)}>{@render Section(section)}</div>{/if}
       {/each}
       </div>
     {:else}<div class="mobile-detail">{@render Section(selected)}</div>{/if}
