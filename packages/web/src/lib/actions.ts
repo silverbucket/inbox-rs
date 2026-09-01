@@ -121,6 +121,21 @@ export function trapFocus(node: HTMLElement) {
   };
 }
 
+/** Apply the focus trap only while `enabled` is true. */
+export function trapFocusWhen(node: HTMLElement, enabled: boolean) {
+  let trap = enabled ? trapFocus(node) : undefined;
+
+  return {
+    update(nextEnabled: boolean) {
+      trap?.destroy();
+      trap = nextEnabled ? trapFocus(node) : undefined;
+    },
+    destroy() {
+      trap?.destroy();
+    },
+  };
+}
+
 /**
  * Run `onEnter` once when the bound element first approaches the viewport.
  *

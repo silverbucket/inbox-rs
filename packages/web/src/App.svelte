@@ -20,6 +20,8 @@
   import { showToast } from './lib/toast';
   import { parseHash, formatRoute, pageUsesFilters, type Page, type Route } from './lib/route';
   import { layout } from './lib/layout';
+  import SettingsModal from './components/SettingsModal.svelte';
+  import type { SectionId } from './lib/settings-sections';
 
   type LazyComponent = Component<Record<string, unknown>>;
   // Svelte 5 components are functions, not classes — InstanceType<> doesn't
@@ -46,6 +48,8 @@
   let preselectedCollectionId = $state<string | null | undefined>(undefined);
 
   let captureSheetOpen = $state(false);
+  let settingsOpen = $state(false);
+  let settingsInitialSection = $state<SectionId | undefined>(undefined);
   let notePrefillTitle = $state('');
   let prefillFile = $state<File | undefined>(undefined);
   let isTouch = $state(
@@ -206,7 +210,8 @@
     || !!(activeModal && AddEntryModalComponent)
     || (showCollectionForm && !!CollectionFormModalComponent)
     || (showGroupForm && !!GroupFormModalComponent)
-    || captureSheetOpen,
+    || captureSheetOpen
+    || settingsOpen,
   );
   let savedScrollY = 0;
   let wasModalOpen = false;
@@ -377,6 +382,11 @@
     void userMenu?.openConnectMenu();
   }
 
+  function openSettings(section?: SectionId) {
+    settingsInitialSection = section;
+    settingsOpen = true;
+  }
+
   async function handleCreateCollection(col: Collection) {
     try {
       await createCollection(col);
@@ -481,11 +491,11 @@
 {/snippet}
 
 {#if $layout === 'sidebar'}
-  <SidebarShell {route} {navTo} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} bind:userMenu>
+  <SidebarShell {route} {navTo} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} bind:userMenu>
     {#snippet children()}{@render shellBody()}{/snippet}
   </SidebarShell>
 {:else}
-  <ClassicShell {route} {navTo} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} bind:userMenu>
+  <ClassicShell {route} {navTo} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} bind:userMenu>
     {#snippet children()}{@render shellBody()}{/snippet}
   </ClassicShell>
 {/if}
@@ -537,6 +547,7 @@
     onclose={() => (captureSheetOpen = false)}
   />
 {/if}
+<SettingsModal bind:open={settingsOpen} initialSection={settingsInitialSection}/>
 <Toast />
 
 <style>
