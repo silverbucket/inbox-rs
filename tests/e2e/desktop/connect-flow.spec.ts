@@ -1,8 +1,8 @@
 /**
  * Connect / disconnect against the local Armadietto.
  *
- * The connect widget lives inside `UserMenu.svelte`. We type the address
- * into the form, submit, and let `remotestoragejs` redirect through
+ * The connect widget lives in the Account section of settings. We type the
+ * address into the form, submit, and let `remotestoragejs` redirect through
  * Armadietto's Allow page. The test user already exists (signup happens
  * in the worker fixture) so the OAuth screen needs only the password.
  */
@@ -22,15 +22,14 @@ test('full connect round-trip via OAuth', async ({
   await page.goto(webOrigin);
   await page.waitForLoadState('networkidle');
 
-  // Open the user menu (header right). It's labelled by aria-label, not
-  // visible text, when disconnected.
+  // Open settings from the avatar, then expand the Account tile.
   await page.getByRole('button', { name: 'User menu — disconnected' }).click();
+  await page.getByRole('button', { name: /^Account — Not connected/ }).click();
 
   // Type the RS address and submit. The form's submit button reads
   // "Connect" until in-flight, then "Connecting…".
   await page.getByPlaceholder('user@storage.example').fill(rsUser.address);
-  // `exact: true` so we don't accidentally select the User-menu trigger
-  // button, whose accessible name contains the substring "Connect".
+  // `exact: true` avoids matching descriptive copy in the section.
   await page.getByRole('button', { name: 'Connect', exact: true }).click();
 
   // remotestoragejs navigates to Armadietto's /oauth/<user> page. Wait
@@ -62,7 +61,7 @@ test('disconnect returns to empty state', async ({
   connectedPage,
   webOrigin,
 }) => {
-  // Once connected, the menu shows a Disconnect entry. Clicking it must
+  // Once connected, the Account section shows Disconnect. Clicking it must
   // reset the UI to the disconnected empty state — InboxGrid's
   // "Connect to your remoteStorage" CTA is the marker.
   await connectedPage.goto(webOrigin);
@@ -75,7 +74,10 @@ test('disconnect returns to empty state', async ({
   await connectedPage
     .getByRole('button', { name: 'User menu — connected' })
     .click();
-  await connectedPage.getByRole('menuitem', { name: 'Disconnect' }).click();
+  await connectedPage
+    .getByRole('button', { name: /^Account — Synced/ })
+    .click();
+  await connectedPage.getByRole('button', { name: 'Disconnect' }).click();
 
   await expect(
     connectedPage.getByRole('button', {

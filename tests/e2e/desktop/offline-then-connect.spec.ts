@@ -58,6 +58,7 @@ test('offline → online → connect with a brand-new account', async ({
   // so we cover the connect transition under post-offline conditions.
   await page.context().setOffline(false);
   await page.getByRole('button', { name: 'User menu — disconnected' }).click();
+  await page.getByRole('button', { name: /^Account — Not connected/ }).click();
   await page.getByPlaceholder('user@storage.example').fill(freshRsUser.address);
   await page.getByRole('button', { name: 'Connect', exact: true }).click();
 
