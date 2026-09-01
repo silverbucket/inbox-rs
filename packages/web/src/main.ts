@@ -34,7 +34,7 @@ try {
 const accent: Accent = isAccent(storedAccent) ? storedAccent : 'indigo';
 const mode: Mode =
   storedMode === 'light' || storedMode === 'dark' ? storedMode : 'system';
-const palette: Palette = isPalette(storedPalette) ? storedPalette : 'solarized';
+const palette: Palette = isPalette(storedPalette) ? storedPalette : 'paper';
 applyTheme(accent, mode);
 applyPalette(palette);
 

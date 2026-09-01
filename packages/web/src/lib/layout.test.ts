@@ -9,25 +9,25 @@ afterEach(() => {
 });
 
 describe('getLayout', () => {
-  it('defaults to classic when nothing is stored', () => {
-    expect(getLayout()).toBe('classic');
-  });
-
-  it('returns a stored valid layout', () => {
-    localStorage.setItem('inbox-rs:layout', 'sidebar');
+  it('defaults to sidebar when nothing is stored', () => {
     expect(getLayout()).toBe('sidebar');
   });
 
-  it('falls back to classic for an unrecognised value', () => {
-    localStorage.setItem('inbox-rs:layout', 'bogus');
+  it('returns a stored valid layout', () => {
+    localStorage.setItem('inbox-rs:layout', 'classic');
     expect(getLayout()).toBe('classic');
   });
 
-  it('falls back to classic when storage access throws', () => {
+  it('falls back to sidebar for an unrecognised value', () => {
+    localStorage.setItem('inbox-rs:layout', 'bogus');
+    expect(getLayout()).toBe('sidebar');
+  });
+
+  it('falls back to sidebar when storage access throws', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new DOMException('blocked', 'SecurityError');
     });
-    expect(getLayout()).toBe('classic');
+    expect(getLayout()).toBe('sidebar');
   });
 });
 
