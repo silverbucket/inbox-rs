@@ -196,9 +196,9 @@
     </div>
     <p class="sub">
       Scheduled cards can post straight to your calendar over CalDAV, relayed
-      through <a href="https://sockethub.org" target="_blank" rel="noreferrer">Sockethub</a> —
-      the same open gateway that fetches link previews. Credentials stay on
-      this device and are relayed per-request — no server stores them.
+      through Sockethub (see Settings → Account for details on the relay).
+      Credentials stay on this device and are relayed per-request — no
+      server stores them.
     </p>
 
     {#each $calendarAccounts as account (account.id)}
