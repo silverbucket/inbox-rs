@@ -81,6 +81,7 @@ function readStoredUserAddress(): string {
 }
 
 export const userAddress = writable<string>(readStoredUserAddress());
+export const storageHref = writable<string>('');
 export const items = writable<Record<string, InboxItem>>({});
 /**
  * Un-normalized view of items straight from storage. Used for migration
@@ -454,10 +455,11 @@ rs.on('connected', async () => {
   connected.set(true);
   // The connected user's address lives on `rs.remote` once auth completes;
   // fall back to localStorage so we have something to display before sync.
-  const remote = rs.remote as { userAddress?: string } | undefined;
+  const remote = rs.remote as { userAddress?: string; href?: string } | undefined;
   const addr =
     remote?.userAddress || localStorage.getItem('inbox-rs:userAddress') || '';
   userAddress.set(addr);
+  storageHref.set(remote?.href || '');
   await loadConnectedData();
 });
 
@@ -482,6 +484,7 @@ rs.on('disconnected', () => {
 
   connected.set(false);
   userAddress.set('');
+  storageHref.set('');
   localStorage.removeItem('inbox-rs:userAddress');
   clearMigrationAlertTimeout();
   migrationAlertReady.set(false);
