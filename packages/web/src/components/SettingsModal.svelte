@@ -5,7 +5,7 @@
   import { calendarAccounts } from '../lib/calendar-accounts';
   import { needsEnrichment } from '../lib/enrich';
   import { layout } from '../lib/layout';
-  import { appVersion } from '../lib/plugin-downloads.generated';
+  import { buildDate, versionLabel } from '../lib/build-info';
   import { SETTINGS_SECTIONS, type SectionId, type SettingsSection } from '../lib/settings-sections';
   import { connected, items, syncing, userAddress, userSettings } from '../lib/stores';
   import { ACCENT_LABELS, isAccent } from '../lib/theme';
@@ -45,7 +45,7 @@
       case 'data': return `${itemList.length} items`;
       case 'apps': return 'Capture tools';
       case 'account': return $connected ? 'Synced' : 'Not connected';
-      case 'about': return appVersion;
+      case 'about': return versionLabel;
     }
   }
   function sub(section: SettingsSection): string {
@@ -59,6 +59,14 @@
       case 'account': return $userAddress || 'Connect remoteStorage';
       case 'about': return "What's new · Source";
     }
+  }
+  // Small-print detail shown next to (not under) the version — currently
+  // only the About section has one, for the deploy date. Deliberately left
+  // out of stateLine() below: that feeds the section-head/mobile-state
+  // caption, and the date already shows next to the version in the tile and
+  // in the About box itself — no need for a third copy.
+  function meta(section: SettingsSection): string {
+    return section.id === 'about' ? buildDate : '';
   }
   function stateLine(section: SettingsSection) { return `${value(section)} · ${sub(section)}`; }
 
@@ -97,7 +105,7 @@
       {#if mobile}<div class="identity"><span class="identity-avatar">{$connected ? ($userSettings.abbreviation || $userAddress.slice(0,2).toUpperCase()) : '?'}</span><span><strong>{$userAddress || 'Not connected'}</strong><small>{$syncing?'Syncing…':$connected?'Synced':'Connect your storage'}</small></span></div>{/if}
       <div class="tiles">
       {#each SETTINGS_SECTIONS as section (section.id)}
-        <SettingsTile {section} value={value(section)} sub={sub(section)} expanded={expanded===section.id} onclick={()=>void choose(section.id)}/>
+        <SettingsTile {section} value={value(section)} sub={sub(section)} meta={meta(section)} expanded={expanded===section.id} onclick={()=>void choose(section.id)}/>
         {#if !mobile && expanded === section.id}<div class="expanded" id={`settings-${section.id}`}>{@render Section(section)}</div>{/if}
       {/each}
       </div>

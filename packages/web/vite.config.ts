@@ -15,7 +15,7 @@ const { version } = JSON.parse(
 // help. Production builds leave both off — nothing here changes for them.
 const isStaging = process.env.STAGING_BUILD === '1';
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [
     svelte(),
     VitePWA({
@@ -88,6 +88,15 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(version),
     __STAGING__: JSON.stringify(isStaging),
+    // Only a real `vite build` (the deploy workflows, and CI's build check)
+    // stamps a date/time — `vite dev`/vitest never deploy anything, so a
+    // stamp there would just be whenever the process happened to start, not
+    // a release date. See review: github.com/silverbucket/inbox-rs/pull/225#discussion_r3904728312
+    __BUILD_DATE__: JSON.stringify(
+      command === 'build'
+        ? `${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`
+        : '',
+    ),
   },
   server: {
     port: 5173,
@@ -126,4 +135,4 @@ export default defineConfig({
   test: {
     css: true,
   },
-});
+}));

@@ -4,7 +4,7 @@
   import GroupFilterBar from './GroupFilterBar.svelte';
   import LogoShield from './LogoShield.svelte';
   import { pageUsesFilters, type Page, type Route } from '../lib/route';
-  import { appVersion } from '../lib/plugin-downloads.generated';
+  import { buildDate, footerVersionLabel } from '../lib/build-info';
 
   // bind:this on a Svelte 5 component yields its exports, not a class instance.
   type UserMenuHandle = { openConnectMenu: () => Promise<void> };
@@ -95,7 +95,8 @@
 <footer class="app-footer">
   <div class="app-footer-inner">
     <span class="footer-brand">Inbox RS</span>
-    <span class="footer-version">v{appVersion}</span>
+    <span class="footer-version">{footerVersionLabel}</span>
+    {#if buildDate}<span class="footer-date">{buildDate}</span>{/if}
     <span class="footer-sep">·</span>
     <a class="footer-link" class:active={isActive('plugins')} href="#/plugins">
       <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -374,5 +375,11 @@
     border: 1px solid color-mix(in srgb, var(--border) 75%, white 25%);
     background: color-mix(in srgb, var(--surface) 86%, black 14%);
     letter-spacing: 0.02em;
+  }
+
+  .footer-date {
+    font-size: 0.78rem;
+    font-style: italic;
+    color: var(--text-muted);
   }
 </style>
