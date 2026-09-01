@@ -1750,11 +1750,35 @@
   /* ── Footer ── */
   .app-footer {
     /* `auto` pins it to the bottom of <main> on short pages; the negative
-       inline margins bleed it back out to the column edges so the rule spans
-       the full content column. With main's 1rem gap this keeps 3.5rem of
-       clearance above the rule, as before. */
+       inline margins bleed it back out past main's own padding so the rule
+       spans the full content column. With main's 1rem gap this keeps 3.5rem
+       of clearance above the rule, as before. A flat, opaque background is
+       required: on desktop the footer bleeds further left, over the sidebar
+       column too (see below), and it needs to paint as one uniform bar on
+       top of both columns — a transparent footer would let the sidebar's
+       border-right (and its background) show through and cut across it. A
+       flex item paints above its earlier, non-positioned siblings by default,
+       so no z-index is needed to keep it on top of the sidebar. */
     margin: auto -1.5rem 0;
     padding-top: 2.5rem;
+    background: var(--bg);
+  }
+
+  /* On desktop, <main> only occupies the grid column *after* the sidebar, so
+     the bleed above isn't enough to reach the page's actual left edge — bleed
+     further left by the sidebar's current rendered width (mirrors the widths
+     in grid-template-columns above) so the footer rule spans the whole page,
+     not just the content column. Scoped to desktop: below 768px the sidebar
+     stacks above <main> in a single column, where the base bleed is already
+     enough. */
+  @media (min-width: 769px) {
+    .body:not(.sidebar-collapsed):not(.no-sidebar) .app-footer {
+      margin-left: calc(-1.5rem - 268px);
+    }
+
+    .body.sidebar-collapsed:not(.no-sidebar) .app-footer {
+      margin-left: calc(-1.5rem - 60px);
+    }
   }
 
   .app-footer-inner {
