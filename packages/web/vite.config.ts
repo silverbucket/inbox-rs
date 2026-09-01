@@ -15,11 +15,7 @@ const { version } = JSON.parse(
 // help. Production builds leave both off — nothing here changes for them.
 const isStaging = process.env.STAGING_BUILD === '1';
 
-// Both deploy workflows build and ship in the same job, so the build date is
-// the deploy date. Surfaced in Settings › About as "Deployed YYYY-MM-DD".
-const buildDate = new Date().toISOString().slice(0, 10);
-
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [
     svelte(),
     VitePWA({
@@ -92,7 +88,13 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(version),
     __STAGING__: JSON.stringify(isStaging),
-    __BUILD_DATE__: JSON.stringify(buildDate),
+    // Only a real `vite build` (the deploy workflows, and CI's build check)
+    // stamps a date — `vite dev`/vitest never deploy anything, so a date
+    // there would just be whenever the process happened to start, not a
+    // release date. See review: github.com/silverbucket/inbox-rs/pull/225#discussion_r3904728312
+    __BUILD_DATE__: JSON.stringify(
+      command === 'build' ? new Date().toISOString().slice(0, 10) : '',
+    ),
   },
   server: {
     port: 5173,
@@ -131,4 +133,4 @@ export default defineConfig({
   test: {
     css: true,
   },
-});
+}));
