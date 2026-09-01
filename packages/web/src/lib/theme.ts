@@ -73,10 +73,10 @@ export function isAccent(value: string | null | undefined): value is Accent {
 
 /**
  * Neutral palettes — each is a full light+dark set of background/surface/
- * text/border tokens. 'solarized' is the default (low-contrast, warm light /
- * blue-green dark); 'classic' is the original high-contrast cool grey. The
- * list is ordered along the cool→warm / crisp→soft axis so adjacent cards in
- * the picker read as a gradient rather than a random grid.
+ * text/border tokens. 'paper' is the default (warm ink on paper, near-black
+ * text / warm charcoal dark); 'classic' is the original high-contrast cool
+ * grey. The list is ordered along the cool→warm / crisp→soft axis so
+ * adjacent cards in the picker read as a gradient rather than a random grid.
  */
 export const PALETTES = [
   'classic',
@@ -111,7 +111,7 @@ export const PALETTE_DESCRIPTIONS: Record<Palette, string> = {
 /**
  * Colours the palette picker paints its preview cards with — kept in sync
  * with each palette's --bg / --sidebar-bg / --surface / --text tokens
- * (global.css for solarized, theme-palettes.css for the rest).
+ * (global.css for paper, theme-palettes.css for the rest).
  */
 export interface PalettePreview {
   bg: string;
@@ -216,8 +216,8 @@ export function isPalette(value: string | null | undefined): value is Palette {
 
 /**
  * Browser-chrome tint per palette — kept in sync with each palette's `--bg`
- * (global.css for solarized, theme-palettes.css for the rest). index.html
- * ships the solarized values for first paint.
+ * (global.css for paper, theme-palettes.css for the rest). index.html
+ * ships the paper values for first paint.
  */
 export const PALETTE_THEME_COLORS: Record<
   Palette,

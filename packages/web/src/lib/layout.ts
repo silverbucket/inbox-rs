@@ -1,7 +1,7 @@
 /**
  * App layout selection — which shell renders the main UI. Persisted per-device
  * in localStorage (mirrors the theme keys); not synced via remoteStorage.
- * 'classic' is the established top-nav layout; 'sidebar' is the opt-in redesign.
+ * 'classic' is the original top-nav layout; 'sidebar' is now the default.
  */
 
 import { writable } from 'svelte/store';
@@ -9,7 +9,7 @@ import { writable } from 'svelte/store';
 export type Layout = 'classic' | 'sidebar';
 
 const LAYOUT_KEY = 'inbox-rs:layout';
-const DEFAULT_LAYOUT: Layout = 'classic';
+const DEFAULT_LAYOUT: Layout = 'sidebar';
 
 function isLayout(value: string | null): value is Layout {
   return value === 'classic' || value === 'sidebar';
