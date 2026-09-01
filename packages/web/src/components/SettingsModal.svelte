@@ -5,7 +5,7 @@
   import { calendarAccounts } from '../lib/calendar-accounts';
   import { needsEnrichment } from '../lib/enrich';
   import { layout } from '../lib/layout';
-  import { appVersion } from '../lib/plugin-downloads.generated';
+  import { buildDate, versionLabel } from '../lib/build-info';
   import { SETTINGS_SECTIONS, type SectionId, type SettingsSection } from '../lib/settings-sections';
   import { connected, items, syncing, userAddress, userSettings } from '../lib/stores';
   import { ACCENT_LABELS, isAccent } from '../lib/theme';
@@ -45,7 +45,7 @@
       case 'data': return `${itemList.length} items`;
       case 'apps': return 'Capture tools';
       case 'account': return $connected ? 'Synced' : 'Not connected';
-      case 'about': return appVersion;
+      case 'about': return versionLabel;
     }
   }
   function sub(section: SettingsSection): string {
@@ -57,7 +57,7 @@
       case 'data': return 'Export or restore a backup';
       case 'apps': return 'Apps and add-ons';
       case 'account': return $userAddress || 'Connect remoteStorage';
-      case 'about': return "What's new · Source";
+      case 'about': return `What's new · Source · Deployed ${buildDate}`;
     }
   }
   function stateLine(section: SettingsSection) { return `${value(section)} · ${sub(section)}`; }

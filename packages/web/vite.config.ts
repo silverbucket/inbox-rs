@@ -15,6 +15,10 @@ const { version } = JSON.parse(
 // help. Production builds leave both off — nothing here changes for them.
 const isStaging = process.env.STAGING_BUILD === '1';
 
+// Both deploy workflows build and ship in the same job, so the build date is
+// the deploy date. Surfaced in Settings › About as "Deployed YYYY-MM-DD".
+const buildDate = new Date().toISOString().slice(0, 10);
+
 export default defineConfig({
   plugins: [
     svelte(),
@@ -88,6 +92,7 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(version),
     __STAGING__: JSON.stringify(isStaging),
+    __BUILD_DATE__: JSON.stringify(buildDate),
   },
   server: {
     port: 5173,

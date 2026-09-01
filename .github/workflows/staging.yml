@@ -53,7 +53,8 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Build web app
-        # STAGING_BUILD=1 turns on sourcemaps + the __STAGING__ debug flag
+        # STAGING_BUILD=1 turns on sourcemaps + the __STAGING__ flag (labels the
+        # build "Staging" in the UI instead of a version number)
         # (see packages/web/vite.config.ts).
         env:
           STAGING_BUILD: '1'
