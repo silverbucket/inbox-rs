@@ -455,7 +455,9 @@ rs.on('connected', async () => {
   connected.set(true);
   // The connected user's address lives on `rs.remote` once auth completes;
   // fall back to localStorage so we have something to display before sync.
-  const remote = rs.remote as { userAddress?: string; href?: string } | undefined;
+  const remote = rs.remote as
+    | { userAddress?: string; href?: string }
+    | undefined;
   const addr =
     remote?.userAddress || localStorage.getItem('inbox-rs:userAddress') || '';
   userAddress.set(addr);
