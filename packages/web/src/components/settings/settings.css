@@ -1,0 +1,162 @@
+.settings-section .row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.7rem 0;
+  min-height: 52px;
+}
+.settings-section .row + .row {
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+.settings-section .row-main {
+  min-width: 0;
+  flex: 1;
+}
+.settings-section .row-label {
+  font-size: 0.88rem;
+  font-weight: 550;
+}
+.settings-section .row-desc {
+  font-size: 0.79rem;
+  color: var(--text-muted);
+  margin-top: 0.1rem;
+}
+.settings-section .row-ctl {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.settings-section .row.stack {
+  display: block;
+}
+.settings-section .row.stack .row-ctl {
+  display: block;
+  width: 100%;
+  margin-top: 0.7rem;
+}
+.settings-section .btn {
+  padding: 0.48rem 0.85rem;
+  border-radius: 9px;
+  font-size: 0.83rem;
+  font-weight: 550;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: none;
+}
+.settings-section .btn:hover {
+  background: var(--surface-hover);
+}
+.settings-section .btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.settings-section .btn.danger {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 26%, transparent);
+  background: transparent;
+}
+.settings-section .field {
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1rem;
+}
+.settings-section .field.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.settings-section .seg {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--bg);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+.settings-section .seg button {
+  padding: 0.42rem 0.72rem;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.settings-section .seg button.on {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: 0 1px 3px var(--shadow);
+}
+.settings-section .switch {
+  width: 42px;
+  height: 25px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--border);
+  position: relative;
+  cursor: pointer;
+}
+.settings-section .switch:after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.18s;
+}
+.settings-section .switch.on {
+  background: var(--accent);
+}
+.settings-section .switch.on:after {
+  transform: translateX(17px);
+}
+.settings-section .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--bg);
+  color: var(--text-muted);
+}
+.settings-section .pill.ok {
+  background: color-mix(in srgb, var(--ok) 15%, transparent);
+  color: var(--ok);
+}
+.settings-section .pill.warn {
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  color: var(--warn);
+}
+@media (max-width: 767px) {
+  .settings-section .row {
+    min-height: 56px;
+    flex-wrap: wrap;
+  }
+  .settings-section .row-ctl {
+    margin-left: auto;
+  }
+  .settings-section .row.wide .row-main,
+  .settings-section .row.identity .row-main {
+    flex: 1 1 100%;
+  }
+  .settings-section .row.wide .row-ctl,
+  .settings-section .row.identity .row-ctl {
+    margin: 0;
+    width: 100%;
+  }
+  .settings-section .row.action .btn {
+    width: 100%;
+    text-align: center;
+  }
+}

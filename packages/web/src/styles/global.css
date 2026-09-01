@@ -2,6 +2,8 @@
 @import "./theme-palettes.css";
 
 :root {
+  --ok: #059669;
+  --warn: #b45309;
   /* Accent comes from data-accent (theme-accents.css); these are fallbacks
      for the first paint before the stored accent is applied. */
   --accent: #4f46e5;

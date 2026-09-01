@@ -1,0 +1,2 @@
+<script lang="ts">import {appVersion} from '../../lib/plugin-downloads.generated';</script>
+<div class="settings-section"><div class="row wide"><div class="row-main"><div class="row-label">Inbox RS {appVersion}</div><div class="row-desc">Your data, your server, no middle tier.</div></div><div class="row-ctl"><a class="btn" href="https://github.com/67P/inbox-rs/releases" target="_blank" rel="noreferrer">What's new</a><a class="btn" href="https://github.com/67P/inbox-rs" target="_blank" rel="noreferrer">Source</a></div></div></div>

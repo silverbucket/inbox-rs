@@ -20,8 +20,11 @@
   let {
     onclose,
     onconnected,
+    embedded = false,
   }: {
     onclose: () => void;
+    /** Render as a settings section instead of a nested modal. */
+    embedded?: boolean;
     /**
      * Fired after an account connects successfully. The add-to-calendar
      * sheet uses it to close the modal and return to posting; from the user
@@ -172,9 +175,9 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="overlay" role="dialog" aria-modal="true" aria-label="Calendar accounts" onclick={onclose}>
-  <div class="modal" use:trapFocus onclick={(e) => e.stopPropagation()}>
-    <div class="head">
+<div class="overlay" class:embedded onclick={embedded ? undefined : onclose}>
+  <div class="modal" use:trapFocus role="dialog" aria-modal="true" aria-label="Calendar accounts" onclick={(e) => e.stopPropagation()}>
+    <div class="head" class:hidden={embedded}>
       <h3 class="title">Calendar accounts</h3>
       <button type="button" class="icon-btn" aria-label="Close" onclick={onclose}>
         <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -337,6 +340,10 @@
     width: 100%;
     box-shadow: 0 12px 40px var(--shadow);
   }
+
+  .overlay.embedded { position: static; display: block; padding: 0; background: transparent; overflow: visible; }
+  .overlay.embedded .modal { max-width: none; padding: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+  .head.hidden { display: none; }
 
   .head {
     display: flex;

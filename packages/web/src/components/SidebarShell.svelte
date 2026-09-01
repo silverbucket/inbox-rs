@@ -54,6 +54,7 @@
     viewTodoCount,
     totalTodoCount,
     onaddgroup,
+    onopensettings = () => {},
     userMenu = $bindable(null),
     children,
   }: {
@@ -64,6 +65,7 @@
     /** Total incomplete todos everywhere (greyed secondary badge). */
     totalTodoCount: number;
     onaddgroup: () => void;
+    onopensettings?: (section?: import('../lib/settings-sections').SectionId) => void;
     userMenu?: UserMenuHandle | null;
     children: Snippet;
   } = $props();
@@ -560,7 +562,7 @@
       >Collections</button>
     </nav>
     <div class="header-right">
-      <UserMenu bind:this={userMenu} />
+      <UserMenu bind:this={userMenu} {onopensettings} />
     </div>
   </div>
 </header>
