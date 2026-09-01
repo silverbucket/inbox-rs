@@ -1752,16 +1752,14 @@
     /* `auto` pins it to the bottom of <main> on short pages; the negative
        inline margins bleed it back out past main's own padding so the rule
        spans the full content column. With main's 1rem gap this keeps 3.5rem
-       of clearance above the rule, as before. A flat, opaque background is
-       required: on desktop the footer bleeds further left, over the sidebar
-       column too (see below), and it needs to paint as one uniform bar on
-       top of both columns — a transparent footer would let the sidebar's
-       border-right (and its background) show through and cut across it. A
-       flex item paints above its earlier, non-positioned siblings by default,
-       so no z-index is needed to keep it on top of the sidebar. */
+       of clearance above the rule, as before. Deliberately no background
+       here: on desktop this box bleeds further left, over the sidebar column
+       too (see below), and the `padding-top` gap above the visible bar
+       (`.app-footer-inner`) should keep showing the sidebar's own background
+       underneath it — a flat colour on this outer box would paint over that
+       gap with the wrong colour and look like the sidebar stopped short. */
     margin: auto -1.5rem 0;
     padding-top: 2.5rem;
-    background: var(--bg);
   }
 
   /* On desktop, <main> only occupies the grid column *after* the sidebar, so
@@ -1782,6 +1780,11 @@
   }
 
   .app-footer-inner {
+    /* The actual visible bar. Opaque so it reads as one uniform strip and
+       hides the sidebar's border-right where it would otherwise cross
+       underneath — this inherits `.app-footer`'s full bled width above
+       (including, on desktop, over the sidebar column), so the coverage
+       matches. */
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -1789,6 +1792,7 @@
     border-top: 1px solid var(--border);
     font-size: 0.82rem;
     color: var(--text-muted);
+    background: var(--bg);
   }
 
   .footer-brand {
