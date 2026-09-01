@@ -11,8 +11,8 @@ export const footerVersionLabel: string = __STAGING__
   : `v${appVersion}`;
 
 /**
- * UTC date (YYYY-MM-DD) this bundle was built — and therefore deployed.
- * Empty outside a real `vite build` (dev server, vitest): those never
- * deploy anything, so there's no honest date to show.
+ * UTC date and time (YYYY-MM-DD HH:MM UTC) this bundle was built — and
+ * therefore deployed. Empty outside a real `vite build` (dev server,
+ * vitest): those never deploy anything, so there's no honest stamp to show.
  */
 export const buildDate: string = __BUILD_DATE__;

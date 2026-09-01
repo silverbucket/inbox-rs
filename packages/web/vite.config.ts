@@ -89,11 +89,13 @@ export default defineConfig(({ command }) => ({
     __APP_VERSION__: JSON.stringify(version),
     __STAGING__: JSON.stringify(isStaging),
     // Only a real `vite build` (the deploy workflows, and CI's build check)
-    // stamps a date — `vite dev`/vitest never deploy anything, so a date
-    // there would just be whenever the process happened to start, not a
-    // release date. See review: github.com/silverbucket/inbox-rs/pull/225#discussion_r3904728312
+    // stamps a date/time — `vite dev`/vitest never deploy anything, so a
+    // stamp there would just be whenever the process happened to start, not
+    // a release date. See review: github.com/silverbucket/inbox-rs/pull/225#discussion_r3904728312
     __BUILD_DATE__: JSON.stringify(
-      command === 'build' ? new Date().toISOString().slice(0, 10) : '',
+      command === 'build'
+        ? `${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`
+        : '',
     ),
   },
   server: {
