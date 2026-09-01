@@ -1680,6 +1680,15 @@
       grid-row: 1;
     }
 
+    .brand-logo {
+      height: 30px;
+    }
+
+    .brand-logo :global(svg) {
+      height: 30px;
+      width: auto;
+    }
+
     .header-right {
       grid-column: 3;
       grid-row: 1;
