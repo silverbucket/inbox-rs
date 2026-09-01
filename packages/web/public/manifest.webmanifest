@@ -4,8 +4,8 @@
   "description": "One inbox for links, notes, images, audio, documents, and email — capture from anywhere, file it, schedule it. Backed by remoteStorage: your data on storage you own.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f8f9fb",
-  "theme_color": "#f8f9fb",
+  "background_color": "#f6efdc",
+  "theme_color": "#f6efdc",
   "icons": [
     {
       "src": "/favicon-32.png",

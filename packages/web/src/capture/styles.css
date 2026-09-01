@@ -8,15 +8,15 @@
  */
 
 :root {
-  /* light neutrals (default) */
-  --bg: #f2f1ee;
-  --surface: #fbfaf7;
-  --seg: #e7e4dd;
-  --ink: #2c2a26;
-  --ink-soft: #5f5b53;
-  --ink-faint: #928d83;
-  --line: #dcd8d0;
-  --on-accent: #fdfdfb;
+  /* light neutrals (default) — Solarized-style warm cream, matching the main app */
+  --bg: #f6efdc;
+  --surface: #fdf6e3;
+  --seg: #eee8d5;
+  --ink: #586e75;
+  --ink-soft: #6d8188;
+  --ink-faint: #8fa0a3;
+  --line: #d9d2ba;
+  --on-accent: #fdf6e3;
 
   /* accent (overridden per data-accent below; indigo is the default) */
   --accent: #4f46e5;
@@ -28,28 +28,31 @@
   color-scheme: light;
 }
 
-/* dark neutrals — explicit choice */
+/* dark neutrals — explicit choice. Solarized-style deep blue-green, matching
+   the main app's dark palette. */
 :root[data-theme="dark"] {
-  --bg: #201f1d;
-  --surface: #2a2825;
-  --seg: #302d29;
-  --ink: #ece8e1;
-  --ink-soft: #b4afa5;
-  --ink-faint: #8b867c;
-  --line: #37342f;
+  --bg: #002b36;
+  --surface: #073642;
+  --seg: #0d4152;
+  --ink: #93a1a1;
+  --ink-soft: #7b8e93;
+  --ink-faint: #657b83;
+  --line: #1a4a5a;
+
   color-scheme: dark;
 }
 
 /* dark neutrals — follow the system when no explicit mode is set */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]):not([data-theme="dark"]) {
-    --bg: #201f1d;
-    --surface: #2a2825;
-    --seg: #302d29;
-    --ink: #ece8e1;
-    --ink-soft: #b4afa5;
-    --ink-faint: #8b867c;
-    --line: #37342f;
+    --bg: #002b36;
+    --surface: #073642;
+    --seg: #0d4152;
+    --ink: #93a1a1;
+    --ink-soft: #7b8e93;
+    --ink-faint: #657b83;
+    --line: #1a4a5a;
+
     color-scheme: dark;
   }
 }

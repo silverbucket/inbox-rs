@@ -27,11 +27,11 @@
     const main = document.createElement('main');
     main.setAttribute('data-app-loader', '');
     main.style.cssText =
-      'min-height:100vh;box-sizing:border-box;display:grid;place-items:center;padding:24px;background:#f8f9fb;color:#20232a;font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+      'min-height:100vh;box-sizing:border-box;display:grid;place-items:center;padding:24px;background:#f6efdc;color:#586e75;font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
 
     const card = document.createElement('section');
     card.style.cssText =
-      'width:min(100%,420px);box-sizing:border-box;padding:32px;border:1px solid #dfe2e8;border-radius:20px;background:#fff;text-align:center;box-shadow:0 12px 36px rgba(20,25,35,.08)';
+      'width:min(100%,420px);box-sizing:border-box;padding:32px;border:1px solid #d9d2ba;border-radius:20px;background:#fdf6e3;text-align:center;box-shadow:0 12px 36px rgba(88,74,32,.1)';
 
     const heading = document.createElement('h1');
     heading.textContent = title;
