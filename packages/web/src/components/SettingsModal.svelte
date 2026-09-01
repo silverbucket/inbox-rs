@@ -57,10 +57,18 @@
       case 'data': return 'Export or restore a backup';
       case 'apps': return 'Apps and add-ons';
       case 'account': return $userAddress || 'Connect remoteStorage';
-      case 'about': return `What's new · Source · Deployed ${buildDate}`;
+      case 'about': return "What's new · Source";
     }
   }
-  function stateLine(section: SettingsSection) { return `${value(section)} · ${sub(section)}`; }
+  // Small-print detail shown next to (not under) the version — currently
+  // only the About section has one, for the deploy date.
+  function meta(section: SettingsSection): string {
+    return section.id === 'about' ? `Deployed ${buildDate}` : '';
+  }
+  function stateLine(section: SettingsSection) {
+    const m = meta(section);
+    return `${value(section)}${m ? ` · ${m}` : ''} · ${sub(section)}`;
+  }
 
   $effect(() => {
     if (!isOpen) { expanded = null; return; }
@@ -97,7 +105,7 @@
       {#if mobile}<div class="identity"><span class="identity-avatar">{$connected ? ($userSettings.abbreviation || $userAddress.slice(0,2).toUpperCase()) : '?'}</span><span><strong>{$userAddress || 'Not connected'}</strong><small>{$syncing?'Syncing…':$connected?'Synced':'Connect your storage'}</small></span></div>{/if}
       <div class="tiles">
       {#each SETTINGS_SECTIONS as section (section.id)}
-        <SettingsTile {section} value={value(section)} sub={sub(section)} expanded={expanded===section.id} onclick={()=>void choose(section.id)}/>
+        <SettingsTile {section} value={value(section)} sub={sub(section)} meta={meta(section)} expanded={expanded===section.id} onclick={()=>void choose(section.id)}/>
         {#if !mobile && expanded === section.id}<div class="expanded" id={`settings-${section.id}`}>{@render Section(section)}</div>{/if}
       {/each}
       </div>
