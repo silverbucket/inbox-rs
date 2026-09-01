@@ -10,6 +10,10 @@
   const defaultSockethubHost=(()=>{try{return new URL(DEFAULT_SOCKETHUB_ENDPOINT).host}catch{return DEFAULT_SOCKETHUB_ENDPOINT}})();
   function useDefaultSockethub(){sockethubCustom=false;sockethubEndpoint='';removeLocal(LOCAL_SOCKETHUB_URL_KEY);if($connected)void updateUserSettings({sockethubUrl:undefined})}
   function saveSockethub(){const v=sockethubEndpoint.trim();writeLocal(LOCAL_SOCKETHUB_URL_KEY,v);if($connected)void updateUserSettings({sockethubUrl:v||undefined})}
+  // Catches a synced custom endpoint that's still loading from remoteStorage
+  // when this section first renders (e.g. right after connecting on a new
+  // device) — the $state above only reads $userSettings once, at mount.
+  $effect(() => { const synced = $userSettings.sockethubUrl; if (synced && !sockethubCustom && !sockethubEndpoint) { sockethubCustom = true; sockethubEndpoint = synced; } });
   let address = $state(''); let connecting = $state(false); let connectInput = $state<HTMLInputElement|null>(null);
   const localPart = $derived($userAddress.split('@')[0] ?? '');
   const auto = $derived(localPart.length > 1 ? `${localPart[0]}${localPart.at(-1)}`.toUpperCase() : localPart.toUpperCase() || '?');
