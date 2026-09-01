@@ -1071,12 +1071,13 @@
 
   /* ── Sidebar ── */
   .sidebar {
-    position: sticky;
-    top: 70px;
-    /* Stretch, not start: the item must span the full grid column so its
-       background and border keep painting when the content column is taller
-       than the sidebar — with `start` the column below the sidebar showed the
-       page background once the user scrolled. */
+    /* Not sticky. html/body/#app all set overflow-x: hidden, which makes #app
+       the sticky scrollport — and #app never scrolls, the document does — so
+       `position: sticky` was inert here (the header scrolls away for the same
+       reason). Stretching instead: the item must span the full grid column so
+       its background and border keep painting when the content column is
+       taller than the sidebar — with `start` the column below the sidebar
+       showed the page background once the user scrolled. */
     align-self: stretch;
     padding: 1rem 0.65rem 1rem 1rem;
     border-right: 1px solid var(--border);
@@ -1701,7 +1702,6 @@
     }
 
     .sidebar {
-      position: static;
       flex-shrink: 0;
       min-height: 0;
       border-right: none;
