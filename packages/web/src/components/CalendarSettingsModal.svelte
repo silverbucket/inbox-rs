@@ -12,7 +12,7 @@
     updateCalendarAccount,
     type CalendarAccount,
   } from '../lib/calendar-accounts';
-  import { trapFocus } from '../lib/actions';
+  import { trapFocusWhen } from '../lib/actions';
   import { resolveSockethubEndpoint } from '../lib/enrich';
   import { DEFAULT_SOCKETHUB_ENDPOINT } from '../lib/link-metadata';
   import { showToast } from '../lib/toast';
@@ -176,7 +176,15 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="overlay" class:embedded onclick={embedded ? undefined : onclose}>
-  <div class="modal" use:trapFocus role="dialog" aria-modal="true" aria-label="Calendar accounts" onclick={(e) => e.stopPropagation()}>
+  <!-- biome-ignore lint/a11y/useValidAriaRole: both conditional roles are valid; embedded content must not use dialog semantics. -->
+  <div
+    class="modal"
+    use:trapFocusWhen={!embedded}
+    role={embedded ? 'group' : 'dialog'}
+    aria-modal={embedded ? undefined : 'true'}
+    aria-label="Calendar accounts"
+    onclick={(e) => e.stopPropagation()}
+  >
     <div class="head" class:hidden={embedded}>
       <h3 class="title">Calendar accounts</h3>
       <button type="button" class="icon-btn" aria-label="Close" onclick={onclose}>
