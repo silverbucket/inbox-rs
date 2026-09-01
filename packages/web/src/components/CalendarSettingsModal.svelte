@@ -195,7 +195,9 @@
       </button>
     </div>
     <p class="sub">
-      Scheduled cards can post straight to your calendar. Credentials stay on
+      Scheduled cards can post straight to your calendar over CalDAV, relayed
+      through <a href="https://sockethub.org" target="_blank" rel="noreferrer">Sockethub</a> —
+      the same open gateway that fetches link previews. Credentials stay on
       this device and are relayed per-request — no server stores them.
     </p>
 
@@ -294,8 +296,8 @@
             a custom Sockethub server, not the app default. Make sure you
             trust it.
           {:else}
-            Credentials are relayed via <strong>{endpointHost}</strong> and
-            never stored there.
+            Credentials are relayed via <strong>{endpointHost}</strong>, a
+            Sockethub server, and never stored there.
           {/if}
         </p>
         {#if connectError}
