@@ -61,14 +61,14 @@
     }
   }
   // Small-print detail shown next to (not under) the version — currently
-  // only the About section has one, for the deploy date.
+  // only the About section has one, for the deploy date. Deliberately left
+  // out of stateLine() below: that feeds the section-head/mobile-state
+  // caption, and the date already shows next to the version in the tile and
+  // in the About box itself — no need for a third copy.
   function meta(section: SettingsSection): string {
     return section.id === 'about' ? `Deployed ${buildDate}` : '';
   }
-  function stateLine(section: SettingsSection) {
-    const m = meta(section);
-    return `${value(section)}${m ? ` · ${m}` : ''} · ${sub(section)}`;
-  }
+  function stateLine(section: SettingsSection) { return `${value(section)} · ${sub(section)}`; }
 
   $effect(() => {
     if (!isOpen) { expanded = null; return; }

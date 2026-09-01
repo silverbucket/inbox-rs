@@ -1838,6 +1838,7 @@
 
   .footer-date {
     font-size: 0.78rem;
+    font-style: italic;
     color: var(--text-muted);
   }
 </style>

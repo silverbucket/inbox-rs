@@ -3,5 +3,5 @@
 <style>
   /* Same small-print treatment as .row-desc — deliberately not bold like
      the version it sits next to. */
-  .deploy-date { margin-left: 0.3rem; font-weight: 400; font-size: 0.79rem; color: var(--text-muted); }
+  .deploy-date { margin-left: 0.3rem; font-weight: 400; font-style: italic; font-size: 0.79rem; color: var(--text-muted); }
 </style>
