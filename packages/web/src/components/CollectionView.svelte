@@ -32,12 +32,14 @@
   import TodoQuickAdd from './TodoQuickAdd.svelte';
   import TodoRow from './TodoRow.svelte';
 
-  let { collection, expanded = false, onselect, onedit, ontoggle, isTouchDevice = false, reorderable = false }: {
+  let { collection, expanded = false, onselect, onedit, ontoggle, onfocus, isTouchDevice = false, reorderable = false }: {
     collection: Collection;
     expanded?: boolean;
     onselect: (item: InboxItem) => void;
     onedit: () => void;
     ontoggle: () => void;
+    /** When set, show a header button that opens this collection in focus mode. */
+    onfocus?: () => void;
     isTouchDevice?: boolean;
     /** When true, show a grip on the header for drag-sorting on the Collections page. */
     reorderable?: boolean;
@@ -299,6 +301,16 @@
       {/if}
     </div>
     <div class="header-actions">
+      {#if onfocus}
+        <button type="button" class="btn-header" onclick={(e) => { e.stopPropagation(); onfocus(); }} aria-label="Focus on {collection.name}" title="Focus">
+          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3"></path>
+            <path d="M21 8V5a2 2 0 0 0-2-2h-3"></path>
+            <path d="M3 16v3a2 2 0 0 0 2 2h3"></path>
+            <path d="M16 21h3a2 2 0 0 0 2-2v-3"></path>
+          </svg>
+        </button>
+      {/if}
       <button type="button" class="btn-header" onclick={(e) => { e.stopPropagation(); onedit(); }} aria-label="Edit collection" title="Edit">
         <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>

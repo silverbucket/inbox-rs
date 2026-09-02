@@ -32,6 +32,9 @@
   } = $props();
 
   function isActive(page: Page): boolean {
+    // Focus mode is a Collections sub-page; keep that tab lit so the user
+    // knows which section they're in.
+    if (page === 'collections' && route.page === 'collection') return true;
     return route.page === page;
   }
 </script>

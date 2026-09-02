@@ -24,6 +24,36 @@ describe('parseHash', () => {
     expect(parseHash('#/group/g123')).toEqual({ page: 'collections' });
   });
 
+  it('parses #/collection/:id into focus mode', () => {
+    expect(parseHash('#/collection/c123')).toEqual({
+      page: 'collection',
+      collectionId: 'c123',
+    });
+    expect(parseHash('#/collection/c123/')).toEqual({
+      page: 'collection',
+      collectionId: 'c123',
+    });
+  });
+
+  it('decodes an encoded collection id', () => {
+    expect(parseHash('#/collection/a%20b')).toEqual({
+      page: 'collection',
+      collectionId: 'a b',
+    });
+  });
+
+  it('falls back to inbox for #/collection with no id', () => {
+    expect(parseHash('#/collection')).toEqual({ page: 'inbox' });
+    expect(parseHash('#/collection/')).toEqual({ page: 'inbox' });
+  });
+
+  it('ignores filter params in focus mode', () => {
+    expect(parseHash('#/collection/c1?g=g1')).toEqual({
+      page: 'collection',
+      collectionId: 'c1',
+    });
+  });
+
   it('parses single group filter', () => {
     expect(parseHash('#/todos?g=g1')).toEqual({
       page: 'todos',
@@ -93,6 +123,19 @@ describe('formatRoute', () => {
     expect(formatRoute({ page: 'todos', groupFilters: [] })).toBe('#/todos?g=');
   });
 
+  it('formats focus-mode routes and encodes the id', () => {
+    expect(formatRoute({ page: 'collection', collectionId: 'c1' })).toBe(
+      '#/collection/c1',
+    );
+    expect(formatRoute({ page: 'collection', collectionId: 'a b' })).toBe(
+      '#/collection/a%20b',
+    );
+  });
+
+  it('falls back to the collections page for a collection route without id', () => {
+    expect(formatRoute({ page: 'collection' })).toBe('#/collections');
+  });
+
   it('round-trips with parseHash', () => {
     const inputs: Array<Parameters<typeof formatRoute>[0]> = [
       { page: 'inbox' },
@@ -102,6 +145,7 @@ describe('formatRoute', () => {
       { page: 'collections' },
       { page: 'collections', groupFilters: [] },
       { page: 'plugins' },
+      { page: 'collection', collectionId: 'c1' },
     ];
     for (const route of inputs) {
       expect(parseHash(formatRoute(route))).toEqual(route);
@@ -115,8 +159,9 @@ describe('pageUsesFilters', () => {
     expect(pageUsesFilters('collections')).toBe(true);
   });
 
-  it('is false for inbox and plugins', () => {
+  it('is false for inbox, plugins, and focus mode', () => {
     expect(pageUsesFilters('inbox')).toBe(false);
     expect(pageUsesFilters('plugins')).toBe(false);
+    expect(pageUsesFilters('collection')).toBe(false);
   });
 });

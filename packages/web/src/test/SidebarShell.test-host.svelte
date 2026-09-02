@@ -5,19 +5,21 @@
   let {
     route,
     navTo,
+    navToCollection,
     viewTodoCount,
     totalTodoCount,
     onaddgroup,
   }: {
     route: Route;
     navTo: (page: Page) => void;
+    navToCollection: (id: string) => void;
     viewTodoCount: number;
     totalTodoCount: number;
     onaddgroup: () => void;
   } = $props();
 </script>
 
-<SidebarShell {route} {navTo} {viewTodoCount} {totalTodoCount} {onaddgroup}>
+<SidebarShell {route} {navTo} {navToCollection} {viewTodoCount} {totalTodoCount} {onaddgroup}>
   {#snippet children()}
     <div data-testid="shell-body"></div>
   {/snippet}

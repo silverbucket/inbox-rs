@@ -5,18 +5,21 @@
  * typical URL looks like:
  *   https://example.com/#/todos?g=workId,personalId
  *
- * Pages: inbox (default), todos, collections, plugins.
+ * Pages: inbox (default), todos, collections, plugins, and
+ * collection (focus mode for one collection: `#/collection/:id`).
  * Query params:
  *   g  — comma-separated group IDs for filter state. Only meaningful on
  *        the `todos` and `collections` pages; ignored elsewhere.
  */
 
-export type Page = 'inbox' | 'todos' | 'collections' | 'plugins';
+export type Page = 'inbox' | 'todos' | 'collections' | 'plugins' | 'collection';
 
 export interface Route {
   page: Page;
   /** Group filter IDs parsed from the `g=` param. undefined = not supplied. */
   groupFilters?: string[];
+  /** Focused collection id. Only set when `page` is `collection`. */
+  collectionId?: string;
 }
 
 /**
@@ -31,13 +34,20 @@ export function parseHash(hash: string): Route {
   const path = qIdx >= 0 ? h.slice(0, qIdx) : h;
   const query = qIdx >= 0 ? h.slice(qIdx + 1) : '';
 
-  const page = pageFromPath(path);
+  const clean = path.replace(/\/+$/, '');
+  if (clean.startsWith('collection/')) {
+    const id = decodeURIComponent(clean.slice('collection/'.length));
+    // Focus mode carries no filter params — the whole point is one
+    // collection, so `g=` is dropped rather than remembered.
+    if (id) return { page: 'collection', collectionId: id };
+  }
+
+  const page = pageFromPath(clean);
   const groupFilters = parseQueryGroups(query);
   return groupFilters === undefined ? { page } : { page, groupFilters };
 }
 
-function pageFromPath(path: string): Page {
-  const clean = path.replace(/\/+$/, '');
+function pageFromPath(clean: string): Page {
   switch (clean) {
     case '':
     case 'inbox':
@@ -73,6 +83,13 @@ function parseQueryGroups(query: string): string[] | undefined {
  * Filter params are only emitted on pages that use them.
  */
 export function formatRoute(route: Route): string {
+  if (route.page === 'collection') {
+    // A collection route without an id has nowhere to point; the closest
+    // sensible destination is the Collections page.
+    return route.collectionId
+      ? `#/collection/${encodeURIComponent(route.collectionId)}`
+      : '#/collections';
+  }
   const path = pathFromPage(route.page);
   if (!pageUsesFilters(route.page) || route.groupFilters === undefined) {
     return `#${path}`;
@@ -83,7 +100,7 @@ export function formatRoute(route: Route): string {
   return `#${path}?g=${route.groupFilters.join(',')}`;
 }
 
-function pathFromPage(page: Page): string {
+function pathFromPage(page: Exclude<Page, 'collection'>): string {
   switch (page) {
     case 'inbox':
       return '/';

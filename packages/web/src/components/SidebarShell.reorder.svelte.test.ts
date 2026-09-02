@@ -102,12 +102,15 @@ describe('SidebarShell drag reorder', () => {
     host.remove();
   });
 
+  const navToCollection = vi.fn();
+
   function render() {
     component = mount(SidebarShellTestHost, {
       target: host,
       props: {
         route: { page: 'inbox' },
         navTo: vi.fn(),
+        navToCollection,
         viewTodoCount: 0,
         totalTodoCount: 0,
         onaddgroup: vi.fn(),
@@ -131,9 +134,10 @@ describe('SidebarShell drag reorder', () => {
   });
 
   /**
-   * The row's click is the show/hide filter toggle — the most-used control in
-   * the sidebar. A native drag source suppresses the click once the pointer
-   * travels a few pixels, so nothing on the row body may be `draggable`.
+   * The row body carries the sidebar's two most-used collection controls —
+   * the dot toggles the show/hide filter, the name opens focus mode. A
+   * native drag source suppresses the click once the pointer travels a few
+   * pixels, so nothing on the row body may be `draggable`.
    */
   it('leaves the collection row body clickable, not draggable', () => {
     render();
@@ -142,6 +146,11 @@ describe('SidebarShell drag reorder', () => {
     expect(entity.draggable).toBe(false);
 
     entity.click();
+    expect(navToCollection).toHaveBeenCalledWith('c1');
+
+    const dot = host.querySelector('.dot-toggle') as HTMLElement;
+    expect(dot.draggable).toBe(false);
+    dot.click();
     expect(storeFns.toggleCollectionFilter).toHaveBeenCalledWith('c1');
   });
 
