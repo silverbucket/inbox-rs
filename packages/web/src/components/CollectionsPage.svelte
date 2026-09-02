@@ -17,8 +17,10 @@
   import GroupFormModal from './GroupFormModal.svelte';
   import Fab from './Fab.svelte';
 
-  let { onselect }: {
+  let { onselect, onfocuscollection }: {
     onselect: (item: InboxItem) => void;
+    /** Open a collection in focus mode (fullscreen, `#/collection/:id`). */
+    onfocuscollection: (id: string) => void;
   } = $props();
 
   let editingCollection = $state<Collection | null>(null);
@@ -338,6 +340,7 @@
               {isTouchDevice}
               onedit={() => editingCollection = col}
               ontoggle={() => toggleExpand(col)}
+              onfocus={() => onfocuscollection(col.id)}
             />
           {/each}
         </div>
@@ -400,6 +403,7 @@
             {isTouchDevice}
             onedit={() => editingCollection = col}
             ontoggle={() => toggleExpand(col)}
+            onfocus={() => onfocuscollection(col.id)}
           />
         {/each}
       </div>

@@ -112,3 +112,72 @@ describe('CollectionView capture handling', () => {
     });
   });
 });
+
+describe('CollectionView header keyboard handling', () => {
+  let host: HTMLElement;
+  let component: ReturnType<typeof mount> | undefined;
+
+  const collection = {
+    id: 'col-1',
+    name: 'Reading',
+    color: '#6366f1',
+    itemIds: [],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    host = document.createElement('div');
+    document.body.appendChild(host);
+  });
+  afterEach(() => {
+    if (component) unmount(component);
+    component = undefined;
+    host.remove();
+  });
+
+  function renderWith(props: { ontoggle: () => void; onfocus?: () => void }) {
+    component = mount(CollectionView, {
+      target: host,
+      props: {
+        collection,
+        expanded: false,
+        onselect: vi.fn(),
+        onedit: vi.fn(),
+        ...props,
+      },
+    });
+    flushSync();
+  }
+
+  function pressEnter(el: HTMLElement) {
+    el.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+    );
+    flushSync();
+  }
+
+  it('toggles on Enter when the header itself is focused', () => {
+    const ontoggle = vi.fn();
+    renderWith({ ontoggle });
+    pressEnter(host.querySelector('.collection-header') as HTMLElement);
+    expect(ontoggle).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Enter/Space on a header-action button bubbles up to the header, whose
+   * handler used to preventDefault (killing the button's activation) and
+   * toggle the collection instead — a keyboard user "clicking" Focus or
+   * Edit collapsed the card. The header must ignore keydowns it didn't
+   * originate.
+   */
+  it('does not toggle when Enter lands on a header-action button', () => {
+    const ontoggle = vi.fn();
+    renderWith({ ontoggle, onfocus: vi.fn() });
+    const focusBtn = host.querySelector(
+      '[aria-label="Focus on Reading"]',
+    ) as HTMLElement;
+    expect(focusBtn).toBeTruthy();
+    pressEnter(focusBtn);
+    expect(ontoggle).not.toHaveBeenCalled();
+  });
+});

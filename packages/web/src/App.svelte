@@ -39,6 +39,7 @@
   let PluginsPageComponent = $state<LazyComponent | null>(null);
   let TodosPageComponent = $state<LazyComponent | null>(null);
   let CollectionsPageComponent = $state<LazyComponent | null>(null);
+  let CollectionFocusPageComponent = $state<LazyComponent | null>(null);
   let CollectionFormModalComponent = $state<LazyComponent | null>(null);
   let GroupFormModalComponent = $state<LazyComponent | null>(null);
   // Collection to pre-select when opening the add-entry modal. Used by the
@@ -71,6 +72,30 @@
 
   let route = $state<Route>(parseHash(window.location.hash));
 
+  // Focus mode renders as a popup over the page the user was on, so that
+  // page keeps rendering underneath the dimmed backdrop. `lastListPage` is
+  // that page; it defaults to Collections for direct links, where there is
+  // no "underneath" to return to.
+  let lastListPage = $state<Page>('collections');
+  $effect(() => {
+    if (route.page !== 'collection') lastListPage = route.page;
+  });
+  const bodyPage = $derived(route.page === 'collection' ? lastListPage : route.page);
+
+  // True only when focus mode was entered by in-app navigation, so exiting
+  // can pop the history entry instead of pushing a new one. A direct link
+  // (or a reload while focused) has no in-app past — exit goes to the
+  // Collections page instead.
+  let focusReturnAvailable = false;
+  $effect(() => {
+    if (route.page !== 'collection') focusReturnAvailable = false;
+  });
+
+  function exitFocus() {
+    if (focusReturnAvailable) window.history.back();
+    else navTo('collections');
+  }
+
   // A failed lazy load must never leave a modal "open" with no UI — the
   // onerror callbacks undo the state that summoned it (see lib/lazy-load.ts).
   async function loadAddEntryModal() {
@@ -97,6 +122,18 @@
 
   async function loadCollectionsPage() {
     CollectionsPageComponent ??= await loadLazy<LazyComponent>(() => import('./components/CollectionsPage.svelte'));
+  }
+
+  async function loadCollectionFocusPage() {
+    // Unlike the page chunks, a failed load here strands the user on a route
+    // whose exits (Esc, backdrop, Back pill) all live in the unloaded chunk —
+    // so back out of the route, same as the modal loaders undo their state.
+    CollectionFocusPageComponent ??= await loadLazy<LazyComponent>(
+      () => import('./components/CollectionFocusPage.svelte'),
+      () => {
+        if (route.page === 'collection') exitFocus();
+      },
+    );
   }
 
   async function loadCollectionFormModal() {
@@ -163,9 +200,10 @@
   // opened, or the filter-sync effect rewriting the hash. Keying this
   // effect on the object would close modals on all of those (a real race:
   // attach a file right after clicking Inbox and the modal dies as the
-  // stale hashchange arrives). The $derived memoizes on the page *value*,
-  // so this only fires when the user actually lands on another page.
-  const routePage = $derived(route.page);
+  // stale hashchange arrives). The $derived memoizes on the page *value*
+  // (plus the focused collection, so switching focus targets also counts as
+  // navigation), so this only fires when the user actually lands elsewhere.
+  const routePage = $derived(`${route.page}:${route.collectionId ?? ''}`);
   $effect(() => {
     void routePage;
     activeModal = null;
@@ -173,16 +211,22 @@
     viewingItem = null;
   });
 
+  // Keyed on bodyPage, not route.page: the focus popup needs its backdrop
+  // page's chunk too (e.g. a direct focus link renders Collections beneath).
   $effect(() => {
-    if (route.page === 'plugins') void loadPluginsPage();
+    if (bodyPage === 'plugins') void loadPluginsPage();
   });
 
   $effect(() => {
-    if (route.page === 'todos') void loadTodosPage();
+    if (bodyPage === 'todos') void loadTodosPage();
   });
 
   $effect(() => {
-    if (route.page === 'collections') void loadCollectionsPage();
+    if (bodyPage === 'collections') void loadCollectionsPage();
+  });
+
+  $effect(() => {
+    if (route.page === 'collection') void loadCollectionFocusPage();
   });
 
   $effect(() => {
@@ -211,7 +255,10 @@
     || (showCollectionForm && !!CollectionFormModalComponent)
     || (showGroupForm && !!GroupFormModalComponent)
     || captureSheetOpen
-    || settingsOpen,
+    || settingsOpen
+    // The focus popup scrolls internally; locking the body keeps the page
+    // underneath at its scroll position for when the popup closes.
+    || (route.page === 'collection' && !!CollectionFocusPageComponent),
   );
   let savedScrollY = 0;
   let wasModalOpen = false;
@@ -241,6 +288,15 @@
       : { page };
     const hash = formatRoute(target);
     if (window.location.hash !== hash) {
+      window.location.hash = hash;
+    }
+  }
+
+  /** Open a collection in focus mode: a popup over the current page. */
+  function navToCollection(collectionId: string) {
+    const hash = formatRoute({ page: 'collection', collectionId });
+    if (window.location.hash !== hash) {
+      focusReturnAvailable = true;
       window.location.hash = hash;
     }
   }
@@ -419,7 +475,7 @@
 </script>
 
 {#snippet shellBody()}
-    {#if route.page === 'plugins'}
+    {#if bodyPage === 'plugins'}
       {#if PluginsPageComponent}
         <PluginsPageComponent />
       {/if}
@@ -428,7 +484,7 @@
         <MigrationAlert count={$pendingMigrationCount} onrun={runAllMigrations} />
       {/if}
 
-      {#if route.page === 'inbox'}
+      {#if bodyPage === 'inbox'}
         <div class="page-toolbar">
           <!-- Inbox is a refs-only staging area for unprocessed thoughts.
                Todos are captured from the dedicated Todos surface so they can
@@ -478,26 +534,39 @@
             <InboxGrid onselect={openView} onconnect={openConnectMenu} />
           </div>
         {/if}
-      {:else if route.page === 'todos'}
+      {:else if bodyPage === 'todos'}
         {#if TodosPageComponent}
           <TodosPageComponent onselect={openView} onaddtodo={openAddTodo} onaddtodoincollection={openAddTodoInCollection} />
         {/if}
       {:else}
         {#if CollectionsPageComponent}
-          <CollectionsPageComponent onselect={openView} />
+          <CollectionsPageComponent onselect={openView} onfocuscollection={navToCollection} />
         {/if}
       {/if}
     {/if}
 {/snippet}
 
 {#if $layout === 'sidebar'}
-  <SidebarShell {route} {navTo} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} bind:userMenu>
+  <SidebarShell {route} {navTo} {navToCollection} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} bind:userMenu>
     {#snippet children()}{@render shellBody()}{/snippet}
   </SidebarShell>
 {:else}
   <ClassicShell {route} {navTo} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} bind:userMenu>
     {#snippet children()}{@render shellBody()}{/snippet}
   </ClassicShell>
+{/if}
+
+<!-- Focus mode: a route-driven popup (#/collection/:id) over the page the
+     user was on. Rendered here, not in the shell body, so the backdrop can
+     dim the whole shell — header, sidebar and all. -->
+{#if route.page === 'collection' && route.collectionId}
+  {#if CollectionFocusPageComponent}
+    <CollectionFocusPageComponent
+      collectionId={route.collectionId}
+      onselect={openView}
+      onexit={exitFocus}
+    />
+  {/if}
 {/if}
 
 {#if viewingItem}

@@ -121,7 +121,7 @@ describe('CollectionsPage filing drag', () => {
   function render() {
     component = mount(CollectionsPage, {
       target: host,
-      props: { onselect: vi.fn() },
+      props: { onselect: vi.fn(), onfocuscollection: vi.fn() },
     });
     flushSync();
   }

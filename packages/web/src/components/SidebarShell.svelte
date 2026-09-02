@@ -51,6 +51,7 @@
   let {
     route,
     navTo,
+    navToCollection,
     viewTodoCount,
     totalTodoCount,
     onaddgroup,
@@ -60,6 +61,8 @@
   }: {
     route: Route;
     navTo: (page: Page) => void;
+    /** Open a collection in focus mode (`#/collection/:id`). */
+    navToCollection: (id: string) => void;
     /** Open todos within the current group/collection focus (primary badge). */
     viewTodoCount: number;
     /** Total incomplete todos everywhere (greyed secondary badge). */
@@ -72,6 +75,14 @@
 
   let collapsed = $state(readCollapsed());
   let expandedGroups = $state<Set<string>>(new Set());
+
+  // What the hovered/focused control does, shown in the sidebar-head hint
+  // slot — the same place drag and solo hints appear. The rows pack three
+  // click semantics (dot = filter, name = open, group = filter) behind small
+  // targets; this narrates them without adding any chrome to the rows.
+  let hoverHint = $state<string | null>(null);
+  const setHint = (text: string) => () => { hoverHint = text; };
+  const clearHint = () => { hoverHint = null; };
 
   // Inline creation state — no modal, no page switch.
   let addingCollectionFor = $state<string | null>(null);
@@ -107,6 +118,8 @@
   const movingCollection = $derived($draggingCollectionId !== null);
   // The plugins page has no groups to filter — the sidebar is
   // omitted entirely and the body grid must collapse to a single column.
+  // Focus mode (page === 'collection') is a popup over the previous page,
+  // so the shell keeps rendering that page's chrome untouched beneath it.
   const noSidebar = $derived(route.page === 'plugins');
 
   // Sidebar reorder state — groups and per-group collections.
@@ -229,6 +242,9 @@
   }
 
   function isActive(page: Page): boolean {
+    // Focus mode is a Collections sub-page; keep that tab lit so the user
+    // knows which section they're in while the sidebar is hidden.
+    if (page === 'collections' && route.page === 'collection') return true;
     return route.page === page;
   }
 
@@ -606,6 +622,8 @@
             <span class="filing">Drop on a group</span>
           {:else if soloing}
             <span class="solo-hint">{soloHint}</span>
+          {:else if hoverHint}
+            <span class="solo-hint">{hoverHint}</span>
           {:else}
             <span class="sidebar-title">Groups</span>
           {/if}
@@ -693,6 +711,10 @@
                     aria-pressed={groupActive}
                     title={groupTitle(group)}
                     onclick={(e) => onToggleGroup(e, group)}
+                    onmouseenter={setHint('Show / hide this group in your lists')}
+                    onmouseleave={clearHint}
+                    onfocus={setHint('Show / hide this group in your lists')}
+                    onblur={clearHint}
                   >
                     <span class="dot"></span>
                     <span class="entity-name">{group.name}</span>
@@ -759,17 +781,46 @@
                             }}
                           >
                             <div class="collection-row-main">
+                              <!-- The row splits into two controls: the dot is
+                                   the show/hide filter toggle (checkbox
+                                   semantics, so it carries aria-pressed) and
+                                   the name opens the collection in focus mode
+                                   — the sidebar convention everywhere else:
+                                   click a thing to go to it. ⌘/Ctrl-click on
+                                   the name still solos, matching the group
+                                   rows. -->
+                              <button
+                                class="dot-toggle"
+                                class:inactive={!colActive}
+                                type="button"
+                                aria-pressed={colActive}
+                                title={colActive ? `Hide ${col.name}` : `Show ${col.name}`}
+                                aria-label={colActive ? `Hide ${col.name}` : `Show ${col.name}`}
+                                onclick={(e) => onToggleCollection(e, group, col)}
+                                onmouseenter={setHint('Show / hide in your lists')}
+                                onmouseleave={clearHint}
+                                onfocus={setHint('Show / hide in your lists')}
+                                onblur={clearHint}
+                              >
+                                <span class="dot"></span>
+                              </button>
                               <button
                                 class="entity collection-entity"
                                 class:inactive={!colActive}
                                 class:being-moved={$draggingCollectionId === col.id}
                                 type="button"
-                                aria-pressed={colActive}
-                                title={colActive ? `Hide ${col.name}` : `Show ${col.name}`}
-                                onclick={(e) => onToggleCollection(e, group, col)}
+                                title={soloing ? `Show only ${col.name}` : `Open ${col.name}`}
+                                onclick={(e) => {
+                                  if (isSoloModifier(e)) void onToggleCollection(e, group, col);
+                                  else navToCollection(col.id);
+                                }}
+                                onmouseenter={setHint('Open this collection')}
+                                onmouseleave={clearHint}
+                                onfocus={setHint('Open this collection')}
+                                onblur={clearHint}
                               >
-                                <span class="dot"></span>
                                 <span class="entity-name">{col.name}</span>
+                                <svg class="open-arrow" aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                                 <span class="count">{col.itemIds.length}</span>
                               </button>
                               <ReorderGrip label="Drag to reorder {col.name}" />
@@ -1328,6 +1379,49 @@
     font-size: 0.86rem;
   }
 
+  /* Slides in on hover/focus to say the name is a door, not a label —
+     the row's other controls are toggles, so the distinction matters. */
+  .collection-entity .open-arrow {
+    flex-shrink: 0;
+    color: var(--entity-color, var(--accent));
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity 150ms, transform 150ms;
+  }
+
+  .collection-entity:hover .open-arrow,
+  .collection-entity:focus-visible .open-arrow {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  /* The filter half of a collection row — just the dot, sized to the same
+     hit target as the grip and move button beside the name. Its state reads
+     at rest, no hover needed: filled dot = shown in your lists, hollow
+     outline = hidden. */
+  .dot-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    min-height: 1.9rem;
+    flex: 0 0 24px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    background: none;
+    cursor: pointer;
+    transition: background 150ms, opacity 150ms;
+  }
+
+  .dot-toggle:hover {
+    background: var(--surface-hover);
+  }
+
+  .dot-toggle.inactive {
+    opacity: 0.55;
+  }
+
   /* Reveals on the same rule as the grip beside it, so a resting collection
      row is just its dot, name and count. Pinned on while its menu is open. */
   .collection-move-btn {
@@ -1413,6 +1507,32 @@
     border-radius: 50%;
     background: var(--entity-color);
     flex-shrink: 0;
+  }
+
+  /* Dot-toggle dot states — declared after the base `.dot` for the same
+     descending-specificity reason as `.rail-dot .dot` below. */
+  .dot-toggle .dot {
+    transition: box-shadow 150ms, background 150ms, transform 150ms;
+  }
+
+  /* A halo on hover says "this responds to you" — the same cue the collapsed
+     rail dots carry. */
+  .dot-toggle:hover .dot,
+  .dot-toggle:focus-visible .dot {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--entity-color) 22%, transparent);
+  }
+
+  .dot-toggle.inactive .dot {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--entity-color);
+  }
+
+  .dot-toggle.inactive:hover .dot,
+  .dot-toggle.inactive:focus-visible .dot {
+    box-shadow:
+      inset 0 0 0 1.5px var(--entity-color),
+      0 0 0 3px color-mix(in srgb, var(--entity-color) 22%, transparent);
   }
 
   /* Larger dot for the collapsed rail (declared after the base `.dot` so the
