@@ -36,10 +36,15 @@ export function parseHash(hash: string): Route {
 
   const clean = path.replace(/\/+$/, '');
   if (clean.startsWith('collection/')) {
-    const id = decodeURIComponent(clean.slice('collection/'.length));
-    // Focus mode carries no filter params — the whole point is one
-    // collection, so `g=` is dropped rather than remembered.
-    if (id) return { page: 'collection', collectionId: id };
+    try {
+      const id = decodeURIComponent(clean.slice('collection/'.length));
+      // Focus mode carries no filter params — the whole point is one
+      // collection, so `g=` is dropped rather than remembered.
+      if (id) return { page: 'collection', collectionId: id };
+    } catch {
+      // Malformed percent-encoding (e.g. #/collection/%) — treat like any
+      // other unknown path rather than letting URIError break routing.
+    }
   }
 
   const page = pageFromPath(clean);

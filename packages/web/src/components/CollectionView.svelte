@@ -265,7 +265,14 @@
     role="button"
     tabindex="0"
     onclick={ontoggle}
-    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ontoggle(); } }}
+    onkeydown={(e) => {
+      // Only when the header itself is focused — Enter/Space on a child
+      // button (focus/edit/move) bubbles here, and without this guard the
+      // preventDefault would swallow the button's activation and toggle
+      // the collection instead.
+      if (e.target !== e.currentTarget) return;
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ontoggle(); }
+    }}
     aria-expanded={expanded}
     aria-label="{expanded ? 'Collapse' : 'Expand'} {collection.name}"
     use:collectionDropTarget={{

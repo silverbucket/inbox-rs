@@ -52,8 +52,11 @@
   async function handleDeleteCollection() {
     editing = false;
     try {
-      await deleteCollection(collectionId);
-      onexit();
+      // `deleteCollection` refuses (returns false) when items still reference
+      // the collection — possible despite the empty check below if another
+      // device filed something in the meantime. Stay in the overlay so the
+      // user sees the collection that still exists.
+      if (await deleteCollection(collectionId)) onexit();
     } catch (error) {
       console.error('Failed to delete collection', error);
     }

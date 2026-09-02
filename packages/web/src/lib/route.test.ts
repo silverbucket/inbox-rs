@@ -47,6 +47,11 @@ describe('parseHash', () => {
     expect(parseHash('#/collection/')).toEqual({ page: 'inbox' });
   });
 
+  it('falls back to inbox for a malformed encoded id instead of throwing', () => {
+    expect(parseHash('#/collection/%')).toEqual({ page: 'inbox' });
+    expect(parseHash('#/collection/%E0%A4%A')).toEqual({ page: 'inbox' });
+  });
+
   it('ignores filter params in focus mode', () => {
     expect(parseHash('#/collection/c1?g=g1')).toEqual({
       page: 'collection',

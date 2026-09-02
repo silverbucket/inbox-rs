@@ -125,7 +125,15 @@
   }
 
   async function loadCollectionFocusPage() {
-    CollectionFocusPageComponent ??= await loadLazy<LazyComponent>(() => import('./components/CollectionFocusPage.svelte'));
+    // Unlike the page chunks, a failed load here strands the user on a route
+    // whose exits (Esc, backdrop, Back pill) all live in the unloaded chunk —
+    // so back out of the route, same as the modal loaders undo their state.
+    CollectionFocusPageComponent ??= await loadLazy<LazyComponent>(
+      () => import('./components/CollectionFocusPage.svelte'),
+      () => {
+        if (route.page === 'collection') exitFocus();
+      },
+    );
   }
 
   async function loadCollectionFormModal() {
