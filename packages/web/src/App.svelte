@@ -361,7 +361,16 @@
     if (files.length > 1) notifyExtraFiles(files.length - 1);
   }
 
-  function handleOpenEditor(text: string) {
+  async function handleOpenEditor(text: string) {
+    // The sidebar can still have a route update settling when the newly
+    // mounted inbox capture bar receives its first shortcut. Do not expose
+    // activeModal until the lazy component is ready: the route cleanup effect
+    // could otherwise clear it while the chunk is loading, leaving the input
+    // empty with no editor on screen.
+    const openingRoute = routePage;
+    await loadAddEntryModal();
+    if (!AddEntryModalComponent || routePage !== openingRoute) return;
+
     editingItem = undefined;
     preselectedCollectionId = undefined;
     prefillFile = undefined;
@@ -369,7 +378,6 @@
     // The typed text becomes the note title; the editor focuses the body.
     notePrefillTitle = text;
     activeModal = 'note';
-    void loadAddEntryModal();
   }
 
   // The ⊕ file picker routes by the chosen file's type: images open the image
