@@ -29,6 +29,7 @@ import type {
 
 export { recoverLegacyBinaryStringEncoding } from './legacy/binary-recovery.js';
 export { migrator, wrapCodeBlock } from './migrations.js';
+export { noteTitleFromBody } from './note-title.js';
 export type {
   BrowserStorageArea,
   ConfigStore,

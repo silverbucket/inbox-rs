@@ -240,6 +240,16 @@ describe('buildNoteItem', () => {
     expect((result.item as { body: string }).body).toBe(longBody);
   });
 
+  it('does not include later body lines in the fallback title', () => {
+    const result = buildNoteItem(ctx(), {
+      title: '',
+      body: 'a short title\nand some more text about stuff',
+      description: '',
+    });
+
+    expect(result.item.title).toBe('a short title');
+  });
+
   it('keeps body verbatim and converts empty description to undefined', () => {
     const result = buildNoteItem(ctx(), {
       title: 'Title',

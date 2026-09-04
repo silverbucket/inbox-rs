@@ -25,6 +25,7 @@ import type {
   NoteItem,
   TodoItem,
 } from '@inbox-rs/rs-module';
+import { noteTitleFromBody } from '@inbox-rs/rs-module';
 import { type BuildItemResult, getFileExtension } from './add-entry-modal';
 import { generateThumbnail, THUMB_MIME_TYPE } from './thumbnail';
 
@@ -121,7 +122,7 @@ export function buildNoteItem(
   const item: NoteItem = {
     id: ctx.id,
     type: 'note',
-    title: data.title || data.body.slice(0, 50),
+    title: data.title || noteTitleFromBody(data.body),
     body: data.body,
     description: data.description || undefined,
     createdAt: ctx.createdAt,

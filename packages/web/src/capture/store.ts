@@ -4,6 +4,7 @@ import type {
   InboxItem,
   NoteItem,
 } from '@inbox-rs/rs-module';
+import { noteTitleFromBody } from '@inbox-rs/rs-module';
 import {
   DirectRS,
   discoverStorage,
@@ -176,7 +177,7 @@ export function captureNote(text: string): CaptureRecord {
   const item: NoteItem = {
     id,
     type: 'note',
-    title: trimmed.slice(0, 50) || 'Note',
+    title: noteTitleFromBody(trimmed) || 'Note',
     body: trimmed,
     createdAt: new Date().toISOString(),
   };

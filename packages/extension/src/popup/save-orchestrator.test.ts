@@ -299,6 +299,23 @@ describe('runSaveNote', () => {
     expect(stored.body).toBe(longBody);
   });
 
+  it('uses only the first body line as the title when title is empty', async () => {
+    mockFetch.mockResolvedValue({ ok: true });
+    const rs = makeRS();
+    const body = 'a short title\nand some more text about stuff';
+
+    await runSaveNote({
+      rs,
+      ...baseNoteParams,
+      noteTitle: '',
+      noteBody: body,
+    });
+
+    const stored = JSON.parse(mockFetch.mock.calls[0]?.[1].body);
+    expect(stored.title).toBe('a short title');
+    expect(stored.body).toBe(body);
+  });
+
   it('trims whitespace-only title and body', async () => {
     mockFetch.mockResolvedValue({ ok: true });
     const rs = makeRS();

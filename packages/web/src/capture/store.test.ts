@@ -197,6 +197,17 @@ describe('capture history + delivery', () => {
     expect(pendingCount(history)).toBe(1);
   });
 
+  it('uses only the first line for a generated note title', () => {
+    const record = captureNote(
+      'a short title\r\nand some more text about stuff',
+    );
+
+    expect(record.item.title).toBe('a short title');
+    expect((record.item as NoteItem).body).toBe(
+      'a short title\r\nand some more text about stuff',
+    );
+  });
+
   it('stores optional text with image captures', async () => {
     const record = await captureImage(
       new File(['image'], 'photo.jpg', { type: 'image/jpeg' }),
