@@ -176,6 +176,9 @@
     position: fixed;
     inset: 0;
     z-index: 140;
+    display: flex;
+    overflow: hidden;
+    overscroll-behavior: none;
     background: var(--overlay);
     /* The rim of page peeking out says "you haven't left", but it shouldn't
        compete for attention — blur it into context, not content. */
@@ -187,8 +190,10 @@
   .focus-panel {
     width: 100%;
     height: 100%;
+    min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--radius);
