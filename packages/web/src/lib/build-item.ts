@@ -114,6 +114,11 @@ export interface NoteFormData {
   description: string;
 }
 
+/** Generate a compact note title without pulling body text from later lines. */
+export function noteTitleFromBody(body: string): string {
+  return body.split(/\r\n?|\n/, 1)[0].slice(0, 50);
+}
+
 export function buildNoteItem(
   ctx: BuildContext,
   data: NoteFormData,
@@ -121,7 +126,7 @@ export function buildNoteItem(
   const item: NoteItem = {
     id: ctx.id,
     type: 'note',
-    title: data.title || data.body.slice(0, 50),
+    title: data.title || noteTitleFromBody(data.body),
     body: data.body,
     description: data.description || undefined,
     createdAt: ctx.createdAt,

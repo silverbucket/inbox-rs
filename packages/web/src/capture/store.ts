@@ -10,6 +10,7 @@ import {
   extractTokenFromRedirect,
   type RSConfig,
 } from '@inbox-rs/rs-module/runtime';
+import { noteTitleFromBody } from '../lib/build-item';
 import { generateThumbnail, THUMB_MIME_TYPE } from '../lib/thumbnail';
 
 /** The three ways to capture. Maps to inbox item types note / audio / image. */
@@ -176,7 +177,7 @@ export function captureNote(text: string): CaptureRecord {
   const item: NoteItem = {
     id,
     type: 'note',
-    title: trimmed.slice(0, 50) || 'Note',
+    title: noteTitleFromBody(trimmed) || 'Note',
     body: trimmed,
     createdAt: new Date().toISOString(),
   };

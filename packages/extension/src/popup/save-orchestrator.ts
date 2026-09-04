@@ -113,7 +113,7 @@ export async function runSaveNote(
   const item: NoteItem = {
     id,
     type: 'note',
-    title: params.noteTitle.trim() || body.slice(0, 50),
+    title: params.noteTitle.trim() || body.split(/\r\n?|\n/, 1)[0].slice(0, 50),
     body,
     createdAt,
   };
