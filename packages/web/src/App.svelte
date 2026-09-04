@@ -266,12 +266,17 @@
   $effect(() => {
     if (anyModalOpen && !wasModalOpen) {
       savedScrollY = window.scrollY;
+      // The root element is the document scrollport in some browsers. Lock it
+      // as well as the body so wheel/touch input cannot scroll the page behind
+      // a modal whose own scrollport is under the pointer.
+      document.documentElement.style.overflow = 'hidden';
       document.body.style.position = 'fixed';
       document.body.style.top = `-${savedScrollY}px`;
       document.body.style.left = '0';
       document.body.style.right = '0';
       document.body.style.overflow = 'hidden';
     } else if (!anyModalOpen && wasModalOpen) {
+      document.documentElement.style.overflow = '';
       document.body.style.position = '';
       document.body.style.top = '';
       document.body.style.left = '';
