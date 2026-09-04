@@ -4,13 +4,13 @@ import type {
   InboxItem,
   NoteItem,
 } from '@inbox-rs/rs-module';
+import { noteTitleFromBody } from '@inbox-rs/rs-module';
 import {
   DirectRS,
   discoverStorage,
   extractTokenFromRedirect,
   type RSConfig,
 } from '@inbox-rs/rs-module/runtime';
-import { noteTitleFromBody } from '../lib/build-item';
 import { generateThumbnail, THUMB_MIME_TYPE } from '../lib/thumbnail';
 
 /** The three ways to capture. Maps to inbox item types note / audio / image. */

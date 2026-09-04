@@ -25,6 +25,7 @@ import type {
   NoteItem,
   TodoItem,
 } from '@inbox-rs/rs-module';
+import { noteTitleFromBody } from '@inbox-rs/rs-module';
 import { type BuildItemResult, getFileExtension } from './add-entry-modal';
 import { generateThumbnail, THUMB_MIME_TYPE } from './thumbnail';
 
@@ -112,11 +113,6 @@ export interface NoteFormData {
   title: string;
   body: string;
   description: string;
-}
-
-/** Generate a compact note title without pulling body text from later lines. */
-export function noteTitleFromBody(body: string): string {
-  return body.split(/\r\n?|\n/, 1)[0].slice(0, 50);
 }
 
 export function buildNoteItem(

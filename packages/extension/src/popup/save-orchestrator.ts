@@ -15,7 +15,7 @@
  * spinner in `finally` regardless of outcome.
  */
 
-import type { NoteItem } from '@inbox-rs/rs-module';
+import { type NoteItem, noteTitleFromBody } from '@inbox-rs/rs-module';
 import type { DirectRS } from '../lib/rs';
 import { saveAsBookmark, saveAsImage } from './save-logic';
 
@@ -113,7 +113,7 @@ export async function runSaveNote(
   const item: NoteItem = {
     id,
     type: 'note',
-    title: params.noteTitle.trim() || body.split(/\r\n?|\n/, 1)[0].slice(0, 50),
+    title: params.noteTitle.trim() || noteTitleFromBody(body),
     body,
     createdAt,
   };
