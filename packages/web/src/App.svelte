@@ -71,6 +71,10 @@
   });
 
   let route = $state<Route>(parseHash(window.location.hash));
+  // Monotonically advances on every hash navigation. Unlike routePage, this
+  // also detects leaving a page and returning to the same one while an async
+  // modal chunk is still loading.
+  let navigationGeneration = 0;
 
   // Focus mode renders as a popup over the page the user was on, so that
   // page keeps rendering underneath the dimmed backdrop. `lastListPage` is
@@ -181,6 +185,7 @@
 
   onMount(() => {
     const syncRoute = () => {
+      navigationGeneration += 1;
       route = parseHash(window.location.hash);
     };
     syncRoute();
@@ -368,8 +373,14 @@
     // could otherwise clear it while the chunk is loading, leaving the input
     // empty with no editor on screen.
     const openingRoute = routePage;
+    const openingNavigation = navigationGeneration;
     await loadAddEntryModal();
-    if (!AddEntryModalComponent || routePage !== openingRoute) return;
+    if (
+      !AddEntryModalComponent ||
+      routePage !== openingRoute ||
+      navigationGeneration !== openingNavigation
+    )
+      return;
 
     editingItem = undefined;
     preselectedCollectionId = undefined;
