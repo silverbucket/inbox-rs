@@ -83,9 +83,15 @@ describe('CaptureBar', () => {
     expect(onopeneditor).not.toHaveBeenCalled();
   });
 
-  it('emits onopeneditor on Ctrl/Cmd-Enter with the text', () => {
+  it.each([
+    ['Ctrl', { ctrlKey: true }],
+    ['Command', { metaKey: true }],
+  ] satisfies [
+    string,
+    KeyboardEventInit,
+  ][])('emits onopeneditor on %s-Enter with the text', (_modifier, keys) => {
     render();
-    typeAndKey('a longer thought', { ctrlKey: true });
+    typeAndKey('a longer thought', keys);
     expect(onopeneditor).toHaveBeenCalledWith('a longer thought');
     expect(oncapture).not.toHaveBeenCalled();
   });
