@@ -34,8 +34,8 @@
   };
 
   let mode = $state<CaptureMode>('note');
-  let noteText = $state('');
-  let noteField = $state<HTMLTextAreaElement | null>(null);
+  let captureText = $state('');
+  let textField = $state<HTMLTextAreaElement | null>(null);
   let history = $state<CaptureRecord[]>([]);
   let status = $state('');
   let syncing = $state(false);
@@ -68,7 +68,7 @@
   const pending = $derived(pendingCount(history));
   const canSend = $derived(
     mode === 'note'
-      ? noteText.trim() !== ''
+      ? captureText.trim() !== ''
       : mode === 'voice'
         ? recordedBlob !== null
         : selectedFile !== null,
@@ -100,11 +100,11 @@
     ].filter((part): part is string => !!part?.trim());
     if (sharedParts.length > 0) {
       mode = 'note';
-      noteText = noteText
-        ? `${noteText}\n${sharedParts.join('\n')}`
+      captureText = captureText
+        ? `${captureText}\n${sharedParts.join('\n')}`
         : sharedParts.join('\n');
       window.history.replaceState(null, '', window.location.pathname);
-      requestAnimationFrame(() => noteField?.focus());
+      requestAnimationFrame(() => textField?.focus());
     }
 
     // Drive the app height from the *visual* viewport so the layout shrinks when
@@ -150,18 +150,18 @@
   async function send() {
     if (!canSend) return;
     if (mode === 'note') {
-      captureNote(noteText);
-      noteText = '';
+      captureNote(captureText);
       // Refocus synchronously (still within the tap gesture) so the keyboard
       // stays up for rapid write → send → write entry.
-      noteField?.focus();
+      textField?.focus();
     } else if (mode === 'voice' && recordedBlob) {
-      await captureVoice(recordedBlob, recordDuration);
+      await captureVoice(recordedBlob, recordDuration, captureText);
       clearVoice();
     } else if (mode === 'image' && selectedFile) {
-      await captureImage(selectedFile);
+      await captureImage(selectedFile, captureText);
       clearImage();
     }
+    captureText = '';
     history = getHistory();
     status = navigator.onLine ? 'Saved ✓' : 'Saved offline';
     await syncNow();
@@ -307,6 +307,25 @@
     }
   }
 
+  async function pasteFromClipboard() {
+    try {
+      const pasted = await navigator.clipboard.readText();
+      if (!pasted) {
+        status = 'Clipboard is empty';
+        return;
+      }
+      captureText = appendText(captureText, pasted);
+      textField?.focus();
+      status = 'Pasted ✓';
+    } catch {
+      status = 'Clipboard access was denied';
+    }
+  }
+
+  function appendText(current: string, pasted: string): string {
+    return current ? `${current}\n${pasted}` : pasted;
+  }
+
   const STATUS_LABEL: Record<DeliveryStatus, string> = {
     queued: 'Queued',
     sending: 'Sending…',
@@ -386,17 +405,7 @@
   </div>
 
   <section class="surface">
-    {#if mode === 'note'}
-      <textarea
-        class="field"
-        bind:this={noteField}
-        bind:value={noteText}
-        use:autofocus
-        onkeydown={onNoteKey}
-        placeholder="Jot it down…"
-        aria-label="Note text"
-      ></textarea>
-    {:else if mode === 'voice'}
+    {#if mode === 'voice'}
       <div class="pad">
         {#if recording}
           <button class="record recording" type="button" onclick={stopRecording} aria-label="Stop recording">
@@ -426,7 +435,7 @@
           {#if recordError}<p class="pad-line error">{recordError}</p>{/if}
         {/if}
       </div>
-    {:else}
+    {:else if mode === 'image'}
       <!--
         A <label> opening a visually-hidden (not display:none) input is the only
         approach that reliably triggers the native picker in every browser —
@@ -456,6 +465,20 @@
         {/if}
       </div>
     {/if}
+
+    <div class:text-composer={mode === 'note'} class:attachment-composer={mode !== 'note'}>
+      <textarea
+        class:field={mode === 'note'}
+        class:attachment-field={mode !== 'note'}
+        bind:this={textField}
+        bind:value={captureText}
+        use:autofocus
+        onkeydown={onNoteKey}
+        placeholder={mode === 'note' ? 'Jot it down…' : 'Add some text…'}
+        aria-label="Capture text"
+      ></textarea>
+      <button class="paste" type="button" onclick={pasteFromClipboard}>Paste</button>
+    </div>
 
     <button class="send" type="button" onclick={send} disabled={!canSend}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -695,6 +718,31 @@
     resize: none;
     min-height: 0;
   }
+  .text-composer {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+  .text-composer .field {
+    padding-bottom: 4.5rem;
+  }
+  .paste {
+    position: absolute;
+    right: 1rem;
+    bottom: 1rem;
+    min-height: 2.75rem;
+    padding: 0 1rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--seg);
+    color: var(--ink);
+    font-weight: 750;
+  }
+  .paste:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+  }
   .field::placeholder {
     color: var(--ink-faint);
   }
@@ -717,6 +765,28 @@
     gap: 1rem;
     padding: 1.5rem;
     min-height: 0;
+  }
+  .attachment-composer {
+    position: relative;
+    width: 100%;
+    flex: none;
+  }
+  .attachment-field {
+    display: block;
+    width: 100%;
+    min-height: 6.5rem;
+    padding: 0.9rem 5.5rem 0.9rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: 1rem;
+    background: var(--bg);
+    font-size: 1rem;
+    line-height: 1.4;
+    resize: none;
+  }
+  .attachment-field:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-tint);
   }
   .pad-line {
     color: var(--ink-soft);

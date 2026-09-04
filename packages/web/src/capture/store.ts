@@ -193,8 +193,12 @@ export function captureNote(text: string): CaptureRecord {
 }
 
 /** Queue a photo for delivery; the binary is held in IndexedDB until synced. */
-export async function captureImage(file: File): Promise<CaptureRecord> {
+export async function captureImage(
+  file: File,
+  text = '',
+): Promise<CaptureRecord> {
   const id = crypto.randomUUID();
+  const description = text.trim();
   const ext = extFromName(file.name) || extFromMime(file.type) || '.jpg';
   // Best-effort thumbnail (null when the source is already small or can't be
   // decoded); queued alongside the original and uploaded on flush.
@@ -205,6 +209,7 @@ export async function captureImage(file: File): Promise<CaptureRecord> {
     title: file.name || 'Photo',
     filePath: `files/${id}${ext}`,
     mimeType: file.type || 'image/jpeg',
+    description: description || undefined,
     thumbPath: thumb ? `files/${id}.thumb.jpg` : undefined,
     thumbMimeType: thumb ? THUMB_MIME_TYPE : undefined,
     createdAt: new Date().toISOString(),
@@ -216,7 +221,13 @@ export async function captureImage(file: File): Promise<CaptureRecord> {
       new Blob([thumb.data], { type: thumb.mimeType }),
     );
   }
-  const record = newRecord(id, 'image', file.name || 'Photo', item, true);
+  const record = newRecord(
+    id,
+    'image',
+    description.slice(0, 120) || file.name || 'Photo',
+    item,
+    true,
+  );
   const withThumb: CaptureRecord = { ...record, hasThumb: !!thumb };
   prepend(withThumb);
   return withThumb;
@@ -231,8 +242,10 @@ function thumbKey(id: string): string {
 export async function captureVoice(
   blob: Blob,
   durationSec?: number,
+  text = '',
 ): Promise<CaptureRecord> {
   const id = crypto.randomUUID();
+  const description = text.trim();
   const ext = blob.type.includes('mp4')
     ? '.mp4'
     : blob.type.includes('ogg')
@@ -245,12 +258,15 @@ export async function captureVoice(
     filePath: `files/${id}${ext}`,
     mimeType: blob.type || 'audio/webm',
     duration: durationSec,
+    description: description || undefined,
     createdAt: new Date().toISOString(),
   };
   await putBlob(id, blob);
-  const preview = durationSec
-    ? `Voice memo · ${formatDuration(durationSec)}`
-    : 'Voice memo';
+  const preview =
+    description.slice(0, 120) ||
+    (durationSec
+      ? `Voice memo · ${formatDuration(durationSec)}`
+      : 'Voice memo');
   const record = newRecord(id, 'voice', preview, item, true);
   prepend(record);
   return record;

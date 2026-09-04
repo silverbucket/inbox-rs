@@ -13,7 +13,9 @@ vi.mock('@inbox-rs/rs-module/runtime', async (importOriginal) => {
 });
 
 import {
+  captureImage,
   captureNote,
+  captureVoice,
   finishConnectFromRedirect,
   flushQueue,
   getHistory,
@@ -204,6 +206,33 @@ describe('capture history + delivery', () => {
     expect((record.item as NoteItem).body).toBe(
       'a short title\r\nand some more text about stuff',
     );
+  });
+
+  it('stores optional text with image captures', async () => {
+    const record = await captureImage(
+      new File(['image'], 'photo.jpg', { type: 'image/jpeg' }),
+      '  A useful caption  ',
+    );
+
+    expect(record.preview).toBe('A useful caption');
+    expect(record.item).toMatchObject({
+      type: 'image',
+      description: 'A useful caption',
+    });
+  });
+
+  it('stores optional text with voice captures', async () => {
+    const record = await captureVoice(
+      new Blob(['audio'], { type: 'audio/webm' }),
+      12,
+      '  Context for this recording  ',
+    );
+
+    expect(record.preview).toBe('Context for this recording');
+    expect(record.item).toMatchObject({
+      type: 'audio',
+      description: 'Context for this recording',
+    });
   });
 
   it('delivers queued notes to remoteStorage and marks them synced (FIFO)', async () => {
