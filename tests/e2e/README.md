@@ -20,7 +20,9 @@ schemas.
 | `desktop/offline-resilience.spec.ts` | warm-offline keeps SPA usable; cold-offline characterization (will flip when SW lands) |
 | `desktop/offline-then-connect.spec.ts` | offline → online → connect, both for a brand-new account *and* an existing account with pre-seeded data that must sync down |
 | `desktop/inbox-crud.spec.ts` | add a Note via the modal, see it in the grid (smoke for the change-event path) |
-| `mobile/mobile-layout.spec.ts` | 768 px breakpoint promotes header to grid, logo shrinks, touch targets sized |
+| `desktop/sidebar-position.spec.ts` | fixed desktop sidebar hugs the header's bottom edge, then the viewport top once the header scrolls away (expanded and collapsed) |
+| `desktop/footer-layout.spec.ts` | footer stays hit-testable above the fixed sidebar (expanded, collapsed, short and long pages), one-row layout in both shells, overflowing sidebar still reachable |
+| `mobile/mobile-layout.spec.ts` | 768 px breakpoint promotes header to grid, logo shrinks, touch targets sized, footer stacks into two rows without wrapping the build date |
 | `mobile/touch-interactions.spec.ts` | `tap()` (touch dispatch) opens menus and navigates |
 | `mobile/modal-scroll-lock.spec.ts` | iOS body-scroll-lock fixed on open, restored on close |
 | `mobile/mobile-pwa.spec.ts` | media-scoped `theme-color` metas resolve to the right value under dark/light |

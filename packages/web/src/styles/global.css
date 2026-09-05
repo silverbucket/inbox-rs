@@ -94,7 +94,12 @@ body {
   line-height: 1.5;
   min-height: 100vh;
   min-height: 100dvh;
+  /* Contain horizontal overflow without becoming a scroll container: `hidden`
+     would make body the scrollport for every position: sticky descendant
+     (the sidebar), and body itself never scrolls — the viewport does. `clip`
+     clips without that side effect; Safari 15 lacks it and keeps `hidden`. */
   overflow-x: hidden;
+  overflow-x: clip;
   -webkit-overflow-scrolling: touch;
   padding: env(safe-area-inset-top) env(safe-area-inset-right)
     env(safe-area-inset-bottom) env(safe-area-inset-left);
@@ -102,7 +107,9 @@ body {
 
 #app {
   width: 100%;
+  /* Same as body above: clip, not a scroll container. */
   overflow-x: hidden;
+  overflow-x: clip;
   position: relative;
   display: flex;
   flex-direction: column;
