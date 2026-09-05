@@ -1121,7 +1121,6 @@
   /* ── Sidebar ── */
   .sidebar {
     border-right: 1px solid var(--border);
-    min-height: calc(100vh - 70px);
     background: linear-gradient(
       180deg,
       color-mix(in srgb, var(--accent) 3%, var(--sidebar-bg)),

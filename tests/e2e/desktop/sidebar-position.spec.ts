@@ -17,7 +17,9 @@ type Edges = { headerBottom: number; sidebarTop: number; scrollY: number };
 function edges(page: Page): Promise<Edges> {
   return page.evaluate(() => {
     const header = document.querySelector('header');
-    const sidebar = document.querySelector('.sidebar');
+    // The aside spans the whole page column; the box that sticks (and is
+    // what the user sees as "the sidebar") is its scroll area.
+    const sidebar = document.querySelector('.sidebar-scroll');
     if (!header || !sidebar) throw new Error('header and sidebar must render');
     return {
       headerBottom: header.getBoundingClientRect().bottom,
