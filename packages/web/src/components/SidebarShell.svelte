@@ -1127,14 +1127,6 @@
 
   /* ── Sidebar ── */
   .sidebar {
-    /* Not sticky. html/body/#app all set overflow-x: hidden, which makes #app
-       the sticky scrollport — and #app never scrolls, the document does — so
-       `position: sticky` was inert here (the header scrolls away for the same
-       reason). Stretching instead: the item must span the full grid column so
-       its background and border keep painting when the content column is
-       taller than the sidebar — with `start` the column below the sidebar
-       showed the page background once the user scrolled. */
-    align-self: stretch;
     padding: 1rem 0.65rem 1rem 1rem;
     border-right: 1px solid var(--border);
     min-height: calc(100vh - 70px);
@@ -1904,6 +1896,32 @@
      stacks above <main> in a single column, where the base bleed is already
      enough. */
   @media (min-width: 769px) {
+    .sidebar {
+      /* Keep filing targets alongside long content. Its own scrollbar makes
+         every group reachable when the sidebar is taller than the viewport.
+         Fixed positioning also preserves the app's Safari-15-compatible
+         horizontal overflow containment, which would disable sticky here. */
+      position: fixed;
+      top: calc(70px + env(safe-area-inset-top));
+      bottom: env(safe-area-inset-bottom);
+      left: env(safe-area-inset-left);
+      width: 268px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+
+    .sidebar.collapsed {
+      width: 60px;
+    }
+
+    main {
+      grid-column: 2;
+    }
+
+    .body.no-sidebar main {
+      grid-column: 1;
+    }
+
     .body:not(.sidebar-collapsed):not(.no-sidebar) .app-footer {
       margin-left: calc(-1.5rem - 268px);
     }
