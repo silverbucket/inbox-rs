@@ -1902,8 +1902,8 @@
          Fixed positioning also preserves the app's Safari-15-compatible
          horizontal overflow containment, which would disable sticky here. */
       position: fixed;
-      top: 70px;
-      bottom: 0;
+      top: calc(70px + env(safe-area-inset-top));
+      bottom: env(safe-area-inset-bottom);
       left: env(safe-area-inset-left);
       width: 268px;
       overflow-y: auto;
