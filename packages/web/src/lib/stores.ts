@@ -1723,6 +1723,22 @@ export const visibleGroupedCollections = derived(
   },
 );
 
+/** The collection implied by the current filters when exactly one collection
+ * is visible. Capture surfaces use this as their contextual filing default. */
+export const soleVisibleCollectionId = derived(
+  visibleGroupedCollections,
+  ($sections): string | undefined => {
+    let onlyId: string | undefined;
+    for (const section of $sections) {
+      for (const collection of section.collections) {
+        if (onlyId !== undefined) return undefined;
+        onlyId = collection.id;
+      }
+    }
+    return onlyId;
+  },
+);
+
 /**
  * Collections whose `groupId` is unset or refers to a group that no longer
  * exists. Surfaced read-only on the Collections page as an advisory section

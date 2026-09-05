@@ -6,6 +6,7 @@
   import {
     visibleTodos, visibleOnCalendarTodos, reorderTodosGlobal,
     collections, sortedGroups, appConfig, updateConfig,
+    soleVisibleCollectionId,
   } from '../lib/stores';
   import { isDueTodayOrOverdue } from '../lib/schedule';
   import { todayStart } from '../lib/now';
@@ -137,7 +138,7 @@
          ⌘/Ctrl-Enter opens the modal). Mobile: the Fab is position:fixed, a
          floating + circle in the thumb zone. -->
     <div class="page-toolbar">
-      <Fab onclick={() => onaddtodo()} label="New todo" />
+      <Fab onclick={() => onaddtodo('', $soleVisibleCollectionId)} label="New todo" />
     </div>
   {/snippet}
 

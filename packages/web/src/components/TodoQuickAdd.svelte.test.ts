@@ -24,6 +24,7 @@ vi.mock('../lib/stores', async () => {
     groupCollections: writable({}),
     sortedGroups: writable([]),
     activeGroupIds: writable(new Set<string>()),
+    soleVisibleCollectionId: writable(undefined),
     groups: writable({}),
     items: writable({}),
     appConfig: writable({}),
@@ -39,6 +40,7 @@ import {
   activeGroupIds,
   collections,
   groupCollections,
+  soleVisibleCollectionId,
   sortedGroups,
 } from '../lib/stores';
 import TodoQuickAdd from './TodoQuickAdd.svelte';
@@ -60,6 +62,7 @@ describe('TodoQuickAdd', () => {
     w<unknown[]>(sortedGroups).set([]);
     w<Record<string, unknown>>(groupCollections).set({});
     w<Set<string>>(activeGroupIds).set(new Set());
+    w<string | undefined>(soleVisibleCollectionId).set(undefined);
     onopenmodal = vi.fn();
     host = document.createElement('div');
     document.body.appendChild(host);
@@ -158,6 +161,20 @@ describe('TodoQuickAdd', () => {
     expect(moveItemToCollection).not.toHaveBeenCalled();
     flushSync();
     expect(input().value).toBe('');
+  });
+
+  it('defaults to the sole visible collection', async () => {
+    seedVisibleGroup();
+    w<string | undefined>(soleVisibleCollectionId).set('col-road');
+    render();
+    expect(chipText()).toBe('Roadmap');
+    type('write spec');
+    submit();
+    await vi.waitFor(() => {
+      expect(moveItemToCollection).toHaveBeenCalledOnce();
+    });
+    const todoId = (storeItem.mock.calls[0][0] as { id: string }).id;
+    expect(moveItemToCollection).toHaveBeenCalledWith(todoId, 'col-road');
   });
 
   it('files into the fixed collection and hides the collection select', async () => {

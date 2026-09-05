@@ -91,6 +91,7 @@ import {
   setCollectionArchived,
   setGroupArchived,
   setItemArchived,
+  soleVisibleCollectionId,
   soloCollectionFilter,
   soloGroupFilter,
   spliceIntoOrder,
@@ -1352,6 +1353,25 @@ describe('visibleGroupedCollections', () => {
     const sections = get(visibleGroupedCollections);
     expect(sections).toHaveLength(1);
     expect(sections[0].collections.map((c) => c.id)).toEqual(['c2']);
+  });
+
+  it('exposes the sole visible collection as a capture default', () => {
+    const c1 = makeCollection('c1', 'g1');
+    const c2 = makeCollection('c2', 'g1');
+    collections.set({ c1, c2 });
+    groups.set({ g1: makeGroup('g1', ['c1', 'c2']) });
+    appConfig.set({ inactiveCollectionFilters: ['c2'] });
+
+    expect(get(soleVisibleCollectionId)).toBe('c1');
+  });
+
+  it('has no sole collection default when multiple collections are visible', () => {
+    const c1 = makeCollection('c1', 'g1');
+    const c2 = makeCollection('c2', 'g1');
+    collections.set({ c1, c2 });
+    groups.set({ g1: makeGroup('g1', ['c1', 'c2']) });
+
+    expect(get(soleVisibleCollectionId)).toBeUndefined();
   });
 });
 
