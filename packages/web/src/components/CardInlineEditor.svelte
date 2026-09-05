@@ -21,6 +21,7 @@
     status = $bindable<SaveStatus>('saved'),
     flush = $bindable<() => Promise<void>>(async () => {}),
     retry = $bindable<() => void>(() => {}),
+    discard = $bindable<() => void>(() => {}),
     onfetchurlpreview = undefined,
     fetchingUrlPreview = false,
     children,
@@ -29,12 +30,22 @@
     status?: SaveStatus;
     flush?: () => Promise<void>;
     retry?: () => void;
+    /**
+     * Drop any unsaved edit for good. Call after the card itself is gone
+     * (deleted) so teardown doesn't write it back into existence.
+     */
+    discard?: () => void;
     onfetchurlpreview?: () => void;
     fetchingUrlPreview?: boolean;
     children?: Snippet;
   } = $props();
 
   const initialItem = untrack(() => item);
+  // The latest item we've been handed, held outside the reactive graph. The
+  // `item` prop is a lazy getter into the parent's state; after teardown
+  // (route change closing the modal) it dereferences a null and throws, and
+  // the save on destroy must not depend on it.
+  let currentItem = initialItem;
   const recovered = readCardDraft(initialItem, localStorage);
   let draft = $state(recovered ?? createCardDraft(initialItem));
   let syncedDraft = $state<CardDraft>(
@@ -44,8 +55,11 @@
   let persistedRevision = 0;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let savePromise: Promise<void> | null = null;
+  let discarded = false;
 
   status = recovered ? 'restored' : 'saved';
+
+  const hasPendingEdit = () => revision > persistedRevision && !discarded;
 
   function scheduleSave() {
     revision += 1;
@@ -69,14 +83,15 @@
 
     const savingRevision = revision;
     const snapshot = $state.snapshot(draft);
+    const target = currentItem;
     status = 'saving';
-    savePromise = storeItem(applyCardDraft(item, snapshot));
+    savePromise = storeItem(applyCardDraft(target, snapshot));
     try {
       await savePromise;
       if (revision === savingRevision) {
         persistedRevision = savingRevision;
         syncedDraft = structuredClone(snapshot);
-        clearCardDraft(item.id, localStorage);
+        clearCardDraft(target.id, localStorage);
         status = 'saved';
       } else {
         status = 'pending';
@@ -93,13 +108,51 @@
 
   flush = persist;
   retry = () => void persist().catch(() => {});
+  discard = () => {
+    discarded = true;
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = undefined;
+  };
 
   if (recovered) {
     saveTimer = setTimeout(() => void persist().catch(() => {}), 700);
   }
 
+  // Closing is the save. Most exits go through the modal's own flush, but
+  // the editor can also be torn down without it — a route change (mobile
+  // back button, a nav tap), a deleted-elsewhere card, a parent re-key.
+  // Dropping the debounce timer there stranded the edit in the device-local
+  // draft, where it never synced until this exact card was reopened on this
+  // exact device. Fire the save instead; storeItem outlives the component.
   onDestroy(() => {
-    if (saveTimer) clearTimeout(saveTimer);
+    if (discarded || !hasPendingEdit()) {
+      if (saveTimer) clearTimeout(saveTimer);
+      return;
+    }
+    void persist().catch(() => {});
+  });
+
+  // Backgrounding the PWA or switching tabs can be the last thing that
+  // happens before the process dies. Push the pending write as soon as the
+  // page is hidden so the local cache commits and the next sync carries it.
+  // `pagehide` (navigation, tab close) fires while the document still reports
+  // itself visible, so it isn't gated on visibility. If the unload wins the
+  // race anyway, the localStorage draft is replayed on the next launch — see
+  // lib/card-draft-recovery.ts.
+  function flushIfHidden() {
+    if (document.visibilityState === 'visible') return;
+    flushPending();
+  }
+  function flushPending() {
+    if (hasPendingEdit()) void persist().catch(() => {});
+  }
+  $effect(() => {
+    document.addEventListener('visibilitychange', flushIfHidden);
+    window.addEventListener('pagehide', flushPending);
+    return () => {
+      document.removeEventListener('visibilitychange', flushIfHidden);
+      window.removeEventListener('pagehide', flushPending);
+    };
   });
 
   function noteExternalDraftChange() {
@@ -115,6 +168,7 @@
   // without clobbering fields the user has edited locally.
   $effect(() => {
     const external = item;
+    currentItem = external;
     untrack(() => {
       if (revision > persistedRevision) {
         const merged = mergeExternalCardDraft(draft, syncedDraft, external);

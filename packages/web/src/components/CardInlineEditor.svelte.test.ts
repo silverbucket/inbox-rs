@@ -192,4 +192,89 @@ describe('CardInlineEditor autosave', () => {
     });
     expect(localStorage.getItem(cardDraftKey(bookmark.id))).toBeNull();
   });
+
+  it('saves a pending edit when torn down before the debounce fires', async () => {
+    // A route change (mobile back button, nav tap) closes the card modal
+    // without the modal's own flush. The edit must still leave the device.
+    render();
+    const title = host.querySelector(
+      '[aria-label="Title"]',
+    ) as HTMLInputElement;
+    title.value = 'Typed then navigated away';
+    title.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    flushSync();
+    expect(storeItem).not.toHaveBeenCalled();
+
+    unmount(component as ReturnType<typeof mount>);
+    component = undefined;
+
+    expect(storeItem).toHaveBeenCalledTimes(1);
+    expect(storeItem).toHaveBeenCalledWith({
+      ...item,
+      title: 'Typed then navigated away',
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(localStorage.getItem(cardDraftKey(item.id))).toBeNull();
+  });
+
+  it('does not write a discarded edit back on teardown', () => {
+    // After the card is deleted, an edit that never flushed must stay dead.
+    let discard: () => void = () => {};
+    component = mount(CardInlineEditor, {
+      target: host,
+      props: {
+        item,
+        get discard() {
+          return discard;
+        },
+        set discard(next: () => void) {
+          discard = next;
+        },
+      },
+    });
+    flushSync();
+    const title = host.querySelector(
+      '[aria-label="Title"]',
+    ) as HTMLInputElement;
+    title.value = 'Edited then deleted';
+    title.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    flushSync();
+
+    discard();
+    unmount(component);
+    component = undefined;
+
+    expect(storeItem).not.toHaveBeenCalled();
+  });
+
+  it('pushes a pending edit as soon as the page is hidden', () => {
+    render();
+    const title = host.querySelector(
+      '[aria-label="Title"]',
+    ) as HTMLInputElement;
+    title.value = 'Typed then tab hidden';
+    title.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    flushSync();
+    expect(storeItem).not.toHaveBeenCalled();
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'hidden',
+    });
+    try {
+      document.dispatchEvent(new Event('visibilitychange'));
+    } finally {
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => 'visible',
+      });
+    }
+
+    expect(storeItem).toHaveBeenCalledTimes(1);
+    expect(storeItem).toHaveBeenCalledWith({
+      ...item,
+      title: 'Typed then tab hidden',
+    });
+  });
 });

@@ -8,6 +8,7 @@ import type {
 import { migrator, wrapCodeBlock } from '@inbox-rs/rs-module';
 import type { Readable, Writable } from 'svelte/store';
 import { derived, get, writable } from 'svelte/store';
+import { replayCardDrafts } from './card-draft-recovery';
 import { cleanForStorage } from './clean-for-storage';
 import { pinItemsFirst } from './collection-todos';
 import { todayStart } from './now';
@@ -317,6 +318,25 @@ async function loadItems() {
   }
 }
 
+// Edits the card editor couldn't push before the app was closed sit in
+// localStorage. Write them once a load has settled — not from inside
+// loadItems, where a concurrent getAll() could read the pre-write cache and
+// then merge that stale snapshot over the replayed item in the store.
+let draftReplay: Promise<void> | null = null;
+function replayPendingCardDrafts(): Promise<void> {
+  if (typeof localStorage === 'undefined') return Promise.resolve();
+  if (draftReplay) return draftReplay;
+  draftReplay = replayCardDrafts(get(items), localStorage, (item) =>
+    storeItem(item),
+  )
+    .then(() => undefined)
+    .catch((e) => console.error('[inbox] card draft replay failed:', e))
+    .finally(() => {
+      draftReplay = null;
+    });
+  return draftReplay;
+}
+
 async function loadConfig() {
   const inbox = getInbox();
   if (!inbox) return;
@@ -392,6 +412,7 @@ async function loadCachedData() {
   } finally {
     inFlightLoad = null;
   }
+  await replayPendingCardDrafts();
 }
 
 async function loadConnectedData() {
@@ -412,6 +433,7 @@ async function loadConnectedData() {
   } finally {
     inFlightLoad = null;
   }
+  await replayPendingCardDrafts();
 }
 
 // Debounced sync indicator: stays visible for at least 1 second to avoid flicker
@@ -576,7 +598,12 @@ if (inboxRef) {
   // window coalesces a sync burst into a handful of updates while staying
   // imperceptible for a single incoming change. Collections/groups/config
   // change rarely and are still applied immediately below.
-  const pendingItemChanges = new Map<string, object | null>(); // null = delete
+  type PendingItemChange = {
+    value: object | null; // null = delete
+    /** RS event origin: 'local' is the startup cache replay. */
+    origin: string | undefined;
+  };
+  const pendingItemChanges = new Map<string, PendingItemChange>();
   let itemFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
   function flushItemChanges() {
@@ -584,9 +611,20 @@ if (inboxRef) {
     if (pendingItemChanges.size === 0) return;
     const batch = new Map(pendingItemChanges);
     pendingItemChanges.clear();
+    // 'local' events are the cache being read back at startup. They exist to
+    // paint the grid before getAll() resolves; they are never fresher than
+    // what the store already holds, and the 50ms buffer can deliver them
+    // *after* a write that happened in the meantime (a replayed card draft),
+    // which would then be overwritten with the pre-write value. Only let
+    // them fill gaps.
+    const present = get(items);
+    for (const [key, change] of batch) {
+      if (change.origin === 'local' && present[key]) batch.delete(key);
+    }
+    if (batch.size === 0) return;
     rawItems.update((current) => {
       const next = { ...current };
-      for (const [key, value] of batch) {
+      for (const [key, { value }] of batch) {
         if (value) next[key] = value;
         else delete next[key];
       }
@@ -594,7 +632,7 @@ if (inboxRef) {
     });
     items.update((current) => {
       const next = { ...current };
-      for (const [key, value] of batch) {
+      for (const [key, { value }] of batch) {
         if (value) next[key] = normalizeLoadedItem(value);
         else delete next[key];
       }
@@ -602,8 +640,12 @@ if (inboxRef) {
     });
   }
 
-  function queueItemChange(key: string, value: object | null) {
-    pendingItemChanges.set(key, value);
+  function queueItemChange(
+    key: string,
+    value: object | null,
+    origin: string | undefined,
+  ) {
+    pendingItemChanges.set(key, { value, origin });
     if (itemFlushTimer === null) {
       itemFlushTimer = setTimeout(flushItemChanges, 50);
     }
@@ -619,9 +661,9 @@ if (inboxRef) {
       const key = path.slice('items/'.length);
       if (value && typeof value === 'object' && 'id' in value) {
         if (key !== (value as { id: string }).id) return;
-        queueItemChange(key, value);
+        queueItemChange(key, value, event.origin);
       } else if (!value) {
-        queueItemChange(key, null);
+        queueItemChange(key, null, event.origin);
       }
     } else if (path.startsWith('collections/')) {
       const key = path.slice('collections/'.length);

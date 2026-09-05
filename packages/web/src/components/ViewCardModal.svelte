@@ -57,6 +57,7 @@
   let saveStatus = $state<SaveStatus>('saved');
   let flushEdits = $state<() => Promise<void>>(async () => {});
   let retrySave = $state<() => void>(() => {});
+  let discardEdits = $state<() => void>(() => {});
   let closing = $state(false);
 
   const saveLabel = $derived(
@@ -101,6 +102,9 @@
       // The save attempt has settled. Deletion must now win.
     }
     await deleteItem(item.id, item);
+    // The card is gone; an edit that failed to flush must not be written
+    // back by the editor's teardown.
+    discardEdits();
     clearCardDraft(item.id, localStorage);
     showDelete = false;
     deleting = false;
@@ -490,6 +494,21 @@
     onclick={handleModalClick}
   >
     <div class="modal-header">
+      <!-- Same control as the collection focus page's exit: a labelled Back
+           button on the leading edge is easier to hit and reads the same on
+           desktop and mobile as the focus overlay it often sits above. -->
+      <button
+        type="button"
+        class="btn-back"
+        title="Back (Esc)"
+        onclick={() => void requestClose()}
+      >
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        Back
+      </button>
       <span class="type-badge">{item.type}</span>
       <time class="date">{formatDate(item.createdAt)}</time>
       <button
@@ -565,28 +584,6 @@
             </button>
           </div>
         {/if}
-        <button
-          type="button"
-          class="icon-btn"
-          title="Close"
-          aria-label="Close"
-          onclick={() => void requestClose()}
-        >
-          <svg
-            aria-hidden="true"
-            width="17"
-            height="17"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
       </div>
     </div>
 
@@ -597,6 +594,7 @@
         bind:status={saveStatus}
         bind:flush={flushEdits}
         bind:retry={retrySave}
+        bind:discard={discardEdits}
         onfetchurlpreview={noteBookmarkUrl ? convertNoteToBookmark : undefined}
         fetchingUrlPreview={convertingBookmark}
       >
@@ -908,6 +906,29 @@
     min-height: 36px;
   }
 
+  .btn-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+    min-height: 32px;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.35rem 0.7rem;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  .btn-back:hover {
+    color: var(--text);
+    border-color: var(--text-muted);
+  }
+
   .type-badge {
     background: var(--accent-subtle);
     color: var(--accent);
@@ -922,11 +943,19 @@
   .date {
     font-size: 0.75rem;
     color: var(--text-muted);
+    /* The header is one row. On a phone the Back button, badge, status and
+       menu leave the date little room, so it truncates rather than wraps. */
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .save-status {
     display: inline-flex;
     align-items: center;
+    flex-shrink: 0;
+    white-space: nowrap;
     gap: 0.35rem;
     border: none;
     background: none;
@@ -1265,7 +1294,7 @@
     position: absolute;
     z-index: 10;
     top: calc(100% + 0.35rem);
-    right: 44px;
+    right: 0;
     min-width: 168px;
     padding: 0.3rem;
     border: 1px solid var(--border);
@@ -1307,8 +1336,9 @@
       height: 44px;
     }
 
-    .actions-menu {
-      right: 48px;
+    .btn-back {
+      min-height: 44px;
+      padding: 0.35rem 0.85rem;
     }
 
     .actions-menu-item {

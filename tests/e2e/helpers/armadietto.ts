@@ -238,3 +238,36 @@ export async function putInboxFile(
     );
   }
 }
+
+/**
+ * Read every inbox item straight from the server, bypassing the web app and
+ * its local cache. This is the only honest way to assert that an autosave
+ * actually *left the device* — the app's own UI can render a change that
+ * exists nowhere but a device-local recovery draft.
+ */
+export async function getInboxItems(
+  user: RsUser,
+  token: string,
+): Promise<InboxItem[]> {
+  const headers = { Authorization: `Bearer ${token}` };
+  const listing = await fetch(
+    `${ARMADIETTO_ORIGIN}/storage/${user.username}/inbox/items/`,
+    { headers, signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS) },
+  );
+  if (listing.status === 404) return [];
+  if (!listing.ok) {
+    throw new Error(`GET /inbox/items/ failed: HTTP ${listing.status}`);
+  }
+  const folder = (await listing.json()) as { items?: Record<string, unknown> };
+  const ids = Object.keys(folder.items ?? {}).filter((k) => !k.endsWith('/'));
+  return Promise.all(
+    ids.map(async (id) => {
+      const r = await fetch(
+        `${ARMADIETTO_ORIGIN}/storage/${user.username}/inbox/items/${id}`,
+        { headers, signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS) },
+      );
+      if (!r.ok) throw new Error(`GET /inbox/items/${id}: HTTP ${r.status}`);
+      return (await r.json()) as InboxItem;
+    }),
+  );
+}
