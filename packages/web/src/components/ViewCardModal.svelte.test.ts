@@ -3,7 +3,8 @@ import type { InboxItem } from '@inbox-rs/rs-module';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { storeItem } = vi.hoisted(() => ({
+const { moveItemToCollection, storeItem } = vi.hoisted(() => ({
+  moveItemToCollection: vi.fn().mockResolvedValue(undefined),
   storeItem: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -15,7 +16,7 @@ vi.mock('../lib/stores', async () => {
     collections: writable({}),
     groups: writable({}),
     deleteItem: vi.fn().mockResolvedValue(undefined),
-    moveItemToCollection: vi.fn().mockResolvedValue(undefined),
+    moveItemToCollection,
     loadFileBlobUrl: vi.fn(),
     storeItem,
   };
@@ -140,5 +141,33 @@ describe('ViewCardModal actions menu', () => {
     expect(image?.compareDocumentPosition(moreDetails as Node) ?? 0).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
+  });
+
+  it('makes a card in a collection a todo without asking where to file it', async () => {
+    render({ ...item, collectionId: 'collection-1' });
+
+    const makeTodo = Array.from(host.querySelectorAll('button')).find(
+      (button) => button.textContent?.includes('Make a todo'),
+    );
+    makeTodo?.click();
+
+    await vi.waitFor(() => {
+      expect(moveItemToCollection).toHaveBeenCalledWith(
+        'note-1',
+        'collection-1',
+      );
+      expect(storeItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'note-1',
+          isTodo: true,
+          completed: false,
+          collectionId: 'collection-1',
+        }),
+      );
+    });
+    expect(
+      host.querySelector('[role="dialog"][aria-label="Choose collection"]'),
+    ).toBeNull();
+    expect(onclose).toHaveBeenCalledOnce();
   });
 });
