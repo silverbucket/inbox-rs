@@ -1898,13 +1898,28 @@
   @media (min-width: 769px) {
     .sidebar {
       /* Keep filing targets alongside long content. Its own scrollbar makes
-         every group reachable when the sidebar is taller than the viewport. */
-      position: sticky;
+         every group reachable when the sidebar is taller than the viewport.
+         Fixed positioning also preserves the app's Safari-15-compatible
+         horizontal overflow containment, which would disable sticky here. */
+      position: fixed;
       top: 70px;
-      align-self: start;
-      max-height: calc(100dvh - 70px);
+      bottom: 0;
+      left: env(safe-area-inset-left);
+      width: 268px;
       overflow-y: auto;
       overscroll-behavior: contain;
+    }
+
+    .sidebar.collapsed {
+      width: 60px;
+    }
+
+    main {
+      grid-column: 2;
+    }
+
+    .body.no-sidebar main {
+      grid-column: 1;
     }
 
     .body:not(.sidebar-collapsed):not(.no-sidebar) .app-footer {
