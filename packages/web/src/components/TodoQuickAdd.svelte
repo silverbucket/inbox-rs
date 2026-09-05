@@ -24,6 +24,7 @@
     activeGroupIds,
     collections,
     moveItemToCollection,
+    soleVisibleCollectionId,
     sortedGroups,
     storeItem,
     toggleGroupFilter,
@@ -100,9 +101,12 @@
       : undefined,
   );
   // The passive default never targets a hidden group: a plain-Enter add would
-  // file the todo where it can't be seen. Falls back to Unfiled instead.
+  // file the todo where it can't be seen. When the filters leave one visible
+  // collection, that focused collection takes priority; otherwise use the
+  // safe remembered destination or leave the todo Unfiled.
   const defaultCollectionId = $derived(
-    pickedId && isOutOfView(pickedId) ? undefined : pickedId,
+    $soleVisibleCollectionId ??
+      (pickedId && !isOutOfView(pickedId) ? pickedId : undefined),
   );
   // Live select value: an explicit in-session pick wins (you may deliberately
   // file into a hidden group — addQuickTodo surfaces a "Show" toast for that);
