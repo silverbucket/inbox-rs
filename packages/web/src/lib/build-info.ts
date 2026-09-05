@@ -2,6 +2,9 @@
 // __STAGING__ and __BUILD_DATE__ are compile-time constants from vite.config.ts.
 import { appVersion } from './plugin-downloads.generated';
 
+/** True for staging bundles (STAGING_BUILD=1), false for releases and dev. */
+export const isStagingBuild: boolean = __STAGING__;
+
 /** Version as shown in Settings › About: the release number, or "Staging". */
 export const versionLabel: string = __STAGING__ ? 'Staging' : appVersion;
 
