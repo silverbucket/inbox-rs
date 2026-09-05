@@ -73,6 +73,24 @@ export function cardDraftKey(id: string): string {
   return `${CARD_DRAFT_PREFIX}${id}`;
 }
 
+/** Ids of every card that still has a recovery draft on this device. */
+export function listCardDraftIds(
+  storage: Pick<Storage, 'length' | 'key'>,
+): string[] {
+  const ids: string[] = [];
+  try {
+    for (let i = 0; i < storage.length; i += 1) {
+      const key = storage.key(i);
+      if (key?.startsWith(CARD_DRAFT_PREFIX)) {
+        ids.push(key.slice(CARD_DRAFT_PREFIX.length));
+      }
+    }
+  } catch {
+    // Storage can be disabled; there is nothing to recover then.
+  }
+  return ids;
+}
+
 export function readCardDraft(
   item: InboxItem,
   storage: Pick<Storage, 'getItem'>,
