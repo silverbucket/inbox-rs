@@ -279,7 +279,13 @@
     showPicker = true;
   }
 
-  function openMakeTodoPicker() {
+  function makeTodo() {
+    // A filed card already has an explicit destination. Convert it in place
+    // instead of asking the user to choose the same filing context again.
+    if (item.collectionId) {
+      void convertToTodoInCollection(item.collectionId);
+      return;
+    }
     pickerMode = 'todo';
     showPicker = true;
   }
@@ -727,7 +733,7 @@
           type="button"
           class="action-row"
           disabled={convertingTodo}
-          onclick={openMakeTodoPicker}
+          onclick={makeTodo}
         >
           <svg
             aria-hidden="true"
