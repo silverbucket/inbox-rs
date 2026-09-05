@@ -18,7 +18,7 @@
   const localPart = $derived($userAddress.split('@')[0] ?? '');
   const auto = $derived(localPart.length > 1 ? `${localPart[0]}${localPart.at(-1)}`.toUpperCase() : localPart.toUpperCase() || '?');
   let initials = $state('');
-  $effect(() => { if (!initials) initials = $userSettings.abbreviation ?? ''; });
+  $effect(() => { if (!initials) initials = ($userSettings.abbreviation ?? '').slice(0, 2); });
   $effect(() => { if (!$connected && !address) address = $userAddress; });
   $effect(() => { if (focusConnect && !$connected) void tick().then(() => connectInput?.focus()); });
   $effect(() => {
@@ -44,12 +44,12 @@
       connecting = false;
     }
   }
-  function saveInitials(){ const value=initials.trim().toUpperCase().slice(0,3); initials=value; if($connected) void updateUserSettings({abbreviation:value||undefined}); }
+  function saveInitials(){ const value=initials.trim().toUpperCase().slice(0,2); initials=value; if($connected) void updateUserSettings({abbreviation:value||undefined}); }
 </script>
 <div class="settings-section">
 {#if $connected}
-  <div class="row identity wide"><div class="account-avatar">{$userSettings.abbreviation || auto}</div><div class="row-main"><div class="row-label">{$userAddress}</div><div class="row-desc">Your inbox lives on your own <a href="https://remotestorage.io" target="_blank" rel="noreferrer">remoteStorage</a> server. Inbox RS never holds a copy.</div></div><div class="row-ctl"><span class="pill ok">{$syncing?'Syncing…':'Synced'}</span></div></div>
-  <div class="row"><div class="row-main"><div class="row-label">Initials</div><div class="row-desc">Two or three letters for your avatar. Defaults to your address.</div></div><div class="row-ctl"><input class="field initials" aria-label="Initials" maxlength="3" bind:value={initials} onblur={saveInitials}/></div></div>
+  <div class="row identity wide"><div class="account-avatar">{$userSettings.abbreviation?.slice(0, 2) || auto}</div><div class="row-main"><div class="row-label">{$userAddress}</div><div class="row-desc">Your inbox lives on your own <a href="https://remotestorage.io" target="_blank" rel="noreferrer">remoteStorage</a> server. Inbox RS never holds a copy.</div></div><div class="row-ctl"><span class="pill ok">{$syncing?'Syncing…':'Synced'}</span></div></div>
+  <div class="row"><div class="row-main"><div class="row-label">Initials</div><div class="row-desc">Up to two letters for your avatar. Defaults to your address.</div></div><div class="row-ctl"><input class="field initials" aria-label="Initials" maxlength="2" bind:value={initials} onblur={saveInitials}/></div></div>
   <div class="row"><div class="row-main"><div class="row-label">Sign out of this browser</div><div class="row-desc">Removes the local copy. Everything stays on your storage server.</div></div><div class="row-ctl"><button class="btn danger" type="button" onclick={() => rs.disconnect()}>Disconnect</button></div></div>
 {:else}
   <form class="row wide" onsubmit={(e)=>{e.preventDefault();connect()}}><div class="row-main"><div class="row-label">Connect your storage</div><div class="row-desc">Your inbox lives on your own <a href="https://remotestorage.io" target="_blank" rel="noreferrer">remoteStorage</a> server, an open standard — Inbox RS never holds a copy. New to remoteStorage? <a href="https://remotestorage.io/get.html" target="_blank" rel="noreferrer">Get a storage account</a>.</div></div><div class="row-ctl connect"><input class="field" aria-label="Storage address" bind:this={connectInput} bind:value={address} placeholder="user@storage.example"/><button type="submit" class="btn primary" disabled={connecting||!address.trim()}>{connecting?'Connecting…':'Connect'}</button></div></form>
