@@ -142,14 +142,19 @@
            page. Expansion is forced by prop, never written to the synced
            `expandedCollections` set, so focusing here doesn't churn the
            accordion state on other devices. -->
-      <CollectionView
-        {collection}
-        expanded
-        {onselect}
-        {isTouchDevice}
-        onedit={() => editing = true}
-        ontoggle={onexit}
-      />
+      <!-- Give the collection its own constrained scrollport. Keeping scroll
+           off the flex panel avoids shrinking CollectionView to the viewport,
+           where its desktop overflow clipping would hide the remaining cards. -->
+      <div class="focus-scroll">
+        <CollectionView
+          {collection}
+          expanded
+          {onselect}
+          {isTouchDevice}
+          onedit={() => editing = true}
+          ontoggle={onexit}
+        />
+      </div>
     {:else}
       <div class="focus-missing">
         <p>This collection doesn't exist — it may have been deleted.</p>
@@ -191,9 +196,7 @@
     width: 100%;
     height: 100%;
     min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
+    overflow: hidden;
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -204,11 +207,10 @@
     gap: 0.6rem;
   }
 
-  /* Stays reachable while the collection body scrolls under it. */
+  /* Stays reachable while the collection scrolls in the region below it. */
   .focus-toolbar {
-    position: sticky;
-    top: -0.85rem;
     z-index: 5;
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     gap: 0.6rem;
@@ -216,6 +218,15 @@
     padding: 0.7rem 1rem;
     background: color-mix(in srgb, var(--bg) 94%, transparent);
     backdrop-filter: blur(10px);
+  }
+
+  .focus-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   .btn-back {
