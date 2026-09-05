@@ -21,7 +21,7 @@
     <div class="row-ctl"><a class="btn" href="/capture/">Open</a></div>
   </div>
 
-  <div class="row wide">
+  <div class="row wide browser-row">
     <div class="browser-logos" aria-hidden="true">
       <span class="capture-logo chrome"><img src={chromeLogo} alt="" /></span>
       <span class="capture-logo firefox"><img src={firefoxLogo} alt="" /></span>
@@ -60,8 +60,8 @@
 <style>
   .capture-logo {
     display: grid;
-    width: 2.25rem;
-    height: 2.25rem;
+    width: var(--capture-logo-size, 2.25rem);
+    height: var(--capture-logo-size, 2.25rem);
     flex: none;
     place-items: center;
     border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
@@ -99,24 +99,33 @@
     filter: brightness(0) invert(1);
   }
 
+  .browser-row {
+    --capture-logo-size: 2.25rem;
+    --browser-logo-overlap: 0.55rem;
+    --browser-logo-column: calc(
+      var(--capture-logo-size) + var(--capture-logo-size) - var(--browser-logo-overlap)
+    );
+  }
+
   .browser-logos {
     display: flex;
     flex: none;
+    width: var(--browser-logo-column);
   }
 
   .browser-logos .capture-logo + .capture-logo {
-    margin-left: -0.55rem;
+    margin-left: calc(-1 * var(--browser-logo-overlap));
     box-shadow: 0 0 0 2px var(--surface);
   }
 
   @media (max-width: 767px) {
-    .settings-section .row.wide:not(.transcription-row) .row-main {
-      flex: 1 1 calc(100% - 3.25rem);
+    .settings-section .browser-row .row-main {
+      flex: 1 1 calc(100% - var(--browser-logo-column) - 1rem);
     }
 
-    .settings-section .row.wide:not(.transcription-row) .row-ctl {
-      margin-left: 3.25rem;
-      width: calc(100% - 3.25rem);
+    .settings-section .browser-row .row-ctl {
+      margin-left: calc(var(--browser-logo-column) + 1rem);
+      width: calc(100% - var(--browser-logo-column) - 1rem);
     }
   }
 </style>
