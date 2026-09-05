@@ -106,7 +106,7 @@
     </header>
     {#if mobile && selected}<div class="mobile-state">{stateLine(selected)}</div>{/if}
     {#if !mobile || !selected}
-      {#if mobile}<div class="identity"><span class="identity-avatar">{$connected ? ($userSettings.abbreviation || $userAddress.slice(0,2).toUpperCase()) : '?'}</span><span><strong>{$userAddress || 'Not connected'}</strong><small>{$syncing?'Syncing…':$connected?'Synced':'Connect your storage'}</small></span></div>{/if}
+      {#if mobile}<div class="identity"><span class="identity-avatar">{$connected ? ($userSettings.abbreviation?.slice(0, 2) || $userAddress.slice(0,2).toUpperCase()) : '?'}</span><span><strong>{$userAddress || 'Not connected'}</strong><small>{$syncing?'Syncing…':$connected?'Synced':'Connect your storage'}</small></span></div>{/if}
       <div class="tiles">
       {#each SETTINGS_SECTIONS as section (section.id)}
         <SettingsTile {section} value={value(section)} sub={sub(section)} meta={meta(section)} expanded={expanded===section.id} onclick={()=>void choose(section.id)}/>

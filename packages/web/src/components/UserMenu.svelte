@@ -7,7 +7,7 @@
   const automaticInitials = $derived(localPart.length > 1
     ? `${localPart[0]}${localPart[localPart.length - 1]}`.toUpperCase()
     : localPart.toUpperCase() || '?');
-  const initials = $derived($userSettings.abbreviation || automaticInitials);
+  const initials = $derived($userSettings.abbreviation?.slice(0, 2) || automaticInitials);
 
   export async function openConnectMenu(): Promise<void> {
     onopensettings('account');
