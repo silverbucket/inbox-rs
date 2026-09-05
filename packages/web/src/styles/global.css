@@ -81,7 +81,10 @@
 }
 
 html {
-  overflow-x: hidden;
+  /* Clip horizontal paint without creating a non-scrolling overflow
+     container. Sticky descendants (notably the desktop sidebar) must remain
+     anchored to the document scrollport. */
+  overflow-x: clip;
   height: 100%;
   -webkit-text-size-adjust: 100%;
 }
@@ -94,7 +97,7 @@ body {
   line-height: 1.5;
   min-height: 100vh;
   min-height: 100dvh;
-  overflow-x: hidden;
+  overflow-x: clip;
   -webkit-overflow-scrolling: touch;
   padding: env(safe-area-inset-top) env(safe-area-inset-right)
     env(safe-area-inset-bottom) env(safe-area-inset-left);
@@ -102,7 +105,7 @@ body {
 
 #app {
   width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
   position: relative;
   display: flex;
   flex-direction: column;
