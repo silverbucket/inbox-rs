@@ -198,7 +198,10 @@ describe('CollectionView due todos band', () => {
     id: 'col-1',
     name: 'Reading',
     color: '#6366f1',
-    itemIds: ['t-old', 't-overdue', 't-today'],
+    // Canonical manual order — must list every filed item, matching what the
+    // real collectionItems store derives from. Scheduled todos deliberately
+    // sit last so the pin (not itemIds order) is what surfaces them.
+    itemIds: ['t-old', 't-overdue', 't-today', 't-tomorrow'],
   };
 
   const todo = (
@@ -230,7 +233,6 @@ describe('CollectionView due todos band', () => {
     document.body.appendChild(host);
     (collectionItems as unknown as { set: (v: unknown) => void }).set({
       [collection.id]: [
-        // Manual itemIds order deliberately puts the scheduled todos last.
         todo('t-old', 'manual first'),
         todo('t-overdue', 'was due yesterday', at(-1)),
         todo('t-today', 'due today', at(0)),
