@@ -105,7 +105,10 @@ function titleScore(title: string, term: string): number {
  * Score one item against already-parsed terms. Returns 0 when any term
  * fails to match — every term must hit at least one field.
  */
-export function scoreFields(fields: SearchFields, terms: string[]): number {
+export function scoreFields(
+  fields: SearchFields,
+  terms: readonly string[],
+): number {
   let total = 0;
   for (const term of terms) {
     let best = titleScore(fields.title, term);
