@@ -28,6 +28,8 @@
     focusNonce?: number;
   } = $props();
 
+  // Seeded from the route once; the effect below keeps it in step afterwards.
+  // svelte-ignore state_referenced_locally
   let text = $state(query);
   let inputEl = $state<HTMLInputElement | null>(null);
 
