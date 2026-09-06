@@ -17,6 +17,8 @@
     sortCompletedTodosByCompletedAt,
     spliceOpenTodoOrder,
   } from '../lib/collection-todos';
+  import { compareByDueTime, isDueTodayOrOverdue } from '../lib/schedule';
+  import { todayStart } from '../lib/now';
   import { slide, fade } from 'svelte/transition';
   import { flip } from 'svelte/animate';
   import { dragHandleZone } from 'svelte-dnd-action';
@@ -51,6 +53,16 @@
   const items = $derived($collectionItems[collection.id] ?? []);
   const todoItems = $derived(filterTodos(items));
   const openTodos = $derived(filterOpenTodos(todoItems));
+  // Due/overdue todos render as a pinned non-draggable band above the manual
+  // order — same treatment as the flat Todos page, earliest due first.
+  const dueTodos = $derived(
+    openTodos
+      .filter(t => isDueTodayOrOverdue(t, $todayStart))
+      .sort(compareByDueTime),
+  );
+  const restOpenTodos = $derived(
+    openTodos.filter(t => !isDueTodayOrOverdue(t, $todayStart)),
+  );
   const completedTodos = $derived(
     sortCompletedTodosByCompletedAt(filterCompletedTodos(todoItems))
   );
@@ -205,7 +217,7 @@
   // ---- Drag-and-drop reordering of open todos ----
   let dndOpen = $state<Array<InboxItem & { id: string }>>([]);
   $effect(() => {
-    dndOpen = openTodos.map(t => ({ ...t }));
+    dndOpen = restOpenTodos.map(t => ({ ...t }));
   });
 
   function handleDndConsider(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
@@ -213,13 +225,15 @@
   }
 
   async function handleDndFinalize(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
-    const previous = openTodos.map(t => ({ ...t }));
+    const previous = restOpenTodos.map(t => ({ ...t }));
     dndOpen = e.detail.items;
     try {
+      // Due-band todos lead the persisted order so they resume a sane manual
+      // slot once their due date passes out of the band.
       const newItemIds = spliceOpenTodoOrder(
         collection.itemIds,
-        previous.map(t => t.id),
-        dndOpen.map(t => t.id),
+        openTodos.map(t => t.id),
+        [...dueTodos.map(t => t.id), ...dndOpen.map(t => t.id)],
       );
       await reorderCollectionItems(collection.id, newItemIds);
     } catch (error) {
@@ -404,6 +418,17 @@
           onopenmodal={(t) => { prefillTitle = t; addingType = 'todo'; }}
         />
 
+        {#if dueTodos.length > 0}
+          <div class="due-band">
+            <div class="due-header">Due</div>
+            <ul class="todo-list" role="list">
+              {#each dueTodos as todo (todo.id)}
+                <TodoRow {todo} {collection} {group} {onselect} />
+              {/each}
+            </ul>
+          </div>
+        {/if}
+
         {#if dndOpen.length > 0}
           <ul
             class="todo-list" role="list"
@@ -426,7 +451,7 @@
               </div>
             {/each}
           </ul>
-        {:else if completedTodos.length === 0}
+        {:else if dueTodos.length === 0 && completedTodos.length === 0}
           <p class="section-empty">No todos yet.</p>
         {/if}
 
@@ -884,6 +909,25 @@
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
+  }
+
+  /* Pinned due/overdue band — mirrors the flat Todos page's treatment. */
+  .due-band {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px dashed var(--border);
+  }
+
+  .due-header {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--danger);
+    padding: 0 0.25rem;
   }
 
   .completed-list {

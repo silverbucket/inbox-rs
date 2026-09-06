@@ -30,6 +30,8 @@ vi.mock('../lib/stores', async () => {
   };
 });
 
+import type { InboxItem } from '@inbox-rs/rs-module';
+import { collectionItems } from '../lib/stores';
 import CollectionView from './CollectionView.svelte';
 
 describe('CollectionView capture handling', () => {
@@ -179,5 +181,116 @@ describe('CollectionView header keyboard handling', () => {
     expect(focusBtn).toBeTruthy();
     pressEnter(focusBtn);
     expect(ontoggle).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Scheduling must mean the same thing on every todo list: a collection's
+ * Todos section pins due/overdue todos in a Due band above the manual order,
+ * exactly like the flat Todos page — a todo due today must not sit at the
+ * bottom just because it was filed last.
+ */
+describe('CollectionView due todos band', () => {
+  let host: HTMLElement;
+  let component: ReturnType<typeof mount> | undefined;
+
+  const collection = {
+    id: 'col-1',
+    name: 'Reading',
+    color: '#6366f1',
+    itemIds: ['t-old', 't-overdue', 't-today'],
+  };
+
+  const todo = (
+    id: string,
+    title: string,
+    startsAt?: string,
+  ): Partial<InboxItem> => ({
+    id,
+    title,
+    type: 'todo',
+    isTodo: true,
+    collectionId: collection.id,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...(startsAt ? { startsAt, scheduleKind: 'task' as const } : {}),
+  });
+
+  // Dates relative to the real clock — the due band is date-based, so
+  // "yesterday"/"today"/"tomorrow" are stable regardless of when tests run.
+  const at = (dayOffset: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + dayOffset);
+    d.setHours(9, 0, 0, 0);
+    return d.toISOString();
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    (collectionItems as unknown as { set: (v: unknown) => void }).set({
+      [collection.id]: [
+        // Manual itemIds order deliberately puts the scheduled todos last.
+        todo('t-old', 'manual first'),
+        todo('t-overdue', 'was due yesterday', at(-1)),
+        todo('t-today', 'due today', at(0)),
+        todo('t-tomorrow', 'due tomorrow', at(1)),
+      ],
+    });
+  });
+  afterEach(() => {
+    if (component) unmount(component);
+    component = undefined;
+    host.remove();
+    (collectionItems as unknown as { set: (v: unknown) => void }).set({});
+  });
+
+  function render() {
+    component = mount(CollectionView, {
+      target: host,
+      props: {
+        collection,
+        expanded: true,
+        onselect: vi.fn(),
+        onedit: vi.fn(),
+        ontoggle: vi.fn(),
+      },
+    });
+    flushSync();
+  }
+
+  const titles = (root: Element | null) =>
+    [...(root?.querySelectorAll('.title') ?? [])].map((el) =>
+      el.textContent?.trim(),
+    );
+
+  it('pins due/overdue todos in a Due band, earliest first', () => {
+    render();
+    const band = host.querySelector('.todos-section .due-band');
+    expect(band).toBeTruthy();
+    expect(titles(band)).toEqual(['was due yesterday', 'due today']);
+  });
+
+  it('keeps future and unscheduled todos in manual order below the band', () => {
+    render();
+    const band = host.querySelector('.todos-section .due-band');
+    const manualList = [
+      ...host.querySelectorAll('.todos-section .todo-list'),
+    ].find((ul) => !band?.contains(ul));
+    expect(titles(manualList ?? null)).toEqual([
+      'manual first',
+      'due tomorrow',
+    ]);
+  });
+
+  it('renders no band when nothing is due', () => {
+    (collectionItems as unknown as { set: (v: unknown) => void }).set({
+      [collection.id]: [todo('t-old', 'manual first', at(1))],
+    });
+    render();
+    expect(host.querySelector('.todos-section .due-band')).toBeNull();
+    expect(titles(host.querySelector('.todos-section'))).toEqual([
+      'manual first',
+    ]);
   });
 });
