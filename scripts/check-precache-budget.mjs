@@ -31,8 +31,13 @@ try {
 }
 
 // Workbox emits the manifest as [{url:"...",revision:"..."}]. Sum the size of
-// each referenced dist file.
-const urls = [...sw.matchAll(/url:\s*"([^"]+)"/g)].map((m) => m[1]);
+// each referenced dist file. Count each URL once: `includeAssets` and the
+// glob both list the icons and web manifest, but Workbox collapses identical
+// entries and fetches every URL a single time on install, so a duplicate
+// costs the visitor nothing.
+const urls = [
+  ...new Set([...sw.matchAll(/url:\s*"([^"]+)"/g)].map((m) => m[1])),
+];
 if (urls.length === 0) {
   console.error(
     '[precache-budget] no precache entries found in sw.js — did the Workbox output format change?',

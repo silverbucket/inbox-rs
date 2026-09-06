@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import UserMenu from './UserMenu.svelte';
+  import SearchButton from './SearchButton.svelte';
   import GroupFilterBar from './GroupFilterBar.svelte';
   import LogoShield from './LogoShield.svelte';
   import { pageUsesFilters, type Page, type Route } from '../lib/route';
@@ -12,6 +13,7 @@
   let {
     route,
     navTo,
+    onsearch,
     viewTodoCount,
     totalTodoCount,
     onaddgroup,
@@ -21,6 +23,8 @@
   }: {
     route: Route;
     navTo: (page: Page) => void;
+    /** Open the search page (or re-focus its field when already there). */
+    onsearch: () => void;
     /** Open todos within the current group/collection focus (primary badge). */
     viewTodoCount: number;
     /** Total incomplete todos everywhere (greyed secondary badge). */
@@ -76,6 +80,7 @@
       >Collections</button>
     </nav>
     <div class="header-right">
+      <SearchButton active={isActive('search')} onclick={onsearch} />
       <UserMenu bind:this={userMenu} {onopensettings} />
     </div>
   </div>

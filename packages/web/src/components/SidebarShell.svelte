@@ -5,6 +5,7 @@
   import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
   import AppFooter from './AppFooter.svelte';
   import UserMenu from './UserMenu.svelte';
+  import SearchButton from './SearchButton.svelte';
   import LogoShield from './LogoShield.svelte';
   import type { Page, Route } from '../lib/route';
   import { autofocus, autofocusIf } from '../lib/actions';
@@ -52,6 +53,7 @@
     route,
     navTo,
     navToCollection,
+    onsearch,
     viewTodoCount,
     totalTodoCount,
     onaddgroup,
@@ -63,6 +65,8 @@
     navTo: (page: Page) => void;
     /** Open a collection in focus mode (`#/collection/:id`). */
     navToCollection: (id: string) => void;
+    /** Open the search page (or re-focus its field when already there). */
+    onsearch: () => void;
     /** Open todos within the current group/collection focus (primary badge). */
     viewTodoCount: number;
     /** Total incomplete todos everywhere (greyed secondary badge). */
@@ -579,6 +583,7 @@
       >Collections</button>
     </nav>
     <div class="header-right">
+      <SearchButton active={isActive('search')} onclick={onsearch} />
       <UserMenu bind:this={userMenu} {onopensettings} />
     </div>
   </div>
