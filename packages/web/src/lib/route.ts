@@ -5,14 +5,21 @@
  * typical URL looks like:
  *   https://example.com/#/todos?g=workId,personalId
  *
- * Pages: inbox (default), todos, collections, plugins, and
+ * Pages: inbox (default), todos, collections, plugins, search, and
  * collection (focus mode for one collection: `#/collection/:id`).
  * Query params:
  *   g  — comma-separated group IDs for filter state. Only meaningful on
  *        the `todos` and `collections` pages; ignored elsewhere.
+ *   q  — search text. Only meaningful on the `search` page.
  */
 
-export type Page = 'inbox' | 'todos' | 'collections' | 'plugins' | 'collection';
+export type Page =
+  | 'inbox'
+  | 'todos'
+  | 'collections'
+  | 'plugins'
+  | 'search'
+  | 'collection';
 
 export interface Route {
   page: Page;
@@ -20,6 +27,8 @@ export interface Route {
   groupFilters?: string[];
   /** Focused collection id. Only set when `page` is `collection`. */
   collectionId?: string;
+  /** Search text from the `q=` param. Only set when `page` is `search`. */
+  query?: string;
 }
 
 /**
@@ -48,6 +57,12 @@ export function parseHash(hash: string): Route {
   }
 
   const page = pageFromPath(clean);
+  if (page === 'search') {
+    // Search carries its text and nothing else — group filters don't apply,
+    // results span every collection.
+    const q = parseQueryText(query);
+    return q ? { page, query: q } : { page };
+  }
   const groupFilters = parseQueryGroups(query);
   return groupFilters === undefined ? { page } : { page, groupFilters };
 }
@@ -63,6 +78,8 @@ function pageFromPath(clean: string): Page {
       return 'collections';
     case 'plugins':
       return 'plugins';
+    case 'search':
+      return 'search';
     default:
       // Legacy: #/group/:id and #/collections (ungrouped) both redirect
       // to the new Collections page. Filter params are not preserved.
@@ -83,6 +100,12 @@ function parseQueryGroups(query: string): string[] | undefined {
     .filter(Boolean);
 }
 
+function parseQueryText(query: string): string {
+  // URLSearchParams tolerates malformed percent-encoding (it never throws),
+  // so a hand-mangled link degrades to odd text rather than a routing error.
+  return query ? (new URLSearchParams(query).get('q') ?? '') : '';
+}
+
 /**
  * Format a Route back to a hash string (with leading `#`).
  * Filter params are only emitted on pages that use them.
@@ -95,6 +118,13 @@ export function formatRoute(route: Route): string {
       ? `#/collection/${encodeURIComponent(route.collectionId)}`
       : '#/collections';
   }
+  if (route.page === 'search') {
+    // URLSearchParams encodes spaces as `+`, which reads better in a shared
+    // link than `%20` and round-trips through `parseQueryText`.
+    return route.query
+      ? `#/search?${new URLSearchParams({ q: route.query })}`
+      : '#/search';
+  }
   const path = pathFromPage(route.page);
   if (!pageUsesFilters(route.page) || route.groupFilters === undefined) {
     return `#${path}`;
@@ -105,7 +135,7 @@ export function formatRoute(route: Route): string {
   return `#${path}?g=${route.groupFilters.join(',')}`;
 }
 
-function pathFromPage(page: Exclude<Page, 'collection'>): string {
+function pathFromPage(page: Exclude<Page, 'collection' | 'search'>): string {
   switch (page) {
     case 'inbox':
       return '/';

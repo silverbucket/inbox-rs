@@ -41,7 +41,8 @@ storage server like any other file, and nowhere else.
 **Organize** — File cards into collections, group related collections together,
 and filter the view down to what you're working on. Any card can become a todo,
 and todos get their own page with drag-to-order and a collapsed completed
-section.
+section. Search (`/` or `⌘K`) runs across everything at once — titles, notes,
+links, transcripts, and collection names — and never leaves the browser.
 
 **Act** — Give a card a time and it becomes a scheduled event or task, with an
 in-app alert when it comes due. From there it can be published to a real

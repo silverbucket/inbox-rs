@@ -39,6 +39,7 @@
   let PluginsPageComponent = $state<LazyComponent | null>(null);
   let TodosPageComponent = $state<LazyComponent | null>(null);
   let CollectionsPageComponent = $state<LazyComponent | null>(null);
+  let SearchPageComponent = $state<LazyComponent | null>(null);
   let CollectionFocusPageComponent = $state<LazyComponent | null>(null);
   let CollectionFormModalComponent = $state<LazyComponent | null>(null);
   let GroupFormModalComponent = $state<LazyComponent | null>(null);
@@ -126,6 +127,10 @@
 
   async function loadCollectionsPage() {
     CollectionsPageComponent ??= await loadLazy<LazyComponent>(() => import('./components/CollectionsPage.svelte'));
+  }
+
+  async function loadSearchPage() {
+    SearchPageComponent ??= await loadLazy<LazyComponent>(() => import('./components/SearchPage.svelte'));
   }
 
   async function loadCollectionFocusPage() {
@@ -231,6 +236,10 @@
   });
 
   $effect(() => {
+    if (bodyPage === 'search') void loadSearchPage();
+  });
+
+  $effect(() => {
     if (route.page === 'collection') void loadCollectionFocusPage();
   });
 
@@ -309,6 +318,58 @@
       focusReturnAvailable = true;
       window.location.hash = hash;
     }
+  }
+
+  // Bumped by the shortcut while the search page is already showing, so the
+  // page re-focuses its field instead of navigating nowhere.
+  let searchFocusNonce = $state(0);
+
+  // The search text the page shows. Read from the route while on it, and
+  // held while focus mode is popped up over it (the route is then the
+  // collection's) so the results underneath don't blank out.
+  let searchQuery = $state('');
+  $effect(() => {
+    if (route.page === 'search') searchQuery = route.query ?? '';
+  });
+
+  function navToSearch() {
+    if (route.page === 'search') searchFocusNonce += 1;
+    else navTo('search');
+  }
+
+  // Each edit rewrites the hash in place: the URL stays shareable and
+  // survives a reload, without a history entry per keystroke — Back leaves
+  // the search page in one step. replaceState fires no hashchange, so the
+  // route is updated here directly (as the filter sync above does).
+  function handleSearchQueryChange(query: string) {
+    if (route.page !== 'search') return;
+    const next: Route = query ? { page: 'search', query } : { page: 'search' };
+    const hash = formatRoute(next);
+    if (window.location.hash !== hash) window.history.replaceState(null, '', hash);
+    route = next;
+  }
+
+  // ⌘/Ctrl+K and `/` open search from anywhere in the app. `/` is left alone
+  // inside form fields (it is ordinary text there); ⌘K is honoured in an
+  // *empty* field too, since the inbox capture bar holds focus on that page
+  // and would otherwise swallow the shortcut — a field with a draft in it
+  // keeps it, so leaving the page can't discard unsaved text.
+  function handleGlobalKeydown(e: KeyboardEvent) {
+    if (e.defaultPrevented || e.altKey) return;
+    const mod = e.metaKey || e.ctrlKey;
+    const isModK = mod && !e.shiftKey && e.key.toLowerCase() === 'k';
+    const isSlash = !mod && e.key === '/';
+    if (!isModK && !isSlash) return;
+    if (anyModalOpen) return;
+    const target = e.target as HTMLElement | null;
+    const field = target?.closest<HTMLElement>('input, textarea, select, [contenteditable="true"]');
+    if (field) {
+      if (isSlash) return;
+      const value = 'value' in field ? String((field as HTMLInputElement).value) : field.textContent ?? '';
+      if (value.trim() !== '') return;
+    }
+    e.preventDefault();
+    navToSearch();
   }
 
   function openAdd(type: InboxItemType) {
@@ -562,6 +623,17 @@
         {#if TodosPageComponent}
           <TodosPageComponent onselect={openView} onaddtodo={openAddTodo} onaddtodoincollection={openAddTodoInCollection} />
         {/if}
+      {:else if bodyPage === 'search'}
+        {#if SearchPageComponent}
+          <SearchPageComponent
+            query={searchQuery}
+            onquerychange={handleSearchQueryChange}
+            onselect={openView}
+            onfocuscollection={navToCollection}
+            focusOnMount={!isTouch}
+            focusNonce={searchFocusNonce}
+          />
+        {/if}
       {:else}
         {#if CollectionsPageComponent}
           <CollectionsPageComponent onselect={openView} onfocuscollection={navToCollection} />
@@ -570,12 +642,14 @@
     {/if}
 {/snippet}
 
+<svelte:window onkeydown={handleGlobalKeydown} />
+
 {#if $layout === 'sidebar'}
-  <SidebarShell {route} {navTo} {navToCollection} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} bind:userMenu>
+  <SidebarShell {route} {navTo} {navToCollection} onsearch={navToSearch} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} bind:userMenu>
     {#snippet children()}{@render shellBody()}{/snippet}
   </SidebarShell>
 {:else}
-  <ClassicShell {route} {navTo} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} bind:userMenu>
+  <ClassicShell {route} {navTo} onsearch={navToSearch} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} bind:userMenu>
     {#snippet children()}{@render shellBody()}{/snippet}
   </ClassicShell>
 {/if}

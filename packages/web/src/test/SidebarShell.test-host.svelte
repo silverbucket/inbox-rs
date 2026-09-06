@@ -19,7 +19,7 @@
   } = $props();
 </script>
 
-<SidebarShell {route} {navTo} {navToCollection} {viewTodoCount} {totalTodoCount} {onaddgroup}>
+<SidebarShell {route} {navTo} {navToCollection} onsearch={() => {}} {viewTodoCount} {totalTodoCount} {onaddgroup}>
   {#snippet children()}
     <div data-testid="shell-body"></div>
   {/snippet}

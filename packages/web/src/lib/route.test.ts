@@ -170,3 +170,53 @@ describe('pageUsesFilters', () => {
     expect(pageUsesFilters('collection')).toBe(false);
   });
 });
+
+describe('search route', () => {
+  it('parses #/search with and without a query', () => {
+    expect(parseHash('#/search')).toEqual({ page: 'search' });
+    expect(parseHash('#/search?q=')).toEqual({ page: 'search' });
+    expect(parseHash('#/search?q=hello')).toEqual({
+      page: 'search',
+      query: 'hello',
+    });
+  });
+
+  it('decodes plus-separated and percent-encoded query text', () => {
+    expect(parseHash('#/search?q=two+words')).toEqual({
+      page: 'search',
+      query: 'two words',
+    });
+    expect(parseHash('#/search?q=caf%C3%A9%20%22a+b%22')).toEqual({
+      page: 'search',
+      query: 'café "a b"',
+    });
+  });
+
+  it('ignores group filters on the search page', () => {
+    expect(parseHash('#/search?q=x&g=a,b')).toEqual({
+      page: 'search',
+      query: 'x',
+    });
+  });
+
+  it('formats the search route', () => {
+    expect(formatRoute({ page: 'search' })).toBe('#/search');
+    expect(formatRoute({ page: 'search', query: '' })).toBe('#/search');
+    expect(formatRoute({ page: 'search', query: 'two words' })).toBe(
+      '#/search?q=two+words',
+    );
+  });
+
+  it('round-trips awkward query text', () => {
+    for (const query of ['a&b=c', '#hash', '50% off', 'café "a b"', '/']) {
+      expect(parseHash(formatRoute({ page: 'search', query }))).toEqual({
+        page: 'search',
+        query,
+      });
+    }
+  });
+
+  it('does not use group filters', () => {
+    expect(pageUsesFilters('search')).toBe(false);
+  });
+});
