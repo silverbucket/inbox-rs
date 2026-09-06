@@ -132,7 +132,19 @@ export function searchItems(
   query: string,
   collections: Record<string, Collection> = {},
 ): SearchResult[] {
-  const terms = parseQuery(query);
+  return searchItemsWithTerms(items, parseQuery(query), collections);
+}
+
+/**
+ * `searchItems` for callers that already hold the parsed terms — the search
+ * page tokenizes once per keystroke to decide whether to search at all, and
+ * reuses that here rather than parsing the same text twice.
+ */
+export function searchItemsWithTerms(
+  items: Iterable<InboxItem>,
+  terms: readonly string[],
+  collections: Record<string, Collection> = {},
+): SearchResult[] {
   if (terms.length === 0) return [];
 
   const results: SearchResult[] = [];

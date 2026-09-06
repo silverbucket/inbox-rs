@@ -2,7 +2,7 @@
   import type { InboxItem } from '@inbox-rs/rs-module';
   import { untrack } from 'svelte';
   import { inview } from '../lib/actions';
-  import { isTodoLike, parseQuery, searchItems } from '../lib/search';
+  import { isTodoLike, parseQuery, searchItemsWithTerms } from '../lib/search';
   import { collections, groups, items } from '../lib/stores';
   import InboxCard from './InboxCard.svelte';
   import TodoRow from './TodoRow.svelte';
@@ -81,9 +81,10 @@
     else inputEl?.blur();
   }
 
-  const hasTerms = $derived(parseQuery(text).length > 0);
+  const terms = $derived(parseQuery(text));
+  const hasTerms = $derived(terms.length > 0);
   const results = $derived(
-    hasTerms ? searchItems(Object.values($items), text, $collections) : [],
+    searchItemsWithTerms(Object.values($items), terms, $collections),
   );
   const todos = $derived(results.filter((r) => isTodoLike(r.item)).map((r) => r.item));
   const cards = $derived(results.filter((r) => !isTodoLike(r.item)).map((r) => r.item));

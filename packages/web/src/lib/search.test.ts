@@ -7,6 +7,7 @@ import {
   scoreFields,
   searchFields,
   searchItems,
+  searchItemsWithTerms,
 } from './search';
 
 function note(
@@ -168,6 +169,13 @@ describe('searchItems', () => {
   it('returns nothing for an empty query', () => {
     expect(searchItems(items, '')).toEqual([]);
     expect(searchItems(items, '  ')).toEqual([]);
+    expect(searchItemsWithTerms(items, [])).toEqual([]);
+  });
+
+  it('gives the same results for pre-parsed terms', () => {
+    expect(searchItemsWithTerms(items, parseQuery('rust talk'))).toEqual(
+      searchItems(items, 'rust talk'),
+    );
   });
 
   it('matches across title and body, excluding non-matches', () => {
