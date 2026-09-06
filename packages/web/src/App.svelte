@@ -274,6 +274,19 @@
     // underneath at its scroll position for when the popup closes.
     || (route.page === 'collection' && !!CollectionFocusPageComponent),
   );
+  // The same set keyed on the *request* rather than the loaded chunk. The
+  // search shortcut checks this one: during the moment between summoning a
+  // modal and its chunk arriving, navigating away would let the route
+  // cleanup discard the pending view.
+  const anyOverlayRequested = $derived(
+    activeModal !== null
+    || viewingItem !== null
+    || showCollectionForm
+    || showGroupForm
+    || captureSheetOpen
+    || settingsOpen
+    || route.page === 'collection',
+  );
   let savedScrollY = 0;
   let wasModalOpen = false;
 
@@ -360,7 +373,7 @@
     const isModK = mod && !e.shiftKey && e.key.toLowerCase() === 'k';
     const isSlash = !mod && e.key === '/';
     if (!isModK && !isSlash) return;
-    if (anyModalOpen) return;
+    if (anyOverlayRequested) return;
     const target = e.target as HTMLElement | null;
     const field = target?.closest<HTMLElement>('input, textarea, select, [contenteditable="true"]');
     if (field) {
