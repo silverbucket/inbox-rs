@@ -22,6 +22,7 @@
   import { layout } from './lib/layout';
   import SettingsModal from './components/SettingsModal.svelte';
   import type { SectionId } from './lib/settings-sections';
+  import KeyboardShortcutsModal from './components/KeyboardShortcutsModal.svelte';
 
   type LazyComponent = Component<Record<string, unknown>>;
   // Svelte 5 components are functions, not classes — InstanceType<> doesn't
@@ -51,6 +52,7 @@
 
   let captureSheetOpen = $state(false);
   let settingsOpen = $state(false);
+  let shortcutHelpOpen = $state(false);
   let settingsInitialSection = $state<SectionId | undefined>(undefined);
   let notePrefillTitle = $state('');
   let prefillFile = $state<File | undefined>(undefined);
@@ -201,7 +203,10 @@
     setAlertOpenHandler(openView);
     initAlerts();
 
-    return () => window.removeEventListener('hashchange', syncRoute);
+    return () => {
+      window.removeEventListener('hashchange', syncRoute);
+      clearGoSequence();
+    };
   });
 
   // Close modals when navigating to a *different* page. `route` is
@@ -270,6 +275,7 @@
     || (showGroupForm && !!GroupFormModalComponent)
     || captureSheetOpen
     || settingsOpen
+    || shortcutHelpOpen
     // The focus popup scrolls internally; locking the body keeps the page
     // underneath at its scroll position for when the popup closes.
     || (route.page === 'collection' && !!CollectionFocusPageComponent),
@@ -285,6 +291,7 @@
     || showGroupForm
     || captureSheetOpen
     || settingsOpen
+    || shortcutHelpOpen
     || route.page === 'collection',
   );
   let savedScrollY = 0;
@@ -362,27 +369,94 @@
     route = next;
   }
 
-  // ⌘/Ctrl+K and `/` open search from anywhere in the app. `/` is left alone
-  // inside form fields (it is ordinary text there); ⌘K is honoured in an
-  // *empty* field too, since the inbox capture bar holds focus on that page
-  // and would otherwise swallow the shortcut — a field with a draft in it
-  // keeps it, so leaving the page can't discard unsaved text.
+  // The first G in a Gmail-style navigation chord stays live briefly. Keeping
+  // it here (rather than in page components) makes the scheme identical in
+  // both shell layouts and across every page.
+  let goSequenceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function clearGoSequence() {
+    if (goSequenceTimer) clearTimeout(goSequenceTimer);
+    goSequenceTimer = undefined;
+  }
+
+  function startGoSequence() {
+    clearGoSequence();
+    goSequenceTimer = setTimeout(clearGoSequence, 1200);
+  }
+
+  function isTypingTarget(target: EventTarget | null): boolean {
+    return target instanceof HTMLElement
+      && !!target.closest('input, textarea, select, [contenteditable="true"]');
+  }
+
+  // Global shortcuts are deliberately single-key only outside editable
+  // controls. Search keeps its established exception for an empty input so
+  // the auto-focused Inbox capture bar doesn't swallow ⌘/Ctrl+K.
   function handleGlobalKeydown(e: KeyboardEvent) {
-    if (e.defaultPrevented || e.altKey) return;
+    if (e.defaultPrevented || e.altKey || e.repeat) return;
     const mod = e.metaKey || e.ctrlKey;
+    const key = e.key.toLowerCase();
     const isModK = mod && !e.shiftKey && e.key.toLowerCase() === 'k';
     const isSlash = !mod && e.key === '/';
-    if (!isModK && !isSlash) return;
-    if (anyOverlayRequested) return;
     const target = e.target as HTMLElement | null;
-    const field = target?.closest<HTMLElement>('input, textarea, select, [contenteditable="true"]');
-    if (field) {
-      if (isSlash) return;
-      const value = 'value' in field ? String((field as HTMLInputElement).value) : field.textContent ?? '';
-      if (value.trim() !== '') return;
+    const field = isTypingTarget(target)
+      ? target?.closest<HTMLElement>('input, textarea, select, [contenteditable="true"]')
+      : null;
+
+    if (!mod && e.key === '?' && !field && (!anyOverlayRequested || shortcutHelpOpen)) {
+      e.preventDefault();
+      shortcutHelpOpen = !shortcutHelpOpen;
+      return;
     }
-    e.preventDefault();
-    navToSearch();
+
+    if (anyOverlayRequested) {
+      clearGoSequence();
+      return;
+    }
+
+    if (isModK || isSlash) {
+      if (field) {
+        if (isSlash) return;
+        const value = 'value' in field ? String((field as HTMLInputElement).value) : field.textContent ?? '';
+        if (value.trim() !== '') return;
+      }
+      e.preventDefault();
+      clearGoSequence();
+      navToSearch();
+      return;
+    }
+
+    if (mod || e.shiftKey || field) {
+      clearGoSequence();
+      return;
+    }
+
+    if (goSequenceTimer) {
+      clearGoSequence();
+      const page = key === 'i' ? 'inbox' : key === 't' ? 'todos' : key === 'c' ? 'collections' : null;
+      if (page) {
+        e.preventDefault();
+        navTo(page);
+      }
+      return;
+    }
+
+    if (key === 'g') {
+      startGoSequence();
+      return;
+    }
+
+    const action = {
+      n: () => openAdd('note'),
+      t: () => openAddTodo(),
+      b: () => openAdd('bookmark'),
+      r: handleRecord,
+      s: () => openSettings(),
+    }[key];
+    if (action) {
+      e.preventDefault();
+      action();
+    }
   }
 
   function openAdd(type: InboxItemType) {
@@ -658,11 +732,11 @@
 <svelte:window onkeydown={handleGlobalKeydown} />
 
 {#if $layout === 'sidebar'}
-  <SidebarShell {route} {navTo} {navToCollection} onsearch={navToSearch} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} bind:userMenu>
+  <SidebarShell {route} {navTo} {navToCollection} onsearch={navToSearch} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} onopenhelp={() => shortcutHelpOpen = true} bind:userMenu>
     {#snippet children()}{@render shellBody()}{/snippet}
   </SidebarShell>
 {:else}
-  <ClassicShell {route} {navTo} onsearch={navToSearch} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} bind:userMenu>
+  <ClassicShell {route} {navTo} onsearch={navToSearch} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} onopenhelp={() => shortcutHelpOpen = true} bind:userMenu>
     {#snippet children()}{@render shellBody()}{/snippet}
   </ClassicShell>
 {/if}
@@ -728,6 +802,9 @@
   />
 {/if}
 <SettingsModal bind:open={settingsOpen} initialSection={settingsInitialSection}/>
+{#if shortcutHelpOpen}
+  <KeyboardShortcutsModal onclose={() => shortcutHelpOpen = false} />
+{/if}
 <Toast />
 
 <style>
