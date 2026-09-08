@@ -394,8 +394,8 @@
     const isCommandPalette = mod && !e.altKey && e.shiftKey && key === 'p';
     const isSettings = mod && !e.altKey && !e.shiftKey && e.key === ',';
     const isHelp = mod && !e.altKey && !e.shiftKey && e.key === '/';
-    const isAddTodo = mod && e.altKey && !e.shiftKey && key === 't';
-    const isAddCard = mod && e.altKey && !e.shiftKey && key === 'c';
+    const isAddTodo = mod && !e.altKey && e.shiftKey && e.key === 'Enter';
+    const isAddCard = mod && !e.altKey && !e.shiftKey && e.key === 'Enter';
     const isTyping = isTypingTarget(e.target);
 
     if (isHelp && (!anyOverlayRequested || shortcutHelpOpen)) {
@@ -546,7 +546,7 @@
   }
 
   /** Open the add-todo modal, optionally pre-filling the title and target
-      collection (⌘/Ctrl-Enter or the Fab from the Todos quick-add, so the
+      collection (⌘/Ctrl-Shift-Enter or the Fab from the Todos quick-add, so the
       modal mirrors the quick-add's title + collection selection). */
   function openAddTodo(
     prefillTitle = '',

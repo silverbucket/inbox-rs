@@ -293,15 +293,14 @@ test.describe('search', () => {
     );
     await capture.fill('draft stays here');
 
-    await connectedPage.keyboard.press('ControlOrMeta+Alt+t');
+    await connectedPage.keyboard.press('ControlOrMeta+Shift+Enter');
     await expect(
       connectedPage.getByRole('heading', { name: 'Add Todo' }),
     ).toBeVisible();
     await connectedPage.keyboard.press('Escape');
     await expect(capture).toHaveValue('draft stays here');
 
-    await capture.focus();
-    await connectedPage.keyboard.press('ControlOrMeta+Alt+c');
+    await connectedPage.keyboard.press('ControlOrMeta+Enter');
     await expect(
       connectedPage.getByRole('heading', { name: 'Add Note' }),
     ).toBeVisible();

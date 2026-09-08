@@ -96,6 +96,13 @@ describe('CaptureBar', () => {
     expect(oncapture).not.toHaveBeenCalled();
   });
 
+  it('leaves modified Shift-Enter for the global todo shortcut', () => {
+    render();
+    typeAndKey('a todo draft', { metaKey: true, shiftKey: true });
+    expect(oncapture).not.toHaveBeenCalled();
+    expect(onopeneditor).not.toHaveBeenCalled();
+  });
+
   it('ignores Enter on empty input', () => {
     render();
     typeAndKey('   ', {});

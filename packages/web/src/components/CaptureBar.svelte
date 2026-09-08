@@ -67,6 +67,9 @@
       return;
     }
     if (e.metaKey || e.ctrlKey) {
+      // The global handler owns modified Shift-Enter (Add todo). Leave the
+      // event untouched so it can bubble there instead of quick-saving.
+      if (e.shiftKey) return;
       e.preventDefault();
       onopeneditor(value);
       value = '';

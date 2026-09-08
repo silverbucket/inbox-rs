@@ -18,7 +18,7 @@
   let { onselect, onaddtodo, onaddtodoincollection }: {
     onselect: (item: InboxItem) => void;
     /** Opens the add-todo modal for richer details and optional filing.
-        Optionally pre-fills the todo title (⌘/Ctrl-Enter from the quick-add)
+        Optionally pre-fills the todo title (⌘/Ctrl-Shift-Enter from the quick-add)
         and the target collection (mirrors the quick-add's collection select),
         where `null` is the quick-add's explicit Unfiled and `undefined` means
         no destination context at all (the bare Fab). */
@@ -135,7 +135,7 @@
   -->
   {#snippet todoToolbar()}
     <!-- Desktop: hidden — capture happens in the input (Enter quick-adds,
-         ⌘/Ctrl-Enter opens the modal). Mobile: the Fab is position:fixed, a
+         ⌘/Ctrl-Shift-Enter opens the modal). Mobile: the Fab is position:fixed, a
          floating + circle in the thumb zone. -->
     <div class="page-toolbar">
       <Fab onclick={() => onaddtodo('', $soleVisibleCollectionId)} label="New todo" />
@@ -144,7 +144,7 @@
 
   {#if openTodos.length === 0 && completedTodos.length === 0 && onCalendarTodos.length === 0}
     <!-- Lead with the composer so its input lines up with the inbox capture
-         bar. The toolbar's Fab is hidden on desktop (the input + ⌘↵ handle
+         bar. The toolbar's Fab is hidden on desktop (the input + ⌘⇧↵ handle
          capture) and a floating + circle on mobile. -->
     <TodoQuickAdd hideOnMobile focusOnMount onopenmodal={(t, c) => onaddtodo(t, c)} />
     {@render todoToolbar()}
@@ -297,7 +297,7 @@
   }
 
   /* Desktop: no inline New-todo pill — capture lives in the input (Enter to
-     quick-add, ⌘/Ctrl-Enter to open the modal). On mobile the Fab is
+     quick-add, ⌘/Ctrl-Shift-Enter to open the modal). On mobile the Fab is
      position:fixed (out of flow), so the floating + circle still shows. */
   @media (min-width: 769px) {
     .page-toolbar {

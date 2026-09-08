@@ -4,7 +4,6 @@
 
   let { onclose }: { onclose: () => void } = $props();
   const mod = modLabel();
-  const alt = mod === '⌘' ? '⌥' : 'Alt';
 
   const sections = [
     {
@@ -14,15 +13,14 @@
         { keys: [`${mod} ⇧ P`], label: 'Open command palette' },
         { keys: [`${mod} ,`], label: 'Open settings' },
         { keys: [`${mod} /`], label: 'Show these shortcuts' },
-        { keys: [`${mod} ${alt} T`], label: 'Add a todo' },
-        { keys: [`${mod} ${alt} C`], label: 'Add a card' },
+        { keys: [`${mod} Enter`], label: 'Add a card' },
+        { keys: [`${mod} ⇧ Enter`], label: 'Add a todo' },
       ],
     },
     {
       title: 'Quick entry',
       shortcuts: [
         { keys: ['Enter'], label: 'Save the quick entry' },
-        { keys: [`${mod} Enter`], label: 'Open the full editor' },
         { keys: ['Esc'], label: 'Close a dialog' },
       ],
     },

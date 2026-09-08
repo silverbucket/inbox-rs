@@ -140,6 +140,7 @@ describe('TodoQuickAdd', () => {
       new KeyboardEvent('keydown', {
         key: 'Enter',
         ctrlKey: true,
+        shiftKey: true,
         bubbles: true,
       }),
     );
