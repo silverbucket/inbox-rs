@@ -380,18 +380,24 @@
   }
 
   // Modified shortcuts work even while the Inbox or Todos composer owns
-  // focus. The bare slash remains ordinary text in editable controls.
+  // focus. At the compact layout breakpoint, the shortcut UI and bindings
+  // both disappear together.
   function handleGlobalKeydown(e: KeyboardEvent) {
-    if (e.defaultPrevented || e.altKey || e.repeat) return;
+    if (
+      e.defaultPrevented
+      || e.altKey
+      || e.repeat
+      || window.matchMedia('(max-width: 768px)').matches
+    ) return;
     const mod = e.metaKey || e.ctrlKey;
     const key = e.key.toLowerCase();
     const isModK = mod && !e.shiftKey && e.key.toLowerCase() === 'k';
     const isCommandPalette = mod && e.shiftKey && key === 'p';
     const isSettings = mod && !e.shiftKey && e.key === ',';
-    const isSlash = !mod && e.key === '/';
+    const isHelp = mod && !e.shiftKey && e.key === '/';
     const isTyping = isTypingTarget(e.target);
 
-    if (!mod && e.key === '?' && !isTyping && (!anyOverlayRequested || shortcutHelpOpen)) {
+    if (isHelp && (!anyOverlayRequested || shortcutHelpOpen)) {
       e.preventDefault();
       shortcutHelpOpen = !shortcutHelpOpen;
       return;
@@ -413,9 +419,8 @@
       return;
     }
 
-    if (isModK || isSlash) {
+    if (isModK) {
       if (isTyping) {
-        if (isSlash) return;
         const element = e.target instanceof Element ? e.target : null;
         const editor = element?.closest<HTMLElement>(
           'input, textarea, select, [contenteditable]',
@@ -598,7 +603,7 @@
     { id: 'bookmark', label: 'New bookmark', hint: 'Create', keywords: 'nb link' },
     { id: 'audio', label: 'Record audio', hint: 'Create', keywords: 'voice memo' },
     { id: 'settings', label: 'Open settings', hint: `${commandMod} ,`, keywords: 'preferences' },
-    { id: 'help', label: 'Keyboard shortcuts', hint: '?', keywords: 'help keys' },
+    { id: 'help', label: 'Keyboard shortcuts', hint: `${commandMod} /`, keywords: 'help keys' },
   ];
 
   function runCommand(id: string) {
@@ -712,6 +717,7 @@
           <SearchPageComponent
             query={searchQuery}
             onquerychange={handleSearchQueryChange}
+            onclose={() => navTo('inbox')}
             onselect={openView}
             onfocuscollection={navToCollection}
             focusOnMount={!isTouch}

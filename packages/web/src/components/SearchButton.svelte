@@ -3,9 +3,7 @@
 
   let { active = false, onclick }: { active?: boolean; onclick: () => void } = $props();
 
-  // The same two shortcuts App.svelte listens for; the tooltip is the only
-  // place they are advertised, so keep it in step with the handler there.
-  const shortcut = isMac() ? '⌘K or /' : 'Ctrl+K or /';
+  const shortcut = isMac() ? '⌘K' : 'Ctrl+K';
 </script>
 
 <button

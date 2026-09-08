@@ -1,6 +1,6 @@
 /**
  * Global search: the `#/search?q=` page, the header button, the `/` and
- * ⌘/Ctrl+K shortcuts, and results drawn from every surface (inbox cards,
+ * ⌘/Ctrl+K shortcut, and results drawn from every surface (inbox cards,
  * filed references, todos).
  *
  * Items are seeded straight into storage before the app connects, so the
@@ -93,10 +93,9 @@ test.describe('search', () => {
     await box.fill('zeppelin');
     await expect(page.getByText('Nothing matches “zeppelin”')).toBeVisible();
 
-    // Escape clears; the URL drops the query with it.
+    // Escape exits search.
     await box.press('Escape');
-    await expect(box).toHaveValue('');
-    await expect(page).toHaveURL(/#\/search$/);
+    await expect(page).toHaveURL(/#\/?$/);
 
     assertNoConsoleErrors(log);
     await context.close();
@@ -146,9 +145,9 @@ test.describe('search', () => {
       connectedPage.getByRole('button', { name: 'Todos' }).first(),
     ).toHaveAttribute('aria-current', 'page');
 
-    // `/` from the page body (nothing focused).
+    // ⌘/Ctrl+K from the page body (nothing focused).
     await connectedPage.locator('body').click({ position: { x: 5, y: 5 } });
-    await connectedPage.keyboard.press('/');
+    await connectedPage.keyboard.press('ControlOrMeta+k');
     await expect(connectedPage).toHaveURL(/#\/search$/);
     const box = connectedPage.getByRole('searchbox', { name: 'Search' });
     await expect(box).toBeFocused();
@@ -172,7 +171,7 @@ test.describe('search', () => {
     await connectedPage.keyboard.press('ControlOrMeta+k');
     await expect(connectedPage).toHaveURL(/#\/?$/);
     await expect(capture).toHaveValue('half-written thought');
-    // And `/` is plain text inside a field.
+    // Unmodified punctuation is plain text inside a field.
     await capture.press('/');
     await expect(capture).toHaveValue('half-written thought/');
     await expect(connectedPage).toHaveURL(/#\/?$/);
@@ -192,7 +191,7 @@ test.describe('search', () => {
       name: 'Keyboard shortcuts',
     });
 
-    // Bare shortcuts remain text while an editor owns focus.
+    // Unmodified punctuation remains text while an editor owns focus.
     await expect(capture).toBeFocused();
     await connectedPage.keyboard.type('?');
     await expect(capture).toHaveValue('?');
@@ -212,16 +211,16 @@ test.describe('search', () => {
     await expect(editable).toHaveText('?');
     await expect(help).toHaveCount(0);
 
-    // Outside an editor, ? opens help. Other global overlays stay gated
-    // until it closes.
-    await connectedPage.locator('body').click({ position: { x: 5, y: 5 } });
-    await connectedPage.keyboard.press('?');
+    // The modified help shortcut works from an editor. Other global overlays
+    // stay gated until it closes.
+    await capture.focus();
+    await connectedPage.keyboard.press('ControlOrMeta+/');
     await expect(help).toBeVisible();
     await connectedPage.keyboard.press('ControlOrMeta+,');
     await expect(
       connectedPage.getByRole('dialog', { name: 'Settings' }),
     ).toHaveCount(0);
-    await connectedPage.keyboard.press('?');
+    await connectedPage.keyboard.press('ControlOrMeta+/');
     await expect(help).toHaveCount(0);
 
     // Modified shortcuts are available from quick entry, and opening an
@@ -245,5 +244,27 @@ test.describe('search', () => {
       connectedPage.getByRole('dialog', { name: 'Settings' }),
     ).toBeVisible();
     await expect(capture).toHaveValue('?');
+  });
+
+  test('hides help and disables global shortcuts when the sidebar moves above content', async ({
+    connectedPage,
+    webOrigin,
+  }) => {
+    await connectedPage.setViewportSize({ width: 768, height: 900 });
+    await connectedPage.goto(`${webOrigin}/#/todos`);
+    await connectedPage.waitForLoadState('networkidle');
+
+    await expect(
+      connectedPage.getByRole('button', { name: 'Keyboard shortcuts' }),
+    ).toBeHidden();
+
+    await connectedPage.locator('body').click({ position: { x: 5, y: 5 } });
+    await connectedPage.keyboard.press('?');
+    await connectedPage.keyboard.press('ControlOrMeta+Shift+p');
+    await connectedPage.keyboard.press('ControlOrMeta+,');
+    await connectedPage.keyboard.press('/');
+
+    await expect(connectedPage).toHaveURL(/#\/todos$/);
+    await expect(connectedPage.getByRole('dialog')).toHaveCount(0);
   });
 });

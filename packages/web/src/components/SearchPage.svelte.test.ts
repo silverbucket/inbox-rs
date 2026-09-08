@@ -65,6 +65,7 @@ describe('SearchPage', () => {
   let host: HTMLElement;
   let component: ReturnType<typeof mount> | undefined;
   let onquerychange: ReturnType<typeof vi.fn>;
+  let onclose: ReturnType<typeof vi.fn>;
   let onselect: ReturnType<typeof vi.fn>;
   let onfocuscollection: ReturnType<typeof vi.fn>;
 
@@ -99,6 +100,7 @@ describe('SearchPage', () => {
       },
     });
     onquerychange = vi.fn();
+    onclose = vi.fn();
     onselect = vi.fn();
     onfocuscollection = vi.fn();
     host = document.createElement('div');
@@ -129,6 +131,7 @@ describe('SearchPage', () => {
       target: host,
       props: {
         onquerychange,
+        onclose,
         onselect,
         onfocuscollection,
         get query() {
@@ -217,7 +220,7 @@ describe('SearchPage', () => {
     expect(host.querySelector('.empty-state')).toBeNull();
   });
 
-  it('clears with the button and with Escape, then blurs on a second Escape', () => {
+  it('clears with the button and exits with Escape', () => {
     render({ query: 'rust' });
     const el = input();
     el.focus();
@@ -233,15 +236,9 @@ describe('SearchPage', () => {
       new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
     );
     flushSync();
-    expect(el.value).toBe('');
-    expect(onquerychange).toHaveBeenLastCalledWith('');
+    expect(el.value).toBe('rust');
+    expect(onclose).toHaveBeenCalledOnce();
     expect(document.activeElement).toBe(el);
-
-    el.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-    );
-    flushSync();
-    expect(document.activeElement).not.toBe(el);
   });
 
   it('adopts a new query from the route', () => {

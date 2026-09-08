@@ -10,6 +10,7 @@
   let {
     query,
     onquerychange,
+    onclose,
     onselect,
     onfocuscollection,
     focusOnMount = false,
@@ -19,6 +20,8 @@
     query: string;
     /** Called on every edit so the URL tracks the text (shareable, survives reload). */
     onquerychange: (query: string) => void;
+    /** Leave search and return to the inbox. */
+    onclose: () => void;
     onselect: (item: InboxItem) => void;
     /** Open a result's collection in focus mode. */
     onfocuscollection: (collectionId: string) => void;
@@ -76,11 +79,8 @@
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key !== 'Escape') return;
-    // First Escape clears the text; a second one drops focus so the page's
-    // other shortcuts come back.
     e.preventDefault();
-    if (text) clear();
-    else inputEl?.blur();
+    onclose();
   }
 
   const terms = $derived(parseQuery(text));

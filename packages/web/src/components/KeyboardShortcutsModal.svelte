@@ -12,13 +12,7 @@
         { keys: [`${mod} K`], label: 'Search everything' },
         { keys: [`${mod} ⇧ P`], label: 'Open command palette' },
         { keys: [`${mod} ,`], label: 'Open settings' },
-      ],
-    },
-    {
-      title: 'When not typing',
-      shortcuts: [
-        { keys: ['/'], label: 'Search everything' },
-        { keys: ['?'], label: 'Show these shortcuts' },
+        { keys: [`${mod} /`], label: 'Show these shortcuts' },
       ],
     },
     {
@@ -82,7 +76,7 @@
         </section>
       {/each}
     </div>
-    <p class="note">Modified shortcuts work while a quick-entry field is focused. A bare / remains normal text while you’re typing.</p>
+    <p class="note">Shortcuts work while a quick-entry field is focused.</p>
   </div>
 </div>
 

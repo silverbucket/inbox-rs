@@ -6,7 +6,7 @@
   type="button"
   class="help-trigger"
   aria-label="Keyboard shortcuts"
-  title="Keyboard shortcuts (?)"
+  title="Keyboard shortcuts"
   {onclick}
 >
   <span aria-hidden="true">?</span>
@@ -40,7 +40,7 @@
     outline-offset: 2px;
   }
 
-  @media (max-width: 600px) {
+  @media (max-width: 768px) {
     .help-trigger { display: none; }
   }
 </style>
