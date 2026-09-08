@@ -84,6 +84,12 @@ html {
   overflow-x: hidden;
   height: 100%;
   -webkit-text-size-adjust: 100%;
+  /* Block the browser's two-finger-swipe back/forward navigation: nothing in
+     the app scrolls horizontally at the root, so a touchpad swipe would
+     otherwise chain to the viewport and navigate history. Set on both html
+     and body — Chrome propagated this to the viewport from body until 140;
+     Chrome 140+ and other browsers take it from the root element. */
+  overscroll-behavior-x: none;
 }
 
 body {
@@ -100,6 +106,7 @@ body {
      clips without that side effect; Safari 15 lacks it and keeps `hidden`. */
   overflow-x: hidden;
   overflow-x: clip;
+  overscroll-behavior-x: none;
   -webkit-overflow-scrolling: touch;
   padding: env(safe-area-inset-top) env(safe-area-inset-right)
     env(safe-area-inset-bottom) env(safe-area-inset-left);
