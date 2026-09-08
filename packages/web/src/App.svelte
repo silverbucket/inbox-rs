@@ -418,8 +418,8 @@
 
     if ((isAddTodo || isAddCard) && !anyOverlayRequested) {
       e.preventDefault();
-      if (isAddTodo) openAddTodo();
-      else openAdd('note');
+      if (isAddTodo) openAddTodo('', null);
+      else openAdd('note', null);
       return;
     }
 
@@ -444,9 +444,12 @@
     }
   }
 
-  function openAdd(type: InboxItemType) {
+  function openAdd(
+    type: InboxItemType,
+    collectionId: string | null | undefined = undefined,
+  ) {
     editingItem = undefined;
-    preselectedCollectionId = undefined;
+    preselectedCollectionId = collectionId;
     notePrefillTitle = '';
     prefillFile = undefined;
     captureSheetOpen = false;
@@ -521,7 +524,9 @@
       return;
 
     editingItem = undefined;
-    preselectedCollectionId = undefined;
+    // Cmd/Ctrl-Enter is a global quick-key entry, so it deliberately starts
+    // in Inbox instead of inheriting the most recently used collection.
+    preselectedCollectionId = null;
     prefillFile = undefined;
     captureSheetOpen = false;
     // The typed text becomes the note title; the editor focuses the body.

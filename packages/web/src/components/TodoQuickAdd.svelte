@@ -297,7 +297,9 @@
         canCaptureTodo(quickTitle)
       ) {
         e.preventDefault();
-        onopenmodal(quickTitle, targetCollectionId ?? null);
+        // Shortcut-created todos always start unfiled. The selected/fixed
+        // collection still applies to plain-Enter quick saves.
+        onopenmodal(quickTitle, null);
         quickTitle = '';
       }
     }}

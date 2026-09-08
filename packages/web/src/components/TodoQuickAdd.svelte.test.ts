@@ -196,7 +196,7 @@ describe('TodoQuickAdd', () => {
     render({ fixedCollectionId: 'col-9' });
     type('a richer todo');
     cmdEnter();
-    expect(onopenmodal).toHaveBeenCalledWith('a richer todo', 'col-9');
+    expect(onopenmodal).toHaveBeenCalledWith('a richer todo', null);
     expect(storeItem).not.toHaveBeenCalled();
     flushSync();
     expect(input().value).toBe('');
