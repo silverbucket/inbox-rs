@@ -385,16 +385,17 @@
   function handleGlobalKeydown(e: KeyboardEvent) {
     if (
       e.defaultPrevented
-      || e.altKey
       || e.repeat
       || window.matchMedia('(max-width: 768px)').matches
     ) return;
     const mod = e.metaKey || e.ctrlKey;
     const key = e.key.toLowerCase();
-    const isModK = mod && !e.shiftKey && e.key.toLowerCase() === 'k';
-    const isCommandPalette = mod && e.shiftKey && key === 'p';
-    const isSettings = mod && !e.shiftKey && e.key === ',';
-    const isHelp = mod && !e.shiftKey && e.key === '/';
+    const isModK = mod && !e.altKey && !e.shiftKey && key === 'k';
+    const isCommandPalette = mod && !e.altKey && e.shiftKey && key === 'p';
+    const isSettings = mod && !e.altKey && !e.shiftKey && e.key === ',';
+    const isHelp = mod && !e.altKey && !e.shiftKey && e.key === '/';
+    const isAddTodo = mod && e.altKey && !e.shiftKey && key === 't';
+    const isAddCard = mod && e.altKey && !e.shiftKey && key === 'c';
     const isTyping = isTypingTarget(e.target);
 
     if (isHelp && (!anyOverlayRequested || shortcutHelpOpen)) {
@@ -412,6 +413,13 @@
     if (isSettings && !anyOverlayRequested) {
       e.preventDefault();
       openSettings();
+      return;
+    }
+
+    if ((isAddTodo || isAddCard) && !anyOverlayRequested) {
+      e.preventDefault();
+      if (isAddTodo) openAddTodo();
+      else openAdd('note');
       return;
     }
 

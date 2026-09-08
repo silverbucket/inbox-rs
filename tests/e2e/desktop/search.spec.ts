@@ -280,4 +280,32 @@ test.describe('search', () => {
     await expect(connectedPage).toHaveURL(/#\/todos$/);
     await expect(connectedPage.getByRole('dialog')).toHaveCount(0);
   });
+
+  test('dedicated shortcuts open todo and card creation', async ({
+    connectedPage,
+    webOrigin,
+  }) => {
+    await connectedPage.goto(webOrigin);
+    await connectedPage.waitForLoadState('networkidle');
+
+    const capture = connectedPage.getByPlaceholder(
+      'Paste a link, jot a note, or drop a file…',
+    );
+    await capture.fill('draft stays here');
+
+    await connectedPage.keyboard.press('ControlOrMeta+Alt+t');
+    await expect(
+      connectedPage.getByRole('heading', { name: 'Add Todo' }),
+    ).toBeVisible();
+    await connectedPage.keyboard.press('Escape');
+    await expect(capture).toHaveValue('draft stays here');
+
+    await capture.focus();
+    await connectedPage.keyboard.press('ControlOrMeta+Alt+c');
+    await expect(
+      connectedPage.getByRole('heading', { name: 'Add Note' }),
+    ).toBeVisible();
+    await connectedPage.keyboard.press('Escape');
+    await expect(capture).toHaveValue('draft stays here');
+  });
 });
