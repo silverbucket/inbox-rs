@@ -231,9 +231,22 @@ test.describe('search', () => {
       name: 'Command palette',
     });
     await expect(palette).toBeVisible();
+    const commandSearch = palette.getByRole('textbox', {
+      name: 'Find a command',
+    });
+    await expect(commandSearch).toBeFocused();
+    await commandSearch.fill('to');
     await expect(
-      palette.getByRole('textbox', { name: 'Find a command' }),
-    ).toBeFocused();
+      palette.getByRole('button', { name: /Go to Todos/ }),
+    ).toHaveAttribute('aria-current', 'true');
+    await commandSearch.fill('add todo');
+    await expect(
+      palette.getByRole('button', { name: /Add todo/ }),
+    ).toHaveAttribute('aria-current', 'true');
+    await commandSearch.fill('add card');
+    await expect(
+      palette.getByRole('button', { name: /Add card/ }),
+    ).toHaveAttribute('aria-current', 'true');
     await connectedPage.keyboard.press('Escape');
     await expect(palette).toHaveCount(0);
     await expect(capture).toHaveValue('?');

@@ -20,10 +20,35 @@
 
   let query = $state('');
   let selected = $state(0);
+  const inconsequentialWords = new Set(['a', 'an', 'go', 'the', 'to']);
+
+  function words(value: string) {
+    return value.toLowerCase().split(/\s+/).filter(Boolean);
+  }
+
+  function matchScore(command: Command, rawQuery: string): number {
+    const needle = rawQuery.trim().toLowerCase();
+    if (!needle) return 1;
+
+    const label = command.label.toLowerCase();
+    const labelWords = words(label).filter((word) => !inconsequentialWords.has(word));
+    const keywordWords = words(command.keywords ?? '');
+    if (label === needle) return 100;
+    if (labelWords.includes(needle)) return 90;
+    if (labelWords.some((word) => word.startsWith(needle))) return 80;
+    if (keywordWords.includes(needle)) return 70;
+    if (keywordWords.some((word) => word.startsWith(needle))) return 60;
+    if (label.includes(needle)) return 50;
+    if ((command.keywords ?? '').toLowerCase().includes(needle)) return 40;
+    return 0;
+  }
+
   const matches = $derived(
-    commands.filter((command) =>
-      `${command.label} ${command.keywords ?? ''}`.toLowerCase().includes(query.trim().toLowerCase()),
-    ),
+    commands
+      .map((command, index) => ({ command, index, score: matchScore(command, query) }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .map(({ command }) => command),
   );
 
   function run(command: Command | undefined) {
