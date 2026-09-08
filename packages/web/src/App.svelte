@@ -23,6 +23,8 @@
   import SettingsModal from './components/SettingsModal.svelte';
   import type { SectionId } from './lib/settings-sections';
   import KeyboardShortcutsModal from './components/KeyboardShortcutsModal.svelte';
+  import CommandPalette from './components/CommandPalette.svelte';
+  import { modLabel } from './lib/platform';
 
   type LazyComponent = Component<Record<string, unknown>>;
   // Svelte 5 components are functions, not classes — InstanceType<> doesn't
@@ -53,6 +55,7 @@
   let captureSheetOpen = $state(false);
   let settingsOpen = $state(false);
   let shortcutHelpOpen = $state(false);
+  let commandPaletteOpen = $state(false);
   let settingsInitialSection = $state<SectionId | undefined>(undefined);
   let notePrefillTitle = $state('');
   let prefillFile = $state<File | undefined>(undefined);
@@ -205,7 +208,6 @@
 
     return () => {
       window.removeEventListener('hashchange', syncRoute);
-      clearGoSequence();
     };
   });
 
@@ -276,6 +278,7 @@
     || captureSheetOpen
     || settingsOpen
     || shortcutHelpOpen
+    || commandPaletteOpen
     // The focus popup scrolls internally; locking the body keeps the page
     // underneath at its scroll position for when the popup closes.
     || (route.page === 'collection' && !!CollectionFocusPageComponent),
@@ -292,6 +295,7 @@
     || captureSheetOpen
     || settingsOpen
     || shortcutHelpOpen
+    || commandPaletteOpen
     || route.page === 'collection',
   );
   let savedScrollY = 0;
@@ -369,34 +373,20 @@
     route = next;
   }
 
-  // The first G in a Gmail-style navigation chord stays live briefly. Keeping
-  // it here (rather than in page components) makes the scheme identical in
-  // both shell layouts and across every page.
-  let goSequenceTimer: ReturnType<typeof setTimeout> | undefined;
-
-  function clearGoSequence() {
-    if (goSequenceTimer) clearTimeout(goSequenceTimer);
-    goSequenceTimer = undefined;
-  }
-
-  function startGoSequence() {
-    clearGoSequence();
-    goSequenceTimer = setTimeout(clearGoSequence, 1200);
-  }
-
   function isTypingTarget(target: EventTarget | null): boolean {
     return target instanceof HTMLElement
       && !!target.closest('input, textarea, select, [contenteditable="true"]');
   }
 
-  // Global shortcuts are deliberately single-key only outside editable
-  // controls. Search keeps its established exception for an empty input so
-  // the auto-focused Inbox capture bar doesn't swallow ⌘/Ctrl+K.
+  // Modified shortcuts work even while the Inbox or Todos composer owns
+  // focus. The bare slash remains ordinary text in editable controls.
   function handleGlobalKeydown(e: KeyboardEvent) {
     if (e.defaultPrevented || e.altKey || e.repeat) return;
     const mod = e.metaKey || e.ctrlKey;
     const key = e.key.toLowerCase();
     const isModK = mod && !e.shiftKey && e.key.toLowerCase() === 'k';
+    const isCommandPalette = mod && e.shiftKey && key === 'p';
+    const isSettings = mod && !e.shiftKey && e.key === ',';
     const isSlash = !mod && e.key === '/';
     const target = e.target as HTMLElement | null;
     const field = isTypingTarget(target)
@@ -409,53 +399,29 @@
       return;
     }
 
+    if (isCommandPalette && (!anyOverlayRequested || commandPaletteOpen)) {
+      e.preventDefault();
+      commandPaletteOpen = !commandPaletteOpen;
+      return;
+    }
+
+    if (isSettings && !anyOverlayRequested) {
+      e.preventDefault();
+      openSettings();
+      return;
+    }
+
     if (anyOverlayRequested) {
-      clearGoSequence();
       return;
     }
 
     if (isModK || isSlash) {
       if (field) {
         if (isSlash) return;
-        const value = 'value' in field ? String((field as HTMLInputElement).value) : field.textContent ?? '';
-        if (value.trim() !== '') return;
       }
       e.preventDefault();
-      clearGoSequence();
       navToSearch();
       return;
-    }
-
-    if (mod || e.shiftKey || field) {
-      clearGoSequence();
-      return;
-    }
-
-    if (goSequenceTimer) {
-      clearGoSequence();
-      const page = key === 'i' ? 'inbox' : key === 't' ? 'todos' : key === 'c' ? 'collections' : null;
-      if (page) {
-        e.preventDefault();
-        navTo(page);
-      }
-      return;
-    }
-
-    if (key === 'g') {
-      startGoSequence();
-      return;
-    }
-
-    const action = {
-      n: () => openAdd('note'),
-      t: () => openAddTodo(),
-      b: () => openAdd('bookmark'),
-      r: handleRecord,
-      s: () => openSettings(),
-    }[key];
-    if (action) {
-      e.preventDefault();
-      action();
     }
   }
 
@@ -613,6 +579,31 @@
   function openSettings(section?: SectionId) {
     settingsInitialSection = section;
     settingsOpen = true;
+  }
+
+  const commandMod = modLabel();
+  const commands = [
+    { id: 'search', label: 'Search everything', hint: `${commandMod} K`, keywords: 'find' },
+    { id: 'inbox', label: 'Go to Inbox', hint: 'Navigation', keywords: 'gi' },
+    { id: 'todos', label: 'Go to Todos', hint: 'Navigation', keywords: 'gt tasks' },
+    { id: 'collections', label: 'Go to Collections', hint: 'Navigation', keywords: 'gc' },
+    { id: 'note', label: 'New note', hint: 'Create', keywords: 'nn write' },
+    { id: 'todo', label: 'New todo', hint: 'Create', keywords: 'nt task' },
+    { id: 'bookmark', label: 'New bookmark', hint: 'Create', keywords: 'nb link' },
+    { id: 'audio', label: 'Record audio', hint: 'Create', keywords: 'voice memo' },
+    { id: 'settings', label: 'Open settings', hint: `${commandMod} ,`, keywords: 'preferences' },
+    { id: 'help', label: 'Keyboard shortcuts', hint: '?', keywords: 'help keys' },
+  ];
+
+  function runCommand(id: string) {
+    commandPaletteOpen = false;
+    if (id === 'search') navToSearch();
+    else if (id === 'inbox' || id === 'todos' || id === 'collections') navTo(id);
+    else if (id === 'note' || id === 'bookmark') openAdd(id);
+    else if (id === 'todo') openAddTodo();
+    else if (id === 'audio') handleRecord();
+    else if (id === 'settings') openSettings();
+    else if (id === 'help') shortcutHelpOpen = true;
   }
 
   async function handleCreateCollection(col: Collection) {
@@ -804,6 +795,9 @@
 <SettingsModal bind:open={settingsOpen} initialSection={settingsInitialSection}/>
 {#if shortcutHelpOpen}
   <KeyboardShortcutsModal onclose={() => shortcutHelpOpen = false} />
+{/if}
+{#if commandPaletteOpen}
+  <CommandPalette {commands} onrun={runCommand} onclose={() => commandPaletteOpen = false} />
 {/if}
 <Toast />
 

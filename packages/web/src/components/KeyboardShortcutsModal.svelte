@@ -7,28 +7,25 @@
 
   const sections = [
     {
-      title: 'Move around',
+      title: 'Available anywhere',
       shortcuts: [
-        { keys: ['G', 'I'], label: 'Go to Inbox' },
-        { keys: ['G', 'T'], label: 'Go to Todos' },
-        { keys: ['G', 'C'], label: 'Go to Collections' },
-        { keys: [`${mod} K`], alternate: '/', label: 'Search everything' },
+        { keys: [`${mod} K`], label: 'Search everything' },
+        { keys: [`${mod} ⇧ P`], label: 'Open command palette' },
+        { keys: [`${mod} ,`], label: 'Open settings' },
       ],
     },
     {
-      title: 'Create',
+      title: 'When not typing',
       shortcuts: [
-        { keys: ['N'], label: 'New note' },
-        { keys: ['T'], label: 'New todo' },
-        { keys: ['B'], label: 'New bookmark' },
-        { keys: ['R'], label: 'Record audio' },
-      ],
-    },
-    {
-      title: 'App',
-      shortcuts: [
-        { keys: ['S'], label: 'Open settings' },
+        { keys: ['/'], label: 'Search everything' },
         { keys: ['?'], label: 'Show these shortcuts' },
+      ],
+    },
+    {
+      title: 'Quick entry',
+      shortcuts: [
+        { keys: ['Enter'], label: 'Save the quick entry' },
+        { keys: [`${mod} Enter`], label: 'Open the full editor' },
         { keys: ['Esc'], label: 'Close a dialog' },
       ],
     },
@@ -77,7 +74,6 @@
                     {#if index > 0}<span class="then">then</span>{/if}
                     <kbd>{key}</kbd>
                   {/each}
-                  {#if shortcut.alternate}<span class="or">or</span><kbd>{shortcut.alternate}</kbd>{/if}
                 </dt>
                 <dd>{shortcut.label}</dd>
               </div>
@@ -86,7 +82,7 @@
         </section>
       {/each}
     </div>
-    <p class="note">Shortcuts pause while you’re typing or a dialog is open.</p>
+    <p class="note">Modified shortcuts work while a quick-entry field is focused. A bare / remains normal text while you’re typing.</p>
   </div>
 </div>
 
@@ -107,7 +103,7 @@
   dt { display: flex; align-items: center; gap: 0.35rem; }
   dd { color: var(--text); font-size: 0.92rem; }
   kbd { min-width: 1.75rem; padding: 0.22rem 0.45rem; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 6px; background: var(--bg); color: var(--text); font: 650 0.78rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center; white-space: nowrap; }
-  .then, .or { color: var(--text-muted); font-size: 0.68rem; }
+  .then { color: var(--text-muted); font-size: 0.68rem; }
   .note { margin: 0 1.5rem; padding: 1rem 0 1.3rem; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.82rem; }
   @media (max-width: 600px) { .backdrop { padding: 0; place-items: end center; } .modal { max-height: 88dvh; border-radius: 18px 18px 0 0; border-bottom: 0; } .sections { grid-template-columns: 1fr; gap: 1.25rem; } .shortcut-section:last-child { grid-column: auto; } }
 </style>
