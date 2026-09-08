@@ -46,10 +46,9 @@
     /** Focus the input on mount (the Todos page does; the collection view
         doesn't, to avoid stealing focus when a collection is expanded). */
     focusOnMount?: boolean;
-    /** ⌘/Ctrl-Shift-Enter — open the full todo modal pre-filled with the title and
-        the resolved target collection. `null` when that target is Unfiled: the
-        chip is a visible choice, so the modal must not swap in a remembered
-        collection behind it. */
+    /** ⌘/Ctrl-Shift-Enter — open the full todo modal pre-filled with the title.
+        Shortcut-created todos pass `null` so the modal starts Unfiled rather
+        than inheriting the selected, fixed, or remembered collection. */
     onopenmodal: (prefillTitle: string, collectionId: string | null) => void;
   } = $props();
 

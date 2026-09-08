@@ -550,9 +550,9 @@
     openAdd('audio');
   }
 
-  /** Open the add-todo modal, optionally pre-filling the title and target
-      collection (⌘/Ctrl-Shift-Enter or the Fab from the Todos quick-add, so the
-      modal mirrors the quick-add's title + collection selection). */
+  /** Open the add-todo modal, optionally pre-filling its title and destination.
+      `null` explicitly starts Unfiled; `undefined` allows the modal's normal
+      destination selection behavior. */
   function openAddTodo(
     prefillTitle = '',
     collectionId: string | null | undefined = undefined,

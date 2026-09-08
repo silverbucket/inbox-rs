@@ -17,11 +17,10 @@
 
   let { onselect, onaddtodo, onaddtodoincollection }: {
     onselect: (item: InboxItem) => void;
-    /** Opens the add-todo modal for richer details and optional filing.
-        Optionally pre-fills the todo title (⌘/Ctrl-Shift-Enter from the quick-add)
-        and the target collection (mirrors the quick-add's collection select),
-        where `null` is the quick-add's explicit Unfiled and `undefined` means
-        no destination context at all (the bare Fab). */
+    /** Opens the add-todo modal with optional title and destination context.
+        Callers may pass a collection explicitly; the quick-key path passes
+        `null` to start Unfiled, while `undefined` leaves destination selection
+        to the modal (as with the bare Fab). */
     onaddtodo: (prefillTitle?: string, collectionId?: string | null) => void;
     /** Opens the add-todo modal with a specific collection pre-selected.
         Used by the per-row quick-add affordance. Pass `null` to target an
