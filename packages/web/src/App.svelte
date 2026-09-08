@@ -374,8 +374,9 @@
   }
 
   function isTypingTarget(target: EventTarget | null): boolean {
-    return target instanceof HTMLElement
-      && !!target.closest('input, textarea, select, [contenteditable="true"]');
+    const element = target instanceof Element ? target : null;
+    return !!element?.closest('input, textarea, select')
+      || !!element?.closest<HTMLElement>('[contenteditable]')?.isContentEditable;
   }
 
   // Modified shortcuts work even while the Inbox or Todos composer owns
@@ -388,12 +389,9 @@
     const isCommandPalette = mod && e.shiftKey && key === 'p';
     const isSettings = mod && !e.shiftKey && e.key === ',';
     const isSlash = !mod && e.key === '/';
-    const target = e.target as HTMLElement | null;
-    const field = isTypingTarget(target)
-      ? target?.closest<HTMLElement>('input, textarea, select, [contenteditable="true"]')
-      : null;
+    const isTyping = isTypingTarget(e.target);
 
-    if (!mod && e.key === '?' && !field && (!anyOverlayRequested || shortcutHelpOpen)) {
+    if (!mod && e.key === '?' && !isTyping && (!anyOverlayRequested || shortcutHelpOpen)) {
       e.preventDefault();
       shortcutHelpOpen = !shortcutHelpOpen;
       return;
@@ -416,7 +414,7 @@
     }
 
     if (isModK || isSlash) {
-      if (field) {
+      if (isTyping) {
         if (isSlash) return;
       }
       e.preventDefault();
