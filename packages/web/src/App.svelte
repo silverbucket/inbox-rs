@@ -416,6 +416,14 @@
     if (isModK || isSlash) {
       if (isTyping) {
         if (isSlash) return;
+        const element = e.target instanceof Element ? e.target : null;
+        const editor = element?.closest<HTMLElement>(
+          'input, textarea, select, [contenteditable]',
+        );
+        const value = editor && 'value' in editor
+          ? String(editor.value)
+          : editor?.textContent ?? '';
+        if (value.trim() !== '') return;
       }
       e.preventDefault();
       navToSearch();
