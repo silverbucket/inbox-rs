@@ -87,7 +87,8 @@ html {
   /* Block the browser's two-finger-swipe back/forward navigation: nothing in
      the app scrolls horizontally at the root, so a touchpad swipe would
      otherwise chain to the viewport and navigate history. Set on both html
-     and body — Chrome < 93 propagates from body, newer browsers from html. */
+     and body — Chrome propagated this to the viewport from body until 140;
+     Chrome 140+ and other browsers take it from the root element. */
   overscroll-behavior-x: none;
 }
 
