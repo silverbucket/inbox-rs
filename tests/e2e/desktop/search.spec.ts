@@ -177,4 +177,73 @@ test.describe('search', () => {
     await expect(capture).toHaveValue('half-written thought/');
     await expect(connectedPage).toHaveURL(/#\/?$/);
   });
+
+  test('global shortcuts respect typing and open overlays predictably', async ({
+    connectedPage,
+    webOrigin,
+  }) => {
+    await connectedPage.goto(webOrigin);
+    await connectedPage.waitForLoadState('networkidle');
+
+    const capture = connectedPage.getByPlaceholder(
+      'Paste a link, jot a note, or drop a file…',
+    );
+    const help = connectedPage.getByRole('dialog', {
+      name: 'Keyboard shortcuts',
+    });
+
+    // Bare shortcuts remain text while an editor owns focus.
+    await expect(capture).toBeFocused();
+    await connectedPage.keyboard.type('?');
+    await expect(capture).toHaveValue('?');
+    await expect(help).toHaveCount(0);
+
+    // The same protection covers every contenteditable form, including a
+    // bare contenteditable attribute rather than only contenteditable=true.
+    const editable = connectedPage.locator('[data-test="bare-editable"]');
+    await connectedPage.evaluate(() => {
+      const element = document.createElement('div');
+      element.setAttribute('contenteditable', '');
+      element.dataset.test = 'bare-editable';
+      document.body.append(element);
+    });
+    await editable.focus();
+    await connectedPage.keyboard.type('?');
+    await expect(editable).toHaveText('?');
+    await expect(help).toHaveCount(0);
+
+    // Outside an editor, ? opens help. Other global overlays stay gated
+    // until it closes.
+    await connectedPage.locator('body').click({ position: { x: 5, y: 5 } });
+    await connectedPage.keyboard.press('?');
+    await expect(help).toBeVisible();
+    await connectedPage.keyboard.press('ControlOrMeta+,');
+    await expect(
+      connectedPage.getByRole('dialog', { name: 'Settings' }),
+    ).toHaveCount(0);
+    await connectedPage.keyboard.press('?');
+    await expect(help).toHaveCount(0);
+
+    // Modified shortcuts are available from quick entry, and opening an
+    // overlay does not discard the draft.
+    await capture.focus();
+    await connectedPage.keyboard.press('ControlOrMeta+Shift+p');
+    const palette = connectedPage.getByRole('dialog', {
+      name: 'Command palette',
+    });
+    await expect(palette).toBeVisible();
+    await expect(
+      palette.getByRole('textbox', { name: 'Find a command' }),
+    ).toBeFocused();
+    await connectedPage.keyboard.press('Escape');
+    await expect(palette).toHaveCount(0);
+    await expect(capture).toHaveValue('?');
+
+    await capture.focus();
+    await connectedPage.keyboard.press('ControlOrMeta+,');
+    await expect(
+      connectedPage.getByRole('dialog', { name: 'Settings' }),
+    ).toBeVisible();
+    await expect(capture).toHaveValue('?');
+  });
 });
