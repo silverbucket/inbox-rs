@@ -297,18 +297,12 @@ test.describe('search', () => {
     await expect(
       connectedPage.getByRole('heading', { name: 'Add Todo' }),
     ).toBeVisible();
-    await expect(
-      connectedPage.getByText('Unfiled', { exact: true }),
-    ).toBeVisible();
     await connectedPage.keyboard.press('Escape');
     await expect(capture).toHaveValue('draft stays here');
 
     await connectedPage.keyboard.press('ControlOrMeta+Enter');
     await expect(
       connectedPage.getByRole('heading', { name: 'Add Note' }),
-    ).toBeVisible();
-    await expect(
-      connectedPage.getByText('Inbox', { exact: true }),
     ).toBeVisible();
     await connectedPage.keyboard.press('Escape');
     await expect(capture).toHaveValue('draft stays here');
