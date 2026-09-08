@@ -15,7 +15,7 @@
   import TodoQuickAdd from './TodoQuickAdd.svelte';
   import Fab from './Fab.svelte';
 
-  let { onselect, onaddtodo, onaddtodoincollection }: {
+  let { onselect, onaddtodo, onaddtodoincollection, quickDraft = $bindable('') }: {
     onselect: (item: InboxItem) => void;
     /** Opens the add-todo modal with optional title and destination context.
         Callers may pass a collection explicitly; the quick-key path passes
@@ -26,6 +26,8 @@
         Used by the per-row quick-add affordance. Pass `null` to target an
         unfiled todo. */
     onaddtodoincollection: (collectionId: string | null) => void;
+    /** Hoisted by App so search navigation preserves the quick-entry draft. */
+    quickDraft?: string;
   } = $props();
 
   const todos = $derived($visibleTodos);
@@ -145,7 +147,7 @@
     <!-- Lead with the composer so its input lines up with the inbox capture
          bar. The toolbar's Fab is hidden on desktop (the input + ⌘⇧↵ handle
          capture) and a floating + circle on mobile. -->
-    <TodoQuickAdd hideOnMobile focusOnMount onopenmodal={(t, c) => onaddtodo(t, c)} />
+    <TodoQuickAdd hideOnMobile focusOnMount bind:quickTitle={quickDraft} onopenmodal={(t, c) => onaddtodo(t, c)} />
     {@render todoToolbar()}
     <div class="empty-state" in:fade={{ duration: 180 }}>
       <p class="empty-title">Jot a todo</p>
@@ -155,7 +157,7 @@
       <p class="empty-hint empty-hint--mobile">Tap + to capture one. Organize it later.</p>
     </div>
   {:else}
-    <TodoQuickAdd hideOnMobile compact focusOnMount onopenmodal={(t, c) => onaddtodo(t, c)} />
+    <TodoQuickAdd hideOnMobile compact focusOnMount bind:quickTitle={quickDraft} onopenmodal={(t, c) => onaddtodo(t, c)} />
     {@render todoToolbar()}
 
     {#if dueTodos.length > 0}

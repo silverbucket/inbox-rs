@@ -165,16 +165,34 @@ test.describe('search', () => {
     await expect(connectedPage).toHaveURL(/#\/search$/);
     await expect(box).toBeFocused();
 
-    // …but not when that field holds a draft: leaving would discard it.
+    // The shortcut still navigates with a draft, and Escape restores it.
     await connectedPage.getByRole('button', { name: 'Inbox' }).first().click();
     await capture.fill('half-written thought');
     await connectedPage.keyboard.press('ControlOrMeta+k');
+    await expect(connectedPage).toHaveURL(/#\/search$/);
+    await expect(box).toBeFocused();
+    await connectedPage.keyboard.press('Escape');
     await expect(connectedPage).toHaveURL(/#\/?$/);
     await expect(capture).toHaveValue('half-written thought');
     // Unmodified punctuation is plain text inside a field.
     await capture.press('/');
     await expect(capture).toHaveValue('half-written thought/');
     await expect(connectedPage).toHaveURL(/#\/?$/);
+
+    // The Todos quick-entry draft survives the same search round trip.
+    await connectedPage.getByRole('button', { name: 'Todos' }).first().click();
+    const todoQuickAdd = connectedPage.getByPlaceholder(
+      /Add a todo|What needs doing/,
+    );
+    await todoQuickAdd.fill('another unfinished thought');
+    await connectedPage.keyboard.press('ControlOrMeta+k');
+    await expect(connectedPage).toHaveURL(/#\/search$/);
+    await expect(box).toBeFocused();
+    await connectedPage.keyboard.press('Escape');
+    await expect(connectedPage).toHaveURL(/#\/?$/);
+    await connectedPage.getByRole('button', { name: 'Todos' }).first().click();
+    await expect(connectedPage).toHaveURL(/#\/todos$/);
+    await expect(todoQuickAdd).toHaveValue('another unfinished thought');
   });
 
   test('global shortcuts respect typing and open overlays predictably', async ({

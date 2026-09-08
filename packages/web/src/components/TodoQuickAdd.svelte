@@ -35,6 +35,7 @@
     compact = false,
     hideOnMobile = false,
     focusOnMount = false,
+    quickTitle = $bindable(''),
     onopenmodal,
   }: {
     /** When set, todos are filed here and the collection select is hidden. */
@@ -46,13 +47,14 @@
     /** Focus the input on mount (the Todos page does; the collection view
         doesn't, to avoid stealing focus when a collection is expanded). */
     focusOnMount?: boolean;
+    /** Hoisted on the Todos page so navigation does not discard a draft. */
+    quickTitle?: string;
     /** ⌘/Ctrl-Shift-Enter — open the full todo modal pre-filled with the title.
         Shortcut-created todos pass `null` so the modal starts Unfiled rather
         than inheriting the selected, fixed, or remembered collection. */
     onopenmodal: (prefillTitle: string, collectionId: string | null) => void;
   } = $props();
 
-  let quickTitle = $state('');
   let quickSaving = $state(false);
   let quickError = $state('');
   let quickFocused = $state(false);

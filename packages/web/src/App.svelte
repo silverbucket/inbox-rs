@@ -58,6 +58,8 @@
   let commandPaletteOpen = $state(false);
   let settingsInitialSection = $state<SectionId | undefined>(undefined);
   let notePrefillTitle = $state('');
+  let inboxQuickDraft = $state('');
+  let todoQuickDraft = $state('');
   let prefillFile = $state<File | undefined>(undefined);
   let isTouch = $state(
     typeof window !== 'undefined' && window.matchMedia('(max-width: 600px)').matches,
@@ -373,12 +375,6 @@
     route = next;
   }
 
-  function isTypingTarget(target: EventTarget | null): boolean {
-    const element = target instanceof Element ? target : null;
-    return !!element?.closest('input, textarea, select')
-      || !!element?.closest<HTMLElement>('[contenteditable]')?.isContentEditable;
-  }
-
   // Modified shortcuts work even while the Inbox or Todos composer owns
   // focus. At the compact layout breakpoint, the shortcut UI and bindings
   // both disappear together.
@@ -396,8 +392,6 @@
     const isHelp = mod && !e.altKey && !e.shiftKey && e.key === '/';
     const isAddTodo = mod && !e.altKey && e.shiftKey && e.key === 'Enter';
     const isAddCard = mod && !e.altKey && !e.shiftKey && e.key === 'Enter';
-    const isTyping = isTypingTarget(e.target);
-
     if (isHelp && (!anyOverlayRequested || shortcutHelpOpen)) {
       e.preventDefault();
       shortcutHelpOpen = !shortcutHelpOpen;
@@ -428,16 +422,6 @@
     }
 
     if (isModK) {
-      if (isTyping) {
-        const element = e.target instanceof Element ? e.target : null;
-        const editor = element?.closest<HTMLElement>(
-          'input, textarea, select, [contenteditable]',
-        );
-        const value = editor && 'value' in editor
-          ? String(editor.value)
-          : editor?.textContent ?? '';
-        if (value.trim() !== '') return;
-      }
       e.preventDefault();
       navToSearch();
       return;
@@ -685,6 +669,7 @@
           {:else}
             <CaptureBar
               focusOnMount
+              bind:value={inboxQuickDraft}
               oncapture={handleQuickCapture}
               onopeneditor={handleOpenEditor}
               onfile={handleFile}
@@ -723,7 +708,7 @@
         {/if}
       {:else if bodyPage === 'todos'}
         {#if TodosPageComponent}
-          <TodosPageComponent onselect={openView} onaddtodo={openAddTodo} onaddtodoincollection={openAddTodoInCollection} />
+          <TodosPageComponent bind:quickDraft={todoQuickDraft} onselect={openView} onaddtodo={openAddTodo} onaddtodoincollection={openAddTodoInCollection} />
         {/if}
       {:else if bodyPage === 'search'}
         {#if SearchPageComponent}

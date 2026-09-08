@@ -103,6 +103,17 @@ describe('CaptureBar', () => {
     expect(onopeneditor).not.toHaveBeenCalled();
   });
 
+  it('preserves Alt-modified Shift-Enter as an editor shortcut', () => {
+    render();
+    typeAndKey('a longer thought', {
+      metaKey: true,
+      altKey: true,
+      shiftKey: true,
+    });
+    expect(onopeneditor).toHaveBeenCalledWith('a longer thought');
+    expect(oncapture).not.toHaveBeenCalled();
+  });
+
   it('ignores Enter on empty input', () => {
     render();
     typeAndKey('   ', {});
