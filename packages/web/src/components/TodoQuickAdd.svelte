@@ -377,7 +377,7 @@
   {#if quickFocused && quickTitle.trim()}
     <span>↵ {fixedCollectionId ? 'Add todo' : `Add to ${destinationLabel}`}</span>
     <span class="sep">·</span>
-    <span>{mod}↵ Open editor</span>
+    <span>{mod}⇧↵ Open editor</span>
   {/if}
 </div>
 
