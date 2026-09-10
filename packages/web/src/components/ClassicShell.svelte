@@ -6,6 +6,7 @@
   import LogoShield from './LogoShield.svelte';
   import { pageUsesFilters, type Page, type Route } from '../lib/route';
   import AppFooter from './AppFooter.svelte';
+  import ShortcutHelpButton from './ShortcutHelpButton.svelte';
 
   // bind:this on a Svelte 5 component yields its exports, not a class instance.
   type UserMenuHandle = { openConnectMenu: () => Promise<void> };
@@ -18,6 +19,7 @@
     totalTodoCount,
     onaddgroup,
     onopensettings = () => {},
+    onopenhelp = () => {},
     userMenu = $bindable(null),
     children,
   }: {
@@ -31,6 +33,7 @@
     totalTodoCount: number;
     onaddgroup: () => void;
     onopensettings?: (section?: import('../lib/settings-sections').SectionId) => void;
+    onopenhelp?: () => void;
     userMenu?: UserMenuHandle | null;
     children: Snippet;
   } = $props();
@@ -81,6 +84,7 @@
     </nav>
     <div class="header-right">
       <SearchButton active={isActive('search')} onclick={onsearch} />
+      <ShortcutHelpButton onclick={onopenhelp} />
       <UserMenu bind:this={userMenu} {onopensettings} />
     </div>
   </div>

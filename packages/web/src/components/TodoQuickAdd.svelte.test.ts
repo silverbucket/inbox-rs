@@ -140,6 +140,7 @@ describe('TodoQuickAdd', () => {
       new KeyboardEvent('keydown', {
         key: 'Enter',
         ctrlKey: true,
+        shiftKey: true,
         bubbles: true,
       }),
     );
@@ -191,14 +192,32 @@ describe('TodoQuickAdd', () => {
     expect(moveItemToCollection).toHaveBeenCalledWith(todoId, 'col-9');
   });
 
-  it('opens the modal on ⌘/Ctrl-Enter without storing', () => {
+  it('opens the modal on ⌘/Ctrl-Shift-Enter without storing', () => {
     render({ fixedCollectionId: 'col-9' });
     type('a richer todo');
     cmdEnter();
-    expect(onopenmodal).toHaveBeenCalledWith('a richer todo', 'col-9');
+    expect(onopenmodal).toHaveBeenCalledWith('a richer todo', null);
     expect(storeItem).not.toHaveBeenCalled();
     flushSync();
     expect(input().value).toBe('');
+  });
+
+  it('does not treat Alt+⌘/Ctrl-Shift-Enter as the modal shortcut', () => {
+    render({ fixedCollectionId: 'col-9' });
+    type('a richer todo');
+    input().dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Enter',
+        ctrlKey: true,
+        shiftKey: true,
+        altKey: true,
+        bubbles: true,
+      }),
+    );
+    flushSync();
+    expect(onopenmodal).not.toHaveBeenCalled();
+    expect(storeItem).not.toHaveBeenCalled();
+    expect(input().value).toBe('a richer todo');
   });
 
   it('clears the input but reports a distinct error when filing fails after the todo is created', async () => {

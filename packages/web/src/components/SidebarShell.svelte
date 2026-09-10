@@ -7,6 +7,7 @@
   import UserMenu from './UserMenu.svelte';
   import SearchButton from './SearchButton.svelte';
   import LogoShield from './LogoShield.svelte';
+  import ShortcutHelpButton from './ShortcutHelpButton.svelte';
   import type { Page, Route } from '../lib/route';
   import { autofocus, autofocusIf } from '../lib/actions';
   import {
@@ -58,6 +59,7 @@
     totalTodoCount,
     onaddgroup,
     onopensettings = () => {},
+    onopenhelp = () => {},
     userMenu = $bindable(null),
     children,
   }: {
@@ -73,6 +75,7 @@
     totalTodoCount: number;
     onaddgroup: () => void;
     onopensettings?: (section?: import('../lib/settings-sections').SectionId) => void;
+    onopenhelp?: () => void;
     userMenu?: UserMenuHandle | null;
     children: Snippet;
   } = $props();
@@ -584,6 +587,7 @@
     </nav>
     <div class="header-right">
       <SearchButton active={isActive('search')} onclick={onsearch} />
+      <ShortcutHelpButton onclick={onopenhelp} />
       <UserMenu bind:this={userMenu} {onopensettings} />
     </div>
   </div>

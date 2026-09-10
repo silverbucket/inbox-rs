@@ -12,6 +12,7 @@
     onextrafiles,
     onrecord,
     focusOnMount = false,
+    value = $bindable(''),
   }: {
     oncapture: (raw: string) => void;
     onopeneditor: (text: string) => void;
@@ -27,9 +28,10 @@
     /** Focus the input on mount (the inbox does; the collection view doesn't,
         to avoid stealing focus when a collection is expanded). */
     focusOnMount?: boolean;
+    /** Hoisted on the Inbox page so navigation does not discard a draft. */
+    value?: string;
   } = $props();
 
-  let value = $state('');
   let focused = $state(false);
   let fileInputEl = $state<HTMLInputElement | null>(null);
   let textInputEl = $state<HTMLInputElement | null>(null);
@@ -67,6 +69,9 @@
       return;
     }
     if (e.metaKey || e.ctrlKey) {
+      // The global handler owns modified Shift-Enter (Add todo). Leave the
+      // event untouched so it can bubble there instead of quick-saving.
+      if (e.shiftKey && !e.altKey) return;
       e.preventDefault();
       onopeneditor(value);
       value = '';

@@ -22,6 +22,9 @@
   import { layout } from './lib/layout';
   import SettingsModal from './components/SettingsModal.svelte';
   import type { SectionId } from './lib/settings-sections';
+  import KeyboardShortcutsModal from './components/KeyboardShortcutsModal.svelte';
+  import CommandPalette from './components/CommandPalette.svelte';
+  import { modLabel } from './lib/platform';
 
   type LazyComponent = Component<Record<string, unknown>>;
   // Svelte 5 components are functions, not classes — InstanceType<> doesn't
@@ -51,8 +54,12 @@
 
   let captureSheetOpen = $state(false);
   let settingsOpen = $state(false);
+  let shortcutHelpOpen = $state(false);
+  let commandPaletteOpen = $state(false);
   let settingsInitialSection = $state<SectionId | undefined>(undefined);
   let notePrefillTitle = $state('');
+  let inboxQuickDraft = $state('');
+  let todoQuickDraft = $state('');
   let prefillFile = $state<File | undefined>(undefined);
   let isTouch = $state(
     typeof window !== 'undefined' && window.matchMedia('(max-width: 600px)').matches,
@@ -201,7 +208,9 @@
     setAlertOpenHandler(openView);
     initAlerts();
 
-    return () => window.removeEventListener('hashchange', syncRoute);
+    return () => {
+      window.removeEventListener('hashchange', syncRoute);
+    };
   });
 
   // Close modals when navigating to a *different* page. `route` is
@@ -270,6 +279,8 @@
     || (showGroupForm && !!GroupFormModalComponent)
     || captureSheetOpen
     || settingsOpen
+    || shortcutHelpOpen
+    || commandPaletteOpen
     // The focus popup scrolls internally; locking the body keeps the page
     // underneath at its scroll position for when the popup closes.
     || (route.page === 'collection' && !!CollectionFocusPageComponent),
@@ -285,6 +296,8 @@
     || showGroupForm
     || captureSheetOpen
     || settingsOpen
+    || shortcutHelpOpen
+    || commandPaletteOpen
     || route.page === 'collection',
   );
   let savedScrollY = 0;
@@ -362,32 +375,65 @@
     route = next;
   }
 
-  // ⌘/Ctrl+K and `/` open search from anywhere in the app. `/` is left alone
-  // inside form fields (it is ordinary text there); ⌘K is honoured in an
-  // *empty* field too, since the inbox capture bar holds focus on that page
-  // and would otherwise swallow the shortcut — a field with a draft in it
-  // keeps it, so leaving the page can't discard unsaved text.
+  // Modified shortcuts work even while the Inbox or Todos composer owns
+  // focus. At the compact layout breakpoint, the shortcut UI and bindings
+  // both disappear together.
   function handleGlobalKeydown(e: KeyboardEvent) {
-    if (e.defaultPrevented || e.altKey) return;
+    if (
+      e.defaultPrevented
+      || e.repeat
+      || window.matchMedia('(max-width: 768px)').matches
+    ) return;
     const mod = e.metaKey || e.ctrlKey;
-    const isModK = mod && !e.shiftKey && e.key.toLowerCase() === 'k';
-    const isSlash = !mod && e.key === '/';
-    if (!isModK && !isSlash) return;
-    if (anyOverlayRequested) return;
-    const target = e.target as HTMLElement | null;
-    const field = target?.closest<HTMLElement>('input, textarea, select, [contenteditable="true"]');
-    if (field) {
-      if (isSlash) return;
-      const value = 'value' in field ? String((field as HTMLInputElement).value) : field.textContent ?? '';
-      if (value.trim() !== '') return;
+    const key = e.key.toLowerCase();
+    const isModK = mod && !e.altKey && !e.shiftKey && key === 'k';
+    const isCommandPalette = mod && !e.altKey && e.shiftKey && key === 'p';
+    const isSettings = mod && !e.altKey && !e.shiftKey && e.key === ',';
+    const isHelp = mod && !e.altKey && !e.shiftKey && e.key === '/';
+    const isAddTodo = mod && !e.altKey && e.shiftKey && e.key === 'Enter';
+    const isAddCard = mod && !e.altKey && !e.shiftKey && e.key === 'Enter';
+    if (isHelp && (!anyOverlayRequested || shortcutHelpOpen)) {
+      e.preventDefault();
+      shortcutHelpOpen = !shortcutHelpOpen;
+      return;
     }
-    e.preventDefault();
-    navToSearch();
+
+    if (isCommandPalette && (!anyOverlayRequested || commandPaletteOpen)) {
+      e.preventDefault();
+      commandPaletteOpen = !commandPaletteOpen;
+      return;
+    }
+
+    if (isSettings && !anyOverlayRequested) {
+      e.preventDefault();
+      openSettings();
+      return;
+    }
+
+    if ((isAddTodo || isAddCard) && !anyOverlayRequested) {
+      e.preventDefault();
+      if (isAddTodo) openAddTodo('', null);
+      else openAdd('note', null);
+      return;
+    }
+
+    if (anyOverlayRequested) {
+      return;
+    }
+
+    if (isModK) {
+      e.preventDefault();
+      navToSearch();
+      return;
+    }
   }
 
-  function openAdd(type: InboxItemType) {
+  function openAdd(
+    type: InboxItemType,
+    collectionId: string | null | undefined = undefined,
+  ) {
     editingItem = undefined;
-    preselectedCollectionId = undefined;
+    preselectedCollectionId = collectionId;
     notePrefillTitle = '';
     prefillFile = undefined;
     captureSheetOpen = false;
@@ -462,7 +508,9 @@
       return;
 
     editingItem = undefined;
-    preselectedCollectionId = undefined;
+    // Cmd/Ctrl-Enter is a global quick-key entry, so it deliberately starts
+    // in Inbox instead of inheriting the most recently used collection.
+    preselectedCollectionId = null;
     prefillFile = undefined;
     captureSheetOpen = false;
     // The typed text becomes the note title; the editor focuses the body.
@@ -486,9 +534,9 @@
     openAdd('audio');
   }
 
-  /** Open the add-todo modal, optionally pre-filling the title and target
-      collection (⌘/Ctrl-Enter or the Fab from the Todos quick-add, so the
-      modal mirrors the quick-add's title + collection selection). */
+  /** Open the add-todo modal, optionally pre-filling its title and destination.
+      `null` explicitly starts Unfiled; `undefined` allows the modal's normal
+      destination selection behavior. */
   function openAddTodo(
     prefillTitle = '',
     collectionId: string | null | undefined = undefined,
@@ -539,6 +587,31 @@
   function openSettings(section?: SectionId) {
     settingsInitialSection = section;
     settingsOpen = true;
+  }
+
+  const commandMod = modLabel();
+  const commands = [
+    { id: 'search', label: 'Search everything', hint: `${commandMod} K`, keywords: 'find' },
+    { id: 'inbox', label: 'Go to Inbox', hint: 'Navigation', keywords: 'gi' },
+    { id: 'todos', label: 'Go to Todos', hint: 'Navigation', keywords: 'gt tasks' },
+    { id: 'collections', label: 'Go to Collections', hint: 'Navigation', keywords: 'gc' },
+    { id: 'note', label: 'Add card', hint: 'Create', keywords: 'new note write' },
+    { id: 'todo', label: 'Add todo', hint: 'Create', keywords: 'new task' },
+    { id: 'bookmark', label: 'Add bookmark', hint: 'Create', keywords: 'new link' },
+    { id: 'audio', label: 'Record audio', hint: 'Create', keywords: 'voice memo' },
+    { id: 'settings', label: 'Open settings', hint: `${commandMod} ,`, keywords: 'preferences' },
+    { id: 'help', label: 'Keyboard shortcuts', hint: `${commandMod} /`, keywords: 'help keys' },
+  ];
+
+  function runCommand(id: string) {
+    commandPaletteOpen = false;
+    if (id === 'search') navToSearch();
+    else if (id === 'inbox' || id === 'todos' || id === 'collections') navTo(id);
+    else if (id === 'note' || id === 'bookmark') openAdd(id, null);
+    else if (id === 'todo') openAddTodo('', null);
+    else if (id === 'audio') handleRecord();
+    else if (id === 'settings') openSettings();
+    else if (id === 'help') shortcutHelpOpen = true;
   }
 
   async function handleCreateCollection(col: Collection) {
@@ -596,6 +669,7 @@
           {:else}
             <CaptureBar
               focusOnMount
+              bind:value={inboxQuickDraft}
               oncapture={handleQuickCapture}
               onopeneditor={handleOpenEditor}
               onfile={handleFile}
@@ -634,13 +708,14 @@
         {/if}
       {:else if bodyPage === 'todos'}
         {#if TodosPageComponent}
-          <TodosPageComponent onselect={openView} onaddtodo={openAddTodo} onaddtodoincollection={openAddTodoInCollection} />
+          <TodosPageComponent bind:quickDraft={todoQuickDraft} onselect={openView} onaddtodo={openAddTodo} onaddtodoincollection={openAddTodoInCollection} />
         {/if}
       {:else if bodyPage === 'search'}
         {#if SearchPageComponent}
           <SearchPageComponent
             query={searchQuery}
             onquerychange={handleSearchQueryChange}
+            onclose={() => navTo('inbox')}
             onselect={openView}
             onfocuscollection={navToCollection}
             focusOnMount={!isTouch}
@@ -658,11 +733,11 @@
 <svelte:window onkeydown={handleGlobalKeydown} />
 
 {#if $layout === 'sidebar'}
-  <SidebarShell {route} {navTo} {navToCollection} onsearch={navToSearch} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} bind:userMenu>
+  <SidebarShell {route} {navTo} {navToCollection} onsearch={navToSearch} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} onopenhelp={() => shortcutHelpOpen = true} bind:userMenu>
     {#snippet children()}{@render shellBody()}{/snippet}
   </SidebarShell>
 {:else}
-  <ClassicShell {route} {navTo} onsearch={navToSearch} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} bind:userMenu>
+  <ClassicShell {route} {navTo} onsearch={navToSearch} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} onopenhelp={() => shortcutHelpOpen = true} bind:userMenu>
     {#snippet children()}{@render shellBody()}{/snippet}
   </ClassicShell>
 {/if}
@@ -728,6 +803,12 @@
   />
 {/if}
 <SettingsModal bind:open={settingsOpen} initialSection={settingsInitialSection}/>
+{#if shortcutHelpOpen}
+  <KeyboardShortcutsModal onclose={() => shortcutHelpOpen = false} />
+{/if}
+{#if commandPaletteOpen}
+  <CommandPalette {commands} onrun={runCommand} onclose={() => commandPaletteOpen = false} />
+{/if}
 <Toast />
 
 <style>

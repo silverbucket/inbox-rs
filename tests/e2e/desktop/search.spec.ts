@@ -1,6 +1,6 @@
 /**
  * Global search: the `#/search?q=` page, the header button, the `/` and
- * ⌘/Ctrl+K shortcuts, and results drawn from every surface (inbox cards,
+ * ⌘/Ctrl+K shortcut, and results drawn from every surface (inbox cards,
  * filed references, todos).
  *
  * Items are seeded straight into storage before the app connects, so the
@@ -93,10 +93,9 @@ test.describe('search', () => {
     await box.fill('zeppelin');
     await expect(page.getByText('Nothing matches “zeppelin”')).toBeVisible();
 
-    // Escape clears; the URL drops the query with it.
+    // Escape exits search.
     await box.press('Escape');
-    await expect(box).toHaveValue('');
-    await expect(page).toHaveURL(/#\/search$/);
+    await expect(page).toHaveURL(/#\/?$/);
 
     assertNoConsoleErrors(log);
     await context.close();
@@ -146,9 +145,9 @@ test.describe('search', () => {
       connectedPage.getByRole('button', { name: 'Todos' }).first(),
     ).toHaveAttribute('aria-current', 'page');
 
-    // `/` from the page body (nothing focused).
+    // ⌘/Ctrl+K from the page body (nothing focused).
     await connectedPage.locator('body').click({ position: { x: 5, y: 5 } });
-    await connectedPage.keyboard.press('/');
+    await connectedPage.keyboard.press('ControlOrMeta+k');
     await expect(connectedPage).toHaveURL(/#\/search$/);
     const box = connectedPage.getByRole('searchbox', { name: 'Search' });
     await expect(box).toBeFocused();
@@ -166,15 +165,164 @@ test.describe('search', () => {
     await expect(connectedPage).toHaveURL(/#\/search$/);
     await expect(box).toBeFocused();
 
-    // …but not when that field holds a draft: leaving would discard it.
+    // The shortcut still navigates with a draft, and Escape restores it.
     await connectedPage.getByRole('button', { name: 'Inbox' }).first().click();
     await capture.fill('half-written thought');
     await connectedPage.keyboard.press('ControlOrMeta+k');
+    await expect(connectedPage).toHaveURL(/#\/search$/);
+    await expect(box).toBeFocused();
+    await connectedPage.keyboard.press('Escape');
     await expect(connectedPage).toHaveURL(/#\/?$/);
     await expect(capture).toHaveValue('half-written thought');
-    // And `/` is plain text inside a field.
+    // Unmodified punctuation is plain text inside a field.
     await capture.press('/');
     await expect(capture).toHaveValue('half-written thought/');
     await expect(connectedPage).toHaveURL(/#\/?$/);
+
+    // The Todos quick-entry draft survives the same search round trip.
+    await connectedPage.getByRole('button', { name: 'Todos' }).first().click();
+    const todoQuickAdd = connectedPage.getByPlaceholder(
+      /Add a todo|What needs doing/,
+    );
+    await todoQuickAdd.fill('another unfinished thought');
+    await connectedPage.keyboard.press('ControlOrMeta+k');
+    await expect(connectedPage).toHaveURL(/#\/search$/);
+    await expect(box).toBeFocused();
+    await connectedPage.keyboard.press('Escape');
+    await expect(connectedPage).toHaveURL(/#\/?$/);
+    await connectedPage.getByRole('button', { name: 'Todos' }).first().click();
+    await expect(connectedPage).toHaveURL(/#\/todos$/);
+    await expect(todoQuickAdd).toHaveValue('another unfinished thought');
+  });
+
+  test('global shortcuts respect typing and open overlays predictably', async ({
+    connectedPage,
+    webOrigin,
+  }) => {
+    await connectedPage.goto(webOrigin);
+    await connectedPage.waitForLoadState('networkidle');
+
+    const capture = connectedPage.getByPlaceholder(
+      'Paste a link, jot a note, or drop a file…',
+    );
+    const help = connectedPage.getByRole('dialog', {
+      name: 'Keyboard shortcuts',
+    });
+
+    // Unmodified punctuation remains text while an editor owns focus.
+    await expect(capture).toBeFocused();
+    await connectedPage.keyboard.type('?');
+    await expect(capture).toHaveValue('?');
+    await expect(help).toHaveCount(0);
+
+    // The same protection covers every contenteditable form, including a
+    // bare contenteditable attribute rather than only contenteditable=true.
+    const editable = connectedPage.locator('[data-test="bare-editable"]');
+    await connectedPage.evaluate(() => {
+      const element = document.createElement('div');
+      element.setAttribute('contenteditable', '');
+      element.dataset.test = 'bare-editable';
+      document.body.append(element);
+    });
+    await editable.focus();
+    await connectedPage.keyboard.type('?');
+    await expect(editable).toHaveText('?');
+    await expect(help).toHaveCount(0);
+
+    // The modified help shortcut works from an editor. Other global overlays
+    // stay gated until it closes.
+    await capture.focus();
+    await connectedPage.keyboard.press('ControlOrMeta+/');
+    await expect(help).toBeVisible();
+    await connectedPage.keyboard.press('ControlOrMeta+,');
+    await expect(
+      connectedPage.getByRole('dialog', { name: 'Settings' }),
+    ).toHaveCount(0);
+    await connectedPage.keyboard.press('ControlOrMeta+/');
+    await expect(help).toHaveCount(0);
+
+    // Modified shortcuts are available from quick entry, and opening an
+    // overlay does not discard the draft.
+    await capture.focus();
+    await connectedPage.keyboard.press('ControlOrMeta+Shift+p');
+    const palette = connectedPage.getByRole('dialog', {
+      name: 'Command palette',
+    });
+    await expect(palette).toBeVisible();
+    const commandSearch = palette.getByRole('textbox', {
+      name: 'Find a command',
+    });
+    await expect(commandSearch).toBeFocused();
+    await commandSearch.fill('to');
+    await expect(
+      palette.getByRole('button', { name: /Go to Todos/ }),
+    ).toHaveAttribute('aria-current', 'true');
+    await commandSearch.fill('add todo');
+    await expect(
+      palette.getByRole('button', { name: /Add todo/ }),
+    ).toHaveAttribute('aria-current', 'true');
+    await commandSearch.fill('add card');
+    await expect(
+      palette.getByRole('button', { name: /Add card/ }),
+    ).toHaveAttribute('aria-current', 'true');
+    await connectedPage.keyboard.press('Escape');
+    await expect(palette).toHaveCount(0);
+    await expect(capture).toHaveValue('?');
+
+    await capture.focus();
+    await connectedPage.keyboard.press('ControlOrMeta+,');
+    await expect(
+      connectedPage.getByRole('dialog', { name: 'Settings' }),
+    ).toBeVisible();
+    await expect(capture).toHaveValue('?');
+  });
+
+  test('hides help and disables global shortcuts when the sidebar moves above content', async ({
+    connectedPage,
+    webOrigin,
+  }) => {
+    await connectedPage.setViewportSize({ width: 768, height: 900 });
+    await connectedPage.goto(`${webOrigin}/#/todos`);
+    await connectedPage.waitForLoadState('networkidle');
+
+    await expect(
+      connectedPage.getByRole('button', { name: 'Keyboard shortcuts' }),
+    ).toBeHidden();
+
+    await connectedPage.locator('body').click({ position: { x: 5, y: 5 } });
+    await connectedPage.keyboard.press('?');
+    await connectedPage.keyboard.press('ControlOrMeta+Shift+p');
+    await connectedPage.keyboard.press('ControlOrMeta+,');
+    await connectedPage.keyboard.press('/');
+
+    await expect(connectedPage).toHaveURL(/#\/todos$/);
+    await expect(connectedPage.getByRole('dialog')).toHaveCount(0);
+  });
+
+  test('dedicated shortcuts open todo and card creation', async ({
+    connectedPage,
+    webOrigin,
+  }) => {
+    await connectedPage.goto(webOrigin);
+    await connectedPage.waitForLoadState('networkidle');
+
+    const capture = connectedPage.getByPlaceholder(
+      'Paste a link, jot a note, or drop a file…',
+    );
+    await capture.fill('draft stays here');
+
+    await connectedPage.keyboard.press('ControlOrMeta+Shift+Enter');
+    await expect(
+      connectedPage.getByRole('heading', { name: 'Add Todo' }),
+    ).toBeVisible();
+    await connectedPage.keyboard.press('Escape');
+    await expect(capture).toHaveValue('draft stays here');
+
+    await connectedPage.keyboard.press('ControlOrMeta+Enter');
+    await expect(
+      connectedPage.getByRole('heading', { name: 'Add Note' }),
+    ).toBeVisible();
+    await connectedPage.keyboard.press('Escape');
+    await expect(capture).toHaveValue('draft stays here');
   });
 });

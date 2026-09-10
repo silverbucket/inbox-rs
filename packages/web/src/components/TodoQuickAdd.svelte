@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * Quick-add todo composer, shared by the Todos page and the collection
-   * view's Todos section. Plain Enter files a todo instantly; ⌘/Ctrl-Enter
+   * view's Todos section. Plain Enter files a todo instantly; ⌘/Ctrl-Shift-Enter
    * opens the full modal pre-filled (via `onopenmodal`), mirroring the inbox
    * capture bar.
    *
@@ -35,6 +35,7 @@
     compact = false,
     hideOnMobile = false,
     focusOnMount = false,
+    quickTitle = $bindable(''),
     onopenmodal,
   }: {
     /** When set, todos are filed here and the collection select is hidden. */
@@ -46,14 +47,14 @@
     /** Focus the input on mount (the Todos page does; the collection view
         doesn't, to avoid stealing focus when a collection is expanded). */
     focusOnMount?: boolean;
-    /** ⌘/Ctrl-Enter — open the full todo modal pre-filled with the title and
-        the resolved target collection. `null` when that target is Unfiled: the
-        chip is a visible choice, so the modal must not swap in a remembered
-        collection behind it. */
+    /** Hoisted on the Todos page so navigation does not discard a draft. */
+    quickTitle?: string;
+    /** ⌘/Ctrl-Shift-Enter — open the full todo modal pre-filled with the title.
+        Shortcut-created todos pass `null` so the modal starts Unfiled rather
+        than inheriting the selected, fixed, or remembered collection. */
     onopenmodal: (prefillTitle: string, collectionId: string | null) => void;
   } = $props();
 
-  let quickTitle = $state('');
   let quickSaving = $state(false);
   let quickError = $state('');
   let quickFocused = $state(false);
@@ -293,10 +294,14 @@
       if (
         e.key === 'Enter' &&
         (e.metaKey || e.ctrlKey) &&
+        e.shiftKey &&
+        !e.altKey &&
         canCaptureTodo(quickTitle)
       ) {
         e.preventDefault();
-        onopenmodal(quickTitle, targetCollectionId ?? null);
+        // Shortcut-created todos always start unfiled. The selected/fixed
+        // collection still applies to plain-Enter quick saves.
+        onopenmodal(quickTitle, null);
         quickTitle = '';
       }
     }}
@@ -373,7 +378,7 @@
   {#if quickFocused && quickTitle.trim()}
     <span>↵ {fixedCollectionId ? 'Add todo' : `Add to ${destinationLabel}`}</span>
     <span class="sep">·</span>
-    <span>{mod}↵ Open editor</span>
+    <span>{mod}⇧↵ Open editor</span>
   {/if}
 </div>
 
