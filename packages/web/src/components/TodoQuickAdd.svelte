@@ -295,6 +295,7 @@
         e.key === 'Enter' &&
         (e.metaKey || e.ctrlKey) &&
         e.shiftKey &&
+        !e.altKey &&
         canCaptureTodo(quickTitle)
       ) {
         e.preventDefault();

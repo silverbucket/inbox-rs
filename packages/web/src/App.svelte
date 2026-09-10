@@ -607,8 +607,8 @@
     commandPaletteOpen = false;
     if (id === 'search') navToSearch();
     else if (id === 'inbox' || id === 'todos' || id === 'collections') navTo(id);
-    else if (id === 'note' || id === 'bookmark') openAdd(id);
-    else if (id === 'todo') openAddTodo();
+    else if (id === 'note' || id === 'bookmark') openAdd(id, null);
+    else if (id === 'todo') openAddTodo('', null);
     else if (id === 'audio') handleRecord();
     else if (id === 'settings') openSettings();
     else if (id === 'help') shortcutHelpOpen = true;
