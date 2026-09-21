@@ -95,7 +95,10 @@ test('Ctrl+Enter on a typed todo title saves without opening the new-note modal'
   await expect(
     page.getByRole('heading', { name: 'Add Note' }),
   ).not.toBeVisible();
-  await expect(input).toHaveValue('');
+  // The first todo swaps the empty-state hero for the compact composer
+  // above the list, so the original locator is gone — the title must not
+  // have carried over into its replacement.
+  await expect(page.getByPlaceholder('Add a todo…')).toHaveValue('');
 
   assertNoConsoleErrors(log);
 });
@@ -124,12 +127,12 @@ test('Ctrl+Shift+Enter on a typed todo title opens the add-todo modal pre-filled
 
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible({ timeout: 10_000 });
-  await expect(
-    page.getByRole('heading', { name: 'Add Todo' }),
-  ).toBeVisible({ timeout: 10_000 });
-  await expect(
-    dialog.getByPlaceholder('What needs to be done?'),
-  ).toHaveValue(sentinel);
+  await expect(page.getByRole('heading', { name: 'Add Todo' })).toBeVisible({
+    timeout: 10_000,
+  });
+  await expect(dialog.getByPlaceholder('What needs to be done?')).toHaveValue(
+    sentinel,
+  );
   await expect(
     page.getByRole('heading', { name: 'Add Note' }),
   ).not.toBeVisible();
