@@ -221,6 +221,27 @@ describe('fetchSockethubInfo', () => {
       platforms: [{ id: 'metadata', apiVersion: 5 }],
     });
   });
+
+  it('aborts a descriptor request after five seconds', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(
+      (_url: string, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          );
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const rejection = expect(fetchSockethubInfo()).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    await vi.advanceTimersByTimeAsync(5_000);
+    await rejection;
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    vi.useRealTimers();
+  });
 });
 
 function ndjsonResponse(lines: unknown[], status = 200) {

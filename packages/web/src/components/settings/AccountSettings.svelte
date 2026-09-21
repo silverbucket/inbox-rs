@@ -14,12 +14,7 @@
   let sockethubPlatforms = $state<Array<{ id: string; apiVersion: number }>>([]);
   let sockethubProbe = 0;
   const effectiveSockethubEndpoint = $derived(sockethubCustom ? sockethubEndpoint.trim() : DEFAULT_SOCKETHUB_ENDPOINT);
-  async function loadSockethubInfo(endpoint = effectiveSockethubEndpoint){
-    const probe = ++sockethubProbe;
-    sockethubApiVersion = null;
-    sockethubPlatforms = [];
-    if (!endpoint) { sockethubStatus = 'unreachable'; return; }
-    sockethubStatus = 'loading';
+  async function loadSockethubInfo(endpoint: string, probe: number){
     try {
       const info = await fetchSockethubInfo(endpoint);
       if (probe !== sockethubProbe) return;
@@ -38,7 +33,12 @@
   $effect(() => { const synced = $userSettings.sockethubUrl; if (synced && !sockethubCustom && !sockethubEndpoint) { sockethubCustom = true; sockethubEndpoint = synced; } });
   $effect(() => {
     const endpoint = effectiveSockethubEndpoint;
-    const timeout = window.setTimeout(() => void loadSockethubInfo(endpoint), 300);
+    const probe = ++sockethubProbe;
+    sockethubApiVersion = null;
+    sockethubPlatforms = [];
+    sockethubStatus = endpoint ? 'loading' : 'unreachable';
+    if (!endpoint) return;
+    const timeout = window.setTimeout(() => void loadSockethubInfo(endpoint, probe), 300);
     return () => window.clearTimeout(timeout);
   });
   let address = $state(''); let connecting = $state(false); let connectInput = $state<HTMLInputElement|null>(null);

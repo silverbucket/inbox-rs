@@ -175,4 +175,41 @@ describe('AccountSettings Sockethub status', () => {
     );
     expect(statusPill()?.textContent).toBe('API v6');
   });
+
+  it('invalidates an in-flight result as soon as the endpoint changes', async () => {
+    let resolveDefault: (value: {
+      name: 'sockethub';
+      apiVersion: number;
+      platforms: Array<{ id: string; apiVersion: number }>;
+    }) => void = () => {};
+    fetchSockethubInfo.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveDefault = resolve;
+        }),
+    );
+    render();
+    await settleProbe();
+
+    const ownServer = Array.from(host.querySelectorAll('button')).find(
+      (button) => button.textContent?.includes('My own server'),
+    );
+    ownServer?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    flushSync();
+    const input = host.querySelector('#sockethub-endpoint') as HTMLInputElement;
+    input.value = 'https://new.example/sockethub-http';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+
+    resolveDefault({
+      name: 'sockethub',
+      apiVersion: 4,
+      platforms: [{ id: 'metadata', apiVersion: 4 }],
+    });
+    await Promise.resolve();
+    flushSync();
+
+    expect(statusPill()?.textContent).toBe('Checking…');
+    expect(platformLabels()).toEqual([]);
+  });
 });

@@ -59,10 +59,17 @@ export interface SockethubInfo {
 export async function fetchSockethubInfo(
   endpoint: string = DEFAULT_SOCKETHUB_ENDPOINT,
 ): Promise<SockethubInfo | null> {
-  const response = await fetch(endpoint, {
-    headers: { Accept: 'application/json' },
-    signal: AbortSignal.timeout(5_000),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5_000);
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
   if (!response.ok) return null;
 
   const payload: unknown = await response.json();
