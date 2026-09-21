@@ -277,10 +277,12 @@ describe('enrichAllBookmarks', () => {
   });
 
   it('counts failures without aborting the rest', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     itemsMap.b1 = bookmark({ id: 'b1' });
     itemsMap.b2 = bookmark({ id: 'b2', url: 'https://two.com' });
+    const deadLink = new Error('dead link');
     fetchLinkMetadata
-      .mockRejectedValueOnce(new Error('dead link'))
+      .mockRejectedValueOnce(deadLink)
       .mockResolvedValueOnce({ title: 'Fetched', description: 'd' });
 
     await expect(enrichAllBookmarks()).resolves.toEqual({
@@ -288,5 +290,12 @@ describe('enrichAllBookmarks', () => {
       failed: 1,
       total: 2,
     });
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(
+      'Metadata fetch failed:',
+      'https://example.com',
+      deadLink,
+    );
+    warn.mockRestore();
   });
 });
