@@ -202,26 +202,32 @@ describe('TodoQuickAdd', () => {
     expect(input().value).toBe('');
   });
 
-  it('saves on ⌘/Ctrl-Enter and keeps the event from the global new-note shortcut', async () => {
-    render();
-    type('buy milk');
-    const event = new KeyboardEvent('keydown', {
-      key: 'Enter',
-      metaKey: true,
-      bubbles: true,
-      cancelable: true,
-    });
-    input().dispatchEvent(event);
-    // The global handler bails on defaultPrevented events.
-    expect(event.defaultPrevented).toBe(true);
-    await vi.waitFor(() => {
+  it.each([
+    ['Ctrl', { ctrlKey: true }],
+    ['Command', { metaKey: true }],
+  ] satisfies [string, KeyboardEventInit][])(
+    'saves on %s-Enter and keeps the event from the global new-note shortcut',
+    async (_modifier, keys) => {
+      render();
+      type('buy milk');
+      const event = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        ...keys,
+        bubbles: true,
+        cancelable: true,
+      });
+      input().dispatchEvent(event);
+      // The global handler bails on defaultPrevented events.
+      expect(event.defaultPrevented).toBe(true);
+      await vi.waitFor(() => {
+        flushSync();
+        expect(storeItem).toHaveBeenCalledOnce();
+      });
+      expect(onopenmodal).not.toHaveBeenCalled();
       flushSync();
-      expect(storeItem).toHaveBeenCalledOnce();
-    });
-    expect(onopenmodal).not.toHaveBeenCalled();
-    flushSync();
-    expect(input().value).toBe('');
-  });
+      expect(input().value).toBe('');
+    },
+  );
 
   it('leaves ⌘/Ctrl-Enter on an empty input to the global shortcut', () => {
     render();
