@@ -45,7 +45,7 @@
       case 'links': return $userSettings.linkPreviews === false ? 'Off' : 'On';
       case 'calendars': return `${$calendarAccounts.length} account${$calendarAccounts.length === 1 ? '' : 's'}`;
       case 'notifications': return $alertPermission === 'granted' ? 'Allowed' : 'Not allowed';
-      case 'data': return `${itemList.length} items`;
+      case 'data': return `${itemList.length} item${itemList.length === 1 ? '' : 's'}`;
       case 'apps': return 'Capture tools';
       case 'account': return $connected ? 'Synced' : 'Not connected';
       case 'about': return versionLabel;

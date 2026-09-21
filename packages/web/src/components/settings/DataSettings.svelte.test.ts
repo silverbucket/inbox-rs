@@ -69,7 +69,11 @@ describe('DataSettings', () => {
     render();
     await vi.waitFor(() => {
       expect(host.textContent).toContain(
-        '1 items · 3.0 MB in your inbox, on your storage server',
+        '1 item · 3.0 MB in your inbox, on your storage server',
+      );
+      // The fixture is one document: singular there, plural for the zeros.
+      expect(host.textContent).toContain(
+        '0 bookmarks · 0 notes · 1 file · 0 voice notes',
       );
     });
   });

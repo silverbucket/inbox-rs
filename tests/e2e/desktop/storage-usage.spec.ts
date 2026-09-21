@@ -63,9 +63,7 @@ test('Your data shows the total size on the storage server', async ({
   });
   // Svelte trims whitespace at block edges — the separator must survive it.
   await expect(
-    settings.getByText(
-      '1 items · 3.0 MB in your inbox, on your storage server',
-    ),
+    settings.getByText('1 item · 3.0 MB in your inbox, on your storage server'),
   ).toBeVisible();
 });
 
