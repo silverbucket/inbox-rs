@@ -97,4 +97,12 @@ describe('formatBytes', () => {
     expect(formatBytes(4.2 * 1024 * 1024)).toBe('4.2 MB');
     expect(formatBytes(1.3 * 1024 ** 3)).toBe('1.3 GB');
   });
+
+  it('rolls over to the next unit when rounding reaches 1024', () => {
+    expect(formatBytes(1023)).toBe('1023 B');
+    expect(formatBytes(1024 ** 2 - 1)).toBe('1.0 MB');
+    expect(formatBytes(1024 ** 3 - 1)).toBe('1.0 GB');
+    expect(formatBytes(1024 ** 4 - 1)).toBe('1.0 TB');
+    expect(formatBytes(1024 ** 5)).toBe('1024.0 TB');
+  });
 });
