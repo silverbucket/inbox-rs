@@ -68,3 +68,100 @@ test('quick-add composer captures a todo from the empty state', async ({
 
   assertNoConsoleErrors(log);
 });
+
+test('Ctrl+Enter on a typed todo title saves without opening the new-note modal', async ({
+  context,
+  freshRsUser,
+  freshRsToken,
+  webOrigin,
+}) => {
+  await seedRsSession(context, freshRsUser, freshRsToken, {
+    clientOrigin: webOrigin,
+  });
+  const page = await context.newPage();
+  const log = attachConsoleCapture(page);
+
+  await page.goto(`${webOrigin}/#/todos`);
+  await page.waitForLoadState('networkidle');
+
+  const input = page.getByPlaceholder('What needs doing?');
+  await expect(input).toBeVisible();
+
+  const sentinel = 'playwright-todo-ctrl-enter-save';
+  await input.fill(sentinel);
+  await input.press('Control+Enter');
+
+  await expect(page.getByText(sentinel)).toBeVisible({ timeout: 10_000 });
+  await expect(
+    page.getByRole('heading', { name: 'Add Note' }),
+  ).not.toBeVisible();
+  // The first todo swaps the empty-state hero for the compact composer
+  // above the list, so the original locator is gone — the title must not
+  // have carried over into its replacement.
+  await expect(page.getByPlaceholder('Add a todo…')).toHaveValue('');
+
+  assertNoConsoleErrors(log);
+});
+
+test('Ctrl+Shift+Enter on a typed todo title opens the add-todo modal pre-filled', async ({
+  context,
+  freshRsUser,
+  freshRsToken,
+  webOrigin,
+}) => {
+  await seedRsSession(context, freshRsUser, freshRsToken, {
+    clientOrigin: webOrigin,
+  });
+  const page = await context.newPage();
+  const log = attachConsoleCapture(page);
+
+  await page.goto(`${webOrigin}/#/todos`);
+  await page.waitForLoadState('networkidle');
+
+  const input = page.getByPlaceholder('What needs doing?');
+  await expect(input).toBeVisible();
+
+  const sentinel = 'playwright-todo-ctrl-shift-enter-modal';
+  await input.fill(sentinel);
+  await input.press('Control+Shift+Enter');
+
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('heading', { name: 'Add Todo' })).toBeVisible({
+    timeout: 10_000,
+  });
+  await expect(dialog.getByPlaceholder('What needs to be done?')).toHaveValue(
+    sentinel,
+  );
+  await expect(
+    page.getByRole('heading', { name: 'Add Note' }),
+  ).not.toBeVisible();
+
+  assertNoConsoleErrors(log);
+});
+
+test('Ctrl+Enter on an empty todo input falls through to the global new-note modal', async ({
+  connectedPage,
+  webOrigin,
+}) => {
+  const log = attachConsoleCapture(connectedPage);
+
+  await connectedPage.goto(`${webOrigin}/#/todos`);
+  await connectedPage.waitForLoadState('networkidle');
+
+  const input = connectedPage.getByPlaceholder(/What needs doing\?|Add a todo/);
+  await expect(input).toBeVisible();
+  await input.click();
+  await expect(input).toHaveValue('');
+
+  await input.press('Control+Enter');
+
+  await expect(
+    connectedPage.getByRole('heading', { name: 'Add Note' }),
+  ).toBeVisible({ timeout: 10_000 });
+  await expect(
+    connectedPage.getByRole('heading', { name: 'Add Todo' }),
+  ).not.toBeVisible();
+
+  assertNoConsoleErrors(log);
+});
