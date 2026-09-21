@@ -198,7 +198,7 @@ async function captureReference(page: Page, title: string): Promise<void> {
 }
 
 /** Add a todo through the quick-add composer in the current view. */
-async function addTodo(page: Page, title: string): Promise<void> {
+export async function addTodo(page: Page, title: string): Promise<void> {
   const field = page
     .locator(
       'input[placeholder^="What needs doing"], input[placeholder^="Add a todo"]',
@@ -277,7 +277,12 @@ type Point = { x: number; y: number };
  * (the same thing a mouse does) and the settle phase gives the browser time to
  * emit a final `dragover` on the target, which is what licenses the `drop`.
  */
-async function steppedDrag(page: Page, from: Point, to: Point): Promise<void> {
+async function steppedDrag(
+  page: Page,
+  from: Point,
+  to: Point,
+  whileHeld?: () => Promise<void>,
+): Promise<void> {
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
 
@@ -302,6 +307,7 @@ async function steppedDrag(page: Page, from: Point, to: Point): Promise<void> {
     await page.waitForTimeout(60);
   }
   await page.waitForTimeout(250);
+  if (whileHeld) await whileHeld();
   await page.mouse.up();
 }
 
@@ -421,12 +427,18 @@ export async function dragCollectionOntoGroup(
  * cursor, so an overshoot — or merely dragging a tall expanded group — put that
  * centre outside the zone and the library reverted the reorder as "dropped
  * outside of any". Tests that stop neatly on the target never see it.
+ *
+ * `whileHeld` runs settled on the target with the button still down — the only
+ * moment the carried copy and the gap it will land in both exist.
  */
 export async function dragGripPast(
   page: Page,
   handle: Locator,
   target: Locator,
-  { overshootPx = 0 }: { overshootPx?: number } = {},
+  {
+    overshootPx = 0,
+    whileHeld,
+  }: { overshootPx?: number; whileHeld?: () => Promise<void> } = {},
 ): Promise<void> {
   const from = await boxOf(handle, 'the drag handle');
   const to = await boxOf(target, 'the reorder target');
@@ -437,5 +449,6 @@ export async function dragGripPast(
       x: from.x + from.width / 2,
       y: overshootPx ? to.y + to.height + overshootPx : to.y + to.height / 2,
     },
+    whileHeld,
   );
 }

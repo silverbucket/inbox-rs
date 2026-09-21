@@ -20,6 +20,7 @@
   import { compareByDueTime, isDueTodayOrOverdue } from '../lib/schedule';
   import { todayStart } from '../lib/now';
   import { slide, fade } from 'svelte/transition';
+  import { createReorderFade } from '../lib/reorder-fade';
   import { flip } from 'svelte/animate';
   import { dragHandleZone } from 'svelte-dnd-action';
   import ReorderGrip from './ReorderGrip.svelte';
@@ -220,13 +221,19 @@
     dndOpen = restOpenTodos.map(t => ({ ...t }));
   });
 
+  // Rows fade when added or removed, but not while being reordered — a
+  // lingering outro copy makes svelte-dnd-action lose the row it is carrying.
+  const reorderFade = createReorderFade();
+
   function handleDndConsider(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
+    reorderFade.start();
     dndOpen = e.detail.items;
   }
 
   async function handleDndFinalize(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
     const previous = restOpenTodos.map(t => ({ ...t }));
     dndOpen = e.detail.items;
+    await reorderFade.end();
     try {
       // Due-band todos lead the persisted order so they resume a sane manual
       // slot once their due date passes out of the band.
@@ -446,7 +453,7 @@
             onfinalize={handleDndFinalize}
           >
             {#each dndOpen as todo (todo.id)}
-              <div animate:flip={{ duration: 200 }} in:fade={{ duration: 180 }} out:fade={{ duration: 120 }}>
+              <div animate:flip={{ duration: 200 }} in:reorderFade.fade={{ duration: 180 }} out:reorderFade.fade={{ duration: 120 }}>
                 <TodoRow {todo} {collection} {group} reorderable {onselect} />
               </div>
             {/each}
