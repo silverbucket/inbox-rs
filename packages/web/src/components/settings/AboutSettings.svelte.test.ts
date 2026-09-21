@@ -48,7 +48,7 @@ describe('AboutSettings', () => {
     );
   }
 
-  it('links What\'s new and Source to the silverbucket GitHub repository', () => {
+  it("links What's new and Source to the silverbucket GitHub repository", () => {
     render();
     expect(link("What's new")?.getAttribute('href')).toBe(`${REPO}/releases`);
     expect(link('Source')?.getAttribute('href')).toBe(REPO);
