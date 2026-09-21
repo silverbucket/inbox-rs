@@ -3,6 +3,7 @@
   import { dragHandleZone } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import { slide, fade } from 'svelte/transition';
+  import { createReorderFade } from '../lib/reorder-fade';
   import {
     visibleTodos, visibleOnCalendarTodos, reorderTodosGlobal,
     collections, sortedGroups, appConfig, updateConfig,
@@ -84,13 +85,19 @@
     dndOpen = restOpenTodos.map(t => ({ ...t }));
   });
 
+  // Rows fade when added or removed, but not while being reordered — a
+  // lingering outro copy makes svelte-dnd-action lose the row it is carrying.
+  const reorderFade = createReorderFade();
+
   function handleDndConsider(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
+    reorderFade.start();
     dndOpen = e.detail.items;
   }
 
   async function handleDndFinalize(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
     const previous = restOpenTodos.map(t => ({ ...t }));
     dndOpen = e.detail.items;
+    await reorderFade.end();
     try {
       // Persist just the open ids — completed todos fall back to completedAt
       // ordering on re-render, so we don't need to thread them through config.
@@ -198,8 +205,8 @@
       {#each dndOpen as todo (todo.id)}
         <div
           animate:flip={{ duration: 200 }}
-          in:fade={{ duration: 180 }}
-          out:fade={{ duration: 120 }}
+          in:reorderFade.fade={{ duration: 180 }}
+          out:reorderFade.fade={{ duration: 120 }}
         >
           <TodoRow
             {todo}
