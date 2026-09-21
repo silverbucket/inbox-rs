@@ -292,17 +292,24 @@
     onblur={() => (quickFocused = false)}
     onkeydown={(e) => {
       if (
-        e.key === 'Enter' &&
-        (e.metaKey || e.ctrlKey) &&
-        e.shiftKey &&
-        !e.altKey &&
-        canCaptureTodo(quickTitle)
+        e.key !== 'Enter' ||
+        !(e.metaKey || e.ctrlKey) ||
+        e.altKey ||
+        !canCaptureTodo(quickTitle)
       ) {
-        e.preventDefault();
+        return;
+      }
+      e.preventDefault();
+      if (e.shiftKey) {
         // Shortcut-created todos always start unfiled. The selected/fixed
         // collection still applies to plain-Enter quick saves.
         onopenmodal(quickTitle, null);
         quickTitle = '';
+      } else {
+        // ⌘/Ctrl-Enter on a typed title saves it like plain Enter. Claiming
+        // the event keeps it from the global handler, which would otherwise
+        // open an empty "new note" modal on top of the save.
+        void addQuickTodo();
       }
     }}
   />
