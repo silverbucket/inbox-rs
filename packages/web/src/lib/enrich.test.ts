@@ -292,9 +292,29 @@ describe('enrichAllBookmarks', () => {
     });
     expect(warn).toHaveBeenCalledOnce();
     expect(warn).toHaveBeenCalledWith(
-      'Metadata fetch failed:',
+      'Link preview enrichment failed:',
       'https://example.com',
       deadLink,
+    );
+    warn.mockRestore();
+  });
+
+  it('counts a failed store as a failure too', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    itemsMap.b1 = bookmark({ id: 'b1' });
+    fetchLinkMetadata.mockResolvedValueOnce({ title: 'Fetched' });
+    const storeFailed = new Error('Inbox storage module is not available');
+    storeItem.mockRejectedValueOnce(storeFailed);
+
+    await expect(enrichAllBookmarks()).resolves.toEqual({
+      updated: 0,
+      failed: 1,
+      total: 1,
+    });
+    expect(warn).toHaveBeenCalledWith(
+      'Link preview enrichment failed:',
+      'https://example.com',
+      storeFailed,
     );
     warn.mockRestore();
   });

@@ -176,9 +176,10 @@ export async function enrichAllBookmarks(): Promise<{
         try {
           if ((await enrichBookmark(item)) === 'updated') updated++;
         } catch (e) {
-          // Same diagnostics the per-card button logs — without this a
-          // bulk pass skips failing URLs with no trace of why.
-          console.warn('Metadata fetch failed:', item.url, e);
+          // Without this a bulk pass skips failing URLs with no trace of
+          // why. Worded for the whole operation: the rejection may come
+          // from the metadata fetch or from storing the enriched item.
+          console.warn('Link preview enrichment failed:', item.url, e);
           failed++;
         }
         bulkEnrichProgress.update((p) => (p ? { ...p, done: p.done + 1 } : p));
