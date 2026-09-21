@@ -1,5 +1,9 @@
 /**
- * Total bytes the app occupies on the user's remoteStorage server.
+ * Total bytes the inbox occupies on the user's remoteStorage server.
+ *
+ * Only `/inbox/` is counted. Sharesome copies under `/public/shares/` are
+ * left out: that folder is shared with other apps, so its size isn't ours
+ * to claim — the UI says "in your inbox" for that reason.
  *
  * remotestoragejs's `getListing` drops `Content-Length` whenever caching is
  * on (it is, for all of `/inbox/`), so we read the server's folder
@@ -59,7 +63,12 @@ export function formatBytes(bytes: number): string {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   let value = bytes;
   let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
+  // Compare what would be printed, not the raw value: 1048575 B rounds to
+  // "1024.0 KB", which should read "1.0 MB".
+  while (
+    unit < units.length - 1 &&
+    (unit === 0 ? value : Number(value.toFixed(1))) >= 1024
+  ) {
     value /= 1024;
     unit++;
   }

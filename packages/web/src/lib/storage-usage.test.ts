@@ -58,6 +58,20 @@ describe('fetchStorageUsage', () => {
     expect(await fetchStorageUsage(HREF, 'tok')).toBe(0);
   });
 
+  it('counts only /inbox/, not other top-level folders', async () => {
+    serve({
+      '/inbox/': { items: { note: { ETag: '1', 'Content-Length': 100 } } },
+      '/public/': { items: { 'shares/': { ETag: 's' } } },
+      '/public/shares/': {
+        items: { big: { ETag: '2', 'Content-Length': 9_999_999 } },
+      },
+    });
+    expect(await fetchStorageUsage(HREF, 'tok')).toBe(100);
+    expect(mockFetch.mock.calls.map(([url]) => url.slice(HREF.length))).toEqual(
+      ['/inbox/'],
+    );
+  });
+
   it('returns null when a listing has no sizes', async () => {
     serve({ '/inbox/': { items: { one: { ETag: '1' } } } });
     expect(await fetchStorageUsage(HREF, 'tok')).toBeNull();
@@ -96,5 +110,14 @@ describe('formatBytes', () => {
     expect(formatBytes(1536)).toBe('1.5 KB');
     expect(formatBytes(4.2 * 1024 * 1024)).toBe('4.2 MB');
     expect(formatBytes(1.3 * 1024 ** 3)).toBe('1.3 GB');
+  });
+
+  it('rolls over to the next unit when rounding reaches 1024', () => {
+    expect(formatBytes(1023)).toBe('1023 B');
+    expect(formatBytes(1048575)).toBe('1.0 MB');
+    expect(formatBytes(1024 ** 2 - 1)).toBe('1.0 MB');
+    expect(formatBytes(1024 ** 3 - 1)).toBe('1.0 GB');
+    expect(formatBytes(1024 ** 4 - 1)).toBe('1.0 TB');
+    expect(formatBytes(1024 ** 5)).toBe('1024.0 TB');
   });
 });
