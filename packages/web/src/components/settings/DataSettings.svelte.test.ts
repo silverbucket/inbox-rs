@@ -94,9 +94,9 @@ describe('DataSettings', () => {
     w<boolean>(syncing).set(false);
     flushSync();
     await vi.waitFor(() => {
-      expect(host.querySelector('[data-testid="storage-usage"]')?.textContent).toBe(
-        '5.0 MB',
-      );
+      expect(
+        host.querySelector('[data-testid="storage-usage"]')?.textContent,
+      ).toBe('5.0 MB');
     });
     expect(fetchStorageUsage).toHaveBeenCalledTimes(2);
   });

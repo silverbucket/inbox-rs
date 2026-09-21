@@ -67,9 +67,9 @@ describe('fetchStorageUsage', () => {
       },
     });
     expect(await fetchStorageUsage(HREF, 'tok')).toBe(100);
-    expect(mockFetch.mock.calls.map(([url]) => url.slice(HREF.length))).toEqual([
-      '/inbox/',
-    ]);
+    expect(mockFetch.mock.calls.map(([url]) => url.slice(HREF.length))).toEqual(
+      ['/inbox/'],
+    );
   });
 
   it('returns null when a listing has no sizes', async () => {
