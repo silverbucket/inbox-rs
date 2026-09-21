@@ -45,6 +45,56 @@ export interface LinkMetadata {
   favicon?: string;
 }
 
+export interface SockethubInfo {
+  name: 'sockethub';
+  apiVersion: number;
+  platforms: Array<{ id: string; apiVersion: number }>;
+}
+
+/**
+ * Read the service descriptor exposed by Sockethub's HTTP actions endpoint.
+ * Servers predating this descriptor return a 400 for a bare GET, in which case
+ * their API versions are not available.
+ */
+export async function fetchSockethubInfo(
+  endpoint: string = DEFAULT_SOCKETHUB_ENDPOINT,
+): Promise<SockethubInfo | null> {
+  const response = await fetch(endpoint, {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!response.ok) return null;
+
+  const payload: unknown = await response.json();
+  if (!payload || typeof payload !== 'object') return null;
+  const info = payload as Record<string, unknown>;
+  if (
+    info.name !== 'sockethub' ||
+    !Number.isInteger(info.apiVersion) ||
+    (info.apiVersion as number) < 0 ||
+    !Array.isArray(info.platforms)
+  ) {
+    return null;
+  }
+  const platforms = Array.isArray(info.platforms)
+    ? info.platforms.flatMap((platform) => {
+        if (!platform || typeof platform !== 'object') return [];
+        const entry = platform as Record<string, unknown>;
+        return typeof entry.id === 'string' &&
+          entry.id.trim() &&
+          Number.isInteger(entry.apiVersion) &&
+          (entry.apiVersion as number) >= 0
+          ? [{ id: entry.id.trim(), apiVersion: entry.apiVersion as number }]
+          : [];
+      })
+    : [];
+  return {
+    name: 'sockethub',
+    apiVersion: info.apiVersion as number,
+    platforms,
+  };
+}
+
 function asNonEmptyString(value: unknown): string | undefined {
   if (typeof value === 'string' && value.trim()) return value.trim();
   return undefined;

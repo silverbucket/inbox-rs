@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_SOCKETHUB_ENDPOINT,
   fetchLinkMetadata,
+  fetchSockethubInfo,
   normalizeMetadata,
 } from './link-metadata';
 
@@ -141,6 +142,84 @@ describe('normalizeMetadata', () => {
     expect(normalizeMetadata({ type: 'message', url: 'https://x' })).toBeNull();
     // A relative favicon with no base URL can't be resolved — nothing left.
     expect(normalizeMetadata({ favicon: '/f.ico' })).toBeNull();
+  });
+});
+
+describe('fetchSockethubInfo', () => {
+  it('reads server and platform API versions from the service descriptor', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          name: 'sockethub',
+          apiVersion: 5,
+          platforms: [
+            { id: 'metadata', apiVersion: 5 },
+            { id: 'caldav', apiVersion: 5 },
+          ],
+        }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      fetchSockethubInfo('https://relay.example/sockethub-http'),
+    ).resolves.toEqual({
+      name: 'sockethub',
+      apiVersion: 5,
+      platforms: [
+        { id: 'metadata', apiVersion: 5 },
+        { id: 'caldav', apiVersion: 5 },
+      ],
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://relay.example/sockethub-http',
+      expect.objectContaining({ headers: { Accept: 'application/json' } }),
+    );
+  });
+
+  it('returns null for servers that do not report API information', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+    await expect(fetchSockethubInfo()).resolves.toBeNull();
+  });
+
+  it('returns null for a malformed service descriptor', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            name: 'sockethub',
+            apiVersion: '5',
+            platforms: [],
+          }),
+      }),
+    );
+    await expect(fetchSockethubInfo()).resolves.toBeNull();
+  });
+
+  it('drops malformed platform entries', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            name: 'sockethub',
+            apiVersion: 5,
+            platforms: [
+              { id: 'metadata', apiVersion: 5 },
+              { id: 'caldav' },
+              null,
+            ],
+          }),
+      }),
+    );
+    await expect(fetchSockethubInfo()).resolves.toEqual({
+      name: 'sockethub',
+      apiVersion: 5,
+      platforms: [{ id: 'metadata', apiVersion: 5 }],
+    });
   });
 });
 
