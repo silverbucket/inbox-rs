@@ -5,7 +5,7 @@
   import { alertPermission } from '../lib/alerts';
   import { trapFocus } from '../lib/actions';
   import { calendarAccounts } from '../lib/calendar-accounts';
-  import { needsEnrichment } from '../lib/enrich';
+  import { needsLinkPreview } from '../lib/enrich';
   import { layout } from '../lib/layout';
   import { buildDate, versionLabel } from '../lib/build-info';
   import { SETTINGS_SECTIONS, type SectionId, type SettingsSection } from '../lib/settings-sections';
@@ -33,7 +33,7 @@
 
   const read = (key: string) => { try { return localStorage.getItem(key); } catch { return null; } };
   const itemList = $derived(Object.values($items));
-  const missingPreviews = $derived(itemList.filter((item) => item.type === 'bookmark' && needsEnrichment(item)).length);
+  const missingPreviews = $derived(itemList.filter(needsLinkPreview).length);
   const theme = $derived($userSettings.theme ?? read('inbox-rs:theme') ?? 'system');
   const accentRaw = $derived(read('inbox-rs:accent'));
   const accent = $derived(isAccent(accentRaw) ? ACCENT_LABELS[accentRaw] : 'Indigo');

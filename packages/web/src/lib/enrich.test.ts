@@ -35,15 +35,20 @@ vi.mock('./stores', () => ({
   },
 }));
 
+import type { NoteItem } from '@inbox-rs/rs-module';
 import {
   applyLinkMetadata,
   bulkEnrichProgress,
   describeLinkPreviewError,
   enrichAllBookmarks,
   enrichBookmark,
+  isSavedLink,
   LOCAL_LINK_PREVIEWS_KEY,
   LOCAL_SOCKETHUB_URL_KEY,
+  linkNoteUrl,
   needsEnrichment,
+  needsLinkPreview,
+  noteToBookmark,
   resolveSockethubEndpoint,
 } from './enrich';
 
@@ -91,6 +96,61 @@ describe('local preview settings', () => {
     expect(describeLinkPreviewError(new Error('404 Not Found'))).toBe(
       'Preview service error: 404 Not Found',
     );
+  });
+});
+
+describe('saved link helpers', () => {
+  const url = 'https://example.com/page';
+  const linkNote = (overrides: Partial<NoteItem> = {}): NoteItem => ({
+    id: 'n1',
+    type: 'note',
+    title: url.slice(0, 50),
+    body: url,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  });
+
+  it('recognises link-only notes and ignores todos or mixed text', () => {
+    expect(linkNoteUrl(linkNote())).toBe(url);
+    expect(isSavedLink(linkNote())).toBe(true);
+    expect(needsLinkPreview(linkNote())).toBe(true);
+
+    expect(linkNoteUrl(linkNote({ isTodo: true }))).toBeNull();
+    expect(isSavedLink(linkNote({ isTodo: true }))).toBe(false);
+    expect(needsLinkPreview(linkNote({ isTodo: true }))).toBe(false);
+
+    expect(
+      linkNoteUrl(
+        linkNote({
+          body: 'read https://example.com/page later',
+          title: 'read',
+        }),
+      ),
+    ).toBeNull();
+    expect(isSavedLink(bookmark())).toBe(true);
+    expect(
+      needsLinkPreview(
+        bookmark({
+          title: 'Done',
+          description: 'D',
+          ogImage: 'https://x/i.png',
+          siteName: 'S',
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('converts a link-only note to a bookmark without clobbering a custom title', () => {
+    const note = linkNote({ title: 'My bookmark label' });
+    expect(noteToBookmark(note, url)).toEqual({
+      id: 'n1',
+      type: 'bookmark',
+      title: 'My bookmark label',
+      url,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    });
+
+    expect(noteToBookmark(linkNote(), url).title).toBe(url);
   });
 });
 
@@ -276,11 +336,87 @@ describe('enrichAllBookmarks', () => {
     expect(get(bulkEnrichProgress)).toBeNull();
   });
 
+  it('converts link-only notes into bookmarks and fetches their previews', async () => {
+    // How quick-capture and the share target save links: a note whose
+    // body is nothing but the URL.
+    const url = 'https://x.com/jack/status/20';
+    itemsMap.n1 = {
+      id: 'n1',
+      type: 'note',
+      title: url.slice(0, 50),
+      body: url,
+      createdAt: '',
+    };
+    itemsMap.n2 = {
+      id: 'n2',
+      type: 'note',
+      title: 'Shopping',
+      body: 'milk https://example.com eggs',
+      createdAt: '',
+    };
+    fetchLinkMetadata.mockResolvedValue({ title: 'Fetched' });
+
+    await expect(enrichAllBookmarks()).resolves.toEqual({
+      updated: 1,
+      failed: 0,
+      total: 1,
+    });
+    expect(storeItem).toHaveBeenCalledWith({
+      id: 'n1',
+      type: 'bookmark',
+      title: url,
+      url,
+      createdAt: '',
+    });
+    expect(fetchLinkMetadata).toHaveBeenCalledOnce();
+    expect(fetchLinkMetadata.mock.calls[0][0]).toBe(url);
+  });
+
+  it('does not convert a link note that changed or vanished while queued', async () => {
+    // Three bookmarks fill the worker slots, so the notes wait; by the time
+    // a worker reaches them, a sync has deleted one and edited the other.
+    const url = 'https://x.com/jack/status/20';
+    for (const id of ['b1', 'b2', 'b3']) {
+      itemsMap[id] = bookmark({
+        id,
+        url: `https://${id}.com`,
+        title: `https://${id}.com`,
+      });
+    }
+    const note = {
+      id: 'n1',
+      type: 'note',
+      title: url,
+      body: url,
+      createdAt: '',
+    };
+    itemsMap.n1 = note;
+    itemsMap.n2 = { ...note, id: 'n2' };
+    fetchLinkMetadata.mockImplementation(async () => {
+      delete itemsMap.n1;
+      itemsMap.n2 = { ...note, id: 'n2', body: 'now some text' };
+      return { title: 'Fetched' };
+    });
+
+    await expect(enrichAllBookmarks()).resolves.toEqual({
+      updated: 3,
+      failed: 0,
+      total: 5,
+    });
+    const stored = storeItem.mock.calls.map((c) => c[0].id);
+    expect(stored).not.toContain('n1');
+    expect(stored).not.toContain('n2');
+    expect(fetchLinkMetadata).toHaveBeenCalledTimes(3);
+    expect(get(bulkEnrichProgress)).toBeNull();
+  });
+
   it('counts failures without aborting the rest', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     itemsMap.b1 = bookmark({ id: 'b1' });
     itemsMap.b2 = bookmark({ id: 'b2', url: 'https://two.com' });
+    const deadLink = new Error('dead link');
     fetchLinkMetadata
-      .mockRejectedValueOnce(new Error('dead link'))
+      .mockRejectedValueOnce(deadLink)
       .mockResolvedValueOnce({ title: 'Fetched', description: 'd' });
 
     await expect(enrichAllBookmarks()).resolves.toEqual({
@@ -288,5 +424,32 @@ describe('enrichAllBookmarks', () => {
       failed: 1,
       total: 2,
     });
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(
+      'Link preview enrichment failed:',
+      'https://example.com',
+      deadLink,
+    );
+    warn.mockRestore();
+  });
+
+  it('counts a failed store as a failure too', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    itemsMap.b1 = bookmark({ id: 'b1' });
+    fetchLinkMetadata.mockResolvedValueOnce({ title: 'Fetched' });
+    const storeFailed = new Error('Inbox storage module is not available');
+    storeItem.mockRejectedValueOnce(storeFailed);
+
+    await expect(enrichAllBookmarks()).resolves.toEqual({
+      updated: 0,
+      failed: 1,
+      total: 1,
+    });
+    expect(warn).toHaveBeenCalledWith(
+      'Link preview enrichment failed:',
+      'https://example.com',
+      storeFailed,
+    );
+    warn.mockRestore();
   });
 });
