@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite build --watch",
     "build": "vite build",
-    "package": "vite build && cd dist && zip -r ../inbox-rs.xpi .",
+    "package": "npm run package:thunderbird --prefix ../..",
     "test": "vitest run"
   },
   "dependencies": {

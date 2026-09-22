@@ -140,3 +140,11 @@ real, fix `release-bump.mjs` and re-release.
   titles. Edit the release if you want better copy.
 - No extra approval gate — `workflow_dispatch` already requires write
   access.
+
+## Thunderbird ATN submission
+
+Run `npm run package:thunderbird` to create a matching XPI and reviewer source
+ZIP in `packages/thunderbird/dist/submission/`. Use these together for ATN;
+the source ZIP includes build instructions and the npm lockfile. See
+[listing copy and submission steps](THUNDERBIRD-LISTING.md), including the
+required screenshots and the reviewer's linter command.

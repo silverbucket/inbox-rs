@@ -21,7 +21,8 @@
     "test:e2e:install": "npm run test:install --workspace=@inbox-rs/e2e",
     "lint": "biome lint",
     "format": "biome format --write",
-    "check": "biome check"
+    "check": "biome check",
+    "package:thunderbird": "node scripts/package-thunderbird.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.13"
