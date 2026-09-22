@@ -1408,6 +1408,27 @@ describe('collection filter (sidebar)', () => {
     expect(get(appConfig).inactiveCollectionFilters).toEqual([]);
     expect(get(appConfig).expandedCollections).toEqual(['c1']);
   });
+
+  it('toggleCollectionFilter preserves existing expansions when re-activating', async () => {
+    appConfig.set({
+      inactiveCollectionFilters: ['c1'],
+      expandedCollections: ['c2'],
+    });
+
+    await toggleCollectionFilter('c1');
+
+    expect(get(appConfig).inactiveCollectionFilters).toEqual([]);
+    expect(get(appConfig).expandedCollections).toEqual(['c2', 'c1']);
+  });
+
+  it('toggleCollectionFilter does not collapse when hiding a collection', async () => {
+    appConfig.set({ expandedCollections: ['c1'] });
+
+    await toggleCollectionFilter('c1');
+
+    expect(get(appConfig).inactiveCollectionFilters).toEqual(['c1']);
+    expect(get(appConfig).expandedCollections).toEqual(['c1']);
+  });
 });
 
 describe('orphanCollections', () => {
@@ -1894,6 +1915,7 @@ describe('enableCollectionFilter', () => {
     // Default-all means the group is already active — no materialization.
     expect(get(appConfig).activeGroupFilters).toBeUndefined();
     expect(get(appConfig).inactiveCollectionFilters).toEqual([]);
+    expect(get(appConfig).expandedCollections).toEqual(['c1']);
   });
 
   it('just un-hides an orphan collection (no group)', async () => {
@@ -1904,6 +1926,7 @@ describe('enableCollectionFilter', () => {
 
     expect(get(appConfig).activeGroupFilters).toBeUndefined();
     expect(get(appConfig).inactiveCollectionFilters).toEqual([]);
+    expect(get(appConfig).expandedCollections).toEqual(['c1']);
   });
 });
 
@@ -1935,12 +1958,14 @@ describe('soloCollectionFilter', () => {
     appConfig.set({
       activeGroupFilters: ['g1'],
       inactiveCollectionFilters: ['c2', 'c3'],
+      expandedCollections: ['c1', 'c3'],
     });
 
     await soloCollectionFilter('c1');
 
     expect(get(appConfig).activeGroupFilters).toBeUndefined();
     expect(get(appConfig).inactiveCollectionFilters).toEqual(['c3']);
+    expect(get(appConfig).expandedCollections).toEqual(['c1', 'c3']);
   });
 });
 
