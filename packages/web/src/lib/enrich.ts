@@ -226,7 +226,14 @@ export async function enrichAllBookmarks(): Promise<{
           if (item.type === 'bookmark') {
             bookmark = item;
           } else {
-            bookmark = noteToBookmark(item as NoteItem, url as string);
+            // The queue holds snapshots taken before the pass started; a
+            // sync may have edited or deleted this note while it waited
+            // behind earlier fetches. Convert the live copy, and only
+            // while it is still the same link-only note — the same
+            // stale-write guard enrichBookmark applies.
+            const current = get(items)[item.id];
+            if (!current || linkNoteUrl(current) !== url) continue;
+            bookmark = noteToBookmark(current as NoteItem, url as string);
             await storeItem(bookmark);
             changed = true;
           }
@@ -238,8 +245,11 @@ export async function enrichAllBookmarks(): Promise<{
           // from the metadata fetch or from storing the enriched item.
           console.warn('Link preview enrichment failed:', url, e);
           failed++;
+        } finally {
+          bulkEnrichProgress.update((p) =>
+            p ? { ...p, done: p.done + 1 } : p,
+          );
         }
-        bulkEnrichProgress.update((p) => (p ? { ...p, done: p.done + 1 } : p));
       }
     };
     await Promise.all(

@@ -12,7 +12,7 @@ import {
   extractTokenFromRedirect,
   type RSConfig,
 } from '@inbox-rs/rs-module/runtime';
-import { detectCaptureKind } from '../lib/capture-detect';
+import { bookmarkUrlFromText, detectCaptureKind } from '../lib/capture-detect';
 import { generateThumbnail, THUMB_MIME_TYPE } from '../lib/thumbnail';
 
 /** The three ways to capture. Maps to inbox item types note / audio / image. */
@@ -172,21 +172,32 @@ function prepend(record: CaptureRecord): void {
   saveHistory([record, ...getHistory()]);
 }
 
+/** A link handed over by the OS share sheet, with the title it came with. */
+export type SharedLink = { url: string; title: string };
+
 /**
  * Queue a text capture for delivery. A lone URL becomes a bookmark, as it
  * does in the main app's capture bar, so the main app's link-preview tools
- * recognise it; anything else is a note.
+ * recognise it; anything else is a note. When the URL is the one the share
+ * target received, the shared title labels the bookmark until a preview
+ * fetch supplies the page's own.
  */
-export function captureNote(text: string): CaptureRecord {
+export function captureNote(text: string, shared?: SharedLink): CaptureRecord {
   const trimmed = text.trim();
   const id = crypto.randomUUID();
   const detected = detectCaptureKind(trimmed);
+  const sharedTitle =
+    detected.kind === 'bookmark' &&
+    shared &&
+    bookmarkUrlFromText(shared.url.trim()) === detected.url
+      ? shared.title.trim()
+      : '';
   const item: NoteItem | BookmarkItem =
     detected.kind === 'bookmark'
       ? {
           id,
           type: 'bookmark',
-          title: detected.url,
+          title: sharedTitle || detected.url,
           url: detected.url,
           createdAt: new Date().toISOString(),
         }

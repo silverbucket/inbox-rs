@@ -3,6 +3,7 @@
   import {
     captureImage,
     captureNote,
+    type SharedLink,
     captureVoice,
     type CaptureMode,
     type CaptureRecord,
@@ -17,6 +18,7 @@
     removeRecord,
     startConnect,
   } from './store';
+  import { bookmarkUrlFromText } from '../lib/capture-detect';
   import {
     type Accent,
     ACCENT_LABELS,
@@ -35,6 +37,9 @@
 
   let mode = $state<CaptureMode>('note');
   let captureText = $state('');
+  // Set when the share sheet handed us a link: its title is kept apart from
+  // the composer so the capture becomes a titled bookmark, not a note.
+  let sharedLink = $state<SharedLink | null>(null);
   let textField = $state<HTMLTextAreaElement | null>(null);
   let history = $state<CaptureRecord[]>([]);
   let status = $state('');
@@ -93,13 +98,24 @@
     // never collide with the OAuth callback (access_token/error), which
     // finishConnectFromRedirect has already consumed above.
     const shareParams = new URLSearchParams(window.location.search);
-    const sharedParts = [
-      shareParams.get('title'),
-      shareParams.get('text'),
-      shareParams.get('url'),
-    ].filter((part): part is string => !!part?.trim());
+    // A shared link usually arrives as `url` (some apps put it in `text`
+    // instead). Prefill only the URL so it captures as a bookmark; the
+    // title rides along separately. Anything else is prefilled verbatim.
+    const sharedUrl =
+      bookmarkUrlFromText((shareParams.get('url') ?? '').trim()) ??
+      bookmarkUrlFromText((shareParams.get('text') ?? '').trim());
+    const sharedParts = sharedUrl
+      ? [sharedUrl]
+      : [
+          shareParams.get('title'),
+          shareParams.get('text'),
+          shareParams.get('url'),
+        ].filter((part): part is string => !!part?.trim());
     if (sharedParts.length > 0) {
       mode = 'note';
+      if (sharedUrl) {
+        sharedLink = { url: sharedUrl, title: shareParams.get('title') ?? '' };
+      }
       captureText = captureText
         ? `${captureText}\n${sharedParts.join('\n')}`
         : sharedParts.join('\n');
@@ -150,7 +166,8 @@
   async function send() {
     if (!canSend) return;
     if (mode === 'note') {
-      captureNote(captureText);
+      captureNote(captureText, sharedLink ?? undefined);
+      sharedLink = null;
       // Refocus synchronously (still within the tap gesture) so the keyboard
       // stays up for rapid write → send → write entry.
       textField?.focus();

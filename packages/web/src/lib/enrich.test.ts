@@ -372,6 +372,38 @@ describe('enrichAllBookmarks', () => {
     expect(fetchLinkMetadata.mock.calls[0][0]).toBe(url);
   });
 
+  it('does not convert a link note that changed or vanished while queued', async () => {
+    // Three bookmarks fill the worker slots, so the notes wait; by the time
+    // a worker reaches them, a sync has deleted one and edited the other.
+    const url = 'https://x.com/jack/status/20';
+    for (const id of ['b1', 'b2', 'b3']) {
+      itemsMap[id] = bookmark({
+        id,
+        url: `https://${id}.com`,
+        title: `https://${id}.com`,
+      });
+    }
+    const note = { id: 'n1', type: 'note', title: url, body: url, createdAt: '' };
+    itemsMap.n1 = note;
+    itemsMap.n2 = { ...note, id: 'n2' };
+    fetchLinkMetadata.mockImplementation(async () => {
+      delete itemsMap.n1;
+      itemsMap.n2 = { ...note, id: 'n2', body: 'now some text' };
+      return { title: 'Fetched' };
+    });
+
+    await expect(enrichAllBookmarks()).resolves.toEqual({
+      updated: 3,
+      failed: 0,
+      total: 5,
+    });
+    const stored = storeItem.mock.calls.map((c) => c[0].id);
+    expect(stored).not.toContain('n1');
+    expect(stored).not.toContain('n2');
+    expect(fetchLinkMetadata).toHaveBeenCalledTimes(3);
+    expect(get(bulkEnrichProgress)).toBeNull();
+  });
+
   it('counts failures without aborting the rest', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     itemsMap.b1 = bookmark({ id: 'b1' });

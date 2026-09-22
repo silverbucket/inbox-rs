@@ -197,6 +197,19 @@ describe('capture history + delivery', () => {
     });
   });
 
+  it('labels a shared link with the title the share sheet supplied', () => {
+    const shared = { url: 'https://x.com/jack/status/20', title: ' jack on X ' };
+    const record = captureNote('https://x.com/jack/status/20', shared);
+    expect(record.item).toMatchObject({ type: 'bookmark', title: 'jack on X' });
+
+    // The title only applies to the link it came with.
+    const other = captureNote('https://example.com', shared);
+    expect(other.item).toMatchObject({
+      type: 'bookmark',
+      title: 'https://example.com',
+    });
+  });
+
   it('keeps text that merely contains a URL as a note', () => {
     const record = captureNote('read https://x.com/jack later');
     expect(record.item.type).toBe('note');
