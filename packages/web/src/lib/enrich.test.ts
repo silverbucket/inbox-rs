@@ -383,7 +383,13 @@ describe('enrichAllBookmarks', () => {
         title: `https://${id}.com`,
       });
     }
-    const note = { id: 'n1', type: 'note', title: url, body: url, createdAt: '' };
+    const note = {
+      id: 'n1',
+      type: 'note',
+      title: url,
+      body: url,
+      createdAt: '',
+    };
     itemsMap.n1 = note;
     itemsMap.n2 = { ...note, id: 'n2' };
     fetchLinkMetadata.mockImplementation(async () => {

@@ -198,7 +198,10 @@ describe('capture history + delivery', () => {
   });
 
   it('labels a shared link with the title the share sheet supplied', () => {
-    const shared = { url: 'https://x.com/jack/status/20', title: ' jack on X ' };
+    const shared = {
+      url: 'https://x.com/jack/status/20',
+      title: ' jack on X ',
+    };
     const record = captureNote('https://x.com/jack/status/20', shared);
     expect(record.item).toMatchObject({ type: 'bookmark', title: 'jack on X' });
 
