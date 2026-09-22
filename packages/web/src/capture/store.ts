@@ -1,5 +1,6 @@
 import type {
   AudioItem,
+  BookmarkItem,
   ImageItem,
   InboxItem,
   NoteItem,
@@ -11,6 +12,7 @@ import {
   extractTokenFromRedirect,
   type RSConfig,
 } from '@inbox-rs/rs-module/runtime';
+import { detectCaptureKind } from '../lib/capture-detect';
 import { generateThumbnail, THUMB_MIME_TYPE } from '../lib/thumbnail';
 
 /** The three ways to capture. Maps to inbox item types note / audio / image. */
@@ -170,17 +172,31 @@ function prepend(record: CaptureRecord): void {
   saveHistory([record, ...getHistory()]);
 }
 
-/** Queue a text note for delivery. */
+/**
+ * Queue a text capture for delivery. A lone URL becomes a bookmark, as it
+ * does in the main app's capture bar, so the main app's link-preview tools
+ * recognise it; anything else is a note.
+ */
 export function captureNote(text: string): CaptureRecord {
   const trimmed = text.trim();
   const id = crypto.randomUUID();
-  const item: NoteItem = {
-    id,
-    type: 'note',
-    title: noteTitleFromBody(trimmed) || 'Note',
-    body: trimmed,
-    createdAt: new Date().toISOString(),
-  };
+  const detected = detectCaptureKind(trimmed);
+  const item: NoteItem | BookmarkItem =
+    detected.kind === 'bookmark'
+      ? {
+          id,
+          type: 'bookmark',
+          title: detected.url,
+          url: detected.url,
+          createdAt: new Date().toISOString(),
+        }
+      : {
+          id,
+          type: 'note',
+          title: noteTitleFromBody(trimmed) || 'Note',
+          body: trimmed,
+          createdAt: new Date().toISOString(),
+        };
   const record = newRecord(
     id,
     'note',

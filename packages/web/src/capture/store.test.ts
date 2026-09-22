@@ -184,6 +184,24 @@ describe('finishConnectFromRedirect', () => {
 });
 
 describe('capture history + delivery', () => {
+  it('stores a lone URL as a bookmark so the main app treats it as a link', () => {
+    const record = captureNote(' https://x.com/jack/status/20 ');
+    expect(record.mode).toBe('note');
+    expect(record.preview).toBe('https://x.com/jack/status/20');
+    expect(record.item).toEqual({
+      id: record.id,
+      type: 'bookmark',
+      title: 'https://x.com/jack/status/20',
+      url: 'https://x.com/jack/status/20',
+      createdAt: record.item.createdAt,
+    });
+  });
+
+  it('keeps text that merely contains a URL as a note', () => {
+    const record = captureNote('read https://x.com/jack later');
+    expect(record.item.type).toBe('note');
+  });
+
   it('queues a note and counts it as pending', () => {
     const record = captureNote('  buy milk  ');
     expect(record.status).toBe('queued');

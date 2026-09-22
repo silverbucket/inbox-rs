@@ -69,6 +69,22 @@ describe('LinkSettings bulk fetch toast', () => {
   const fetchButton = () =>
     host.querySelector('button.btn') as HTMLButtonElement;
 
+  it('counts link-only notes among the previews still to fetch', () => {
+    (items as Writable<Record<string, unknown>>).set({
+      b1: bookmark('b1'),
+      n1: {
+        id: 'n1',
+        type: 'note',
+        title: 'https://x.com/jack',
+        body: 'https://x.com/jack',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    render();
+    expect(host.textContent).toContain('2 of 2 saved links have no preview');
+    expect(fetchButton().textContent).toBe('Fetch 2 previews');
+  });
+
   it('shows the unchanged success toast when no fetches failed', async () => {
     enrichAllBookmarks.mockResolvedValue({ updated: 3, failed: 0, total: 3 });
     render();

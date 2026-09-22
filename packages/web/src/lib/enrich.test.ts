@@ -276,6 +276,42 @@ describe('enrichAllBookmarks', () => {
     expect(get(bulkEnrichProgress)).toBeNull();
   });
 
+  it('converts link-only notes into bookmarks and fetches their previews', async () => {
+    // How quick-capture and the share target save links: a note whose
+    // body is nothing but the URL.
+    const url = 'https://x.com/jack/status/20';
+    itemsMap.n1 = {
+      id: 'n1',
+      type: 'note',
+      title: url.slice(0, 50),
+      body: url,
+      createdAt: '',
+    };
+    itemsMap.n2 = {
+      id: 'n2',
+      type: 'note',
+      title: 'Shopping',
+      body: 'milk https://example.com eggs',
+      createdAt: '',
+    };
+    fetchLinkMetadata.mockResolvedValue({ title: 'Fetched' });
+
+    await expect(enrichAllBookmarks()).resolves.toEqual({
+      updated: 1,
+      failed: 0,
+      total: 1,
+    });
+    expect(storeItem).toHaveBeenCalledWith({
+      id: 'n1',
+      type: 'bookmark',
+      title: url,
+      url,
+      createdAt: '',
+    });
+    expect(fetchLinkMetadata).toHaveBeenCalledOnce();
+    expect(fetchLinkMetadata.mock.calls[0][0]).toBe(url);
+  });
+
   it('counts failures without aborting the rest', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     itemsMap.b1 = bookmark({ id: 'b1' });
