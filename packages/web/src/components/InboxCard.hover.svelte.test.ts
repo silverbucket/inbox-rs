@@ -20,6 +20,7 @@ vi.mock('../lib/rs', () => ({
 
 import InboxCard from './InboxCard.svelte';
 
+/** Create a bookmark fixture for card styling checks. */
 function bookmark(overrides: Partial<BookmarkItem> = {}): BookmarkItem {
   return {
     id: 'b1',
@@ -58,6 +59,40 @@ function isRootCardHoverSelector(selector: string): boolean {
   return afterHover.length === 0 || /^\.svelte-[-\w]+$/.test(afterHover);
 }
 
+/** Split shadow layers without splitting commas inside CSS color functions. */
+function shadowLayers(value: string): string[] {
+  const layers: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < value.length; index++) {
+    const char = value[index];
+    if (char === '(') depth++;
+    if (char === ')') depth--;
+    if (char === ',' && depth === 0) {
+      layers.push(value.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  layers.push(value.slice(start).trim());
+  return layers;
+}
+
+describe('shadow layer parsing', () => {
+  it.each([
+    ['inset 0 0 0 1px var(--accent)', true],
+    ['0 0 1px rgba(0, 0, 0, 0.5) inset, inset 0 0 2px red', true],
+    ['inset 0 0 1px color-mix(in srgb, var(--accent), white)', true],
+    ['inset 0 0 0 1px red, 0 2px 8px rgba(0, 0, 0, 0.5)', false],
+    ['0 2px 8px red, inset 0 0 0 1px red', false],
+    ['0 1px 2px red', false],
+    ['', false],
+  ])('checks every layer in %s', (value, expected) => {
+    expect(
+      shadowLayers(value).every((layer) => /(?:^|\s)inset(?:\s|$)/.test(layer)),
+    ).toBe(expected);
+  });
+});
+
 describe('InboxCard hover styling', () => {
   let host: HTMLElement;
   let component: ReturnType<typeof mount> | undefined;
@@ -88,11 +123,12 @@ describe('InboxCard hover styling', () => {
 
     const boxShadow = hoverRules
       .map((rule) => rule.style.getPropertyValue('box-shadow'))
-      .join(' ');
+      .filter(Boolean)
+      .join(', ');
     expect(boxShadow).toMatch(/inset\s+0\s+0\s+0\s+1px/);
-    // Outer ring / drop shadow paint outside the card box (the pre-fix bleed).
-    expect(boxShadow).not.toMatch(/(?:^|,\s*)0\s+0\s+0\s+1px/);
-    expect(boxShadow).not.toMatch(/0\s+4px\s+16px/);
+    for (const layer of shadowLayers(boxShadow)) {
+      expect(layer).toMatch(/(?:^|\s)inset(?:\s|$)/);
+    }
   });
 
   it('keeps card focus-visible outlines on the selection button and pin control', () => {
