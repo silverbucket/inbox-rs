@@ -1402,9 +1402,32 @@ describe('collection filter (sidebar)', () => {
     appConfig.set({});
     await toggleCollectionFilter('c1');
     expect(get(appConfig).inactiveCollectionFilters).toEqual(['c1']);
+    expect(get(appConfig).expandedCollections).toBeUndefined();
 
     await toggleCollectionFilter('c1');
     expect(get(appConfig).inactiveCollectionFilters).toEqual([]);
+    expect(get(appConfig).expandedCollections).toEqual(['c1']);
+  });
+
+  it('toggleCollectionFilter preserves existing expansions when re-activating', async () => {
+    appConfig.set({
+      inactiveCollectionFilters: ['c1'],
+      expandedCollections: ['c2'],
+    });
+
+    await toggleCollectionFilter('c1');
+
+    expect(get(appConfig).inactiveCollectionFilters).toEqual([]);
+    expect(get(appConfig).expandedCollections).toEqual(['c2', 'c1']);
+  });
+
+  it('toggleCollectionFilter does not collapse when hiding a collection', async () => {
+    appConfig.set({ expandedCollections: ['c1'] });
+
+    await toggleCollectionFilter('c1');
+
+    expect(get(appConfig).inactiveCollectionFilters).toEqual(['c1']);
+    expect(get(appConfig).expandedCollections).toEqual(['c1']);
   });
 });
 
@@ -1851,6 +1874,7 @@ describe('enableCollectionFilter', () => {
     await enableCollectionFilter('c2');
 
     expect(get(appConfig).activeGroupFilters).toEqual(['g1']);
+    expect(get(appConfig).expandedCollections).toEqual(['c2']);
     // Siblings hidden, c2 visible.
     expect(get(appConfig).inactiveCollectionFilters?.sort()).toEqual([
       'c1',
@@ -1867,6 +1891,7 @@ describe('enableCollectionFilter', () => {
     appConfig.set({
       activeGroupFilters: ['g1'],
       inactiveCollectionFilters: ['c2'],
+      expandedCollections: ['c1'],
     });
 
     await enableCollectionFilter('c2');
@@ -1874,6 +1899,10 @@ describe('enableCollectionFilter', () => {
     // Group unchanged; c2 un-hidden; siblings untouched.
     expect(get(appConfig).activeGroupFilters).toEqual(['g1']);
     expect(get(appConfig).inactiveCollectionFilters).toEqual([]);
+    expect(get(appConfig).expandedCollections).toEqual(['c1', 'c2']);
+
+    await enableCollectionFilter('c2');
+    expect(get(appConfig).expandedCollections).toEqual(['c1', 'c2']);
   });
 
   it('reveals a collection under a default-all (undefined) group filter', async () => {
@@ -1886,6 +1915,7 @@ describe('enableCollectionFilter', () => {
     // Default-all means the group is already active — no materialization.
     expect(get(appConfig).activeGroupFilters).toBeUndefined();
     expect(get(appConfig).inactiveCollectionFilters).toEqual([]);
+    expect(get(appConfig).expandedCollections).toEqual(['c1']);
   });
 
   it('just un-hides an orphan collection (no group)', async () => {
@@ -1896,6 +1926,7 @@ describe('enableCollectionFilter', () => {
 
     expect(get(appConfig).activeGroupFilters).toBeUndefined();
     expect(get(appConfig).inactiveCollectionFilters).toEqual([]);
+    expect(get(appConfig).expandedCollections).toEqual(['c1']);
   });
 });
 
@@ -1915,22 +1946,26 @@ describe('soloCollectionFilter', () => {
   });
 
   it('hides every other group and sibling collection', async () => {
+    appConfig.set({ expandedCollections: ['c3'] });
     await soloCollectionFilter('c1');
 
     expect(get(appConfig).activeGroupFilters).toEqual(['g1']);
     expect(get(appConfig).inactiveCollectionFilters).toEqual(['c2']);
+    expect(get(appConfig).expandedCollections).toEqual(['c3', 'c1']);
   });
 
   it('restores all groups when the collection is already alone', async () => {
     appConfig.set({
       activeGroupFilters: ['g1'],
       inactiveCollectionFilters: ['c2', 'c3'],
+      expandedCollections: ['c1', 'c3'],
     });
 
     await soloCollectionFilter('c1');
 
     expect(get(appConfig).activeGroupFilters).toBeUndefined();
     expect(get(appConfig).inactiveCollectionFilters).toEqual(['c3']);
+    expect(get(appConfig).expandedCollections).toEqual(['c1', 'c3']);
   });
 });
 

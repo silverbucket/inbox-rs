@@ -1924,10 +1924,18 @@ export async function toggleCollectionFilter(
 ): Promise<void> {
   const config = get(appConfig);
   const current = config.inactiveCollectionFilters ?? [];
-  const next = current.includes(collectionId)
+  const activating = current.includes(collectionId);
+  const next = activating
     ? current.filter((id) => id !== collectionId)
     : [...current, collectionId];
-  await updateConfig({ inactiveCollectionFilters: next });
+  await updateConfig({
+    inactiveCollectionFilters: next,
+    ...(activating && {
+      expandedCollections: Array.from(
+        new Set([...(config.expandedCollections ?? []), collectionId]),
+      ),
+    }),
+  });
 }
 
 /**
@@ -1943,7 +1951,8 @@ export async function toggleCollectionFilter(
  *   gesture. `toggleGroupFilter` clears these hides again on the next group
  *   activation, so "show the whole group" remains one click away.
  *
- * A collection with no `groupId` (orphan) is simply un-hidden.
+ * The selected collection is expanded so its contents are immediately visible.
+ * A collection with no `groupId` (orphan) is also revealed and expanded.
  */
 export async function enableCollectionFilter(
   collectionId: string,
@@ -1969,6 +1978,9 @@ export async function enableCollectionFilter(
   deny.delete(collectionId);
 
   patch.inactiveCollectionFilters = Array.from(deny);
+  patch.expandedCollections = Array.from(
+    new Set([...(config.expandedCollections ?? []), collectionId]),
+  );
   await updateConfig(patch);
 }
 
@@ -2013,6 +2025,9 @@ export async function soloCollectionFilter(
   await updateConfig({
     activeGroupFilters: [groupId],
     inactiveCollectionFilters: Array.from(inactive),
+    expandedCollections: Array.from(
+      new Set([...(get(appConfig).expandedCollections ?? []), collectionId]),
+    ),
   });
 }
 
