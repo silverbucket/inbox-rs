@@ -272,7 +272,8 @@
 
   .card:hover {
     border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent), 0 4px 16px var(--shadow);
+    /* Keep hover paint inside the card so it cannot bleed across masonry columns. */
+    box-shadow: inset 0 0 0 1px var(--accent);
   }
 
   .card.pinned {
