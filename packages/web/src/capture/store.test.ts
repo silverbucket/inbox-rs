@@ -203,7 +203,12 @@ describe('capture history + delivery', () => {
       title: ' jack on X ',
     };
     const record = captureNote('https://x.com/jack/status/20', shared);
-    expect(record.item).toMatchObject({ type: 'bookmark', title: 'jack on X' });
+    expect(record.item).toMatchObject({
+      type: 'bookmark',
+      title: 'jack on X',
+      url: 'https://x.com/jack/status/20',
+    });
+    expect(record.item).not.toHaveProperty('body');
 
     // The title only applies to the link it came with.
     const other = captureNote('https://example.com', shared);
