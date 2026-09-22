@@ -35,15 +35,20 @@ vi.mock('./stores', () => ({
   },
 }));
 
+import type { NoteItem } from '@inbox-rs/rs-module';
 import {
   applyLinkMetadata,
   bulkEnrichProgress,
   describeLinkPreviewError,
   enrichAllBookmarks,
   enrichBookmark,
+  isSavedLink,
   LOCAL_LINK_PREVIEWS_KEY,
   LOCAL_SOCKETHUB_URL_KEY,
+  linkNoteUrl,
   needsEnrichment,
+  needsLinkPreview,
+  noteToBookmark,
   resolveSockethubEndpoint,
 } from './enrich';
 
@@ -91,6 +96,61 @@ describe('local preview settings', () => {
     expect(describeLinkPreviewError(new Error('404 Not Found'))).toBe(
       'Preview service error: 404 Not Found',
     );
+  });
+});
+
+describe('saved link helpers', () => {
+  const url = 'https://example.com/page';
+  const linkNote = (overrides: Partial<NoteItem> = {}): NoteItem => ({
+    id: 'n1',
+    type: 'note',
+    title: url.slice(0, 50),
+    body: url,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  });
+
+  it('recognises link-only notes and ignores todos or mixed text', () => {
+    expect(linkNoteUrl(linkNote())).toBe(url);
+    expect(isSavedLink(linkNote())).toBe(true);
+    expect(needsLinkPreview(linkNote())).toBe(true);
+
+    expect(linkNoteUrl(linkNote({ isTodo: true }))).toBeNull();
+    expect(isSavedLink(linkNote({ isTodo: true }))).toBe(false);
+    expect(needsLinkPreview(linkNote({ isTodo: true }))).toBe(false);
+
+    expect(
+      linkNoteUrl(
+        linkNote({
+          body: 'read https://example.com/page later',
+          title: 'read',
+        }),
+      ),
+    ).toBeNull();
+    expect(isSavedLink(bookmark())).toBe(true);
+    expect(
+      needsLinkPreview(
+        bookmark({
+          title: 'Done',
+          description: 'D',
+          ogImage: 'https://x/i.png',
+          siteName: 'S',
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('converts a link-only note to a bookmark without clobbering a custom title', () => {
+    const note = linkNote({ title: 'My bookmark label' });
+    expect(noteToBookmark(note, url)).toEqual({
+      id: 'n1',
+      type: 'bookmark',
+      title: 'My bookmark label',
+      url,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    });
+
+    expect(noteToBookmark(linkNote(), url).title).toBe(url);
   });
 });
 

@@ -104,4 +104,13 @@ describe('LinkSettings bulk fetch toast', () => {
       );
     });
   });
+
+  it('shows a generic failure toast when bulk fetch rejects', async () => {
+    enrichAllBookmarks.mockRejectedValue(new Error('offline'));
+    render();
+    fetchButton().click();
+    await vi.waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith('Failed to fetch link previews');
+    });
+  });
 });
