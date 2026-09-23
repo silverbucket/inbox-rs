@@ -35,6 +35,16 @@ describe('OAuth callback state validation', () => {
     expect(window.location.hash).toBe('');
   });
 
+  it.each([
+    '?code=forged-auth-code&state=wrong',
+    '#code=forged-auth-code',
+    '?rsDiscovery=forged',
+  ])('strips an unsolicited OAuth callback from %s', (url) => {
+    window.history.replaceState(null, '', `/${url}`);
+    guardOAuthCallback();
+    expect(window.location.href).not.toMatch(/code=|rsDiscovery=/);
+  });
+
   it.each(['?', '#'])('accepts a matching denial from %s once', (delimiter) => {
     const state = beginOAuthAuthorization('/todos');
     window.history.replaceState(
@@ -94,6 +104,18 @@ describe('OAuth callback state validation', () => {
     const params = new URLSearchParams(window.location.hash.slice(1));
     expect(params.get('access_token')).toBe('valid-token');
     expect(params.get('state')).toBe('/collection/abc');
+    expect(sessionStorage.getItem(key)).toBeNull();
+  });
+
+  it('accepts a matching authorization code and restores the app route', () => {
+    const state = beginOAuthAuthorization('/inbox');
+    window.history.replaceState(null, '', `/?code=valid-code&state=${state}`);
+    guardOAuthCallback();
+    expect(window.location.search).toContain('code=valid-code');
+    expect(window.location.search).not.toContain(state);
+    expect(
+      new URLSearchParams(window.location.hash.slice(1)).get('state'),
+    ).toBe('/inbox');
     expect(sessionStorage.getItem(key)).toBeNull();
   });
 
