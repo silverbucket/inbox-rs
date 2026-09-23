@@ -30,6 +30,7 @@ vi.mock('../../lib/stores', async () => {
   return {
     connected: writable(false),
     authorizationRequired: writable(false),
+    connectionStatus: writable('Not connected'),
     syncing: writable(false),
     userAddress: writable(''),
     userSettings: writable({}),
@@ -42,6 +43,7 @@ import { DEFAULT_SOCKETHUB_ENDPOINT } from '../../lib/link-metadata';
 import {
   authorizationRequired,
   connected,
+  connectionStatus,
   userAddress,
   userSettings,
 } from '../../lib/stores';
@@ -58,6 +60,9 @@ describe('AccountSettings Sockethub status', () => {
     vi.clearAllMocks();
     localStorage.clear();
     w<boolean>(connected).set(false);
+    w<boolean>(authorizationRequired).set(false);
+    w<string>(connectionStatus).set('Not connected');
+    w<string>(userAddress).set('');
     w<Record<string, unknown>>(userSettings).set({});
     fetchSockethubInfo.mockResolvedValue(null);
     host = document.createElement('div');
@@ -187,6 +192,7 @@ describe('AccountSettings Sockethub status', () => {
     w<boolean>(connected).set(true);
     w<string>(userAddress).set('alice@example.com');
     w<boolean>(authorizationRequired).set(true);
+    w<string>(connectionStatus).set('Reconnect required');
     render();
     const identityPill = host.querySelector(
       '.identity .pill',

@@ -4,7 +4,7 @@
   import rs from '../../lib/rs';
   import { LOCAL_SOCKETHUB_URL_KEY } from '../../lib/enrich';
   import { DEFAULT_SOCKETHUB_ENDPOINT, fetchSockethubInfo } from '../../lib/link-metadata';
-  import { authorizationRequired, connected, syncing, userAddress, userSettings, updateUserSettings } from '../../lib/stores';
+  import { connectionStatus, connected, userAddress, userSettings, updateUserSettings } from '../../lib/stores';
   let { focusConnect = false }: { focusConnect?: boolean } = $props();
   const readLocal=(k:string)=>{try{return localStorage.getItem(k)}catch{return null}}; const writeLocal=(k:string,v:string)=>{try{localStorage.setItem(k,v)}catch{}}; const removeLocal=(k:string)=>{try{localStorage.removeItem(k)}catch{}};
   let sockethubCustom=$state(!!($userSettings.sockethubUrl??readLocal(LOCAL_SOCKETHUB_URL_KEY))); let sockethubEndpoint=$state($userSettings.sockethubUrl??readLocal(LOCAL_SOCKETHUB_URL_KEY)??'');
@@ -77,7 +77,7 @@
 <div class="settings-section">
 <StorageAuthorizationNotice />
 {#if $connected}
-  <div class="row identity wide"><div class="account-avatar">{$userSettings.abbreviation?.slice(0, 2) || auto}</div><div class="row-main"><div class="row-label">{$userAddress}</div><div class="row-desc">Your inbox lives on your own <a href="https://remotestorage.io" target="_blank" rel="noreferrer">remoteStorage</a> server. Inbox RS never holds a copy.</div></div><div class="row-ctl"><span class="pill" class:ok={!$authorizationRequired}>{$authorizationRequired?'Reconnect required':$syncing?'Syncing…':'Synced'}</span></div></div>
+  <div class="row identity wide"><div class="account-avatar">{$userSettings.abbreviation?.slice(0, 2) || auto}</div><div class="row-main"><div class="row-label">{$userAddress}</div><div class="row-desc">Your inbox lives on your own <a href="https://remotestorage.io" target="_blank" rel="noreferrer">remoteStorage</a> server. Inbox RS never holds a copy.</div></div><div class="row-ctl"><span class="pill" class:ok={$connectionStatus === 'Connected'}>{$connectionStatus}</span></div></div>
   <div class="row"><div class="row-main"><div class="row-label">Initials</div><div class="row-desc">Up to two letters for your avatar. Defaults to your address.</div></div><div class="row-ctl"><input class="field initials" aria-label="Initials" maxlength="2" bind:value={initials} onblur={saveInitials}/></div></div>
   <div class="row"><div class="row-main"><div class="row-label">Sign out of this browser</div><div class="row-desc">Removes the local copy. Everything stays on your storage server.</div></div><div class="row-ctl"><button class="btn danger" type="button" onclick={() => rs.disconnect()}>Disconnect</button></div></div>
 {:else}

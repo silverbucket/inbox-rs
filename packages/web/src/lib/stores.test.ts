@@ -68,6 +68,7 @@ import {
   collectionItems,
   collections,
   connected,
+  connectionStatus,
   createCollection,
   deleteCollection,
   deleteGroup,
@@ -2897,5 +2898,63 @@ describe('remoteStorage authorization expiry', () => {
     authorizationRequired.set(true);
     emitRsEvent('disconnected');
     expect(get(authorizationRequired)).toBe(false);
+  });
+});
+
+describe('connection status during network outages', () => {
+  beforeEach(() => {
+    connected.set(true);
+    authorizationRequired.set(false);
+    syncing.set(false);
+    window.dispatchEvent(new Event('online'));
+    emitRsEvent('network-online');
+  });
+
+  afterEach(() => {
+    window.dispatchEvent(new Event('online'));
+    emitRsEvent('network-online');
+    emitRsEvent('disconnected');
+  });
+
+  it('immediately stops the activity indicator offline and ignores retry activity', () => {
+    emitRsEvent('wire-busy');
+    expect(get(connectionStatus)).toBe('Syncing…');
+    window.dispatchEvent(new Event('offline'));
+    expect(get(syncing)).toBe(false);
+    expect(get(connectionStatus)).toBe('Offline');
+    emitRsEvent('wire-busy');
+    emitRsEvent('wire-done');
+    emitRsEvent('sync-done');
+    expect(get(syncing)).toBe(false);
+    expect(get(connectionStatus)).toBe('Offline');
+  });
+
+  it('waits for server reachability after the browser comes back online', () => {
+    window.dispatchEvent(new Event('offline'));
+    emitRsEvent('network-offline');
+    window.dispatchEvent(new Event('online'));
+    expect(get(connectionStatus)).toBe('Storage unreachable');
+    emitRsEvent('wire-busy');
+    emitRsEvent('sync-done');
+    expect(get(connectionStatus)).toBe('Storage unreachable');
+    emitRsEvent('network-online');
+    expect(get(connectionStatus)).toBe('Connected');
+  });
+
+  it('does not hide an authorization failure behind restored connectivity', () => {
+    authorizationRequired.set(true);
+    window.dispatchEvent(new Event('offline'));
+    emitRsEvent('network-offline');
+    window.dispatchEvent(new Event('online'));
+    emitRsEvent('network-online');
+    expect(get(connectionStatus)).toBe('Reconnect required');
+  });
+
+  it('cancels the pending activity timer on disconnect', () => {
+    emitRsEvent('wire-busy');
+    emitRsEvent('wire-done');
+    emitRsEvent('disconnected');
+    expect(get(syncing)).toBe(false);
+    expect(get(connectionStatus)).toBe('Not connected');
   });
 });

@@ -16,6 +16,7 @@ schemas.
 |------|-------|
 | `desktop/pwa-manifest.spec.ts` | manifest reachable, install-prompt requirements, icons load, standalone display mode |
 | `desktop/navigation.spec.ts` | hash routing, nav-button `aria-current`, fallback to inbox |
+| `desktop/auth-recovery.spec.ts` | 401/403 warnings, queued writes through reload and reauthorization, OAuth denial, stale tokens, discovery retry, offline/unreachable indicators, and temporary server failure recovery |
 | `desktop/connect-flow.spec.ts` | full OAuth round-trip against Armadietto, disconnect resets UI |
 | `desktop/offline-resilience.spec.ts` | warm-offline keeps SPA usable; cold-offline characterization (will flip when SW lands) |
 | `desktop/offline-then-connect.spec.ts` | offline → online → connect, both for a brand-new account *and* an existing account with pre-seeded data that must sync down |

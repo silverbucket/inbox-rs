@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { SectionId } from '../lib/settings-sections';
-  import { authorizationRequired, connected, syncing, userAddress, userSettings } from '../lib/stores';
+  import { authorizationRequired, connected, connectionStatus, userAddress, userSettings } from '../lib/stores';
 
   let { onopensettings }: { onopensettings: (section?: SectionId) => void } = $props();
   const localPart = $derived($userAddress.split('@')[0] ?? '');
@@ -15,13 +15,14 @@
 </script>
 
 <button type="button" class="trigger" onclick={() => onopensettings()} aria-haspopup="dialog"
-  aria-label={$authorizationRequired ? 'User menu — reconnect required' : $connected ? 'User menu — connected' : 'User menu — disconnected'}>
+  title={$connectionStatus}
+  aria-label={$connectionStatus === 'Offline' ? 'User menu — offline' : $connectionStatus === 'Storage unreachable' ? 'User menu — storage unreachable' : $authorizationRequired ? 'User menu — reconnect required' : $connected ? 'User menu — connected' : 'User menu — disconnected'}>
   {#if $connected && $userAddress}
     <span class="avatar" aria-hidden="true">{initials}</span>
   {:else}
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
   {/if}
-  <span class="status-dot" class:connected={$connected && !$authorizationRequired} class:syncing={$syncing && !$authorizationRequired} class:unauthorized={$authorizationRequired}></span>
+  <span class="status-dot" class:connected={$connectionStatus === 'Connected'} class:syncing={$connectionStatus === 'Syncing…'} class:unauthorized={$authorizationRequired}></span>
 </button>
 
 <style>
