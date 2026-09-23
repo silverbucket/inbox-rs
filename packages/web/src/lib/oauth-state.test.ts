@@ -55,6 +55,7 @@ describe('OAuth callback state validation', () => {
     '?code=forged-auth-code&state=wrong',
     '#code=forged-auth-code',
     '?rsDiscovery=forged',
+    '?state=xrsDiscovery%3DeyJocmVmIjoiaHR0cHM6Ly9ldmlsLmV4YW1wbGUifQ==',
     '?remotestorage=attacker%40evil.example',
     '#remotestorage=attacker%40evil.example',
     '#state=xrsDiscovery%3DeyJocmVmIjoiaHR0cHM6Ly9ldmlsLmV4YW1wbGUifQ==',
