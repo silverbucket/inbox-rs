@@ -395,6 +395,7 @@ for (const callback of [
   '#/search?q=notes&error=access_denied',
   '?error=server_error',
   '#remotestorage=attacker%40storage.invalid',
+  '#state=xrsDiscovery%3DeyJocmVmIjoiaHR0cHM6Ly9zdG9yYWdlLmludmFsaWQifQ==',
 ]) {
   test(`unsolicited callback ${callback} preserves session and queued changes`, async ({
     page,

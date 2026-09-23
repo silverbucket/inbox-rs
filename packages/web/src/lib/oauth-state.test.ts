@@ -57,11 +57,13 @@ describe('OAuth callback state validation', () => {
     '?rsDiscovery=forged',
     '?remotestorage=attacker%40evil.example',
     '#remotestorage=attacker%40evil.example',
+    '#state=xrsDiscovery%3DeyJocmVmIjoiaHR0cHM6Ly9ldmlsLmV4YW1wbGUifQ==',
+    '#/search?q=notes&state=xrsDiscovery%3DeyJocmVmIjoiaHR0cHM6Ly9ldmlsLmV4YW1wbGUifQ==',
   ])('strips an unsolicited OAuth callback from %s', (url) => {
     window.history.replaceState(null, '', `/${url}`);
     guardOAuthCallback();
     expect(window.location.href).not.toMatch(
-      /code=|rsDiscovery=|remotestorage=/,
+      /code=|state=|rsDiscovery=|remotestorage=/,
     );
   });
 

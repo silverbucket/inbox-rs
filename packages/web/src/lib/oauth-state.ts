@@ -46,9 +46,14 @@ export function guardOAuthCallback(): void {
   const params = new URLSearchParams(url.search);
   for (const [key, value] of fragment) params.set(key, value);
   if (
-    !['error', 'access_token', 'code', 'rsDiscovery', 'remotestorage'].some(
-      (key) => params.has(key),
-    )
+    ![
+      'error',
+      'access_token',
+      'code',
+      'state',
+      'rsDiscovery',
+      'remotestorage',
+    ].some((key) => params.has(key))
   )
     return;
 
