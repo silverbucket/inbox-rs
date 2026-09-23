@@ -66,7 +66,9 @@ describe('RemoteStorage.Discover (upstream beta.10)', () => {
   });
 
   it('rejects localhost before fetch when private addresses are disabled', async () => {
-    const rs = new RemoteStorage({ discovery: { allowPrivateAddresses: false } });
+    const rs = new RemoteStorage({
+      discovery: { allowPrivateAddresses: false },
+    });
     rs.access.claim('inbox', 'rw');
     try {
       // Use an address not cached by the successful discovery above. connect()
