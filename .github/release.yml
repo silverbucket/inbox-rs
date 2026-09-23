@@ -1,0 +1,37 @@
+# Used automatically by `gh release create --generate-notes`.
+# Apply labels to pull requests; linked issue labels are not inherited.
+# Put specific categories first so they take precedence for multi-label PRs.
+changelog:
+  categories:
+    - title: Blockers
+      labels:
+        - blocker
+    - title: Security
+      labels:
+        - security
+    - title: Enhancements
+      labels:
+        - enhancement
+    - title: Bug fixes
+      labels:
+        - bug
+    - title: Performance
+      labels:
+        - performance
+    - title: Documentation
+      labels:
+        - documentation
+    - title: Refactoring
+      labels:
+        - refactor
+    - title: Testing
+      labels:
+        - testing
+    - title: Housekeeping
+      labels:
+        - housekeeping
+        - cleanup
+        - tooling
+    - title: Other changes
+      labels:
+        - "*"
