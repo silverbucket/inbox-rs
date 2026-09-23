@@ -17,7 +17,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - run: npm ci
@@ -33,7 +33,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - run: npm ci
@@ -60,7 +60,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - run: npm ci
@@ -97,7 +97,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - run: npm ci
@@ -129,7 +129,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - run: npm ci
@@ -169,3 +169,33 @@ jobs:
             tests/e2e/test-results
           retention-days: 7
           if-no-files-found: ignore
+
+  extension-submissions:
+    name: Extension submissions
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run package:plugins
+      - run: npm run package:submissions
+      - name: Rebuild, audit, compare release artifacts and lint Firefox
+        run: npm run check:submissions
+      - run: npx playwright install --with-deps chromium
+      - uses: browser-actions/setup-firefox@v1
+        id: firefox
+      - name: Install extensions and exercise capture in both browsers
+        env:
+          FIREFOX_BINARY: ${{ steps.firefox.outputs.firefox-path }}
+        run: npm run test:extensions
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: extension-submissions
+          path: dist/submissions
+          retention-days: 14
+          if-no-files-found: error

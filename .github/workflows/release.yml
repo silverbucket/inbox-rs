@@ -71,7 +71,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - run: npm ci
@@ -111,6 +111,19 @@ jobs:
 
       - name: Build web app
         run: npm run build
+
+      - name: Package reviewer sources for the release versions
+        run: npm run package:submissions
+
+      - name: Verify release artifacts before publishing
+        run: npm run check:submissions
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension-submissions-${{ steps.version.outputs.version }}
+          path: dist/submissions
+          retention-days: 90
+          if-no-files-found: error
 
       - name: Commit version bump and tag
         # This clean commit (no build artifacts) is what gets pushed to origin/master.
@@ -229,3 +242,9 @@ jobs:
 
           echo "::error::Could not create the GitHub Release for v${VERSION}. The tag is pushed and the deploy is live — create the release with: gh release create v${VERSION} --generate-notes"
           exit 1
+
+      - name: Attach extension binaries and reviewer sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: gh release upload "v${VERSION}" dist/submissions/*/* --clobber

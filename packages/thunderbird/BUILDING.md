@@ -1,39 +1,21 @@
-# Reproduce the Inbox RS Thunderbird add-on
+# Thunderbird review packages
 
-This source archive contains the Thunderbird add-on, its shared rs-module,
-workspace manifests, the original npm lockfile, and packaging scripts. The other
-workspace manifests preserve npm workspace resolution; their application sources
-are not needed. No Git checkout or private dependencies are required.
-
-## Environment
-
-Use Node.js 24 and npm 11 (https://nodejs.org/en/download), plus the Info-ZIP `zip`
-CLI and `unzip`. On Ubuntu install the latter with `sudo apt install zip unzip`;
-on macOS they are provided by the OS. See BUILD-ENVIRONMENT.txt at the archive
-root for the exact Node/npm versions and platform used to create this submission.
-Internet access to the npm registry is required to install dependencies.
-Thunderbird, Docker, and a remoteStorage account are not needed to build.
-
-## Build
-
-Extract the source ZIP into an empty directory and run from its root:
+From the repository root, with Node.js 24, npm 11 and Info-ZIP zip/unzip installed:
 
 ```sh
-npm ci --workspace=packages/thunderbird --workspace=packages/rs-module --include-workspace-root=false
+npm ci
 npm run package:thunderbird
+npm run check:submissions -- thunderbird
 ```
 
-The command compiles the shared TypeScript library, builds the Svelte add-on with
-Vite, and creates these files (VERSION comes from packages/thunderbird/package.json):
+Upload the matching XPI and source ZIP from `dist/submissions/thunderbird/` to
+ATN. The source ZIP contains a root README with standalone reviewer commands
+(`npm ci` and `npm run package:submission`), exact build environment details,
+source for Thunderbird and rs-module, and a scoped lockfile. No Git checkout,
+Thunderbird installation, account or remoteStorage server is needed to rebuild.
 
-- `packages/thunderbird/dist/submission/inbox-rs-thunderbird-VERSION.xpi`
-- `packages/thunderbird/dist/submission/inbox-rs-thunderbird-VERSION-source.zip`
-
-The unpacked extension is in `packages/thunderbird/dist/` (excluding its
-`submission/` directory). To compare against the submitted XPI, extract both XPIs
-to separate empty directories with `unzip`, then run `diff -ru` on those
-directories. File contents must match; ZIP timestamps may differ.
-
-The build uses the included lockfile without updating it. Do not run `npm update`
-or substitute another lockfile. Build output, dependencies, hidden files, macOS
-resource forks and symlinks are excluded from the source submission.
+The scoped lockfile preserves every retained dependency's version, resolution
+and integrity. The rebuild check installs from that archive, audits its
+required dependencies and compares every unpacked XPI file byte for byte.
+Archive timestamps may differ. See `docs/THUNDERBIRD-LISTING.md` for listing and
+manual submission steps.

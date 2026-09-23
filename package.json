@@ -22,7 +22,11 @@
     "lint": "biome lint",
     "format": "biome format --write",
     "check": "biome check",
-    "package:thunderbird": "node scripts/package-thunderbird.mjs"
+    "package:thunderbird": "node scripts/package-thunderbird.mjs",
+    "package:submissions": "node scripts/package-submissions.mjs",
+    "package:browsers": "node scripts/package-submissions.mjs chromium firefox",
+    "check:submissions": "node scripts/check-submissions.mjs",
+    "test:extensions": "node scripts/test-extensions.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.13"

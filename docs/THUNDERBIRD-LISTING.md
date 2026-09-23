@@ -79,7 +79,7 @@ is listing copy and a capture checklist, not evidence that the listing was edite
 ## Prepare the submission
 
 Run `npm run package:thunderbird`. Upload the matching XPI and source ZIP from
-`packages/thunderbird/dist/submission/`. The source ZIP includes its own root
+`dist/submissions/thunderbird/`. The source ZIP includes its own root
 README with installation and build instructions, a lockfile and a build environment
 record. Do not upload an old XPI with sources from the current checkout.
 
@@ -99,20 +99,17 @@ https://extensionworkshop.com/documentation/publish/source-code-submission/.
 
 ## Validation status (2026-09-22)
 
-The 2.6.0 source archive was extracted into an empty directory and rebuilt using
-its README commands. All 13 unpacked XPI files matched byte for byte. The source
-ZIP contained 41 files, without dotfiles, macOS metadata or build output.
-`npm run check` passed with existing warnings; all 1,019 tests passed.
+The current submission pipeline scopes the source archive to Thunderbird and
+rs-module, preserving the exact retained lockfile resolutions. Compatible
+dependency updates and scoping resolved the earlier shared-lockfile npm audit
+findings; `npm run check:submissions -- thunderbird` now audits that tree and
+verifies a byte-identical source-only rebuild. Source file counts change as the
+project evolves, so use the automated checks rather than a fixed file count.
 
-The Thunderbird linter did **not** pass: it reported 11 dependency-advisory errors
-against the shared monorepo lockfile, then stopped its review early. The flagged
-packages were sharp, brace-expansion (two versions), browserslist, devalue,
-fast-uri, linkify-it, nanoid, protobufjs, postcss and undici. Some belong to the web
-workspace rather than the Thunderbird build; the report alone does not establish
-that they ship in this XPI. Resolve the relevant advisories and the submission's
-shared-lockfile scope, then rerun the full review. The broad `<all_urls>` permission
-also received an informational finding. It supports user-chosen storage hosts.
-
-Screenshots and the live ATN listing update remain outstanding. No submission or
-release was performed. This validation applies to the current 2.6.0 sources, not
-the previously rejected 1.5.0 artifact.
+The Thunderbird reviewer tool was rerun against the clean scoped archive. It
+completed with zero errors, holds or warnings and one informational finding
+about broad host permissions (`<all_urls>`), needed for user-chosen storage
+hosts. Its report is saved with the local Thunderbird submission artifacts.
+Screenshots and the live ATN listing update remain manual. No submission or
+release was performed. These artifacts reflect the current checkout, not the
+rejected 1.5.0 source.
