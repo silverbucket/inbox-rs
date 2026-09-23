@@ -19,6 +19,7 @@ vi.mock('../../lib/rs', () => ({
   default: {
     connect: vi.fn(),
     disconnect: vi.fn(),
+    reconnect: vi.fn(),
     on: vi.fn(),
     removeEventListener: vi.fn(),
   },
@@ -38,7 +39,12 @@ vi.mock('../../lib/stores', async () => {
 
 import type { Writable } from 'svelte/store';
 import { DEFAULT_SOCKETHUB_ENDPOINT } from '../../lib/link-metadata';
-import { connected, userSettings } from '../../lib/stores';
+import {
+  authorizationRequired,
+  connected,
+  userAddress,
+  userSettings,
+} from '../../lib/stores';
 import AccountSettings from './AccountSettings.svelte';
 
 const w = <T>(store: unknown) => store as Writable<T>;
@@ -175,6 +181,20 @@ describe('AccountSettings Sockethub status', () => {
       'https://relay.example/sockethub-http',
     );
     expect(statusPill()?.textContent).toBe('API v6');
+  });
+
+  it('shows reconnect required state while keeping the connected account visible', () => {
+    w<boolean>(connected).set(true);
+    w<string>(userAddress).set('alice@example.com');
+    w<boolean>(authorizationRequired).set(true);
+    render();
+    const identityPill = host.querySelector(
+      '.identity .pill',
+    ) as HTMLSpanElement;
+    expect(identityPill?.textContent).toBe('Reconnect required');
+    expect(identityPill?.classList.contains('ok')).toBe(false);
+    expect(host.textContent).toContain('Reconnect your storage');
+    expect(host.textContent).toContain('alice@example.com');
   });
 
   it('invalidates an in-flight result as soon as the endpoint changes', async () => {

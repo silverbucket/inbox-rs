@@ -2849,6 +2849,17 @@ describe('remoteStorage authorization expiry', () => {
     expect(get(authorizationRequired)).toBe(true);
   });
 
+  it('recognizes remotestoragejs UnauthorizedError-shaped errors', () => {
+    connected.set(true);
+    userAddress.set('alice@example.com');
+    const error = new Error('The bearer token is invalid or expired');
+    error.name = 'Unauthorized';
+    emitRsEvent('error', error);
+    expect(get(authorizationRequired)).toBe(true);
+    expect(get(connected)).toBe(true);
+    expect(get(userAddress)).toBe('alice@example.com');
+  });
+
   it('does not classify network or discovery errors as revoked access', () => {
     for (const error of [
       new Error('Network error'),
