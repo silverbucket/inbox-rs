@@ -115,6 +115,7 @@ describe('UserMenu connection status', () => {
       w<string>(connectionStatus).set('Syncing…');
     });
     expect(trigger().title).toBe('Syncing…');
+    expect(trigger().getAttribute('aria-label')).toBe('User menu — syncing');
     expect(statusDot().classList.contains('syncing')).toBe(true);
     expect(statusDot().classList.contains('connected')).toBe(false);
   });

@@ -3,6 +3,13 @@
   import { authorizationRequired, connected, connectionStatus, userAddress, userSettings } from '../lib/stores';
 
   let { onopensettings }: { onopensettings: (section?: SectionId) => void } = $props();
+  const menuStatus = $derived(
+    $connectionStatus === 'Not connected'
+      ? 'disconnected'
+      : $connectionStatus === 'Syncing…'
+        ? 'syncing'
+        : $connectionStatus.toLowerCase(),
+  );
   const localPart = $derived($userAddress.split('@')[0] ?? '');
   const automaticInitials = $derived(localPart.length > 1
     ? `${localPart[0]}${localPart[localPart.length - 1]}`.toUpperCase()
@@ -16,7 +23,7 @@
 
 <button type="button" class="trigger" onclick={() => onopensettings()} aria-haspopup="dialog"
   title={$connectionStatus}
-  aria-label={$connectionStatus === 'Offline' ? 'User menu — offline' : $connectionStatus === 'Storage unreachable' ? 'User menu — storage unreachable' : $authorizationRequired ? 'User menu — reconnect required' : $connected ? 'User menu — connected' : 'User menu — disconnected'}>
+  aria-label={`User menu — ${menuStatus}`}>
   {#if $connected && $userAddress}
     <span class="avatar" aria-hidden="true">{initials}</span>
   {:else}

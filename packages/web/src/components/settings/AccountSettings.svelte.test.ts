@@ -40,6 +40,7 @@ vi.mock('../../lib/stores', async () => {
 
 import type { Writable } from 'svelte/store';
 import { DEFAULT_SOCKETHUB_ENDPOINT } from '../../lib/link-metadata';
+import rs from '../../lib/rs';
 import {
   authorizationRequired,
   connected,
@@ -199,8 +200,31 @@ describe('AccountSettings Sockethub status', () => {
     ) as HTMLSpanElement;
     expect(identityPill?.textContent).toBe('Reconnect required');
     expect(identityPill?.classList.contains('ok')).toBe(false);
-    expect(host.textContent).toContain('Reconnect your storage');
+    expect(host.querySelectorAll('[role="alert"]')).toHaveLength(0);
+    const reconnectButton = Array.from(host.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Reconnect',
+    );
+    expect(reconnectButton).toBeDefined();
+    reconnectButton?.click();
+    expect(rs.reconnect).toHaveBeenCalledOnce();
     expect(host.textContent).toContain('alice@example.com');
+  });
+
+  it('reports when reconnection cannot start from Account settings', () => {
+    w<boolean>(connected).set(true);
+    w<boolean>(authorizationRequired).set(true);
+    w<string>(connectionStatus).set('Reconnect required');
+    vi.mocked(rs.reconnect).mockImplementationOnce(() => {
+      throw new Error('Unavailable');
+    });
+    render();
+    Array.from(host.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Reconnect')
+      ?.click();
+    flushSync();
+    expect(host.querySelector('[role="status"]')?.textContent).toBe(
+      'Could not start reconnection. Please try again.',
+    );
   });
 
   it('invalidates an in-flight result as soon as the endpoint changes', async () => {

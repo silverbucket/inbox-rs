@@ -234,6 +234,7 @@ test('denying reauthorization clears the stale account and reconnect warning', a
     .getByRole('button', { name: /^Account — Reconnect required/ })
     .click();
   const account = page.getByRole('dialog');
+  await expect(warning).toHaveCount(1);
   await expect(
     account
       .locator('#settings-account')
@@ -393,6 +394,7 @@ for (const callback of [
   '?error=access_denied',
   '#/search?q=notes&error=access_denied',
   '?error=server_error',
+  '#remotestorage=attacker%40storage.invalid',
 ]) {
   test(`unsolicited callback ${callback} preserves session and queued changes`, async ({
     page,

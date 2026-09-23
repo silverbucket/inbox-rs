@@ -12,6 +12,7 @@ const CALLBACK_KEYS = new Set([
   'code',
   'state',
   'rsDiscovery',
+  'remotestorage',
 ]);
 
 type PendingAuthorization = {
@@ -22,7 +23,9 @@ type PendingAuthorization = {
 
 /** Store a callback nonce before redirecting; unavailable storage fails closed. */
 export function beginOAuthAuthorization(returnState: string): string {
-  const state = crypto.randomUUID();
+  const state = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
   const pending: PendingAuthorization = {
     state,
     returnState,
@@ -43,8 +46,8 @@ export function guardOAuthCallback(): void {
   const params = new URLSearchParams(url.search);
   for (const [key, value] of fragment) params.set(key, value);
   if (
-    !['error', 'access_token', 'code', 'rsDiscovery'].some((key) =>
-      params.has(key),
+    !['error', 'access_token', 'code', 'rsDiscovery', 'remotestorage'].some(
+      (key) => params.has(key),
     )
   )
     return;

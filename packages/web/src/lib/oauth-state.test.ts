@@ -11,6 +11,22 @@ describe('OAuth callback state validation', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
+  it('starts authorization when randomUUID is unavailable', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(crypto, 'randomUUID');
+    Object.defineProperty(crypto, 'randomUUID', {
+      configurable: true,
+      value: undefined,
+    });
+    try {
+      const state = beginOAuthAuthorization('/todos');
+      expect(state).toMatch(/^[0-9a-f]{32}$/);
+      expect(JSON.parse(sessionStorage.getItem(key) ?? '{}').state).toBe(state);
+    } finally {
+      if (descriptor) Object.defineProperty(crypto, 'randomUUID', descriptor);
+      else Reflect.deleteProperty(crypto, 'randomUUID');
+    }
+  });
+
   it.each([
     '?error=access_denied',
     '#error=access_denied',
@@ -39,6 +55,8 @@ describe('OAuth callback state validation', () => {
     '?code=forged-auth-code&state=wrong',
     '#code=forged-auth-code',
     '?rsDiscovery=forged',
+    '?remotestorage=attacker%40evil.example',
+    '#remotestorage=attacker%40evil.example',
   ])('strips an unsolicited OAuth callback from %s', (url) => {
     window.history.replaceState(null, '', `/${url}`);
     guardOAuthCallback();
