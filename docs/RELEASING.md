@@ -140,3 +140,51 @@ real, fix `release-bump.mjs` and re-release.
   titles. Edit the release if you want better copy.
 - No extra approval gate — `workflow_dispatch` already requires write
   access.
+
+## Extension submission checks
+
+All CI jobs and release builds use Node.js 24. The **Extension submissions** CI
+job builds release downloads and matching reviewer source ZIPs for Chromium,
+Firefox and Thunderbird. It extracts every source ZIP into an empty directory,
+runs `npm ci`, audits the scoped dependency tree (high/critical findings fail),
+rebuilds, and compares every file with both the submission binary and the public
+download. No retained dependency may change version, resolution or integrity
+when the monorepo lockfile is pruned for a source archive.
+
+Firefox's packaged code is checked with pinned `web-ext`. Errors and unreviewed
+warnings fail. Three narrowly checked warnings are documented exceptions: the
+forward-compatible `data_collection_permissions` key on older Firefox desktop
+and Android versions, and Svelte's compiled static-template `innerHTML` helper.
+The checker verifies that helper's emitted expression. Dynamic evaluation is
+not exempted. Extension components do not use `{@html}` for captured content.
+
+CI then installs the actual Chromium ZIP and Firefox XPI into temporary browser
+profiles and tests metadata, bookmark/note saves, failed-save retry, image upload
+and disconnect. It captures demonstration screenshots. Tests seed a storage token
+and use a local HTTP receiver; live OAuth and context-menu UI remain manual
+checks in [the listing guide](BROWSER-EXTENSION-LISTING.md).
+
+The release workflow repeats packaging and clean rebuild/audit/lint checks after
+version bumps and **before committing, tagging or deploying**. It saves the
+submission pairs as workflow artifacts and attaches them to the GitHub Release.
+The successful CI preflight includes browser smoke tests. No store uploads occur.
+
+```sh
+npm run package:submissions        # all three targets
+npm run check:submissions          # clean rebuilds, audit, comparison, Firefox lint
+npx playwright install chromium
+npm run test:extensions            # Chromium + Firefox; generates screenshots
+```
+
+For only the browser extensions, use `npm run package:browsers` and
+`npm run check:submissions -- chromium firefox`. For Thunderbird, use
+`npm run package:thunderbird` and `npm run check:submissions -- thunderbird`.
+
+Artifacts live in `dist/submissions/<target>/` and screenshots in
+`dist/submissions/screenshots/`; all are ignored build output. Use matching
+binary/source pairs from the same release. Source ZIPs contain their own root
+README with reviewer commands and an environment record.
+
+Store copy and manual checklists:
+[browser extensions](BROWSER-EXTENSION-LISTING.md),
+[Thunderbird](THUNDERBIRD-LISTING.md).

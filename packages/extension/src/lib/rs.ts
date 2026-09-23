@@ -1,28 +1,11 @@
-import InboxModule, {
+import {
   DirectRS,
   type RSConfig,
   connectViaOAuth as sharedConnectViaOAuth,
-} from '@inbox-rs/rs-module';
-import RemoteStorage from 'remotestoragejs';
+} from '@inbox-rs/rs-module/runtime';
 
 export type { RSConfig };
 export { DirectRS };
-
-export function createRS(): RemoteStorage {
-  const rs = new RemoteStorage({
-    modules: [InboxModule],
-    changeEvents: {
-      local: false,
-      window: false,
-      remote: false,
-      conflict: false,
-    },
-  });
-
-  rs.access.claim('inbox', 'rw');
-  // No caching — extension makes direct remote requests
-  return rs;
-}
 
 /** Resolve to whichever identity API is available in this browser. */
 function getIdentityApi() {
@@ -46,28 +29,5 @@ export async function connectViaOAuth(userAddress: string): Promise<RSConfig> {
     redirectUrl,
     launchAuthFlow: (url) =>
       identity.launchWebAuthFlow({ url, interactive: true }) as Promise<string>,
-  });
-}
-
-/**
- * Configure an RS instance with a previously obtained token.
- *
- * Throws if any of the required post-auth fields are missing — those are
- * populated by `connectViaOAuth`, so a missing field here means the caller
- * passed in a half-built config (a real bug, not something to paper over).
- */
-export function configureRS(rs: RemoteStorage, config: RSConfig): void {
-  const { href, storageApi, token } = config;
-  if (!href || !storageApi || !token) {
-    throw new Error(
-      'configureRS: config is missing href, storageApi, or token (run connectViaOAuth first)',
-    );
-  }
-  rs.remote.configure({
-    userAddress: config.userAddress,
-    href,
-    storageApi,
-    token,
-    properties: undefined,
   });
 }

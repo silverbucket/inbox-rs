@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { archiveDirectory } from './plugin-archive.mjs';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(scriptDir, '..');
@@ -38,14 +39,6 @@ function runNpm(args, env = {}) {
     cwd: rootDir,
     stdio: 'inherit',
     env: { ...process.env, ...env },
-  });
-}
-
-function archiveDirectory(sourceDir, targetFile) {
-  rmSync(targetFile, { force: true });
-  execFileSync('zip', ['-qr', targetFile, '.'], {
-    cwd: sourceDir,
-    stdio: 'inherit',
   });
 }
 
