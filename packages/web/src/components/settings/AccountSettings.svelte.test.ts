@@ -45,6 +45,7 @@ import {
   authorizationRequired,
   connected,
   connectionStatus,
+  updateUserSettings,
   userAddress,
   userSettings,
 } from '../../lib/stores';
@@ -262,5 +263,93 @@ describe('AccountSettings Sockethub status', () => {
 
     expect(statusPill()?.textContent).toBe('Checking…');
     expect(platformLabels()).toEqual([]);
+  });
+});
+
+describe('AccountSettings initials', () => {
+  let host: HTMLElement;
+  let component: ReturnType<typeof mount> | undefined;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    fetchSockethubInfo.mockResolvedValue(null);
+    w<boolean>(connected).set(true);
+    w<Record<string, unknown>>(userSettings).set({ abbreviation: 'NJ' });
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    component = mount(AccountSettings, { target: host });
+    flushSync();
+  });
+
+  afterEach(() => {
+    if (component) unmount(component);
+    component = undefined;
+    host.remove();
+  });
+
+  const input = () =>
+    host.querySelector('input[aria-label="Initials"]') as HTMLInputElement;
+
+  it('seeds the field from the stored abbreviation', () => {
+    expect(input().value).toBe('NJ');
+  });
+
+  it('stays empty after the user clears it and saves as unset on blur', async () => {
+    const field = input();
+    field.value = '';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+    expect(field.value).toBe('');
+
+    field.dispatchEvent(new FocusEvent('blur'));
+    flushSync();
+    expect(field.value).toBe('');
+    expect(updateUserSettings).toHaveBeenCalledWith({
+      abbreviation: undefined,
+    });
+  });
+
+  it('follows a stored abbreviation that changes later', () => {
+    w<Record<string, unknown>>(userSettings).set({ abbreviation: 'AB' });
+    flushSync();
+    expect(input().value).toBe('AB');
+  });
+
+  it('keeps an in-progress edit when an unrelated setting syncs', () => {
+    const field = input();
+    field.value = 'X';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+
+    w<Record<string, unknown>>(userSettings).set({
+      abbreviation: 'NJ',
+      theme: 'dark',
+    });
+    flushSync();
+    expect(field.value).toBe('X');
+  });
+
+  it('does not snap back to the stored abbreviation while editing', () => {
+    const field = input();
+    field.value = 'N';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+    expect(field.value).toBe('N');
+  });
+
+  it('persists a new abbreviation on blur', () => {
+    const field = input();
+    field.value = 'xy';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+
+    field.dispatchEvent(new FocusEvent('blur'));
+    flushSync();
+
+    expect(field.value).toBe('XY');
+    expect(updateUserSettings).toHaveBeenCalledWith({
+      abbreviation: 'XY',
+    });
   });
 });
