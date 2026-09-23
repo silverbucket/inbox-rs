@@ -531,7 +531,8 @@ rs.on('error', (e: unknown) => {
   ) {
     syncing.set(false);
     if ('code' in e && e.code === 'access_denied') {
-      // OAuth authorization was declined, rather than an existing token expiring.
+      // OAuth callbacks pass per-tab state validation in rs.ts before RS sees
+      // them. Only a matching denial may take this destructive cleanup path.
       rs.disconnect();
     } else {
       authorizationRequired.set(true);

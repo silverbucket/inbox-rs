@@ -380,3 +380,88 @@ for (const outage of ['browser offline', 'storage unreachable']) {
     await expect(status).toHaveClass(/ok/);
   });
 }
+
+for (const callback of [
+  '?error=access_denied',
+  '#/search?q=notes&error=access_denied',
+  '?error=server_error',
+]) {
+  test(`unsolicited callback ${callback} preserves session and queued changes`, async ({
+    page,
+    freshRsUser,
+    freshRsToken,
+    webOrigin,
+  }) => {
+    await beginConnect(page, webOrigin, freshRsUser);
+    await allow(page, webOrigin, freshRsUser);
+    const storage = `http://localhost:8000/storage/${freshRsUser.username}/**`;
+    await page.route(storage, (route) => route.abort('connectionfailed'));
+    const title = 'Unsynced note must survive an unsolicited callback';
+    await capture(page, title);
+    expect(
+      (await getInboxItems(freshRsUser, freshRsToken)).map(
+        (item) => item.title,
+      ),
+    ).not.toContain(title);
+    await page.goto(`${webOrigin}/${callback}`);
+    // Move back to the inbox if the crafted URL contained a search route.
+    await page
+      .getByRole('button', { name: 'Inbox', exact: true })
+      .first()
+      .click();
+    await expect(
+      page.getByRole('button', { name: `Open ${title}`, exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'User menu — disconnected' }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('alert').filter({ hasText: 'Reconnect your storage' }),
+    ).toHaveCount(0);
+    await page.unroute(storage);
+    await expect
+      .poll(
+        async () =>
+          (await getInboxItems(freshRsUser, freshRsToken)).map(
+            (item) => item.title,
+          ),
+        { timeout: 20_000 },
+      )
+      .toContain(title);
+  });
+}
+
+test('a denial with mismatched state cannot discard a pending reconnect draft', async ({
+  page,
+  freshRsUser,
+  webOrigin,
+}) => {
+  await beginConnect(page, webOrigin, freshRsUser);
+  await allow(page, webOrigin, freshRsUser);
+  const storage = `http://localhost:8000/storage/${freshRsUser.username}/**`;
+  await page.route(storage, (route) =>
+    route.fulfill({
+      status: 401,
+      headers: { 'Access-Control-Allow-Origin': webOrigin },
+      body: '',
+    }),
+  );
+  const title = 'Draft protected from mismatched OAuth state';
+  await capture(page, title);
+  const warning = page
+    .getByRole('alert')
+    .filter({ hasText: 'Reconnect your storage' });
+  await expect(warning).toBeVisible();
+  await warning.getByRole('button', { name: 'Reconnect', exact: true }).click();
+  await page.waitForURL(/^http:\/\/localhost:8000\/oauth\//);
+  const state = new URL(page.url()).searchParams.get('state');
+  expect(state).toBeTruthy();
+  await page.goto(`${webOrigin}/#error=access_denied&state=wrong-${state}`);
+  await expect(
+    page.getByRole('button', { name: `Open ${title}`, exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole('button', { name: `Open ${title}`, exact: true }),
+  ).toBeVisible();
+});
