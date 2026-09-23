@@ -3,6 +3,23 @@ import { getInboxItems, type RsUser } from '../helpers/armadietto';
 import { expect, test } from '../helpers/fixtures';
 import { seedRsSession } from '../helpers/pwa';
 
+// remotestoragejs discovers storage through webfinger.js with URI fallback:
+// when `/.well-known/webfinger` fails it retries `host-meta` and
+// `host-meta.json`, which Armadietto also serves. Blocking only webfinger
+// would let discovery succeed through the fallbacks.
+const DISCOVERY = '**/.well-known/**';
+
+/** Make every storage discovery lookup fail with a 503. */
+async function failDiscovery(page: Page, origin: string) {
+  await page.route(DISCOVERY, (route) =>
+    route.fulfill({
+      status: 503,
+      headers: { 'Access-Control-Allow-Origin': origin },
+      body: '',
+    }),
+  );
+}
+
 // Use actual OAuth, not seedRsSession: its init script overwrites credentials
 // on every navigation and would hide callback/reload regressions.
 /** Start a real OAuth flow from the disconnected account form. */
@@ -185,13 +202,7 @@ test('discovery failure lets the user correct the address and connect again', as
   await page.goto(webOrigin);
   await page.getByRole('button', { name: 'User menu — disconnected' }).click();
   await page.getByRole('button', { name: /^Account — Not connected/ }).click();
-  await page.route('**/.well-known/webfinger?**', (route) =>
-    route.fulfill({
-      status: 503,
-      headers: { 'Access-Control-Allow-Origin': webOrigin },
-      body: '',
-    }),
-  );
+  await failDiscovery(page, webOrigin);
   await page.getByPlaceholder('user@storage.example').fill(freshRsUser.address);
   await page.getByRole('button', { name: 'Connect', exact: true }).click();
   await expect(
@@ -200,7 +211,7 @@ test('discovery failure lets the user correct the address and connect again', as
   await expect(
     page.getByRole('alert').filter({ hasText: 'Reconnect your storage' }),
   ).toHaveCount(0);
-  await page.unroute('**/.well-known/webfinger?**');
+  await page.unroute(DISCOVERY);
   await page.getByRole('button', { name: 'Connect', exact: true }).click();
   await page.waitForURL(/^http:\/\/localhost:8000\/oauth\//);
   await allow(page, webOrigin, freshRsUser);
@@ -309,17 +320,17 @@ test('failed reconnect discovery keeps local data and allows retry', async ({
     .getByRole('alert')
     .filter({ hasText: 'Reconnect your storage' });
   await expect(warning).toBeVisible({ timeout: 20_000 });
-  await page.route('**/.well-known/webfinger?**', (route) =>
-    route.fulfill({
-      status: 503,
-      headers: { 'Access-Control-Allow-Origin': webOrigin },
-      body: '',
-    }),
-  );
+  // remotestoragejs caches a successful discovery in memory and in
+  // localStorage, so a reconnect for the same address never looks the
+  // storage up again. Drop the cache and reload so the reconnect performs
+  // a real discovery that the 503 route below can fail.
+  await page.evaluate(() => localStorage.removeItem('remotestorage:discover'));
+  await page.reload();
+  await expect(warning).toBeVisible({ timeout: 20_000 });
+  await failDiscovery(page, webOrigin);
   const failedDiscovery = page.waitForResponse(
     (response) =>
-      response.url().includes('/.well-known/webfinger?') &&
-      response.status() === 503,
+      response.url().includes('/.well-known/') && response.status() === 503,
   );
   await warning.getByRole('button', { name: 'Reconnect', exact: true }).click();
   await failedDiscovery;
@@ -327,7 +338,7 @@ test('failed reconnect discovery keeps local data and allows retry', async ({
   await expect(
     page.getByRole('button', { name: `Open ${title}`, exact: true }),
   ).toBeVisible();
-  await page.unroute('**/.well-known/webfinger?**');
+  await page.unroute(DISCOVERY);
   await warning.getByRole('button', { name: 'Reconnect', exact: true }).click();
   await page.waitForURL(/^http:\/\/localhost:8000\/oauth\//);
   await page.unroute(storage);

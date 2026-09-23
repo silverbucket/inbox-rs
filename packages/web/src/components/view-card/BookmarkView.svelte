@@ -90,8 +90,8 @@
   );
 
   // Pass mimeType so the blob is tagged with the clean type from item
-  // metadata rather than the server's Content-Type — 5apps preserves the
-  // `; charset=binary` suffix that wireclient adds on upload, and Chrome
+  // metadata rather than the server's Content-Type. Older uploads may still
+  // carry a `; charset=binary` suffix that the server echoes back, and Chrome
   // won't render an <img> whose Blob type carries that suffix.
   $effect(() => {
     // Load from the remote when connected, otherwise the local cache, so
