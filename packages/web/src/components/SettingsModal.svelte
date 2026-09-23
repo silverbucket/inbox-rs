@@ -9,7 +9,7 @@
   import { layout } from '../lib/layout';
   import { buildDate, versionLabel } from '../lib/build-info';
   import { SETTINGS_SECTIONS, type SectionId, type SettingsSection } from '../lib/settings-sections';
-  import { connected, items, syncing, userAddress, userSettings } from '../lib/stores';
+  import { authorizationRequired, connected, items, syncing, userAddress, userSettings } from '../lib/stores';
   import { ACCENT_LABELS, isAccent } from '../lib/theme';
   import AboutSettings from './settings/AboutSettings.svelte';
   import AccountSettings from './settings/AccountSettings.svelte';
@@ -47,7 +47,7 @@
       case 'notifications': return $alertPermission === 'granted' ? 'Allowed' : 'Not allowed';
       case 'data': return `${itemList.length} item${itemList.length === 1 ? '' : 's'}`;
       case 'apps': return 'Capture tools';
-      case 'account': return $connected ? 'Synced' : 'Not connected';
+      case 'account': return $authorizationRequired ? 'Reconnect required' : $connected ? 'Synced' : 'Not connected';
       case 'about': return versionLabel;
     }
   }
@@ -106,7 +106,7 @@
     </header>
     {#if mobile && selected}<div class="mobile-state">{stateLine(selected)}</div>{/if}
     {#if !mobile || !selected}
-      {#if mobile}<div class="identity"><span class="identity-avatar">{$connected ? ($userSettings.abbreviation?.slice(0, 2) || $userAddress.slice(0,2).toUpperCase()) : '?'}</span><span><strong>{$userAddress || 'Not connected'}</strong><small>{$syncing?'Syncing…':$connected?'Synced':'Connect your storage'}</small></span></div>{/if}
+      {#if mobile}<div class="identity"><span class="identity-avatar">{$connected ? ($userSettings.abbreviation?.slice(0, 2) || $userAddress.slice(0,2).toUpperCase()) : '?'}</span><span><strong>{$userAddress || 'Not connected'}</strong><small>{$authorizationRequired?'Reconnect required':$syncing?'Syncing…':$connected?'Synced':'Connect your storage'}</small></span></div>{/if}
       <div class="tiles">
       {#each SETTINGS_SECTIONS as section (section.id)}
         <SettingsTile {section} value={value(section)} sub={sub(section)} meta={meta(section)} expanded={expanded===section.id} onclick={()=>void choose(section.id)}/>

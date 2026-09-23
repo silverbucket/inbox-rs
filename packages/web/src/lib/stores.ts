@@ -64,6 +64,8 @@ function clearBlobLoadFailed(filePath: string) {
 
 export const connected = writable(false);
 export const syncing = writable(false);
+// Keep the account and local data intact while authorization needs renewal.
+export const authorizationRequired = writable(false);
 
 function readStoredUserAddress(): string {
   try {
@@ -441,6 +443,7 @@ let syncTimeout: ReturnType<typeof setTimeout> | null = null;
 let syncVisibleUntil = 0;
 
 function showSync() {
+  if (get(authorizationRequired)) return;
   syncing.set(true);
   syncVisibleUntil = Date.now() + 1000;
   if (syncTimeout) clearTimeout(syncTimeout);
@@ -471,9 +474,21 @@ rs.on('sync-done', () => {
   markMigrationAlertReady();
 });
 
-rs.on('error', (e: unknown) => console.warn('[inbox] rs:error', e));
+rs.on('error', (e: unknown) => {
+  console.warn('[inbox] rs:error', e);
+  if (
+    typeof e === 'object' &&
+    e !== null &&
+    'name' in e &&
+    e.name === 'Unauthorized'
+  ) {
+    authorizationRequired.set(true);
+    syncing.set(false);
+  }
+});
 
 rs.on('connected', async () => {
+  authorizationRequired.set(false);
   connected.set(true);
   // The connected user's address lives on `rs.remote` once auth completes;
   // fall back to localStorage so we have something to display before sync.
@@ -488,6 +503,7 @@ rs.on('connected', async () => {
 });
 
 rs.on('disconnected', () => {
+  authorizationRequired.set(false);
   // Revoke all blob URLs to prevent memory leaks across reconnects / long sessions.
   // Bump the generation so any in-flight loadFileBlobUrl promises from
   // before this disconnect are ignored when they resolve (prevents stale

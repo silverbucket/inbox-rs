@@ -1,4 +1,5 @@
 <script lang="ts">
+  import StorageAuthorizationNotice from './components/StorageAuthorizationNotice.svelte';
   import type { Component } from 'svelte';
   import { onMount } from 'svelte';
   import type { InboxItemType, InboxItem, Collection, CollectionGroup } from '@inbox-rs/rs-module';
@@ -646,6 +647,7 @@
 </script>
 
 {#snippet shellBody()}
+  <StorageAuthorizationNotice />
     {#if bodyPage === 'plugins'}
       {#if PluginsPageComponent}
         <PluginsPageComponent />

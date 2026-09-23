@@ -28,6 +28,7 @@ vi.mock('../../lib/stores', async () => {
   const { writable } = await import('svelte/store');
   return {
     connected: writable(false),
+    authorizationRequired: writable(false),
     syncing: writable(false),
     userAddress: writable(''),
     userSettings: writable({}),

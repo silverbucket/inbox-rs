@@ -62,6 +62,7 @@ import {
   appConfig,
   archivedCollections,
   archivedGroups,
+  authorizationRequired,
   blobUrls,
   collectionItems,
   collections,
@@ -98,9 +99,11 @@ import {
   storeCollection,
   storeGroup,
   storeItem,
+  syncing,
   todoItems,
   toggleCollectionFilter,
   toggleGroupFilter,
+  userAddress,
   userSettings,
   visibleGroupedCollections,
   visibleOnCalendarTodos,
@@ -2813,5 +2816,56 @@ describe('reorderGroups', () => {
     await expect(reorderGroups(['g2', 'g1'])).rejects.toThrow('write failed');
 
     expect(get(appConfig).groupsOrder).toEqual(['g1', 'g2']);
+  });
+});
+
+describe('remoteStorage authorization expiry', () => {
+  afterEach(() => {
+    authorizationRequired.set(false);
+    connected.set(false);
+    syncing.set(false);
+  });
+
+  it('shows authorization failure without discarding the account or local items', () => {
+    connected.set(true);
+    userAddress.set('alice@example.com');
+    const cached = {
+      id: 'unsynced',
+      type: 'note',
+      title: 'Local draft',
+    } as InboxItem;
+    items.set({ unsynced: cached });
+    emitRsEvent('wire-busy');
+    expect(get(syncing)).toBe(true);
+    emitRsEvent('error', { name: 'Unauthorized' });
+    expect(get(authorizationRequired)).toBe(true);
+    expect(get(syncing)).toBe(false);
+    expect(get(connected)).toBe(true);
+    expect(get(userAddress)).toBe('alice@example.com');
+    expect(get(items).unsynced).toEqual(cached);
+    emitRsEvent('wire-busy');
+    emitRsEvent('sync-done');
+    expect(get(syncing)).toBe(false);
+    expect(get(authorizationRequired)).toBe(true);
+  });
+
+  it('does not classify network or discovery errors as revoked access', () => {
+    for (const error of [
+      new Error('Network error'),
+      { name: 'DiscoveryError' },
+      null,
+    ]) {
+      emitRsEvent('error', error);
+      expect(get(authorizationRequired)).toBe(false);
+    }
+  });
+
+  it('clears the warning after authorization succeeds or the user disconnects', () => {
+    authorizationRequired.set(true);
+    emitRsEvent('connected');
+    expect(get(authorizationRequired)).toBe(false);
+    authorizationRequired.set(true);
+    emitRsEvent('disconnected');
+    expect(get(authorizationRequired)).toBe(false);
   });
 });
