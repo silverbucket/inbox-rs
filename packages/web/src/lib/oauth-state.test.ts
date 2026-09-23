@@ -60,7 +60,9 @@ describe('OAuth callback state validation', () => {
   ])('strips an unsolicited OAuth callback from %s', (url) => {
     window.history.replaceState(null, '', `/${url}`);
     guardOAuthCallback();
-    expect(window.location.href).not.toMatch(/code=|rsDiscovery=/);
+    expect(window.location.href).not.toMatch(
+      /code=|rsDiscovery=|remotestorage=/,
+    );
   });
 
   it.each(['?', '#'])('accepts a matching denial from %s once', (delimiter) => {
