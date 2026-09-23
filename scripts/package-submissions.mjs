@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { archiveDirectory, archiveFiles } from './plugin-archive.mjs';
+import { pruneScopedLockfile } from './submission-lockfile.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const targets = process.argv.slice(2);
@@ -78,7 +79,11 @@ for (const target of targets) {
     }
     cpSync(join(root, 'LICENSE'), join(source, 'LICENSE'));
     mkdirSync(join(source, 'scripts'));
-    for (const script of ['package-submissions.mjs', 'plugin-archive.mjs'])
+    for (const script of [
+      'package-submissions.mjs',
+      'plugin-archive.mjs',
+      'submission-lockfile.mjs',
+    ])
       cpSync(join(root, 'scripts', script), join(source, 'scripts', script));
     writeJson(join(source, 'package.json'), {
       name: `inbox-rs-${target}-review`,
@@ -105,7 +110,11 @@ for (const target of targets) {
       ],
       source,
     );
-    const scopedLock = json(join(source, 'package-lock.json'));
+    const scopedLock = pruneScopedLockfile(
+      json(join(source, 'package-lock.json')),
+      [packagePath, 'packages/rs-module'],
+    );
+    writeJson(join(source, 'package-lock.json'), scopedLock);
     for (const [path, entry] of Object.entries(scopedLock.packages)) {
       if (!path.includes('node_modules/')) continue;
       const original = originalLock.packages[path];
@@ -116,7 +125,7 @@ for (const target of targets) {
           );
       }
     }
-    const readme = `# Reproduce Inbox RS for ${target}\n\nInstall Node.js 24 and npm 11 from https://nodejs.org/en/download and Info-ZIP zip/unzip (Ubuntu: sudo apt install zip unzip; included on macOS). Exact producer versions are in BUILD-ENVIRONMENT.txt. Internet access to the npm registry is needed for npm ci. No Git checkout, browser, account or server is needed.\n\nFrom this extracted archive's root:\n\n\`\`\`sh\nnpm ci\nnpm run package:submission\n\`\`\`\n\nThe matching installable artifact and source ZIP are written to dist/submissions/${target}/. The unpacked build is in ${packagePath}/dist/. Compare unpacked XPI/ZIP file contents, not archive timestamps.\n\nThis archive contains only the ${workspace} and rs-module workspaces. Its lockfile is a pruned copy of the repository lockfile: every retained dependency has the same version, resolution and integrity. Packaging fails if scoping changes any of those. The source includes the same Vite/Svelte/TypeScript build configuration used for the release. Do not update dependencies when reproducing a submission.\n`;
+    const readme = `# Reproduce Inbox RS for ${target}\n\nInstall Node.js 24 and npm 11 from https://nodejs.org/en/download and Info-ZIP zip/unzip (Ubuntu: sudo apt install zip unzip; included on macOS). Exact producer versions are in BUILD-ENVIRONMENT.txt. Internet access to the npm registry is needed for npm ci. No Git checkout, browser, account or server is needed.\n\nFrom this extracted archive's root:\n\n\`\`\`sh\nnpm ci\n# Linux only: npm sometimes skips Rollup's native optional dependency.\n# Run this once if \`npm run package:submission\` fails with a missing\n# @rollup/rollup-linux-x64-gnu module.\n# npm install @rollup/rollup-linux-x64-gnu --no-save\nnpm run package:submission\n\`\`\`\n\nThe matching installable artifact and source ZIP are written to dist/submissions/${target}/. The unpacked build is in ${packagePath}/dist/. Compare unpacked XPI/ZIP file contents, not archive timestamps.\n\nThis archive contains only the ${workspace} and rs-module workspaces. Its lockfile is a pruned copy of the repository lockfile: every retained dependency has the same version, resolution and integrity. Packaging fails if scoping changes any of those. The source includes the same Vite/Svelte/TypeScript build configuration used for the release. Do not update dependencies when reproducing a submission.\n`;
     writeFileSync(join(source, 'README.md'), readme);
     writeFileSync(
       join(source, 'BUILD-ENVIRONMENT.txt'),

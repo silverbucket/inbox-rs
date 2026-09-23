@@ -72,6 +72,9 @@ for (const target of targets) {
       ),
     );
     npm(['ci', '--no-fund'], source);
+    if (process.platform === 'linux') {
+      npm(['install', '@rollup/rollup-linux-x64-gnu', '--no-save'], source);
+    }
     npm(['audit', '--audit-level=high'], source);
     npm(['run', 'package:submission'], source);
     execFileSync('unzip', [

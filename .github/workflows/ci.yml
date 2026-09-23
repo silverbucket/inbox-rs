@@ -181,6 +181,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm install @rollup/rollup-linux-x64-gnu --no-save
       - run: npm run package:plugins
       - run: npm run package:submissions
       - name: Rebuild, audit, compare release artifacts and lint Firefox
