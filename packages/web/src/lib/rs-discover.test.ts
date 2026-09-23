@@ -35,7 +35,7 @@ function mockWebfingerFetch() {
 }
 
 /**
- * Regression guard for remotestoragejs beta.10 (#1386).
+ * Regression guard for remotestoragejs beta.10 (regression #1384, fix #1386).
  *
  * beta.9 pulled in webfinger.js v3, which blocks localhost/private hosts
  * unless `allow_private_addresses` is set. The web app calls `rs.connect()`
@@ -63,5 +63,25 @@ describe('RemoteStorage.Discover (upstream beta.10)', () => {
     expect(result.href).toBe('http://192.168.1.50:8000/storage/alice');
     const [webfingerUrl] = vi.mocked(fetch).mock.calls[0] ?? [];
     expect(webfingerUrl).toContain('192.168.1.50:8000/.well-known/webfinger');
+  });
+
+  it('rejects localhost before fetch when private addresses are disabled', async () => {
+    const rs = new RemoteStorage({ discovery: { allowPrivateAddresses: false } });
+    rs.access.claim('inbox', 'rw');
+    try {
+      // Use an address not cached by the successful discovery above. connect()
+      // translates WebFinger's rejection into the app-facing DiscoveryError.
+      const error = await new Promise<unknown>((resolve) => {
+        rs.on('error', resolve);
+        rs.connect('alice@localhost:8001');
+      });
+      expect(error).toMatchObject({
+        name: 'DiscoveryError',
+      });
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      // The discovery configuration is shared across instances.
+      new RemoteStorage({ discovery: { allowPrivateAddresses: true } });
+    }
   });
 });
