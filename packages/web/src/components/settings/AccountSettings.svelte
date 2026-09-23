@@ -46,7 +46,7 @@
   const localPart = $derived($userAddress.split('@')[0] ?? '');
   const auto = $derived(localPart.length > 1 ? `${localPart[0]}${localPart.at(-1)}`.toUpperCase() : localPart.toUpperCase() || '?');
   let initials = $state('');
-  $effect(() => { if (!initials) initials = ($userSettings.abbreviation ?? '').slice(0, 2); });
+  $effect(() => { initials = ($userSettings.abbreviation ?? '').slice(0, 2); });
   $effect(() => { if (!$connected && !address) address = $userAddress; });
   $effect(() => { if (focusConnect && !$connected) void tick().then(() => connectInput?.focus()); });
   $effect(() => {
