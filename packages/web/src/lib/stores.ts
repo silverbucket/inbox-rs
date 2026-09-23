@@ -482,8 +482,13 @@ rs.on('error', (e: unknown) => {
     'name' in e &&
     e.name === 'Unauthorized'
   ) {
-    authorizationRequired.set(true);
     syncing.set(false);
+    if ('code' in e && e.code === 'access_denied') {
+      // OAuth authorization was declined, rather than an existing token expiring.
+      rs.disconnect();
+    } else {
+      authorizationRequired.set(true);
+    }
   }
 });
 

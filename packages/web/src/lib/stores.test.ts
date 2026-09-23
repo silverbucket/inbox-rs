@@ -33,6 +33,7 @@ const { mockRs, mockInbox } = vi.hoisted(() => {
     on: vi.fn(),
     remote: {},
     startSync: vi.fn(),
+    disconnect: vi.fn(),
     inbox: mockInbox,
   };
   return { mockRs, mockInbox };
@@ -2820,6 +2821,10 @@ describe('reorderGroups', () => {
 });
 
 describe('remoteStorage authorization expiry', () => {
+  beforeEach(() => {
+    mockRs.disconnect.mockClear();
+  });
+
   afterEach(() => {
     authorizationRequired.set(false);
     connected.set(false);
@@ -2838,6 +2843,7 @@ describe('remoteStorage authorization expiry', () => {
     emitRsEvent('wire-busy');
     expect(get(syncing)).toBe(true);
     emitRsEvent('error', { name: 'Unauthorized' });
+    expect(mockRs.disconnect).not.toHaveBeenCalled();
     expect(get(authorizationRequired)).toBe(true);
     expect(get(syncing)).toBe(false);
     expect(get(connected)).toBe(true);
@@ -2858,6 +2864,19 @@ describe('remoteStorage authorization expiry', () => {
     expect(get(authorizationRequired)).toBe(true);
     expect(get(connected)).toBe(true);
     expect(get(userAddress)).toBe('alice@example.com');
+  });
+
+  it('disconnects when OAuth access is explicitly denied', () => {
+    emitRsEvent('error', { name: 'Unauthorized', code: 'access_denied' });
+    expect(mockRs.disconnect).toHaveBeenCalledOnce();
+    expect(get(authorizationRequired)).toBe(false);
+    expect(get(syncing)).toBe(false);
+  });
+
+  it('offers reconnection for other authorization error codes', () => {
+    emitRsEvent('error', { name: 'Unauthorized', code: 'invalid_token' });
+    expect(mockRs.disconnect).not.toHaveBeenCalled();
+    expect(get(authorizationRequired)).toBe(true);
   });
 
   it('does not classify network or discovery errors as revoked access', () => {
