@@ -154,10 +154,8 @@
     try {
       const shares = rs.shares;
 
-      // PUT directly to remote, bypassing the sync layer entirely.
-      // Two reasons: (1) shares module has a sync thumbnail bug that throws
-      // because it reads Image dimensions before onload, and (2) the sync
-      // layer silently fails to push binary file data (same RS bug as inbox files).
+      // PUT directly to remote because the shares module generates thumbnails
+      // before the image has loaded, producing a 0×0 canvas error.
       const remote = rs.remote;
       if (!remote?.connected) throw new Error('Not connected to remote storage');
 
