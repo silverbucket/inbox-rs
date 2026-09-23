@@ -88,9 +88,13 @@ export function guardOAuthCallback(): void {
   }
   if (trusted && pending) {
     // remoteStorage uses state to restore the hash, so never pass our nonce
-    // through as an application route. Prefer fragment state as the library does.
+    // through as an application route. Its state parser also treats any
+    // embedded rsDiscovery= text as storage configuration, so drop such routes.
     url.searchParams.delete('state');
-    fragment.set('state', pending.returnState);
+    fragment.set(
+      'state',
+      pending.returnState.includes('rsDiscovery') ? '' : pending.returnState,
+    );
     url.hash = fragment.toString();
   } else {
     for (const key of CALLBACK_KEYS) url.searchParams.delete(key);

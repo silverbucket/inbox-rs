@@ -442,6 +442,41 @@ for (const callback of [
   });
 }
 
+test('a crafted return route cannot send a new token to another storage server', async ({
+  page,
+  freshRsUser,
+  freshRsToken,
+  webOrigin,
+}) => {
+  const attackerRequests: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/storage/attacker'))
+      attackerRequests.push(request.url());
+  });
+  const payload = btoa(
+    JSON.stringify({ href: 'http://localhost:8000/storage/attacker' }),
+  );
+  await page.goto(`${webOrigin}/#/search?q=notes&x=rsDiscovery=${payload}`);
+  await page.getByRole('button', { name: 'User menu — disconnected' }).click();
+  await page.getByRole('button', { name: /^Account — Not connected/ }).click();
+  await page.getByPlaceholder('user@storage.example').fill(freshRsUser.address);
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  await page.waitForURL(/^http:\/\/localhost:8000\/oauth\//);
+  await allow(page, webOrigin, freshRsUser);
+
+  const title = 'Note after a crafted return route';
+  await capture(page, title);
+  await expect
+    .poll(async () =>
+      (await getInboxItems(freshRsUser, freshRsToken)).map(
+        (item) => item.title,
+      ),
+    )
+    .toContain(title);
+  expect(attackerRequests).toEqual([]);
+  expect(page.url()).not.toContain('rsDiscovery');
+});
+
 test('a denial with mismatched state cannot discard a pending reconnect draft', async ({
   page,
   freshRsUser,

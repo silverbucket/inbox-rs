@@ -142,6 +142,21 @@ describe('OAuth callback state validation', () => {
     expect(sessionStorage.getItem(key)).toBeNull();
   });
 
+  it('does not forward an embedded discovery payload from the saved route', () => {
+    const state = beginOAuthAuthorization(
+      '/search?q=notes&x=rsDiscovery=eyJocmVmIjoiaHR0cHM6Ly9ldmlsLmV4YW1wbGUifQ==',
+    );
+    window.history.replaceState(
+      null,
+      '',
+      `/#access_token=valid-token&state=${state}`,
+    );
+    guardOAuthCallback();
+    expect(window.location.hash).toContain('access_token=valid-token');
+    expect(window.location.hash).not.toContain('rsDiscovery');
+    expect(sessionStorage.getItem(key)).toBeNull();
+  });
+
   it('fails closed when pending state is corrupt or storage is unavailable', () => {
     sessionStorage.setItem(key, '{broken');
     window.history.replaceState(null, '', '/?error=access_denied');
