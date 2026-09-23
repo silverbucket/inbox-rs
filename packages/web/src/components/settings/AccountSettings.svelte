@@ -3,7 +3,7 @@
   import rs from '../../lib/rs';
   import { LOCAL_SOCKETHUB_URL_KEY } from '../../lib/enrich';
   import { DEFAULT_SOCKETHUB_ENDPOINT, fetchSockethubInfo } from '../../lib/link-metadata';
-  import { connected, syncing, userAddress, userSettings, updateUserSettings } from '../../lib/stores';
+  import { authorizationRequired, connectionStatus, connected, userAddress, userSettings, updateUserSettings } from '../../lib/stores';
   let { focusConnect = false }: { focusConnect?: boolean } = $props();
   const readLocal=(k:string)=>{try{return localStorage.getItem(k)}catch{return null}}; const writeLocal=(k:string,v:string)=>{try{localStorage.setItem(k,v)}catch{}}; const removeLocal=(k:string)=>{try{localStorage.removeItem(k)}catch{}};
   let sockethubCustom=$state(!!($userSettings.sockethubUrl??readLocal(LOCAL_SOCKETHUB_URL_KEY))); let sockethubEndpoint=$state($userSettings.sockethubUrl??readLocal(LOCAL_SOCKETHUB_URL_KEY)??'');
@@ -42,6 +42,7 @@
     return () => window.clearTimeout(timeout);
   });
   let address = $state(''); let connecting = $state(false); let connectInput = $state<HTMLInputElement|null>(null);
+  let reconnectError = $state('');
   const localPart = $derived($userAddress.split('@')[0] ?? '');
   const auto = $derived(localPart.length > 1 ? `${localPart[0]}${localPart.at(-1)}`.toUpperCase() : localPart.toUpperCase() || '?');
   let initials = $state('');
@@ -72,10 +73,16 @@
     }
   }
   function saveInitials(){ const value=initials.trim().toUpperCase().slice(0,2); initials=value; if($connected) void updateUserSettings({abbreviation:value||undefined}); }
+  /** Keep reconnection available in Account settings without a second alert. */
+  function reconnect(){
+    reconnectError='';
+    try { rs.reconnect(); }
+    catch { reconnectError='Could not start reconnection. Please try again.'; }
+  }
 </script>
 <div class="settings-section">
 {#if $connected}
-  <div class="row identity wide"><div class="account-avatar">{$userSettings.abbreviation?.slice(0, 2) || auto}</div><div class="row-main"><div class="row-label">{$userAddress}</div><div class="row-desc">Your inbox lives on your own <a href="https://remotestorage.io" target="_blank" rel="noreferrer">remoteStorage</a> server. Inbox RS never holds a copy.</div></div><div class="row-ctl"><span class="pill ok">{$syncing?'Syncing…':'Synced'}</span></div></div>
+  <div class="row identity wide"><div class="account-avatar">{$userSettings.abbreviation?.slice(0, 2) || auto}</div><div class="row-main"><div class="row-label">{$userAddress}</div><div class="row-desc">Your inbox lives on your own <a href="https://remotestorage.io" target="_blank" rel="noreferrer">remoteStorage</a> server. Inbox RS never holds a copy.</div>{#if reconnectError}<p role="status">{reconnectError}</p>{/if}</div><div class="row-ctl"><span class="pill" class:ok={$connectionStatus === 'Connected'}>{$connectionStatus}</span>{#if $authorizationRequired}<button class="btn primary" type="button" onclick={reconnect}>Reconnect</button>{/if}</div></div>
   <div class="row"><div class="row-main"><div class="row-label">Initials</div><div class="row-desc">Up to two letters for your avatar. Defaults to your address.</div></div><div class="row-ctl"><input class="field initials" aria-label="Initials" maxlength="2" bind:value={initials} onblur={saveInitials}/></div></div>
   <div class="row"><div class="row-main"><div class="row-label">Sign out of this browser</div><div class="row-desc">Removes the local copy. Everything stays on your storage server.</div></div><div class="row-ctl"><button class="btn danger" type="button" onclick={() => rs.disconnect()}>Disconnect</button></div></div>
 {:else}

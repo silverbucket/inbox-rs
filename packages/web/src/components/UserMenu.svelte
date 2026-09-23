@@ -1,8 +1,15 @@
 <script lang="ts">
   import type { SectionId } from '../lib/settings-sections';
-  import { connected, syncing, userAddress, userSettings } from '../lib/stores';
+  import { authorizationRequired, connected, connectionStatus, userAddress, userSettings } from '../lib/stores';
 
   let { onopensettings }: { onopensettings: (section?: SectionId) => void } = $props();
+  const menuStatus = $derived(
+    $connectionStatus === 'Not connected'
+      ? 'disconnected'
+      : $connectionStatus === 'Syncing…'
+        ? 'syncing'
+        : $connectionStatus.toLowerCase(),
+  );
   const localPart = $derived($userAddress.split('@')[0] ?? '');
   const automaticInitials = $derived(localPart.length > 1
     ? `${localPart[0]}${localPart[localPart.length - 1]}`.toUpperCase()
@@ -15,13 +22,14 @@
 </script>
 
 <button type="button" class="trigger" onclick={() => onopensettings()} aria-haspopup="dialog"
-  aria-label={$connected ? 'User menu — connected' : 'User menu — disconnected'}>
+  title={$connectionStatus}
+  aria-label={`User menu — ${menuStatus}`}>
   {#if $connected && $userAddress}
     <span class="avatar" aria-hidden="true">{initials}</span>
   {:else}
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
   {/if}
-  <span class="status-dot" class:connected={$connected} class:syncing={$syncing}></span>
+  <span class="status-dot" class:connected={$connectionStatus === 'Connected'} class:syncing={$connectionStatus === 'Syncing…'} class:unauthorized={$authorizationRequired}></span>
 </button>
 
 <style>
@@ -31,6 +39,7 @@
   .status-dot { position: absolute; right: -1px; bottom: 1px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--surface); background: var(--text-muted); }
   .status-dot.connected { background: var(--ok, #059669); }
   .status-dot.syncing { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+  .status-dot.unauthorized { background: var(--danger, #dc2626); }
   @keyframes pulse { 50% { opacity: 0.45; } }
   @media (prefers-reduced-motion: reduce) { .status-dot.syncing { animation: none; } }
 </style>

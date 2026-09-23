@@ -64,6 +64,28 @@ function clearBlobLoadFailed(filePath: string) {
 
 export const connected = writable(false);
 export const syncing = writable(false);
+// Keep the account and local data intact while authorization needs renewal.
+export const authorizationRequired = writable(false);
+const browserOnline = writable(
+  typeof navigator === 'undefined' || navigator.onLine,
+);
+const storageReachable = writable(true);
+export const connectionStatus = derived(
+  [connected, authorizationRequired, browserOnline, storageReachable, syncing],
+  ([
+    $connected,
+    $authorizationRequired,
+    $browserOnline,
+    $storageReachable,
+    $syncing,
+  ]) => {
+    if ($authorizationRequired) return 'Reconnect required';
+    if (!$connected) return 'Not connected';
+    if (!$browserOnline) return 'Offline';
+    if (!$storageReachable) return 'Storage unreachable';
+    return $syncing ? 'Syncing…' : 'Connected';
+  },
+);
 
 function readStoredUserAddress(): string {
   try {
@@ -440,7 +462,14 @@ async function loadConnectedData() {
 let syncTimeout: ReturnType<typeof setTimeout> | null = null;
 let syncVisibleUntil = 0;
 
+/** Show sync activity only while storage can receive requests. */
 function showSync() {
+  if (
+    get(authorizationRequired) ||
+    !get(browserOnline) ||
+    !get(storageReachable)
+  )
+    return;
   syncing.set(true);
   syncVisibleUntil = Date.now() + 1000;
   if (syncTimeout) clearTimeout(syncTimeout);
@@ -461,6 +490,29 @@ function hideSync() {
   }
 }
 
+/** Clear pending sync UI when authorization or connectivity is lost. */
+function stopSyncIndicator() {
+  if (syncTimeout) clearTimeout(syncTimeout);
+  syncTimeout = null;
+  syncVisibleUntil = 0;
+  syncing.set(false);
+}
+
+// Browser connectivity updates immediately; RS events also detect a server
+// that is unreachable even while the device itself remains online.
+if (typeof window !== 'undefined') {
+  window.addEventListener('offline', () => {
+    browserOnline.set(false);
+    stopSyncIndicator();
+  });
+  window.addEventListener('online', () => browserOnline.set(true));
+}
+rs.on('network-offline', () => {
+  storageReachable.set(false);
+  stopSyncIndicator();
+});
+rs.on('network-online', () => storageReachable.set(true));
+
 rs.on('wire-busy', showSync);
 rs.on('wire-done', () => {
   hideSync();
@@ -471,9 +523,28 @@ rs.on('sync-done', () => {
   markMigrationAlertReady();
 });
 
-rs.on('error', (e: unknown) => console.warn('[inbox] rs:error', e));
+rs.on('error', (e: unknown) => {
+  console.warn('[inbox] rs:error', e);
+  if (
+    typeof e === 'object' &&
+    e !== null &&
+    'name' in e &&
+    e.name === 'Unauthorized'
+  ) {
+    syncing.set(false);
+    if ('code' in e && e.code === 'access_denied') {
+      // OAuth callbacks pass per-tab state validation in rs.ts before RS sees
+      // them. Only a matching denial may take this destructive cleanup path.
+      rs.disconnect();
+    } else {
+      authorizationRequired.set(true);
+    }
+  }
+});
 
 rs.on('connected', async () => {
+  storageReachable.set(true);
+  authorizationRequired.set(false);
   connected.set(true);
   // The connected user's address lives on `rs.remote` once auth completes;
   // fall back to localStorage so we have something to display before sync.
@@ -488,6 +559,9 @@ rs.on('connected', async () => {
 });
 
 rs.on('disconnected', () => {
+  stopSyncIndicator();
+  storageReachable.set(true);
+  authorizationRequired.set(false);
   // Revoke all blob URLs to prevent memory leaks across reconnects / long sessions.
   // Bump the generation so any in-flight loadFileBlobUrl promises from
   // before this disconnect are ignored when they resolve (prevents stale

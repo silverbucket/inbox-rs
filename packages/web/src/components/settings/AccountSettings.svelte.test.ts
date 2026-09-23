@@ -19,6 +19,7 @@ vi.mock('../../lib/rs', () => ({
   default: {
     connect: vi.fn(),
     disconnect: vi.fn(),
+    reconnect: vi.fn(),
     on: vi.fn(),
     removeEventListener: vi.fn(),
   },
@@ -28,6 +29,8 @@ vi.mock('../../lib/stores', async () => {
   const { writable } = await import('svelte/store');
   return {
     connected: writable(false),
+    authorizationRequired: writable(false),
+    connectionStatus: writable('Not connected'),
     syncing: writable(false),
     userAddress: writable(''),
     userSettings: writable({}),
@@ -37,7 +40,14 @@ vi.mock('../../lib/stores', async () => {
 
 import type { Writable } from 'svelte/store';
 import { DEFAULT_SOCKETHUB_ENDPOINT } from '../../lib/link-metadata';
-import { connected, userSettings } from '../../lib/stores';
+import rs from '../../lib/rs';
+import {
+  authorizationRequired,
+  connected,
+  connectionStatus,
+  userAddress,
+  userSettings,
+} from '../../lib/stores';
 import AccountSettings from './AccountSettings.svelte';
 
 const w = <T>(store: unknown) => store as Writable<T>;
@@ -51,6 +61,9 @@ describe('AccountSettings Sockethub status', () => {
     vi.clearAllMocks();
     localStorage.clear();
     w<boolean>(connected).set(false);
+    w<boolean>(authorizationRequired).set(false);
+    w<string>(connectionStatus).set('Not connected');
+    w<string>(userAddress).set('');
     w<Record<string, unknown>>(userSettings).set({});
     fetchSockethubInfo.mockResolvedValue(null);
     host = document.createElement('div');
@@ -174,6 +187,44 @@ describe('AccountSettings Sockethub status', () => {
       'https://relay.example/sockethub-http',
     );
     expect(statusPill()?.textContent).toBe('API v6');
+  });
+
+  it('shows reconnect required state while keeping the connected account visible', () => {
+    w<boolean>(connected).set(true);
+    w<string>(userAddress).set('alice@example.com');
+    w<boolean>(authorizationRequired).set(true);
+    w<string>(connectionStatus).set('Reconnect required');
+    render();
+    const identityPill = host.querySelector(
+      '.identity .pill',
+    ) as HTMLSpanElement;
+    expect(identityPill?.textContent).toBe('Reconnect required');
+    expect(identityPill?.classList.contains('ok')).toBe(false);
+    expect(host.querySelectorAll('[role="alert"]')).toHaveLength(0);
+    const reconnectButton = Array.from(host.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Reconnect',
+    );
+    expect(reconnectButton).toBeDefined();
+    reconnectButton?.click();
+    expect(rs.reconnect).toHaveBeenCalledOnce();
+    expect(host.textContent).toContain('alice@example.com');
+  });
+
+  it('reports when reconnection cannot start from Account settings', () => {
+    w<boolean>(connected).set(true);
+    w<boolean>(authorizationRequired).set(true);
+    w<string>(connectionStatus).set('Reconnect required');
+    vi.mocked(rs.reconnect).mockImplementationOnce(() => {
+      throw new Error('Unavailable');
+    });
+    render();
+    Array.from(host.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Reconnect')
+      ?.click();
+    flushSync();
+    expect(host.querySelector('[role="status"]')?.textContent).toBe(
+      'Could not start reconnection. Please try again.',
+    );
   });
 
   it('invalidates an in-flight result as soon as the endpoint changes', async () => {
