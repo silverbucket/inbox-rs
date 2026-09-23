@@ -4,6 +4,7 @@ import InboxModule, {
 } from '@inbox-rs/rs-module';
 import SharesModule from 'remotestorage-module-shares';
 import RemoteStorage from 'remotestoragejs';
+import { beginOAuthAuthorization, guardOAuthCallback } from './oauth-state';
 
 /**
  * Shape of the remoteStorage instance once our modules are loaded.
@@ -49,10 +50,27 @@ export type RSWithModules = RemoteStorage & {
   remote: RSRemote;
 };
 
+if (typeof window !== 'undefined') guardOAuthCallback();
+
 const rs = new RemoteStorage({
   modules: [InboxModule, SharesModule],
   changeEvents: { local: true, window: false, remote: true, conflict: true },
 }) as RSWithModules;
+
+// The library forwards OAuth state but does not validate it on return.
+// Capture a per-tab nonce for every authorization redirect, including reconnect.
+const authorize = rs.authorize.bind(rs);
+/** Attach a per-tab callback nonce to every remoteStorage authorization. */
+rs.authorize = (options) => {
+  try {
+    const state = beginOAuthAuthorization(
+      options.state ?? window.location.hash.slice(1),
+    );
+    authorize({ ...options, state });
+  } catch (error) {
+    rs._emit('error', error);
+  }
+};
 
 rs.access.claim('inbox', 'rw');
 rs.access.claim('shares', 'rw');
