@@ -46,7 +46,16 @@
   const localPart = $derived($userAddress.split('@')[0] ?? '');
   const auto = $derived(localPart.length > 1 ? `${localPart[0]}${localPart.at(-1)}`.toUpperCase() : localPart.toUpperCase() || '?');
   let initials = $state('');
-  $effect(() => { initials = ($userSettings.abbreviation ?? '').slice(0, 2); });
+  // Mirror the stored abbreviation, but only when it actually changes: the
+  // store is replaced wholesale on every settings write, and an unrelated
+  // update mid-edit must not clobber what the user is typing.
+  let syncedAbbreviation: string | undefined;
+  $effect(() => {
+    const stored = ($userSettings.abbreviation ?? '').slice(0, 2);
+    if (stored === syncedAbbreviation) return;
+    syncedAbbreviation = stored;
+    initials = stored;
+  });
   $effect(() => { if (!$connected && !address) address = $userAddress; });
   $effect(() => { if (focusConnect && !$connected) void tick().then(() => connectInput?.focus()); });
   $effect(() => {

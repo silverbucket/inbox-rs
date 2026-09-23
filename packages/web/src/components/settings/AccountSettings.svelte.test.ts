@@ -316,6 +316,20 @@ describe('AccountSettings initials', () => {
     expect(input().value).toBe('AB');
   });
 
+  it('keeps an in-progress edit when an unrelated setting syncs', () => {
+    const field = input();
+    field.value = 'X';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+
+    w<Record<string, unknown>>(userSettings).set({
+      abbreviation: 'NJ',
+      theme: 'dark',
+    });
+    flushSync();
+    expect(field.value).toBe('X');
+  });
+
   it('does not snap back to the stored abbreviation while editing', () => {
     const field = input();
     field.value = 'N';
