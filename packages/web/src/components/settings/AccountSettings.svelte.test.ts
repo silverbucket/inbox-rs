@@ -315,4 +315,27 @@ describe('AccountSettings initials', () => {
     flushSync();
     expect(input().value).toBe('AB');
   });
+
+  it('does not snap back to the stored abbreviation while editing', () => {
+    const field = input();
+    field.value = 'N';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+    expect(field.value).toBe('N');
+  });
+
+  it('persists a new abbreviation on blur', () => {
+    const field = input();
+    field.value = 'xy';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+
+    field.dispatchEvent(new FocusEvent('blur'));
+    flushSync();
+
+    expect(field.value).toBe('XY');
+    expect(updateUserSettings).toHaveBeenCalledWith({
+      abbreviation: 'XY',
+    });
+  });
 });
