@@ -248,8 +248,13 @@ test('denying reauthorization clears the stale account and reconnect warning', a
     page.getByRole('button', { name: 'User menu — disconnected' }),
   ).toBeVisible();
   await expect(warning).toHaveCount(0);
+  await page.getByRole('button', { name: 'User menu — disconnected' }).click();
+  await page.getByRole('button', { name: /^Account — Not connected/ }).click();
   await expect(
-    page.getByRole('button', { name: 'Connect to your remoteStorage' }),
+    account.getByRole('textbox', { name: 'Storage address' }),
+  ).toBeVisible();
+  await expect(
+    account.getByRole('button', { name: 'Connect', exact: true }),
   ).toBeVisible();
   await page.reload();
   await expect(
