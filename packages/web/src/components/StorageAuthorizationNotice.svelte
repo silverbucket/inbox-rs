@@ -3,6 +3,7 @@
   import { authorizationRequired } from '../lib/stores';
 
   let reconnectError = $state('');
+  /** Start remoteStorage's OAuth reconnect flow and report startup failures. */
   function reconnect() {
     reconnectError = '';
     try {

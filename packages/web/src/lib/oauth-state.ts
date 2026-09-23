@@ -1,4 +1,4 @@
-/** Bind OAuth callbacks to a short-lived attempt in this browser tab. */
+// Bind OAuth callbacks to a short-lived attempt in this browser tab.
 const PENDING_KEY = 'inbox-rs:pending-oauth';
 const MAX_AGE_MS = 15 * 60 * 1000;
 const CALLBACK_KEYS = new Set([
@@ -20,7 +20,7 @@ type PendingAuthorization = {
   createdAt: number;
 };
 
-/** Store before redirecting; unavailable session storage must fail closed. */
+/** Store a callback nonce before redirecting; unavailable storage fails closed. */
 export function beginOAuthAuthorization(returnState: string): string {
   const state = crypto.randomUUID();
   const pending: PendingAuthorization = {

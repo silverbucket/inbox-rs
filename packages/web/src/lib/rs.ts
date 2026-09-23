@@ -339,6 +339,7 @@ const rs = new RemoteStorage({
 // The library forwards OAuth state but does not validate it on return.
 // Capture a per-tab nonce for every authorization redirect, including reconnect.
 const authorize = rs.authorize.bind(rs);
+/** Attach a per-tab callback nonce to every remoteStorage authorization. */
 rs.authorize = (options) => {
   try {
     const state = beginOAuthAuthorization(

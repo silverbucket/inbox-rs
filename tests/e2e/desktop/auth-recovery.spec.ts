@@ -5,6 +5,7 @@ import { seedRsSession } from '../helpers/pwa';
 
 // Use actual OAuth, not seedRsSession: its init script overwrites credentials
 // on every navigation and would hide callback/reload regressions.
+/** Start a real OAuth flow from the disconnected account form. */
 async function beginConnect(page: Page, origin: string, user: RsUser) {
   await page.goto(origin);
   await page.getByRole('button', { name: 'User menu — disconnected' }).click();
@@ -14,6 +15,7 @@ async function beginConnect(page: Page, origin: string, user: RsUser) {
   await page.waitForURL(/^http:\/\/localhost:8000\/oauth\//);
 }
 
+/** Grant access at the test storage server and wait for app connection. */
 async function allow(page: Page, origin: string, user: RsUser) {
   await page.locator('input[name="password"]').fill(user.password);
   await page.locator('button[name="allow"]').click();
@@ -23,6 +25,7 @@ async function allow(page: Page, origin: string, user: RsUser) {
   ).toBeVisible();
 }
 
+/** Save a note through the app and wait for it to appear in the local view. */
 async function capture(page: Page, title: string) {
   const input = page.getByPlaceholder(
     'Paste a link, jot a note, or drop a file…',

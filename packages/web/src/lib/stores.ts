@@ -462,6 +462,7 @@ async function loadConnectedData() {
 let syncTimeout: ReturnType<typeof setTimeout> | null = null;
 let syncVisibleUntil = 0;
 
+/** Show sync activity only while storage can receive requests. */
 function showSync() {
   if (
     get(authorizationRequired) ||
@@ -489,6 +490,7 @@ function hideSync() {
   }
 }
 
+/** Clear pending sync UI when authorization or connectivity is lost. */
 function stopSyncIndicator() {
   if (syncTimeout) clearTimeout(syncTimeout);
   syncTimeout = null;
