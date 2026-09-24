@@ -164,7 +164,22 @@ jobs:
           mkdir -p ~/.ssh
           echo "$FIVEAPPS_DEPLOY_KEY" > ~/.ssh/5apps_key
           chmod 600 ~/.ssh/5apps_key
-          ssh-keyscan -H 5apps.com >> ~/.ssh/known_hosts
+          # 5apps' SSH server intermittently closes connections or stalls past
+          # ssh-keyscan's default 5s timeout; one empty scan has already sunk a
+          # release. Retry, and require at least one key before continuing.
+          for attempt in {1..5}; do
+            ssh-keyscan -T 15 -H 5apps.com > ~/.ssh/5apps_hosts 2>/dev/null || true
+            if [ -s ~/.ssh/5apps_hosts ]; then
+              cat ~/.ssh/5apps_hosts >> ~/.ssh/known_hosts
+              break
+            fi
+            echo "ssh-keyscan 5apps.com returned no keys (attempt $attempt/5), retrying..."
+            sleep $((attempt * 5))
+          done
+          if ! [ -s ~/.ssh/5apps_hosts ]; then
+            echo "::error::Could not fetch 5apps.com host keys after 5 attempts."
+            exit 1
+          fi
           echo -e "Host 5apps.com\n  IdentityFile ~/.ssh/5apps_key" >> ~/.ssh/config
 
       - name: Deploy to 5apps
@@ -190,7 +205,35 @@ jobs:
           git commit -m "deploy v${VERSION} [skip ci]"
 
           SPLIT_SHA=$(git subtree split --prefix=packages/web/dist)
-          git push 5apps "$SPLIT_SHA":refs/heads/master --force
+          # 5apps.com has been seen dropping the SSH session mid-push, so the
+          # push is retried. The build above carried forward assets from the
+          # 5apps/master we fetched, so that fetched SHA is the only remote
+          # state this deploy may replace: a lease on it means neither the
+          # first attempt nor a retry can clobber a deploy that landed in
+          # between. A retry that finds the ref already at SPLIT_SHA means an
+          # earlier attempt actually got through and is treated as success.
+          EXPECTED_SHA=$(git rev-parse refs/remotes/5apps/master)
+          for attempt in {1..5}; do
+            if git push 5apps "$SPLIT_SHA":refs/heads/master \
+                --force-with-lease=refs/heads/master:"$EXPECTED_SHA"; then
+              break
+            fi
+            REMOTE_SHA=$(git ls-remote 5apps refs/heads/master 2>/dev/null | cut -f1 || true)
+            if [ "$REMOTE_SHA" = "$SPLIT_SHA" ]; then
+              echo "5apps/master is already at $SPLIT_SHA from an earlier attempt."
+              break
+            fi
+            if [ -n "$REMOTE_SHA" ] && [ "$REMOTE_SHA" != "$EXPECTED_SHA" ]; then
+              echo "::error::5apps/master moved to $REMOTE_SHA (expected $EXPECTED_SHA) while this deploy was running. Refusing to overwrite it; re-dispatch to deploy on top of it."
+              exit 1
+            fi
+            if [ "$attempt" = 5 ]; then
+              echo "::error::Push to 5apps failed after 5 attempts."
+              exit 1
+            fi
+            echo "Push to 5apps failed (attempt $attempt/5), retrying..."
+            sleep $((attempt * 10))
+          done
 
           # Return to master; the deploy branch is local-only and discarded.
           git checkout master
