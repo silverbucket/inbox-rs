@@ -164,7 +164,22 @@ jobs:
           mkdir -p ~/.ssh
           echo "$FIVEAPPS_DEPLOY_KEY" > ~/.ssh/5apps_key
           chmod 600 ~/.ssh/5apps_key
-          ssh-keyscan -H 5apps.com >> ~/.ssh/known_hosts
+          # 5apps' SSH server intermittently closes connections or stalls past
+          # ssh-keyscan's default 5s timeout; one empty scan has already sunk a
+          # release. Retry, and require at least one key before continuing.
+          for attempt in {1..5}; do
+            ssh-keyscan -T 15 -H 5apps.com > ~/.ssh/5apps_hosts 2>/dev/null || true
+            if [ -s ~/.ssh/5apps_hosts ]; then
+              cat ~/.ssh/5apps_hosts >> ~/.ssh/known_hosts
+              break
+            fi
+            echo "ssh-keyscan 5apps.com returned no keys (attempt $attempt/5), retrying..."
+            sleep $((attempt * 5))
+          done
+          if ! [ -s ~/.ssh/5apps_hosts ]; then
+            echo "::error::Could not fetch 5apps.com host keys after 5 attempts."
+            exit 1
+          fi
           echo -e "Host 5apps.com\n  IdentityFile ~/.ssh/5apps_key" >> ~/.ssh/config
 
       - name: Deploy to 5apps
