@@ -109,11 +109,27 @@ jobs:
           git commit -m "deploy ${BRANCH} to staging [skip ci]"
 
           SPLIT_SHA=$(git subtree split --prefix=packages/web/dist)
-          # 5apps.com has been seen dropping the SSH session mid-push. A force
-          # push of a fixed SHA is idempotent, so retry rather than fail the run.
+          # 5apps.com has been seen dropping the SSH session mid-push, so the
+          # push is retried. The build above carried forward assets from the
+          # 5apps-staging/master we fetched, so that fetched SHA is the only remote
+          # state this deploy may replace: a lease on it means neither the
+          # first attempt nor a retry can clobber a deploy that landed in
+          # between. A retry that finds the ref already at SPLIT_SHA means an
+          # earlier attempt actually got through and is treated as success.
+          EXPECTED_SHA=$(git rev-parse refs/remotes/5apps-staging/master)
           for attempt in {1..5}; do
-            if git push 5apps-staging "$SPLIT_SHA":refs/heads/master --force; then
+            if git push 5apps-staging "$SPLIT_SHA":refs/heads/master \
+                --force-with-lease=refs/heads/master:"$EXPECTED_SHA"; then
               break
+            fi
+            REMOTE_SHA=$(git ls-remote 5apps-staging refs/heads/master 2>/dev/null | cut -f1 || true)
+            if [ "$REMOTE_SHA" = "$SPLIT_SHA" ]; then
+              echo "5apps-staging/master is already at $SPLIT_SHA from an earlier attempt."
+              break
+            fi
+            if [ -n "$REMOTE_SHA" ] && [ "$REMOTE_SHA" != "$EXPECTED_SHA" ]; then
+              echo "::error::5apps-staging/master moved to $REMOTE_SHA (expected $EXPECTED_SHA) while this deploy was running. Refusing to overwrite it; re-dispatch to deploy on top of it."
+              exit 1
             fi
             if [ "$attempt" = 5 ]; then
               echo "::error::Push to 5apps-staging failed after 5 attempts."
