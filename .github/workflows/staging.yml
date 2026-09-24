@@ -109,4 +109,16 @@ jobs:
           git commit -m "deploy ${BRANCH} to staging [skip ci]"
 
           SPLIT_SHA=$(git subtree split --prefix=packages/web/dist)
-          git push 5apps-staging "$SPLIT_SHA":refs/heads/master --force
+          # 5apps.com has been seen dropping the SSH session mid-push. A force
+          # push of a fixed SHA is idempotent, so retry rather than fail the run.
+          for attempt in {1..5}; do
+            if git push 5apps-staging "$SPLIT_SHA":refs/heads/master --force; then
+              break
+            fi
+            if [ "$attempt" = 5 ]; then
+              echo "::error::Push to 5apps-staging failed after 5 attempts."
+              exit 1
+            fi
+            echo "Push to 5apps-staging failed (attempt $attempt/5), retrying..."
+            sleep $((attempt * 10))
+          done

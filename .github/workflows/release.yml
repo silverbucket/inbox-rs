@@ -205,7 +205,19 @@ jobs:
           git commit -m "deploy v${VERSION} [skip ci]"
 
           SPLIT_SHA=$(git subtree split --prefix=packages/web/dist)
-          git push 5apps "$SPLIT_SHA":refs/heads/master --force
+          # 5apps.com has been seen dropping the SSH session mid-push. A force
+          # push of a fixed SHA is idempotent, so retry rather than fail the run.
+          for attempt in {1..5}; do
+            if git push 5apps "$SPLIT_SHA":refs/heads/master --force; then
+              break
+            fi
+            if [ "$attempt" = 5 ]; then
+              echo "::error::Push to 5apps failed after 5 attempts."
+              exit 1
+            fi
+            echo "Push to 5apps failed (attempt $attempt/5), retrying..."
+            sleep $((attempt * 10))
+          done
 
           # Return to master; the deploy branch is local-only and discarded.
           git checkout master
