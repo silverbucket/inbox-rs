@@ -192,6 +192,10 @@
       use:dragHandleZone={{
         items: dndOpen,
         flipDurationMs: 200,
+        // The grip is at the left edge of a wide row. Follow the pointer so
+        // a diagonal drag inside the list isn't rejected when the row's
+        // centre extends beyond the zone.
+        useCursorForDetection: true,
         dropTargetStyle: {},
         // No `dragDisabled` — see the note in SidebarShell. Every
         // `dragHandleZone` shares one module-global copy of that flag, so
