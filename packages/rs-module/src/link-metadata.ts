@@ -132,6 +132,7 @@ export function normalizeMetadata(
 export async function fetchLinkMetadata(
   url: string,
   endpoint: string = DEFAULT_SOCKETHUB_ENDPOINT,
+  signal: AbortSignal = AbortSignal.timeout(FETCH_TIMEOUT_MS),
 ): Promise<LinkMetadata | null> {
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -144,7 +145,7 @@ export async function fetchLinkMetadata(
       type: 'fetch',
       actor: { id: url, type: 'website' },
     }),
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    signal,
   });
   if (!response.ok) {
     throw new Error(`Metadata server responded with ${response.status}`);

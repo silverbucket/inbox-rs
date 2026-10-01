@@ -1,12 +1,9 @@
 <script lang="ts">
-  import {
-    DEFAULT_SOCKETHUB_ENDPOINT,
-    fetchLinkMetadata,
-    type LinkMetadata,
-  } from '@inbox-rs/rs-module';
+  import type { LinkMetadata } from '@inbox-rs/rs-module';
   import browser from 'webextension-polyfill';
   import { DirectRS } from '../lib/rs';
   import { getConfig } from '../lib/storage';
+  import { fetchPageMetadataForSave } from './page-metadata';
   import { isImageUrl } from './save-logic';
   import { runSavePage, runSaveNote } from './save-orchestrator';
 
@@ -19,7 +16,6 @@
   let rs: DirectRS | null = null;
   let tabId: number | null = null;
   let mode = $state<Mode>('page');
-  let metadataLookup: Promise<LinkMetadata | null> = Promise.resolve(null);
 
   // Page mode fields
   let pageTitle = $state('');
@@ -54,16 +50,6 @@
       rs = new DirectRS(config);
       connected = true;
 
-      metadataLookup = rs
-        .getUserSettings()
-        .catch(() => ({}))
-        .then((settings) => {
-          if (settings.linkPreviews === false || !pageUrl) return null;
-          const endpoint =
-            settings.sockethubUrl?.trim() || DEFAULT_SOCKETHUB_ENDPOINT;
-          return fetchLinkMetadata(pageUrl, endpoint).catch(() => null);
-        });
-
       if (tabId) {
         try {
           const meta = await browser.tabs.sendMessage(tabId, { type: 'get-metadata' });
@@ -86,8 +72,6 @@
       if (!isDirectImage && isImageUrl(pageUrl)) {
         isDirectImage = true;
       }
-
-      void metadataLookup.then(applyFetchedMetadata);
     }
   }
 
@@ -110,7 +94,7 @@
     saving = true;
     saveError = '';
     try {
-      applyFetchedMetadata(await metadataLookup);
+      applyFetchedMetadata(await fetchPageMetadataForSave(rs, pageUrl));
       const result = await runSavePage({
         rs, pageUrl, pageTitle, pageNote, pageDescription,
         embeddedContent, tweetImages, ogImage, favicon, siteName, isDirectImage,
