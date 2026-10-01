@@ -15,6 +15,8 @@
  * so it stays consistent across packages and is independently testable.
  */
 
+import type { UserSettings } from './types.js';
+
 /** Persisted storage configuration. */
 export interface RSConfig {
   userAddress: string;
@@ -238,6 +240,21 @@ export class DirectRS {
 
   private url(path: string): string {
     return `${this.href}/inbox/${path}`;
+  }
+
+  /** GET a JSON object from `inbox/<path>`. A missing object is undefined. */
+  async getObject<T extends object>(path: string): Promise<T | undefined> {
+    const response = await this.fetchImpl(this.url(path), {
+      headers: this.headers,
+    });
+    if (response.status === 404) return undefined;
+    if (!response.ok) throw new Error(`Get failed: ${response.status}`);
+    return (await response.json()) as T;
+  }
+
+  /** Read the settings shared with the web app. */
+  async getUserSettings(): Promise<UserSettings> {
+    return (await this.getObject<UserSettings>('config/user')) ?? {};
   }
 
   /** PUT a JSON object to `inbox/<path>`. Throws on non-2xx. */

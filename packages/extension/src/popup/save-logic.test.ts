@@ -310,6 +310,7 @@ describe('saveAsBookmark', () => {
     await saveAsBookmark({
       rs,
       ...baseParams,
+      pageUrl: 'https://x.com/example/status/123',
       tweetImages: ['https://pbs.twimg.com/media/abc.jpg'],
       ogImage: 'https://pbs.twimg.com/generic-card.jpg',
       embeddedContent: 'Tweet text here',
@@ -320,6 +321,28 @@ describe('saveAsBookmark', () => {
         url: 'https://pbs.twimg.com/media/abc.jpg',
       }),
     );
+  });
+
+  it('downloads og:image for Reddit posts that also have embedded text', async () => {
+    mockSendMessage.mockResolvedValue({ ok: true, mimeType: 'image/png' });
+    mockFetch.mockResolvedValue({ ok: true });
+
+    const rs = makeRS();
+    const result = await saveAsBookmark({
+      rs,
+      ...baseParams,
+      pageUrl: 'https://www.reddit.com/r/test/comments/abc/post/',
+      embeddedContent: 'The Reddit post body',
+      ogImage: 'https://i.redd.it/example.png',
+    });
+
+    expect(mockSendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'https://i.redd.it/example.png',
+      }),
+    );
+    expect(result.filePath).toBeDefined();
+    expect(result.body).toBe('The Reddit post body');
   });
 
   it('filters out placeholder og:images', async () => {

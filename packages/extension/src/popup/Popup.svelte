@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    DEFAULT_SOCKETHUB_ENDPOINT,
+    fetchLinkMetadata,
+    type LinkMetadata,
+  } from '@inbox-rs/rs-module';
   import browser from 'webextension-polyfill';
   import { DirectRS } from '../lib/rs';
   import { getConfig } from '../lib/storage';
@@ -14,6 +19,7 @@
   let rs: DirectRS | null = null;
   let tabId: number | null = null;
   let mode = $state<Mode>('page');
+  let metadataLookup: Promise<LinkMetadata | null> = Promise.resolve(null);
 
   // Page mode fields
   let pageTitle = $state('');
@@ -48,6 +54,16 @@
       rs = new DirectRS(config);
       connected = true;
 
+      metadataLookup = rs
+        .getUserSettings()
+        .catch(() => ({}))
+        .then((settings) => {
+          if (settings.linkPreviews === false || !pageUrl) return null;
+          const endpoint =
+            settings.sockethubUrl?.trim() || DEFAULT_SOCKETHUB_ENDPOINT;
+          return fetchLinkMetadata(pageUrl, endpoint).catch(() => null);
+        });
+
       if (tabId) {
         try {
           const meta = await browser.tabs.sendMessage(tabId, { type: 'get-metadata' });
@@ -70,7 +86,18 @@
       if (!isDirectImage && isImageUrl(pageUrl)) {
         isDirectImage = true;
       }
+
+      void metadataLookup.then(applyFetchedMetadata);
     }
+  }
+
+  function applyFetchedMetadata(meta: LinkMetadata | null) {
+    if (!meta) return;
+    if (meta.title && (!pageTitle || pageTitle === pageUrl)) pageTitle = meta.title;
+    if (meta.description && !pageDescription) pageDescription = meta.description;
+    if (meta.image && !ogImage) ogImage = meta.image;
+    if (meta.favicon && !favicon) favicon = meta.favicon;
+    if (meta.siteName && !siteName) siteName = meta.siteName;
   }
 
   function openSetup() {
@@ -83,6 +110,7 @@
     saving = true;
     saveError = '';
     try {
+      applyFetchedMetadata(await metadataLookup);
       const result = await runSavePage({
         rs, pageUrl, pageTitle, pageNote, pageDescription,
         embeddedContent, tweetImages, ogImage, favicon, siteName, isDirectImage,

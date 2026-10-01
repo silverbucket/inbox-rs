@@ -26,11 +26,19 @@ function getMetadata() {
   const host = location.hostname.replace(/^www\./, '');
   const tweetImages =
     host === 'twitter.com' || host === 'x.com' ? extractTweetImages() : [];
+  const redditImage =
+    host === 'reddit.com' || host.endsWith('.reddit.com')
+      ? extractRedditImage()
+      : undefined;
 
   return {
     title: getMeta('og:title') || document.title || '',
     description: getMeta('og:description') || getMeta('description') || '',
-    ogImage: getMeta('og:image') || getMeta('twitter:image') || undefined,
+    ogImage:
+      getMeta('og:image') ||
+      getMeta('twitter:image') ||
+      redditImage ||
+      undefined,
     siteName: getMeta('og:site_name') || undefined,
     contentType: document.contentType,
     favicon,
@@ -59,7 +67,7 @@ function getEmbeddedContent(): string | undefined {
   // Reddit
   if (host === 'reddit.com' || host.endsWith('.reddit.com')) {
     const postBody = document.querySelector(
-      '[data-click-id="text"] .md, .RichTextJSON-root, shreddit-post',
+      '[data-click-id="text"] .md, .RichTextJSON-root, shreddit-post div[id$="-post-rtjson-content"], shreddit-post [slot="text-body"] .md',
     );
     if (postBody) return postBody.textContent?.trim() || undefined;
   }
@@ -71,6 +79,23 @@ function getEmbeddedContent(): string | undefined {
   }
 
   return undefined;
+}
+
+/** Extract the canonical image from Reddit's modern custom-element markup. */
+function extractRedditImage(): string | undefined {
+  const post = document.querySelector(
+    'shreddit-post[post-type="image"][content-href]',
+  );
+  const value = post?.getAttribute('content-href');
+  if (!value) return undefined;
+  try {
+    const url = new URL(value, location.href);
+    return url.protocol === 'http:' || url.protocol === 'https:'
+      ? url.href
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Extract tweet text and images from Twitter/X */
