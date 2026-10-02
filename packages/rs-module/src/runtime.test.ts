@@ -477,6 +477,45 @@ describe('DirectRS', () => {
     });
   });
 
+  describe('getObject', () => {
+    it('GETs JSON with bearer auth', async () => {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ sockethubUrl: 'https://relay.test' }),
+        );
+      const rs = new DirectRS(config, fetchImpl);
+
+      await expect(rs.getUserSettings()).resolves.toEqual({
+        sockethubUrl: 'https://relay.test',
+      });
+      expect(fetchImpl).toHaveBeenCalledWith(
+        'https://storage.example.com/storage/alice/inbox/config/user',
+        {
+          headers: { Authorization: 'Bearer tok' },
+        },
+      );
+    });
+
+    it('returns empty user settings when config/user does not exist', async () => {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(emptyResponse({ ok: false, status: 404 }));
+      const rs = new DirectRS(config, fetchImpl);
+
+      await expect(rs.getUserSettings()).resolves.toEqual({});
+    });
+
+    it('throws on non-404 failures', async () => {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(emptyResponse({ ok: false, status: 401 }));
+      const rs = new DirectRS(config, fetchImpl);
+
+      await expect(rs.getUserSettings()).rejects.toThrow('Get failed: 401');
+    });
+  });
+
   describe('storeFile', () => {
     it('PUTs binary body with the supplied MIME type', async () => {
       const fetchImpl = vi.fn().mockResolvedValue(emptyResponse());
