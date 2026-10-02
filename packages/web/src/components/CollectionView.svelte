@@ -442,6 +442,9 @@
             use:dragHandleZone={{
               items: dndOpen,
               flipDurationMs: 200,
+              // A wide row's centre can leave the zone while its left-hand
+              // grip is still over a valid slot. Detect drops at the pointer.
+              useCursorForDetection: true,
               dropTargetStyle: {},
               // No `dragDisabled` — see the note in SidebarShell. Every
               // `dragHandleZone` shares one module-global copy of that flag,
