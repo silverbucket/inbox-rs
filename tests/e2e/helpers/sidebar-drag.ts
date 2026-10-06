@@ -428,6 +428,10 @@ export async function dragCollectionOntoGroup(
  * centre outside the zone and the library reverted the reorder as "dropped
  * outside of any". Tests that stop neatly on the target never see it.
  *
+ * `overshootAbovePx` is the mirror image for moving something to the *top* of
+ * a list: release that far above the target's top edge (negative values land
+ * inside the target, below its top edge).
+ *
  * `aimFraction` moves horizontally across the target (0.75 is three quarters
  * across). Omit it to keep the pointer aligned with the source grip.
  *
@@ -440,16 +444,21 @@ export async function dragGripPast(
   target: Locator,
   {
     overshootPx = 0,
+    overshootAbovePx = 0,
     aimFraction,
     whileHeld,
   }: {
     overshootPx?: number;
+    overshootAbovePx?: number;
     aimFraction?: number;
     whileHeld?: () => Promise<void>;
   } = {},
 ): Promise<void> {
   const from = await boxOf(handle, 'the drag handle');
   const to = await boxOf(target, 'the reorder target');
+  let y = to.y + to.height / 2;
+  if (overshootPx) y = to.y + to.height + overshootPx;
+  else if (overshootAbovePx) y = to.y - overshootAbovePx;
   await steppedDrag(
     page,
     { x: from.x + from.width / 2, y: from.y + from.height / 2 },
@@ -458,7 +467,7 @@ export async function dragGripPast(
         aimFraction === undefined
           ? from.x + from.width / 2
           : to.x + to.width * aimFraction,
-      y: overshootPx ? to.y + to.height + overshootPx : to.y + to.height / 2,
+      y,
     },
     whileHeld,
   );
