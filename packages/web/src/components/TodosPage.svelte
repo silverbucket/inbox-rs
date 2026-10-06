@@ -1,8 +1,9 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
-  import { dragHandleZone } from 'svelte-dnd-action';
+  import { type DndEvent, dragHandleZone } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import { slide, fade } from 'svelte/transition';
+  import { createDndLeaveGuard } from '../lib/dnd-leave-guard';
   import { createReorderFade } from '../lib/reorder-fade';
   import {
     visibleTodos, visibleOnCalendarTodos, reorderTodosGlobal,
@@ -89,12 +90,19 @@
   // lingering outro copy makes svelte-dnd-action lose the row it is carrying.
   const reorderFade = createReorderFade();
 
-  function handleDndConsider(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
+  // A two-row list is barely taller than the row being carried, so dragging
+  // one todo above the other takes the pointer out of the list; the library
+  // would revert the order and the drop would snap back.
+  const leaveGuard = createDndLeaveGuard();
+
+  function handleDndConsider(e: CustomEvent<DndEvent<InboxItem & { id: string }>>) {
+    if (leaveGuard.ignores(e.detail.info)) return;
     reorderFade.start();
     dndOpen = e.detail.items;
   }
 
-  async function handleDndFinalize(e: CustomEvent<{ items: Array<InboxItem & { id: string }> }>) {
+  async function handleDndFinalize(e: CustomEvent<DndEvent<InboxItem & { id: string }>>) {
+    leaveGuard.reset();
     const previous = restOpenTodos.map(t => ({ ...t }));
     dndOpen = e.detail.items;
     await reorderFade.end();
