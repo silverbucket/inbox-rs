@@ -11,6 +11,7 @@
     writeCardDraft,
     type CardDraft,
   } from '../lib/card-draft';
+  import { syncEntry } from '../lib/schedule-sync';
   import { storeItem } from '../lib/stores';
   import MarkdownContentField from './add-entry/MarkdownContentField.svelte';
 
@@ -85,9 +86,11 @@
     const snapshot = $state.snapshot(draft);
     const target = currentItem;
     status = 'saving';
-    savePromise = storeItem(applyCardDraft(target, snapshot));
+    const updated = applyCardDraft(target, snapshot);
+    savePromise = storeItem(updated);
     try {
       await savePromise;
+      scheduleCalendarSync(target, updated);
       if (revision === savingRevision) {
         persistedRevision = savingRevision;
         syncedDraft = structuredClone(snapshot);
@@ -104,6 +107,39 @@
     } finally {
       savePromise = null;
     }
+  }
+
+  // ── Calendar entry follows title/notes edits ─────────────────────────
+  // Autosave fires on every typing pause; the relay round-trip is slower
+  // and shouldn't run per pause, so the calendar sync trails the last save
+  // by a few seconds. Only the fields the
+  // entry shows matter; the sync layer reads the latest stored card.
+  let calendarTimer: ReturnType<typeof setTimeout> | undefined;
+  let calendarPrev: InboxItem | undefined;
+
+  function entryFieldsChanged(prev: InboxItem, next: InboxItem): boolean {
+    return (
+      prev.title !== next.title ||
+      prev.description !== next.description ||
+      (prev.type === 'bookmark' && next.type === 'bookmark' && prev.url !== next.url)
+    );
+  }
+
+  function scheduleCalendarSync(prev: InboxItem, next: InboxItem) {
+    if (!next.eventUrl || !next.startsAt || !entryFieldsChanged(prev, next)) return;
+    calendarPrev ??= prev;
+    if (calendarTimer) clearTimeout(calendarTimer);
+    calendarTimer = setTimeout(runCalendarSync, 2500);
+  }
+
+  function runCalendarSync() {
+    calendarTimer = undefined;
+    const prev = calendarPrev;
+    calendarPrev = undefined;
+    if (!prev) return;
+    // currentItem has been updated with every store write in between, so
+    // this is the card as last saved, not as it was when typing started.
+    void syncEntry(prev, currentItem);
   }
 
   flush = persist;
@@ -125,6 +161,10 @@
   // draft, where it never synced until this exact card was reopened on this
   // exact device. Fire the save instead; storeItem outlives the component.
   onDestroy(() => {
+    // The trailing calendar sync outlives the component like the save does
+    // (a pending save re-arms it after it lands). Only a deleted card
+    // cancels it.
+    if (discarded && calendarTimer) clearTimeout(calendarTimer);
     if (discarded || !hasPendingEdit()) {
       if (saveTimer) clearTimeout(saveTimer);
       return;

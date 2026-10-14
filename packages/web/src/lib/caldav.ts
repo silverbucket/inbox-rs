@@ -17,10 +17,14 @@
  * - client-supplied UIDs are allowed — we always use `<itemId>@inbox-rs`
  * - failures arrive as machine-readable `caldav:*` codes
  *
- * This client only discovers calendars and CREATES entries. Publishing is
- * one-shot by design — no updates, no deletes (see note at end of file).
+ * Entries are a live projection of the card: created when a timed card is
+ * put on a calendar, updated when its time/title/completion changes, and
+ * deleted when it is taken off (or loses its time). Every entry carries a
+ * URL back to the card and an alarm at the scheduled moment, so the
+ * calendar app does the notifying this PWA cannot do while closed.
  */
 import type { InboxItem } from '@inbox-rs/rs-module';
+import { cardLink } from './route';
 import { toDateInputValue } from './schedule';
 
 export const CALDAV_CONTEXT = [
@@ -200,13 +204,20 @@ export function itemToCalendarObject(
   const when = allDay
     ? toDateInputValue(new Date(item.startsAt))
     : item.startsAt;
+  // The entry's URL is the link back to the card. A bookmark's own link
+  // moves into the notes so it is still one tap away in the calendar app.
+  const bookmarkUrl = item.type === 'bookmark' ? item.url : undefined;
+  const content = [item.description, bookmarkUrl].filter(Boolean).join('\n\n');
   const base: Record<string, unknown> = {
     type: isTask ? 'task' : 'event',
     uid: uidFor(item),
     name: item.title || 'Untitled',
+    url: cardLink(item.id),
     ...(allDay ? { allDay: true } : {}),
-    ...(item.description ? { content: item.description } : {}),
-    ...(item.type === 'bookmark' && item.url ? { url: item.url } : {}),
+    ...(content ? { content } : {}),
+    // Alarm at the moment itself; all-day entries ring at 09:00 local, the
+    // same hour the in-app alert scheduler uses.
+    reminders: [{ trigger: allDay ? 'PT9H' : 'PT0S', action: 'display' }],
   };
   if (isTask) {
     base.due = when;
@@ -254,8 +265,52 @@ export async function createEntry(
   return mutationResult(result);
 }
 
-// There are deliberately no update or delete operations here. Publishing is
-// one-shot: inbox-rs only ever ADDS entries to the user's calendar, and only
-// on explicit request. Entries must never change or disappear because a card
-// was edited in the app. (The sockethub platform supports update/delete; this
-// client intentionally does not.)
+/**
+ * Replace the item's entry in place (etag-checked — `caldav:conflict` means
+ * another client edited the entry since we last wrote it).
+ */
+export async function updateEntry(
+  creds: CaldavCredentials,
+  calendarId: string,
+  item: InboxItem,
+  endpoint: string,
+): Promise<PostedEntry> {
+  const object = itemToCalendarObject(item);
+  if (!object) throw new CaldavError('item has no schedule');
+  if (!item.eventUrl) throw new CaldavError('item has no calendar entry');
+  const result = await send(
+    creds,
+    {
+      type: 'update',
+      target: { id: calendarId, type: 'calendar' },
+      object: { ...object, id: item.eventUrl, etag: item.eventEtag ?? '' },
+    },
+    ['update'],
+    endpoint,
+  );
+  return mutationResult(result);
+}
+
+/** Remove the item's entry (etag-checked like update). */
+export async function deleteEntry(
+  creds: CaldavCredentials,
+  calendarId: string,
+  item: InboxItem,
+  endpoint: string,
+): Promise<void> {
+  if (!item.eventUrl) return;
+  await send(
+    creds,
+    {
+      type: 'delete',
+      target: { id: calendarId, type: 'calendar' },
+      object: {
+        id: item.eventUrl,
+        type: item.scheduleKind === 'task' ? 'task' : 'event',
+        etag: item.eventEtag ?? '',
+      },
+    },
+    ['delete'],
+    endpoint,
+  );
+}

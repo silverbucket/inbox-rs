@@ -8,10 +8,14 @@
     accountEndpoint,
     addCalendarAccount,
     calendarAccounts,
+    calendarSyncPrefs,
     removeCalendarAccount,
     updateCalendarAccount,
+    updateCalendarSyncPref,
+    visibleCalendarChoices,
     type CalendarAccount,
   } from '../lib/calendar-accounts';
+  import type { ScheduleKind } from '../lib/schedule';
   import { trapFocusWhen } from '../lib/actions';
   import { resolveSockethubEndpoint } from '../lib/enrich';
   import { DEFAULT_SOCKETHUB_ENDPOINT } from '../lib/link-metadata';
@@ -61,6 +65,34 @@
     }
   });
   const isCustomRelay = $derived(connectEndpoint !== DEFAULT_SOCKETHUB_ENDPOINT);
+
+  // ── Sync preferences: one row per kind (cards → events, todos → tasks).
+  const SYNC_ROWS: Array<{ kind: ScheduleKind; label: string; desc: string }> = [
+    {
+      kind: 'event',
+      label: 'Cards with a time',
+      desc: 'Reference cards sync as events.',
+    },
+    {
+      kind: 'task',
+      label: 'Todos with a due date',
+      desc: 'Todos sync as tasks (Reminders on iOS).',
+    },
+  ];
+  const choicesFor = (kind: ScheduleKind) =>
+    visibleCalendarChoices($calendarAccounts).filter((c) =>
+      c.calendar.components.includes(kind),
+    );
+  function setSyncCalendar(kind: ScheduleKind, calendarId: string) {
+    updateCalendarSyncPref(kind, { calendarId: calendarId || undefined });
+  }
+  function toggleAuto(kind: ScheduleKind) {
+    const pref = $calendarSyncPrefs[kind];
+    const next = !pref.auto;
+    // Turning auto on needs a target: fall back to the first capable calendar.
+    const calendarId = pref.calendarId ?? choicesFor(kind)[0]?.calendar.id;
+    updateCalendarSyncPref(kind, { auto: next && !!calendarId, calendarId });
+  }
 
   /** Accept a bare host ("caldav.fastmail.com") — discovery wants a URL. */
   function normalizeUrl(raw: string): string {
@@ -145,13 +177,6 @@
     updateCalendarAccount(account.id, { hiddenCalendarIds: [...hidden] });
   }
 
-  function toggleDefault(account: CalendarAccount, calendarId: string) {
-    updateCalendarAccount(account.id, {
-      defaultCalendarId:
-        account.defaultCalendarId === calendarId ? undefined : calendarId,
-    });
-  }
-
   function handleRemove(accountId: string) {
     if (confirmRemoveId !== accountId) {
       confirmRemoveId = accountId;
@@ -195,12 +220,56 @@
       </button>
     </div>
     <p class="sub">
-      Scheduled cards can post straight to your calendar over CalDAV, relayed
-      through <a href="https://sockethub.org" target="_blank" rel="noreferrer">Sockethub</a>'s
+      Timed cards sync to your calendar over CalDAV, relayed through
+      <a href="https://sockethub.org" target="_blank" rel="noreferrer">Sockethub</a>'s
       <code>caldav</code> platform (see Settings → Account for details on
-      the relay). Credentials stay on this device and are relayed
-      per-request — no server stores them.
+      the relay). Each entry links back to its card and carries an alarm, so
+      your calendar app notifies you even when this one is closed.
+      Credentials stay on this device and are relayed per-request — no
+      server stores them.
     </p>
+
+    {#if $calendarAccounts.length > 0}
+      <div class="sync-prefs">
+        {#each SYNC_ROWS as row (row.kind)}
+          {@const pref = $calendarSyncPrefs[row.kind]}
+          {@const choices = choicesFor(row.kind)}
+          <div class="sync-row">
+            <div class="sync-main">
+              <div class="sync-label">{row.label}</div>
+              <div class="sync-desc">{row.desc}</div>
+            </div>
+            <select
+              class="sync-select"
+              aria-label="Default calendar for {row.label.toLowerCase()}"
+              value={pref.calendarId ?? ''}
+              disabled={choices.length === 0}
+              onchange={(e) => setSyncCalendar(row.kind, e.currentTarget.value)}
+            >
+              <option value="">Choose calendar…</option>
+              {#each choices as c (c.calendar.id)}
+                <option value={c.calendar.id}>{c.calendar.name} · {c.account.label}</option>
+              {/each}
+            </select>
+            <label class="auto-label" title="Sync automatically whenever a time is set">
+              <input
+                type="checkbox"
+                checked={pref.auto}
+                disabled={choices.length === 0}
+                aria-label="Automatically sync {row.label.toLowerCase()}"
+                onchange={() => toggleAuto(row.kind)}
+              />
+              auto
+            </label>
+          </div>
+        {/each}
+        <p class="sync-hint">
+          The chosen calendar is where a card goes by default; you can pick a
+          different one from the card. With <strong>auto</strong> on, every
+          card that gets a time is synced without asking.
+        </p>
+      </div>
+    {/if}
 
     {#each $calendarAccounts as account (account.id)}
       <div class="acct">
@@ -233,17 +302,6 @@
               <span class="tag">tasks</span>
             {/if}
             <span class="line-actions">
-              <button
-                type="button"
-                class="star-btn"
-                class:on={account.defaultCalendarId === cal.id}
-                title={account.defaultCalendarId === cal.id
-                  ? 'Default calendar'
-                  : 'Make default'}
-                aria-label="Make {cal.name} the default calendar"
-                aria-pressed={account.defaultCalendarId === cal.id}
-                onclick={() => toggleDefault(account, cal.id)}
-              >★</button>
               <label class="vis-label">
                 <input
                   type="checkbox"
@@ -384,6 +442,78 @@
     color: var(--text);
   }
 
+  .sync-prefs {
+    margin: 0.9rem 0 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.2rem 0.75rem;
+    background: var(--bg);
+  }
+
+  .sync-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0;
+  }
+
+  .sync-row + .sync-row {
+    border-top: 1px solid var(--border);
+  }
+
+  .sync-main {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .sync-label {
+    font-size: 0.85rem;
+    font-weight: 550;
+  }
+
+  .sync-desc {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+
+  .sync-select {
+    max-width: 11rem;
+    min-width: 0;
+    font: inherit;
+    font-size: 1rem; /* never below 1rem: iOS Safari zooms on focus */
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.3rem 0.4rem;
+  }
+
+  .auto-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .sync-hint {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+    margin: 0.2rem 0 0.6rem;
+  }
+
+  @media (max-width: 767px) {
+    .sync-row {
+      flex-wrap: wrap;
+    }
+
+    .sync-main {
+      flex-basis: 100%;
+    }
+  }
+
   .sub {
     font-size: 0.78rem;
     color: var(--text-muted);
@@ -491,25 +621,6 @@
     align-items: center;
     gap: 0.55rem;
     flex-shrink: 0;
-  }
-
-  .star-btn {
-    border: none;
-    background: none;
-    color: var(--border);
-    font-size: 0.9rem;
-    cursor: pointer;
-    padding: 0;
-    line-height: 1;
-    transition: color 0.15s;
-  }
-
-  .star-btn:hover {
-    color: var(--text-muted);
-  }
-
-  .star-btn.on {
-    color: #eab308;
   }
 
   .vis-label {

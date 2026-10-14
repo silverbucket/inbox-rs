@@ -35,6 +35,15 @@ describe('parseHash', () => {
     });
   });
 
+  it('parses #/card/:id into an inbox route carrying the card to open', () => {
+    expect(parseHash('#/card/abc')).toEqual({ page: 'inbox', cardId: 'abc' });
+    expect(parseHash('#/card/a%20b/')).toEqual({
+      page: 'inbox',
+      cardId: 'a b',
+    });
+    expect(parseHash('#/card/')).toEqual({ page: 'inbox' });
+  });
+
   it('decodes an encoded collection id', () => {
     expect(parseHash('#/collection/a%20b')).toEqual({
       page: 'collection',

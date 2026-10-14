@@ -25,6 +25,7 @@ import type { ScheduleKind } from './schedule';
 
 const STORAGE_KEY = 'inbox-rs:calendar-accounts';
 const LAST_USED_KEY = 'inbox-rs:last-calendar';
+const SYNC_PREFS_KEY = 'inbox-rs:calendar-sync';
 
 export interface CalendarAccount {
   id: string;
@@ -102,6 +103,71 @@ export function removeCalendarAccount(id: string): void {
   calendarAccounts.update((accounts) => accounts.filter((a) => a.id !== id));
 }
 
+/**
+ * Per-kind sync preference — device-local like the accounts it points at.
+ * `calendarId` is the default calendar for that kind (the card view's
+ * picker starts there); `auto` means every card that gets a time is put
+ * on that calendar without asking.
+ */
+export interface CalendarSyncPref {
+  auto: boolean;
+  calendarId?: string;
+}
+
+export type CalendarSyncPrefs = Record<ScheduleKind, CalendarSyncPref>;
+
+const DEFAULT_SYNC_PREFS: CalendarSyncPrefs = {
+  event: { auto: false },
+  task: { auto: false },
+};
+
+function loadSyncPrefs(): CalendarSyncPrefs {
+  try {
+    const raw = localStorage.getItem(SYNC_PREFS_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!parsed || typeof parsed !== 'object') return DEFAULT_SYNC_PREFS;
+    return {
+      event: { ...DEFAULT_SYNC_PREFS.event, ...parsed.event },
+      task: { ...DEFAULT_SYNC_PREFS.task, ...parsed.task },
+    };
+  } catch {
+    return DEFAULT_SYNC_PREFS;
+  }
+}
+
+export const calendarSyncPrefs = writable<CalendarSyncPrefs>(loadSyncPrefs());
+
+calendarSyncPrefs.subscribe((prefs) => {
+  try {
+    localStorage.setItem(SYNC_PREFS_KEY, JSON.stringify(prefs));
+  } catch (err) {
+    console.error('Failed to persist calendar sync preferences', err);
+  }
+});
+
+export function updateCalendarSyncPref(
+  kind: ScheduleKind,
+  patch: Partial<CalendarSyncPref>,
+): void {
+  calendarSyncPrefs.update((prefs) => ({
+    ...prefs,
+    [kind]: { ...prefs[kind], ...patch },
+  }));
+}
+
+/**
+ * The calendar a newly timed item of this kind goes to automatically, or
+ * undefined when auto-sync is off or its calendar is gone.
+ */
+export function autoSyncCalendar(
+  kind: ScheduleKind,
+): CalendarChoice | undefined {
+  const pref = get(calendarSyncPrefs)[kind];
+  if (!pref.auto) return undefined;
+  const choice = findCalendarChoice(pref.calendarId);
+  return choice?.calendar.components.includes(kind) ? choice : undefined;
+}
+
 export interface CalendarChoice {
   account: CalendarAccount;
   calendar: RemoteCalendar;
@@ -158,14 +224,16 @@ export function recordCalendarUse(
 }
 
 /**
- * The picker's initial selection: last used for this kind → an account's
- * default → the first visible calendar supporting the kind → first visible.
+ * The picker's initial selection: this kind's default calendar (settings)
+ * → last used for this kind → an account's default → the first visible
+ * calendar supporting the kind → first visible.
  */
 export function pickPreferredCalendar(
   kind: ScheduleKind,
 ): CalendarChoice | undefined {
   const choices = visibleCalendarChoices();
   if (choices.length === 0) return undefined;
+  const preferred = get(calendarSyncPrefs)[kind].calendarId;
   let lastUsed: string | null = null;
   try {
     lastUsed = localStorage.getItem(`${LAST_USED_KEY}:${kind}`);
@@ -174,6 +242,7 @@ export function pickPreferredCalendar(
   }
   const supports = (c: CalendarChoice) => c.calendar.components.includes(kind);
   return (
+    choices.find((c) => c.calendar.id === preferred && supports(c)) ??
     choices.find((c) => c.calendar.id === lastUsed && supports(c)) ??
     choices.find(
       (c) => c.calendar.id === c.account.defaultCalendarId && supports(c),

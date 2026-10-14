@@ -569,6 +569,19 @@
     void loadViewCardModal();
   }
 
+  // `#/card/:id` deep links (the URL on calendar entries): open the card as
+  // soon as it is in the store, then drop the id from the hash so a reload
+  // or a modal close doesn't reopen it.
+  $effect(() => {
+    const id = route.cardId;
+    if (!id) return;
+    const target = $items[id];
+    if (!target) return;
+    openView(target);
+    window.history.replaceState(null, '', '#/');
+    route = { page: 'inbox' };
+  });
+
   function closeViewModal() {
     viewingItem = null;
   }

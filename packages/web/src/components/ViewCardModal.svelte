@@ -17,8 +17,21 @@
   import CollectionPicker from './CollectionPicker.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
   import ScheduleSheet from './ScheduleSheet.svelte';
-  import AddToCalendarSheet from './AddToCalendarSheet.svelte';
+  import CalendarPicker from './CalendarPicker.svelte';
+  import {
+    calendarAccounts,
+    type CalendarChoice,
+  } from '../lib/calendar-accounts';
+  import { CaldavError } from '../lib/caldav';
+  import { downloadIcs } from '../lib/ics';
   import { formatScheduled, isOverdue } from '../lib/schedule';
+  import {
+    entryHome,
+    reEnableFromCalendar,
+    scheduleKindOf,
+    setItemCalendar,
+    syncEntry,
+  } from '../lib/schedule-sync';
   import BookmarkView from './view-card/BookmarkView.svelte';
   import ImageView from './view-card/ImageView.svelte';
   import AudioView from './view-card/AudioView.svelte';
@@ -48,7 +61,8 @@
   let pickerMode = $state<'move' | 'todo'>('move');
 
   let showSchedule = $state(false);
-  let showCalendarSheet = $state(false);
+  let showCalendarPicker = $state(false);
+  let calendarBusy = $state(false);
 
   let convertingTodo = $state(false);
   let convertingRef = $state(false);
@@ -128,20 +142,15 @@
   }
 
   /**
-   * A todo↔reference conversion changes the card's kind, so a posted
-   * calendar entry no longer matches what the receipt claims (a VEVENT for
-   * what is now a task, or vice versa) — and archive state belongs to the
-   * calendar ownership that conversion breaks. Drop the receipt + archive
-   * flags locally and keep the time, flipping its kind to match. The
-   * calendar keeps its entry untouched: publishing is one-shot, inbox-rs
-   * never updates or deletes there.
+   * A todo↔reference conversion changes the card's kind: a timed card's
+   * entry kind flips with it (a VEVENT can't become a VTODO, so the sync
+   * layer re-creates the entry), and the legacy "moved to calendar"
+   * archive state no longer applies.
    */
-  function detachCalendarOnConversion(
+  function retargetCalendarOnConversion(
     updated: Record<string, unknown>,
     newKind: 'event' | 'task',
   ) {
-    delete updated.eventUrl;
-    delete updated.eventEtag;
     delete updated.archived;
     delete updated.archivedAt;
     delete updated.archiveReason;
@@ -164,8 +173,9 @@
         completed: false,
       };
       delete updated.collectionId;
-      detachCalendarOnConversion(updated, 'task');
+      retargetCalendarOnConversion(updated, 'task');
       await storeItem(updated as unknown as InboxItem);
+      void syncEntry(item, updated as unknown as InboxItem);
       showPicker = false;
       onclose();
     } catch (error) {
@@ -202,8 +212,9 @@
         completed: false,
         collectionId,
       };
-      detachCalendarOnConversion(updated, 'task');
+      retargetCalendarOnConversion(updated, 'task');
       await storeItem(updated as unknown as InboxItem);
+      void syncEntry(item, updated as unknown as InboxItem);
       recordCollectionUse(collectionId);
       showPicker = false;
       onclose();
@@ -231,8 +242,9 @@
         updated.type = 'note';
         if (!updated.body) updated.body = '';
       }
-      detachCalendarOnConversion(updated, 'event');
+      retargetCalendarOnConversion(updated, 'event');
       await storeItem(updated as unknown as InboxItem);
+      void syncEntry(item, updated as unknown as InboxItem);
       onclose();
     } finally {
       convertingRef = false;
@@ -384,7 +396,7 @@
       return;
     }
     if (e.key !== 'Escape') return;
-    if (showDelete || showPicker || showSchedule || showCalendarSheet) return;
+    if (showDelete || showPicker || showSchedule || showCalendarPicker) return;
     if (showActions) {
       closeActions(true);
       return;
@@ -453,12 +465,62 @@
     }
   }
 
-  async function openCalendar() {
+  // ── Calendar ───────────────────────────────────────────────────────────
+  // One row: which calendar this card is on. Tapping it opens the picker;
+  // picking creates/moves the entry, "Not on a calendar" deletes it.
+
+  const hasCalendarAccounts = $derived($calendarAccounts.length > 0);
+  const calendarHome = $derived.by<CalendarChoice | undefined>(() => {
+    void $calendarAccounts; // entryHome reads the accounts store non-reactively
+    return entryHome(item);
+  });
+  const calendarKind = $derived(scheduleKindOf(item));
+  const legacyMovedToCalendar = $derived(
+    !!item.archived && item.archiveReason === 'calendar',
+  );
+  const calendarLabel = $derived(
+    calendarHome
+      ? calendarHome.calendar.name
+      : item.eventUrl
+        ? 'On a calendar from a removed account'
+        : 'Add to calendar…',
+  );
+
+  async function openCalendarPicker() {
     try {
       await prepareAction();
-      showCalendarSheet = true;
+      showCalendarPicker = true;
     } catch {
       // prepareAction already explains that the draft is safe locally.
+    }
+  }
+
+  async function chooseCalendar(calendarId: string | null) {
+    showCalendarPicker = false;
+    if (calendarBusy) return;
+    calendarBusy = true;
+    try {
+      await setItemCalendar(item, calendarId);
+      showToast(calendarId ? 'Added to calendar' : 'Removed from calendar');
+    } catch (err) {
+      console.error('Calendar change failed', err);
+      const why = err instanceof CaldavError ? err.message : 'the calendar relay is unreachable';
+      showToast(`Couldn't update calendar — ${why}`);
+    } finally {
+      calendarBusy = false;
+    }
+  }
+
+  async function reEnable() {
+    calendarBusy = true;
+    try {
+      await reEnableFromCalendar(item);
+      showToast('Re-enabled');
+    } catch (err) {
+      console.error('Re-enable failed', err);
+      showToast("Couldn't re-enable — try again");
+    } finally {
+      calendarBusy = false;
     }
   }
 </script>
@@ -782,11 +844,36 @@
         </svg>
         {scheduledLabel ? `${scheduledLabel} — change…` : 'Set time…'}
       </button>
-      {#if item.startsAt}
+      {#if item.startsAt && !hasCalendarAccounts}
         <button
           type="button"
           class="action-row"
-          onclick={() => void openCalendar()}
+          onclick={() => downloadIcs(item)}
+        >
+          <svg
+            aria-hidden="true"
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Download .ics
+        </button>
+      {/if}
+      {#if item.startsAt && hasCalendarAccounts}
+        <button
+          type="button"
+          class="action-row"
+          disabled={calendarBusy}
+          onclick={() => void openCalendarPicker()}
         >
           <svg
             aria-hidden="true"
@@ -804,7 +891,37 @@
             <line x1="8" y1="2" x2="8" y2="6"></line>
             <line x1="3" y1="10" x2="21" y2="10"></line>
           </svg>
-          {item.eventUrl ? 'On calendar — manage…' : 'Add to calendar…'}
+          {#if calendarHome}
+            <span
+              class="cal-dot"
+              style="background: {calendarHome.calendar.color || 'var(--accent)'}"
+            ></span>
+          {/if}
+          {calendarBusy ? 'Updating calendar…' : calendarLabel}
+        </button>
+      {/if}
+      {#if legacyMovedToCalendar}
+        <button
+          type="button"
+          class="action-row"
+          disabled={calendarBusy}
+          onclick={() => void reEnable()}
+        >
+          <svg
+            aria-hidden="true"
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="1 4 1 10 7 10"></polyline>
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+          </svg>
+          Re-enable in {isTodoish ? 'Todos' : item.collectionId ? 'this collection' : 'the Inbox'}
         </button>
       {/if}
     </div>
@@ -830,8 +947,14 @@
       <ScheduleSheet {item} onclose={() => (showSchedule = false)} />
     {/if}
 
-    {#if showCalendarSheet}
-      <AddToCalendarSheet {item} onclose={() => (showCalendarSheet = false)} />
+    {#if showCalendarPicker}
+      <CalendarPicker
+        kind={calendarKind}
+        selectedId={calendarHome?.calendar.id}
+        onpick={(choice) => void chooseCalendar(choice.calendar.id)}
+        onremove={item.eventUrl ? () => void chooseCalendar(null) : undefined}
+        onclose={() => (showCalendarPicker = false)}
+      />
     {/if}
   </div>
 </div>
@@ -1392,6 +1515,18 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.25rem;
+  }
+
+  .cal-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .action-row:disabled {
+    opacity: 0.6;
+    cursor: default;
   }
 
   .action-row {

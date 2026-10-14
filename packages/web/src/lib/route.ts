@@ -7,6 +7,9 @@
  *
  * Pages: inbox (default), todos, collections, plugins, search, and
  * collection (focus mode for one collection: `#/collection/:id`).
+ * `#/card/:id` is a deep link to one card (used as the URL on calendar
+ * entries): it resolves to the inbox page with `cardId` set, and the app
+ * opens that card once it is loaded.
  * Query params:
  *   g  — comma-separated group IDs for filter state. Only meaningful on
  *        the `todos` and `collections` pages; ignored elsewhere.
@@ -29,6 +32,14 @@ export interface Route {
   collectionId?: string;
   /** Search text from the `q=` param. Only set when `page` is `search`. */
   query?: string;
+  /** Card to open on arrival (`#/card/:id`). Never emitted by formatRoute. */
+  cardId?: string;
+}
+
+/** Absolute deep link to one card — what calendar entries point back to. */
+export function cardLink(id: string): string {
+  const { origin, pathname } = window.location;
+  return `${origin}${pathname}#/card/${encodeURIComponent(id)}`;
 }
 
 /**
@@ -44,6 +55,14 @@ export function parseHash(hash: string): Route {
   const query = qIdx >= 0 ? h.slice(qIdx + 1) : '';
 
   const clean = path.replace(/\/+$/, '');
+  if (clean.startsWith('card/')) {
+    try {
+      const id = decodeURIComponent(clean.slice('card/'.length));
+      if (id) return { page: 'inbox', cardId: id };
+    } catch {
+      // Malformed percent-encoding — fall through to the inbox.
+    }
+  }
   if (clean.startsWith('collection/')) {
     try {
       const id = decodeURIComponent(clean.slice('collection/'.length));

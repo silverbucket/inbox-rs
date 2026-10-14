@@ -4,13 +4,16 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   accountEndpoint,
   addCalendarAccount,
+  autoSyncCalendar,
   calendarAccounts,
+  calendarSyncPrefs,
   choiceForEventUrl,
   findCalendarChoice,
   pickPreferredCalendar,
   recordCalendarUse,
   removeCalendarAccount,
   updateCalendarAccount,
+  updateCalendarSyncPref,
   visibleCalendarChoices,
 } from './calendar-accounts';
 
@@ -39,6 +42,7 @@ function seedAccount(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   localStorage.clear();
+  calendarSyncPrefs.set({ event: { auto: false }, task: { auto: false } });
   calendarAccounts.set([]);
 });
 
@@ -111,7 +115,35 @@ describe('pickPreferredCalendar', () => {
     expect(pickPreferredCalendar('event')?.calendar.name).toBe('Personal');
   });
 
+  it('the settings default for the kind beats last-used', () => {
+    seedAccount({});
+    recordCalendarUse('event', CAL_PERSONAL.id);
+    updateCalendarSyncPref('event', { calendarId: CAL_WORK.id });
+    expect(pickPreferredCalendar('event')?.calendar.name).toBe('Work');
+  });
+
   it('returns undefined with no accounts', () => {
     expect(pickPreferredCalendar('event')).toBeUndefined();
+  });
+});
+
+describe('autoSyncCalendar', () => {
+  it('is undefined unless auto is on and the calendar supports the kind', () => {
+    seedAccount({});
+    expect(autoSyncCalendar('event')).toBeUndefined();
+    updateCalendarSyncPref('event', { auto: true, calendarId: CAL_WORK.id });
+    expect(autoSyncCalendar('event')?.calendar.name).toBe('Work');
+    // Work has no task component → tasks don't auto-sync there.
+    updateCalendarSyncPref('task', { auto: true, calendarId: CAL_WORK.id });
+    expect(autoSyncCalendar('task')).toBeUndefined();
+  });
+
+  it('persists the preference in localStorage', () => {
+    updateCalendarSyncPref('task', { auto: true, calendarId: 'x' });
+    expect(
+      JSON.parse(localStorage.getItem('inbox-rs:calendar-sync')!),
+    ).toMatchObject({
+      task: { auto: true, calendarId: 'x' },
+    });
   });
 });

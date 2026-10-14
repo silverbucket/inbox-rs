@@ -1176,7 +1176,16 @@ export async function removeFile(path: string) {
 
 export async function deleteItem(id: string, item?: InboxItem) {
   const inbox = requireInbox();
+  const doomed = item ?? get(items)[id];
   await inbox.remove(id, item);
+
+  // A deleted card leaves its calendar too, from whichever surface the
+  // delete came from. Dynamic import: schedule-sync imports this module.
+  if (doomed?.eventUrl) {
+    void import('./schedule-sync')
+      .then((m) => m.removeEntryForDeletedItem(doomed))
+      .catch((err) => console.error('Calendar entry removal failed', err));
+  }
 
   // Revoke and remove any associated blob URLs (original + thumbnail) to
   // prevent memory leaks. All current callers pass the full item; we also do

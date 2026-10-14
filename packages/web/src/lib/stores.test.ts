@@ -376,6 +376,26 @@ describe('blob URL cleanup (memory leak prevention)', () => {
     expect(get(blobUrls)['files/photo.jpg']).toBeUndefined();
   });
 
+  it('takes a deleted card off its calendar, whichever surface deleted it', async () => {
+    const removeEntryForDeletedItem = vi.fn(async () => {});
+    vi.doMock('./schedule-sync', () => ({ removeEntryForDeletedItem }));
+    const synced: InboxItem = {
+      id: 'synced-note',
+      type: 'note',
+      title: 'on calendar',
+      body: '',
+      createdAt: new Date().toISOString(),
+      startsAt: '2026-08-03T13:00:00.000Z',
+      eventUrl: 'https://cal.example.org/nick/personal/x.ics',
+    } as any;
+
+    await deleteItem('synced-note', synced);
+    await vi.waitFor(() =>
+      expect(removeEntryForDeletedItem).toHaveBeenCalledWith(synced),
+    );
+    vi.doUnmock('./schedule-sync');
+  });
+
   it('revokes all blob URLs on disconnect (via captured handler)', () => {
     blobUrls.set({
       'files/a.jpg': 'blob:mem/a',

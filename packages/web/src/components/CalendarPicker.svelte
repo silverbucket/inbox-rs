@@ -10,12 +10,15 @@
     kind,
     selectedId,
     onpick,
+    onremove,
     onclose,
   }: {
     /** Entry kind being scheduled — task-incapable calendars are disabled. */
     kind: ScheduleKind;
     selectedId?: string;
     onpick: (choice: CalendarChoice) => void;
+    /** When given, a "Not on a calendar" choice appears for taking the card off. */
+    onremove?: () => void;
     onclose: () => void;
   } = $props();
 
@@ -48,6 +51,17 @@
 <div class="overlay" role="dialog" aria-modal="true" aria-label="Choose calendar" onclick={onclose}>
   <div class="sheet" use:trapFocus onclick={(e) => e.stopPropagation()}>
     <h3 class="title">Choose calendar</h3>
+    {#if onremove && groups.length > 0}
+      <button
+        type="button"
+        class="cal-row"
+        class:sel={!selectedId}
+        onclick={onremove}
+      >
+        <span class="dot none"></span>
+        <span class="name">Not on a calendar</span>
+      </button>
+    {/if}
     {#each groups as group (group.account.id)}
       <div class="grp">{group.account.label} · {group.account.username}</div>
       {#each group.calendars as cal (cal.id)}
@@ -75,8 +89,8 @@
       {/each}
     {:else}
       <p class="empty">
-        No calendar accounts yet. Add one from the user menu → Calendar
-        accounts, then events post straight to your calendar.
+        No calendar accounts yet. Add one in Settings → Calendars, then
+        cards sync straight to your calendar.
       </p>
     {/each}
   </div>
@@ -161,6 +175,11 @@
     height: 9px;
     border-radius: 50%;
     flex-shrink: 0;
+  }
+
+  .dot.none {
+    background: none;
+    border: 1.5px solid var(--text-muted);
   }
 
   .name {

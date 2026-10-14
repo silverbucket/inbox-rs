@@ -13,15 +13,14 @@
     toDateInputValue,
     toTimeInputValue,
   } from '../lib/schedule';
+  import { syncEntry } from '../lib/schedule-sync';
   import { showToast } from '../lib/toast';
   import { storeItem } from '../lib/stores';
 
   /**
-   * The time sheet — deliberately calendar-free. Setting a time is card
-   * metadata (due dates, "this happens Friday"); adding the card to a
-   * calendar is a separate action (AddToCalendarSheet). The one link back:
-   * when the card is already ON a calendar, saving a time change silently
-   * updates the posted entry so the projection never drifts.
+   * The time sheet. Setting a time is card metadata (due dates, "this
+   * happens Friday"); the card's calendar entry, if it has one, follows
+   * the time (and auto-sync may create one — see lib/schedule-sync).
    */
   let {
     item,
@@ -134,12 +133,7 @@
     }
   }
 
-  /**
-   * Save the time — local-only, always. Publishing is one-shot: a posted
-   * calendar entry is a frozen snapshot, so a time edit changes the card
-   * but never the calendar. The toast says so, once, so the drift isn't
-   * mysterious in the other direction.
-   */
+  /** Save the time; the calendar entry (if any) follows. */
   async function save() {
     if (pickMode) {
       if (!start) return;
@@ -147,20 +141,16 @@
       return;
     }
     const updated = scheduledItem();
-    if (!updated) return;
+    if (!item || !updated) return;
     if (!(await persist(updated, 'Failed to save time'))) return;
-    if (updated.eventUrl) {
-      showToast('Time saved — the calendar entry keeps its original time');
-    }
     onclose();
+    void syncEntry(item, updated);
   }
 
   /**
-   * Removing the time also drops the calendar receipt, locally: without its
-   * time the card no longer matches what was posted, so it stops claiming
-   * to be on a calendar (and un-archives). The calendar keeps its entry —
-   * inbox-rs never deletes there. clearSchedule clears the receipt fields
-   * along with the time.
+   * Removing the time takes the card off its calendar too: the entry is
+   * deleted first (while the pointer is still known), then the card is
+   * stored without time or pointer.
    */
   async function remove() {
     if (pickMode) {
@@ -168,13 +158,16 @@
       return;
     }
     if (!item) return;
-    const wasPosted = !!item.eventUrl;
-    if (await persist(clearSchedule(item), 'Failed to remove time')) {
-      if (wasPosted) {
-        showToast('Time removed — the calendar entry stays put');
-      }
+    const cleared = clearSchedule(item);
+    if (item.eventUrl) {
+      // Keep the pointer so syncEntry can find and delete the entry.
+      const unscheduled = { ...cleared, eventUrl: item.eventUrl, eventEtag: item.eventEtag };
+      if (!(await persist(unscheduled, 'Failed to remove time'))) return;
       onclose();
+      void syncEntry(item, unscheduled);
+      return;
     }
+    if (await persist(cleared, 'Failed to remove time')) onclose();
   }
 
   function handleEscape(e: KeyboardEvent) {

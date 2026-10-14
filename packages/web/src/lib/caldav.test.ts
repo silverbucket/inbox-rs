@@ -1,12 +1,16 @@
+// @vitest-environment jsdom
 import type { BookmarkItem, NoteItem, TodoItem } from '@inbox-rs/rs-module';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CaldavError,
   createEntry,
+  deleteEntry,
   fetchCalendars,
   itemToCalendarObject,
   uidFor,
+  updateEntry,
 } from './caldav';
+import { cardLink } from './route';
 
 const ENDPOINT = 'https://sockethub.test/sockethub-http';
 const CREDS = {
@@ -40,7 +44,7 @@ afterEach(() => {
 });
 
 describe('itemToCalendarObject', () => {
-  it('maps a timed event: name, instants with offsets, bookmark url', () => {
+  it('maps a timed event: name, instants, linkback url, bookmark url in notes, alarm', () => {
     const bookmark: BookmarkItem = {
       id: 'bm-1',
       type: 'bookmark',
@@ -56,11 +60,13 @@ describe('itemToCalendarObject', () => {
       type: 'event',
       uid: 'bm-1@inbox-rs',
       name: 'Read this',
-      content: 'notes',
-      url: 'https://example.org/post',
+      content: 'notes\n\nhttps://example.org/post',
+      url: cardLink('bm-1'),
+      reminders: [{ trigger: 'PT0S', action: 'display' }],
       startTime: '2026-08-03T13:00:00.000Z',
       endTime: '2026-08-03T14:00:00.000Z',
     });
+    expect(cardLink('bm-1')).toMatch(/#\/card\/bm-1$/);
   });
 
   it('maps all-day entries to local date-only strings without endTime', () => {
@@ -72,6 +78,8 @@ describe('itemToCalendarObject', () => {
     expect(obj.allDay).toBe(true);
     expect(obj.startTime).toBe('2026-08-03');
     expect(obj.endTime).toBeUndefined();
+    // All-day alarms ring at 09:00 local, like the in-app scheduler.
+    expect(obj.reminders).toEqual([{ trigger: 'PT9H', action: 'display' }]);
   });
 
   it('maps tasks to due, with completed status + completedTime', () => {
@@ -89,6 +97,8 @@ describe('itemToCalendarObject', () => {
       type: 'task',
       uid: 'todo-1@inbox-rs',
       name: 'Call dentist',
+      url: cardLink('todo-1'),
+      reminders: [{ trigger: 'PT0S', action: 'display' }],
       due: '2026-08-05T12:00:00.000Z',
       status: 'completed',
       completedTime: '2026-08-01T10:00:00Z',
@@ -208,7 +218,64 @@ describe('mutations', () => {
     expect(body[1].object.uid).toBe(uidFor(note()));
   });
 
-  // No update/delete tests: those operations were removed from the client
-  // on purpose — publishing is one-shot, and inbox-rs never modifies the
-  // user's calendar after the create.
+  it('update sends the full object with the entry id + etag', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      ndjson({
+        type: 'update',
+        actor: {},
+        target: {},
+        object: { id: `${CAL}item-1%40inbox-rs.ics`, etag: '"e2"' },
+      }),
+    );
+    const item = note({
+      eventUrl: `${CAL}item-1%40inbox-rs.ics`,
+      eventEtag: '"e1"',
+    });
+    const posted = await updateEntry(CREDS, CAL, item, ENDPOINT);
+    expect(posted.eventEtag).toBe('"e2"');
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0][1] as RequestInit).body as string,
+    );
+    expect(body[1].type).toBe('update');
+    expect(body[1].object).toMatchObject({
+      id: `${CAL}item-1%40inbox-rs.ics`,
+      etag: '"e1"',
+      uid: 'item-1@inbox-rs',
+      name: 'Prepare demo',
+    });
+  });
+
+  it('delete sends id, kind, and etag', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        ndjson({ type: 'delete', actor: {}, target: {}, object: {} }),
+      );
+    const item = note({
+      scheduleKind: 'task',
+      eventUrl: `${CAL}item-1%40inbox-rs.ics`,
+      eventEtag: '"e1"',
+    });
+    await deleteEntry(CREDS, CAL, item, ENDPOINT);
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0][1] as RequestInit).body as string,
+    );
+    expect(body[1]).toMatchObject({
+      type: 'delete',
+      target: { id: CAL, type: 'calendar' },
+      object: { id: `${CAL}item-1%40inbox-rs.ics`, type: 'task', etag: '"e1"' },
+    });
+  });
+
+  it('delete surfaces a conflict as a coded error', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      ndjson({ error: 'caldav:conflict' }),
+    );
+    const item = note({ eventUrl: `${CAL}x.ics`, eventEtag: '"e1"' });
+    await expect(deleteEntry(CREDS, CAL, item, ENDPOINT)).rejects.toMatchObject(
+      {
+        code: 'caldav:conflict',
+      },
+    );
+  });
 });
