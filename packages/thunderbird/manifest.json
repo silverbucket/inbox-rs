@@ -3,9 +3,9 @@
   "name": "Inbox RS",
   "version": "2.6.3",
   "description": "Save emails to your remoteStorage inbox.",
-  "applications": {
+  "browser_specific_settings": {
     "gecko": {
-      "id": "inbox-rs-thunderbird@example.com",
+      "id": "inbox-rs@silverbucket.net",
       "strict_min_version": "128.0"
     }
   },

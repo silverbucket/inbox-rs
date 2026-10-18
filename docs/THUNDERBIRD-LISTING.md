@@ -7,6 +7,14 @@ The browser extension's **Save Page** sends the page URL to
 link-preview setting using the same storage account. Thunderbird's Save to Inbox
 saves email text directly to your storage and does not use Save Page.
 
+## Add-on ID and minimum version
+
+- Add-on ID: `inbox-rs@silverbucket.net` (`browser_specific_settings.gecko.id`)
+- Minimum version: Thunderbird 128 (`strict_min_version` `128.0`)
+
+The Firefox browser extension uses the same add-on ID; see
+[BROWSER-EXTENSION-LISTING.md](BROWSER-EXTENSION-LISTING.md).
+
 ## Listing description (copy to ATN)
 
 Save an email from Thunderbird to your Inbox RS inbox, with an optional note.

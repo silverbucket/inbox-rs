@@ -91,8 +91,14 @@ describe.each(variants)('extension manifest — %s', (_label, manifest) => {
 
 describe('firefox-specific manifest invariants', () => {
   it('declares browser_specific_settings.gecko.id (required by AMO)', () => {
-    expect(firefoxManifest.browser_specific_settings?.gecko?.id).toMatch(
-      /^[\w.+-]+@[\w.-]+$/,
+    expect(firefoxManifest.browser_specific_settings?.gecko?.id).toBe(
+      'inbox-rs@silverbucket.net',
     );
+  });
+
+  it('declares minimum Firefox and Firefox for Android versions', () => {
+    const settings = firefoxManifest.browser_specific_settings;
+    expect(settings?.gecko?.strict_min_version).toBe('140.0');
+    expect(settings?.gecko_android?.strict_min_version).toBe('142.0');
   });
 });

@@ -152,10 +152,10 @@ download. No retained dependency may change version, resolution or integrity
 when the monorepo lockfile is pruned for a source archive.
 
 Firefox's packaged code is checked with pinned `web-ext`. Errors and unreviewed
-warnings fail. Three narrowly checked warnings are documented exceptions: the
-forward-compatible `data_collection_permissions` key on older Firefox desktop
-and Android versions, and Svelte's compiled static-template `innerHTML` helper.
-The checker verifies that helper's emitted expression. Dynamic evaluation is
+warnings fail. The only documented exception is Svelte's compiled
+static-template `innerHTML` helper; the checker verifies that helper's emitted
+expression. The Firefox minimums (Firefox 140, Firefox for Android 142) support
+`data_collection_permissions`, so a warning about that key fails the check. Dynamic evaluation is
 not exempted. Extension components do not use `{@html}` for captured content.
 
 CI then installs the actual Chromium ZIP and Firefox XPI into temporary browser

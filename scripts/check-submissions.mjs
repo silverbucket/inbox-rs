@@ -147,14 +147,6 @@ for (const target of targets) {
       );
       assert.equal(report.errors.length, 0, 'Firefox lint errors');
       for (const warning of report.warnings) {
-        // Older supported Firefox versions ignore this forward-compatible key.
-        const futurePrivacyKey =
-          [
-            'KEY_FIREFOX_UNSUPPORTED_BY_MIN_VERSION',
-            'KEY_FIREFOX_ANDROID_UNSUPPORTED_BY_MIN_VERSION',
-          ].includes(warning.code) &&
-          warning.file === 'manifest.json' &&
-          warning.description.includes('data_collection_permissions');
         // Svelte creates compiled static templates through this helper. User
         // content is bound as text; no {@html} is used in these components.
         let staticTemplate = false;
@@ -172,7 +164,7 @@ for (const target of targets) {
             );
         }
         assert(
-          futurePrivacyKey || staticTemplate,
+          staticTemplate,
           `Unreviewed Firefox warning: ${JSON.stringify(warning)}`,
         );
         console.log(
