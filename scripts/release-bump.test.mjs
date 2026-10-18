@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyChanges, planBumps } from './release-bump.mjs';
+import { bumpOutputs, classifyChanges, planBumps } from './release-bump.mjs';
 
 /**
  * `release-bump.mjs` is the single point of truth for "which package
@@ -272,5 +272,16 @@ describe('end-to-end policy (web-only release scenario)', () => {
     expect(files).toContain('packages/extension/manifest.json');
     expect(files).toContain('packages/extension/manifest.firefox.json');
     expect(files).toContain('packages/thunderbird/manifest.json');
+  });
+});
+
+describe('bumpOutputs', () => {
+  it('reports which store packages were bumped for the publish jobs', () => {
+    expect(bumpOutputs(classifyChanges(['packages/extension/src/a.ts']))).toBe(
+      'extension_bumped=true\nthunderbird_bumped=false\n',
+    );
+    expect(bumpOutputs(classifyChanges(['packages/web/src/a.ts']))).toBe(
+      'extension_bumped=false\nthunderbird_bumped=false\n',
+    );
   });
 });

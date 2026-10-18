@@ -63,6 +63,10 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: preflight
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      extension_bumped: ${{ steps.bump.outputs.extension_bumped }}
+      thunderbird_bumped: ${{ steps.bump.outputs.thunderbird_bumped }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -105,6 +109,7 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Bump per-package versions (conditional on what changed)
+        id: bump
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: node scripts/release-bump.mjs "$VERSION"
@@ -291,3 +296,167 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: gh release upload "v${VERSION}" dist/submissions/*/* --clobber
+
+  # Store publishing. Each job runs only when release-bump.mjs bumped its
+  # package (stores reject a re-used version), uses the exact artifacts the
+  # release job verified, and skips with a notice when its secrets are unset.
+  # Re-running after a partial publish is safe: a version the store already
+  # has counts as success.
+  publish-chrome:
+    runs-on: ubuntu-latest
+    needs: release
+    if: needs.release.outputs.extension_bumped == 'true'
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+      CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+      CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
+      CHROME_SERVICE_ACCOUNT_JSON: ${{ secrets.CHROME_SERVICE_ACCOUNT_JSON }}
+    steps:
+      - name: Check Chrome Web Store secrets
+        id: secrets
+        run: |
+          if [ -z "$CHROME_EXTENSION_ID" ] || [ -z "$CHROME_PUBLISHER_ID" ] || [ -z "$CHROME_SERVICE_ACCOUNT_JSON" ]; then
+            echo "::notice::Chrome Web Store secrets are not set; skipping Chrome publish."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.configured == 'true'
+        with:
+          ref: v${{ needs.release.outputs.version }}
+
+      - uses: actions/setup-node@v4
+        if: steps.secrets.outputs.configured == 'true'
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v4
+        if: steps.secrets.outputs.configured == 'true'
+        with:
+          name: extension-submissions-${{ needs.release.outputs.version }}
+          path: dist/submissions
+
+      - name: Upload and publish to Chrome Web Store
+        if: steps.secrets.outputs.configured == 'true'
+        run: node scripts/publish/chrome.mjs "dist/submissions/chromium/inbox-rs-chromium-${VERSION}.zip" "$VERSION"
+
+  publish-firefox:
+    runs-on: ubuntu-latest
+    needs: release
+    if: needs.release.outputs.extension_bumped == 'true'
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+      # web-ext reads these instead of --api-key/--api-secret on the command line.
+      WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+      WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+    steps:
+      - name: Check AMO secrets
+        id: secrets
+        run: |
+          if [ -z "$WEB_EXT_API_KEY" ] || [ -z "$WEB_EXT_API_SECRET" ]; then
+            echo "::notice::AMO secrets are not set; skipping Firefox publish."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.configured == 'true'
+        with:
+          ref: v${{ needs.release.outputs.version }}
+
+      - uses: actions/setup-node@v4
+        if: steps.secrets.outputs.configured == 'true'
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v4
+        if: steps.secrets.outputs.configured == 'true'
+        with:
+          name: extension-submissions-${{ needs.release.outputs.version }}
+          path: dist/submissions
+
+      - name: Submit to AMO (listed)
+        # web-ext signs a directory, so unpack the verified XPI. The source ZIP
+        # goes along for AMO's reviewers. --approval-timeout 0 returns once the
+        # version is submitted rather than waiting on a human review.
+        if: steps.secrets.outputs.configured == 'true'
+        run: |
+          # The locked scripts workspace, not a registry resolve: web-ext runs
+          # with the AMO credentials in its environment.
+          npm ci --workspace=scripts --include-workspace-root=false --ignore-scripts
+          # npm exec --workspace runs from scripts/, so the paths below are absolute.
+
+          SOURCE_DIR="$RUNNER_TEMP/firefox-${VERSION}"
+          mkdir -p "$SOURCE_DIR"
+          unzip -q "dist/submissions/firefox/inbox-rs-firefox-${VERSION}.xpi" -d "$SOURCE_DIR"
+
+          set +e
+          npm exec --no --workspace=scripts -- web-ext sign \
+            --channel=listed \
+            --source-dir "$SOURCE_DIR" \
+            --artifacts-dir "$RUNNER_TEMP/web-ext-artifacts" \
+            --upload-source-code "$GITHUB_WORKSPACE/dist/submissions/firefox/inbox-rs-firefox-${VERSION}-source.zip" \
+            --approval-timeout 0 \
+            2>&1 | tee "$RUNNER_TEMP/web-ext-sign.log"
+          STATUS=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$STATUS" -ne 0 ]; then
+            if grep -qi "already exists" "$RUNNER_TEMP/web-ext-sign.log"; then
+              echo "::notice::AMO already has Firefox ${VERSION}; nothing to do."
+              exit 0
+            fi
+            exit "$STATUS"
+          fi
+
+  publish-thunderbird:
+    runs-on: ubuntu-latest
+    needs: release
+    if: needs.release.outputs.thunderbird_bumped == 'true'
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+      ATN_JWT_ISSUER: ${{ secrets.ATN_JWT_ISSUER }}
+      ATN_JWT_SECRET: ${{ secrets.ATN_JWT_SECRET }}
+    steps:
+      - name: Check ATN secrets
+        id: secrets
+        run: |
+          if [ -z "$ATN_JWT_ISSUER" ] || [ -z "$ATN_JWT_SECRET" ]; then
+            echo "::notice::ATN secrets are not set; skipping Thunderbird publish."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.configured == 'true'
+        with:
+          ref: v${{ needs.release.outputs.version }}
+
+      - uses: actions/setup-node@v4
+        if: steps.secrets.outputs.configured == 'true'
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v4
+        if: steps.secrets.outputs.configured == 'true'
+        with:
+          name: extension-submissions-${{ needs.release.outputs.version }}
+          path: dist/submissions
+
+      - name: Upload to addons.thunderbird.net
+        if: steps.secrets.outputs.configured == 'true'
+        run: >-
+          node scripts/publish/atn.mjs
+          "dist/submissions/thunderbird/inbox-rs-thunderbird-${VERSION}.xpi"
+          "$VERSION"
+          "inbox-rs-thunderbird-${VERSION}-source.zip"
