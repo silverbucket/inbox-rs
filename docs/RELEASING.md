@@ -19,6 +19,8 @@ SHA — fix CI first, then retry.
   `inbox-rs-chromium-<extVer>.zip`, `inbox-rs-firefox-<extVer>.xpi`,
   `inbox-rs-thunderbird-<tbVer>.xpi`.
 - GitHub Release with auto-generated notes.
+- Store submissions for each extension that was bumped: Chrome Web Store,
+  AMO (Firefox) and ATN (Thunderbird). See [Store publishing](#store-publishing).
 
 The build commit (with `dist/`) is force-pushed to 5apps from a throwaway
 `deploy/v<ver>` branch and never reaches `origin`. `master` only sees
@@ -88,8 +90,83 @@ case of web-only deps; that's still cheaper than a failed publish.
 7. **Deploy to 5apps** — `git subtree split` on `packages/web/dist`,
    force-push to the `5apps` remote.
 8. **GitHub Release** — `gh release create v<ver> --generate-notes`.
+9. **Publish to stores** — `publish-chrome`, `publish-firefox` and
+   `publish-thunderbird` run after the release job, in parallel.
 
-Steps 5 and 7 are the only ones that touch remotes.
+Steps 5, 7 and 9 are the only ones that touch remotes.
+
+## Store publishing
+
+The release job exposes `version`, `extension_bumped` and `thunderbird_bumped`
+outputs. `extension_bumped` and `thunderbird_bumped` are `true` when
+`release-bump.mjs` bumped that package. Each publish job checks out the release
+tag and downloads the `extension-submissions-<version>` workflow artifact, so it
+submits the same files that `check:submissions` verified.
+
+| Job | Runs when | Secrets | What it does |
+|---|---|---|---|
+| `publish-chrome` | `extension_bumped` | `CHROME_EXTENSION_ID`, `CHROME_PUBLISHER_ID`, `CHROME_SERVICE_ACCOUNT_JSON` | [`scripts/publish/chrome.mjs`](../scripts/publish/chrome.mjs) uploads the Chromium ZIP with Chrome Web Store API v2 and submits it for publishing |
+| `publish-firefox` | `extension_bumped` | `AMO_JWT_ISSUER`, `AMO_JWT_SECRET` | `web-ext sign --channel=listed` on the Firefox build, with its source ZIP attached; doesn't wait for review |
+| `publish-thunderbird` | `thunderbird_bumped` | `ATN_JWT_ISSUER`, `ATN_JWT_SECRET` | [`scripts/publish/atn.mjs`](../scripts/publish/atn.mjs) uploads the XPI to addons.thunderbird.net, waits for validation, then warns you to upload the source ZIP by hand |
+
+All three behave the same way:
+
+- **Missing secrets:** the job logs a notice and skips. It doesn't fail. Releases
+  work before any store keys are configured.
+- **Version already uploaded:** treated as success. If one store fails, use
+  **Re-run failed jobs** on the workflow run. The stores that already have the
+  version pass without uploading again.
+- **Review:** each store still reviews the submission before it goes live.
+
+Add the secrets under **Settings → Secrets and variables → Actions** in the
+GitHub repository.
+
+### Chrome Web Store
+
+**The first item is submitted by hand.** The API can only update an item that
+already exists. Create the item in the
+[Developer Dashboard](https://chrome.google.com/webstore/devconsole), fill in
+the store listing and privacy tabs, and submit the first version there.
+
+- `CHROME_EXTENSION_ID` — the item ID, shown on the item's dashboard page and
+  in its store URL.
+- `CHROME_PUBLISHER_ID` — the publisher ID, shown in the Developer Dashboard
+  URL (`.../devconsole/<publisher-id>/...`).
+- `CHROME_SERVICE_ACCOUNT_JSON` — the full JSON key of a Google Cloud service
+  account. To create one:
+  1. In the [Google Cloud Console](https://console.cloud.google.com/), pick or
+     create a project and enable the **Chrome Web Store API**.
+  2. Create a service account. It needs no IAM roles.
+  3. Under the service account's **Keys** tab, add a JSON key. Paste the whole
+     file as the secret value.
+  4. In the Developer Dashboard's **Account** section, add the service account's
+     email address. You can link only one service account per publisher.
+
+See [Use a service account with the Chrome Web Store API](https://developer.chrome.com/docs/webstore/service-accounts).
+
+### Firefox (AMO)
+
+- `AMO_JWT_ISSUER` and `AMO_JWT_SECRET` — the **JWT issuer** and **JWT secret**
+  from [AMO's API key page](https://addons.mozilla.org/developers/addon/api/key/).
+
+The add-on ID `inbox-rs@silverbucket.net` must already be listed on AMO. A new
+listed add-on needs listing metadata that this job doesn't send, so submit the
+first version by hand if the add-on isn't on AMO yet.
+
+### Thunderbird (ATN)
+
+**The first version is submitted by hand.** ATN's upload API creates brand-new
+add-ons as unlisted. Submit the first listed version, with its source ZIP, in the
+[ATN developer hub](https://addons.thunderbird.net/developers/). The job uploads
+later versions to the existing listing.
+
+- `ATN_JWT_ISSUER` and `ATN_JWT_SECRET` — the **JWT issuer** and **JWT secret**
+  from [ATN's API key page](https://addons.thunderbird.net/developers/addon/api/key/).
+
+The ATN API can't attach source code. After each upload, the job emits a
+warning naming `inbox-rs-thunderbird-<version>-source.zip`. Download that file
+from the GitHub Release and add it to the version on ATN. Reviewers need it
+before they can approve the version.
 
 ## Verifying
 
@@ -134,7 +211,8 @@ real, fix `release-bump.mjs` and re-release.
 
 ## Not done
 
-- No automated store uploads — Chrome Web Store / AMO / ATN are manual.
+- No automated store listing edits — descriptions, screenshots and privacy
+  answers are still edited by hand on each store.
 - No npm publish — every workspace is `"private": true`.
 - No curated changelog — GitHub Release notes are generated from PR
   titles. Edit the release if you want better copy.
@@ -167,7 +245,8 @@ checks in [the listing guide](BROWSER-EXTENSION-LISTING.md).
 The release workflow repeats packaging and clean rebuild/audit/lint checks after
 version bumps and **before committing, tagging or deploying**. It saves the
 submission pairs as workflow artifacts and attaches them to the GitHub Release.
-The successful CI preflight includes browser smoke tests. No store uploads occur.
+The successful CI preflight includes browser smoke tests. Store uploads happen
+afterwards, in the [publish jobs](#store-publishing).
 
 ```sh
 npm run package:submissions        # all three targets

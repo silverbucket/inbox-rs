@@ -20,12 +20,15 @@
  * Usage (called from .github/workflows/release.yml):
  *   node scripts/release-bump.mjs <new-version>
  *
+ * Under GitHub Actions it also writes `extension_bumped` and
+ * `thunderbird_bumped` step outputs, which gate the store publish jobs.
+ *
  * The pure functions `classifyChanges` and `planBumps` are exported for
  * unit tests so we don't have to spin up fixture git repos.
  */
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -199,6 +202,19 @@ export function main(argv = process.argv) {
   }
 
   formatFiles(plan.map(({ file }) => file));
+
+  if (process.env.GITHUB_OUTPUT) {
+    appendFileSync(process.env.GITHUB_OUTPUT, bumpOutputs(classification));
+  }
+}
+
+/** `key=value` lines for $GITHUB_OUTPUT. Pure function — no I/O. */
+export function bumpOutputs(classification) {
+  return [
+    `extension_bumped=${classification.extensionNeedsBump}`,
+    `thunderbird_bumped=${classification.thunderbirdNeedsBump}`,
+    '',
+  ].join('\n');
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

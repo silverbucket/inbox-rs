@@ -6,6 +6,6 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['*.test.mjs'],
+    include: ['*.test.mjs', 'publish/*.test.mjs'],
   },
 });
