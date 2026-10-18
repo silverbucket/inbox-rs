@@ -18,7 +18,7 @@ The Thunderbird add-on reads the displayed message to prepare its save popup. Wh
 
 ## Link previews and external content
 
-When link previews are enabled, Inbox RS sends a saved page URL to a Sockethub relay to retrieve metadata. The default relay is https://sockethub.silverbucket.net/sockethub-http. In the browser extension, Save Page uses this default relay; it removes fragments and embedded HTTP credentials first, but the URL path and query can still contain personal information. Disable link previews in the web app's link-preview setting, synced to the same storage account, to disable these lookups in the extension.
+When link previews are enabled (the default for the browser extension), Inbox RS sends a saved page URL to a Sockethub relay to retrieve metadata. The default relay is https://sockethub.silverbucket.net/sockethub-http. In the browser extension, Save Page uses this default relay; it removes fragments and embedded HTTP credentials first, but the URL path and query can still contain personal information. Disable link previews in the web app's link-preview setting, synced to the same storage account, to disable these lookups in the extension.
 
 The web app also supports a custom Sockethub endpoint. The relay contacts the target website, and preview images or favicons may be fetched from external hosts. These services receive the requested URLs and ordinary network information such as IP addresses. Their logging and retention are controlled by their operators.
 

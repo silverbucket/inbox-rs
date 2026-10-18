@@ -124,8 +124,7 @@ Thunderbird 2.6.3 XPI and its extracted source ZIP. It reported **0 errors,
 0 holds, 0 warnings and 1 info** for `<all_urls>`, required for user-selected
 storage hosts. It also listed 4 extended code, 1 extended manual, 11 standard
 code and 10 standard manual review items; those are human review prompts,
-not completed manual checks. The local report is
-`dist/submissions/thunderbird/reviewer-report.txt`.
+not completed manual checks.
 
 `npm run screenshots:thunderbird` captures setup, connected setup and the email
 save popup at 1280×800 using the built UI and fictional Thunderbird API stubs.
