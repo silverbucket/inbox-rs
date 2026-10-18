@@ -388,17 +388,21 @@ jobs:
         # version is submitted rather than waiting on a human review.
         if: steps.secrets.outputs.configured == 'true'
         run: |
-          WEB_EXT_VERSION=$(node -p "require('./scripts/package.json').devDependencies['web-ext']")
+          # The locked scripts workspace, not a registry resolve: web-ext runs
+          # with the AMO credentials in its environment.
+          npm ci --workspace=scripts --include-workspace-root=false --ignore-scripts
+          # npm exec --workspace runs from scripts/, so the paths below are absolute.
+
           SOURCE_DIR="$RUNNER_TEMP/firefox-${VERSION}"
           mkdir -p "$SOURCE_DIR"
           unzip -q "dist/submissions/firefox/inbox-rs-firefox-${VERSION}.xpi" -d "$SOURCE_DIR"
 
           set +e
-          npx --yes "web-ext@${WEB_EXT_VERSION}" sign \
+          npm exec --no --workspace=scripts -- web-ext sign \
             --channel=listed \
             --source-dir "$SOURCE_DIR" \
             --artifacts-dir "$RUNNER_TEMP/web-ext-artifacts" \
-            --upload-source-code "dist/submissions/firefox/inbox-rs-firefox-${VERSION}-source.zip" \
+            --upload-source-code "$GITHUB_WORKSPACE/dist/submissions/firefox/inbox-rs-firefox-${VERSION}-source.zip" \
             --approval-timeout 0 \
             2>&1 | tee "$RUNNER_TEMP/web-ext-sign.log"
           STATUS=${PIPESTATUS[0]}
