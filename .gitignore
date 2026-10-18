@@ -47,3 +47,7 @@ mockups/
 
 # Playwright MCP scratch output
 .playwright-mcp/
+
+# macOS resource forks
+._*
+__MACOSX/

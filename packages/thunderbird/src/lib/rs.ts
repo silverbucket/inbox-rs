@@ -2,7 +2,7 @@ import {
   DirectRS,
   type RSConfig,
   connectViaOAuth as sharedConnectViaOAuth,
-} from '@inbox-rs/rs-module';
+} from '@inbox-rs/rs-module/runtime';
 
 export type { RSConfig };
 export { DirectRS };

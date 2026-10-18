@@ -1,4 +1,4 @@
-import { createConfigStore, type RSConfig } from '@inbox-rs/rs-module';
+import { createConfigStore, type RSConfig } from '@inbox-rs/rs-module/runtime';
 
 export type { RSConfig };
 

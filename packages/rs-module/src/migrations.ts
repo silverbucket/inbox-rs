@@ -1,4 +1,4 @@
-import { createMigrator } from 'rs-migrate';
+import { createMigrator } from './vendor/rs-migrate.js';
 
 // Legacy schema for voice-memo-meta (needed so remoteStorage can read old items)
 export const legacySchemas: Array<{ type: string; schema: object }> = [

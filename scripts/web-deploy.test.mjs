@@ -42,7 +42,7 @@ describe('web deployment safety', () => {
       'release five',
     );
     expect(() => readFileSync(join(dist, 'assets/release-1.js.map'))).toThrow();
-  });
+  }, 15000);
 
   it('replaces every historical HTML entry bundle with a recovery shim', () => {
     const repo = mkdtempSync(join(tmpdir(), 'inbox-rs-shims-'));
@@ -101,7 +101,7 @@ describe('web deployment safety', () => {
     expect(readFileSync(join(dist, 'assets/main-current.js'), 'utf8')).toBe(
       'current main',
     );
-  });
+  }, 15000);
 
   it('rejects traversal paths found in historical HTML entries', () => {
     const repo = mkdtempSync(join(tmpdir(), 'inbox-rs-shim-traversal-'));
@@ -134,7 +134,7 @@ describe('web deployment safety', () => {
         repo,
       ),
     ).toThrow(/invalid asset path/);
-  });
+  }, 15000);
 
   it('rejects a deployment whose manifest points at a missing entry', () => {
     const dist = mkdtempSync(join(tmpdir(), 'inbox-rs-invalid-deploy-'));

@@ -1,4 +1,4 @@
-import { createConfigStore, type RSConfig } from '@inbox-rs/rs-module';
+import { createConfigStore, type RSConfig } from '@inbox-rs/rs-module/runtime';
 import browser from 'webextension-polyfill';
 
 export type { RSConfig };

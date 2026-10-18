@@ -48,7 +48,7 @@ export default defineConfig(({ command }) => ({
         // this, any /capture/ navigation that isn't an exact precache match
         // (sub-paths) falls through to the MAIN app's index.html and boots the
         // wrong app inside the capture PWA window.
-        navigateFallbackDenylist: [/^\/capture\//],
+        navigateFallbackDenylist: [/^\/capture\//, /^\/privacy\//],
         globPatterns: ['**/*.{js,css,html,json,png,svg,webmanifest,wasm}'],
         globIgnores: [
           'ml/**/*',
