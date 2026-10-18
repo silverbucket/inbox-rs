@@ -98,6 +98,12 @@ for (const target of targets) {
         ),
         `${target}: different bytes in ${file}`,
       );
+    assert(
+      readFileSync(join(source, 'dist/submissions', target, binaryName)).equals(
+        readFileSync(join(output, binaryName)),
+      ),
+      `${target}: rebuilt archive differs byte for byte`,
+    );
     const downloads = join(root, 'packages/web/public/downloads', binaryName);
     if (existsSync(downloads)) {
       const releaseFiles = execFileSync('unzip', ['-Z1', downloads], {

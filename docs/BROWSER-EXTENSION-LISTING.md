@@ -1,5 +1,12 @@
 # Chrome and Firefox store listings
 
+Privacy policy: https://inbox.5apps.com/privacy/ ([repository copy](../PRIVACY.md)).
+
+The browser extension's **Save Page** sends the page URL to
+`sockethub.silverbucket.net` for link previews. Disable this through the web app's
+link-preview setting using the same storage account. Thunderbird's Save to Inbox
+saves email text directly to your storage and does not use Save Page.
+
 ## Listing description
 
 Save web pages, images, selected text and quick notes to your Inbox RS inbox.
@@ -73,7 +80,7 @@ flow. Review the store's privacy disclosures against this behavior before publis
 ## Screenshots and captions
 
 `npm run test:extensions` captures the real installed extension UI with fictional
-data in each browser, under `dist/submissions/screenshots/`:
+data in each browser at exactly 1280×800, under `dist/submissions/screenshots/`:
 
 | Screenshot | Caption |
 | --- | --- |
@@ -95,3 +102,7 @@ It does not test a provider's real OAuth UI or right-click menu interactions.
 Before submitting, use a test storage account to confirm **Set Up → Connect &
 Authorize**, toolbar access, and each of the three right-click actions in both
 browsers. Confirm the saved items in the web app with that account.
+
+`npm run screenshots:thunderbird` also generates the 440×280 Chromium promo
+`chromium-promo-440x280.png` from `docs/assets/inbox-rs.svg`. All PNGs are local
+or CI artifacts and must not be committed.

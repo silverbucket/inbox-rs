@@ -1,4 +1,3 @@
-import type { MigrateResult } from 'rs-migrate';
 import {
   legacyBinaryStringToArrayBuffer,
   recoverLegacyBinaryStringEncoding,
@@ -26,8 +25,16 @@ import type {
   InboxItemType,
   UserSettings,
 } from './types.js';
+import type { MigrateResult } from './vendor/rs-migrate.js';
 
 export { recoverLegacyBinaryStringEncoding } from './legacy/binary-recovery.js';
+export type { LinkMetadata, SockethubInfo } from './link-metadata.js';
+export {
+  DEFAULT_SOCKETHUB_ENDPOINT,
+  fetchLinkMetadata,
+  fetchSockethubInfo,
+  normalizeMetadata,
+} from './link-metadata.js';
 export { migrator, wrapCodeBlock } from './migrations.js';
 export { noteTitleFromBody } from './note-title.js';
 export type {

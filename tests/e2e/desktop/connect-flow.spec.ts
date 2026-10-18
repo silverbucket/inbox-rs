@@ -75,7 +75,7 @@ test('disconnect returns to empty state', async ({
     .getByRole('button', { name: 'User menu — connected' })
     .click();
   await connectedPage
-    .getByRole('button', { name: /^Account — Synced/ })
+    .getByRole('button', { name: /^Account — (Connected|Syncing…)/ })
     .click();
   await connectedPage.getByRole('button', { name: 'Disconnect' }).click();
 

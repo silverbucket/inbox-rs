@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 import { Builder, By, until } from 'selenium-webdriver';
 import firefox from 'selenium-webdriver/firefox.js';
+import { assertPngSize } from './screenshot-utils.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const screenshots = join(root, 'dist/submissions/screenshots');
@@ -118,6 +119,17 @@ async function launch(target, binary, temporary) {
   try {
     await driver.installAddon(binary, true);
     await driver.manage().window().setRect({ width: 1280, height: 900 });
+    const viewport = await driver.executeScript(
+      'return { width: innerWidth, height: innerHeight };',
+    );
+    const rect = await driver.manage().window().getRect();
+    await driver
+      .manage()
+      .window()
+      .setRect({
+        width: rect.width + 1280 - viewport.width,
+        height: rect.height + 800 - viewport.height,
+      });
   } catch (error) {
     await driver.quit();
     throw error;
@@ -181,6 +193,7 @@ try {
       await browser.goto(optionsUrl);
       await browser.fill('#address', 'demo@storage.example');
       await browser.screenshot(join(screenshots, `${target}-setup.png`));
+      assertPngSize(join(screenshots, `${target}-setup.png`));
       await browser.evaluate(async (config) => {
         await chrome.storage.local.set({ 'inbox-rs-config': config });
       }, config);
@@ -208,6 +221,7 @@ try {
       await browser.fill('input[placeholder="URL"]', `${base}/article`);
       await browser.fill('textarea', 'Read this over the weekend.');
       await browser.screenshot(join(screenshots, `${target}-save-page.png`));
+      assertPngSize(join(screenshots, `${target}-save-page.png`));
       await browser.click('button[type="submit"]');
       await browser.wait('.saved');
       const bookmark = JSON.parse(uploads.at(-1).body);
@@ -220,6 +234,7 @@ try {
       await browser.fill('input', 'An idea to revisit');
       await browser.fill('textarea', 'Make time for a short walk after lunch.');
       await browser.screenshot(join(screenshots, `${target}-quick-note.png`));
+      assertPngSize(join(screenshots, `${target}-quick-note.png`));
       rejectWrites = true;
       await browser.click('button[type="submit"]');
       await browser.wait('[role="alert"]');

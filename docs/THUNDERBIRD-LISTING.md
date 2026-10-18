@@ -1,5 +1,12 @@
 # Thunderbird listing and submission
 
+Privacy policy: https://inbox.5apps.com/privacy/ ([repository copy](../PRIVACY.md)).
+
+The browser extension's **Save Page** sends the page URL to
+`sockethub.silverbucket.net` for link previews. Disable this through the web app's
+link-preview setting using the same storage account. Thunderbird's Save to Inbox
+saves email text directly to your storage and does not use Save Page.
+
 ## Listing description (copy to ATN)
 
 Save an email from Thunderbird to your Inbox RS inbox, with an optional note.
@@ -62,7 +69,13 @@ https://github.com/remotestorage/armadietto.
 
 ## Screenshots to upload
 
-Capture these in Thunderbird using a demonstration email and account. Do not
+Run `npm run build:thunderbird` then `npm run screenshots:thunderbird` for
+`thunderbird-setup.png`, `thunderbird-connected.png` and
+`thunderbird-save-popup.png` in `dist/submissions/screenshots/` (1280×800).
+The same command creates `chromium-promo-440x280.png` from the repository logo.
+Automated captures use fictional API data in Chromium.
+
+For a supplementary real Thunderbird capture, use a demonstration email and account. Do not
 show real mail or authorization tokens. Include the Thunderbird chrome in the
 first screenshot so users can locate the entry point.
 
@@ -88,7 +101,7 @@ outside the project, run `npm install` there, extract the source ZIP into an emp
 directory, and run:
 
 ```sh
-node verify.js /absolute/path/to/addon.xpi --sca-root /absolute/path/to/extracted-source --sca-source packages/thunderbird/src
+node verify.js /abs/path/inbox-rs-thunderbird-<v>.xpi --sca-root /abs/path/extracted-source
 ```
 
 Review findings before submitting. Automated checks do not replace the actual
@@ -97,19 +110,25 @@ Thunderbird setup/save test or the reviewer's decision.
 Mozilla's source submission requirements:
 https://extensionworkshop.com/documentation/publish/source-code-submission/.
 
-## Validation status (2026-09-22)
+## Validation status (2026-10-18)
 
-The current submission pipeline scopes the source archive to Thunderbird and
-rs-module, preserving the exact retained lockfile resolutions. Compatible
-dependency updates and scoping resolved the earlier shared-lockfile npm audit
-findings; `npm run check:submissions -- thunderbird` now audits that tree and
-verifies a byte-identical source-only rebuild. Source file counts change as the
-project evolves, so use the automated checks rather than a fixed file count.
+The scoped source-only rebuild passed `npm run check:submissions` for Chromium,
+Firefox and Thunderbird: every unpacked file and each whole installable ZIP/XPI
+matched byte for byte. Scoped dependency audits passed at the high threshold.
+The source includes vendored rs-migrate v1.0.2 (MIT), with no rs-migrate registry
+dependency, and normalized archive timestamps and file modes.
 
-The Thunderbird reviewer tool was rerun against the clean scoped archive. It
-completed with zero errors, holds or warnings and one informational finding
-about broad host permissions (`<all_urls>`), needed for user-chosen storage
-hosts. Its report is saved with the local Thunderbird submission artifacts.
-Screenshots and the live ATN listing update remain manual. No submission or
-release was performed. These artifacts reflect the current checkout, not the
-rejected 1.5.0 source.
+Thunderbird webext-linter 2.5.1, commit
+`7802ee765fc3c86fb5baec5833a47092f6ef8d00`, was run in SCA mode against the
+Thunderbird 2.6.3 XPI and its extracted source ZIP. It reported **0 errors,
+0 holds, 0 warnings and 1 info** for `<all_urls>`, required for user-selected
+storage hosts. It also listed 4 extended code, 1 extended manual, 11 standard
+code and 10 standard manual review items; those are human review prompts,
+not completed manual checks. The local report is
+`dist/submissions/thunderbird/reviewer-report.txt`.
+
+`npm run screenshots:thunderbird` captures setup, connected setup and the email
+save popup at 1280×800 using the built UI and fictional Thunderbird API stubs.
+These are UI previews, not screenshots of a real Thunderbird installation.
+A real Thunderbird toolbar/OAuth/save check and live store listing updates
+remain manual. No store submission or release was performed.

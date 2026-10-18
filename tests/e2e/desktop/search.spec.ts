@@ -174,6 +174,9 @@ test.describe('search', () => {
     await connectedPage.keyboard.press('Escape');
     await expect(connectedPage).toHaveURL(/#\/?$/);
     await expect(capture).toHaveValue('half-written thought');
+    // Remounting the capture field can place the caret at the start of the
+    // restored draft. Put it at the end before testing punctuation input.
+    await capture.press('End');
     // Unmodified punctuation is plain text inside a field.
     await capture.press('/');
     await expect(capture).toHaveValue('half-written thought/');

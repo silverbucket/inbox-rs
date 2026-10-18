@@ -17,6 +17,11 @@
  * release. The persisted order alone was always correct; asserting only on
  * that is how this shipped.
  *
+ * Upward moves also cover diagonal pointer paths: a row grabbed at its left
+ * edge can extend outside the list even while the pointer is over a valid
+ * slot. Centre-based detection rejected those drops and restored the original
+ * order. Check the visible order after release and again after reloading.
+ *
  * Every todo surface shares the gesture, so the collection view is covered as
  * well as the Todos page.
  */
@@ -157,3 +162,69 @@ test('a todo dragged down a collection shows up where it is dropped', async ({
     'Reorder Delta',
   ]);
 });
+
+for (const targetIndex of [0, 1]) {
+  for (const aimFraction of [undefined, 0.75]) {
+    for (const surface of ['Todos', 'collection'] as const) {
+      test(`a todo dragged upward ${aimFraction ? 'diagonally' : 'vertically'} in ${surface} to slot ${targetIndex + 1} stays after reload`, async ({
+        webOrigin,
+      }) => {
+        let titles: string[];
+        if (surface === 'Todos') {
+          await page.goto(webOrigin);
+          await page.waitForLoadState('networkidle');
+          await gotoPage(page, /^Todos/);
+          for (const title of ['Alfa', 'Bravo', 'Charlie', 'Delta'])
+            await addTodo(page, `Upward ${title}`);
+          titles = [
+            'Upward Delta',
+            'Upward Charlie',
+            'Upward Bravo',
+            'Upward Alfa',
+          ];
+        } else {
+          await context.addInitScript(() =>
+            localStorage.setItem('inbox-rs:layout', 'sidebar'),
+          );
+          await seedSidebarFixture(page, webOrigin);
+          for (const title of ['Bravo', 'Charlie', 'Delta'])
+            await addTodo(page, `Upward ${title}`);
+          titles = [
+            FIXTURE.filedTodo,
+            'Upward Bravo',
+            'Upward Charlie',
+            'Upward Delta',
+          ];
+        }
+        const zone = reorderZone(page.locator('main'));
+        await expect.poll(() => zoneTitles(zone)).toEqual(titles);
+        await page.waitForTimeout(400);
+        const carried = titles[3];
+        const reordered = titles.slice(0, 3);
+        reordered.splice(targetIndex, 0, carried);
+        await dragGripPast(
+          page,
+          zoneRow(zone, carried).locator('.reorder-handle'),
+          zoneRow(zone, titles[targetIndex]),
+          {
+            aimFraction,
+            whileHeld: async () => {
+              await expect(
+                page.locator('#dnd-action-dragged-el'),
+              ).toContainText(carried);
+            },
+          },
+        );
+        await expect(page.locator('#dnd-action-dragged-el')).toHaveCount(0);
+        await expect.poll(() => zoneTitles(zone)).toEqual(reordered);
+        await expect.poll(() => hiddenZoneChildren(zone)).toBe(0);
+        for (const title of titles)
+          await expect(zoneRow(zone, title)).toBeVisible();
+        await page.reload();
+        await expect
+          .poll(() => zoneTitles(reorderZone(page.locator('main'))))
+          .toEqual(reordered);
+      });
+    }
+  }
+}

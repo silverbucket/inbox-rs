@@ -1,9 +1,13 @@
 import { execFileSync } from 'node:child_process';
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -89,4 +93,31 @@ it('rejects symlinks instead of including files outside the source tree', () => 
   expect(() =>
     archiveDirectory(join(dir, 'source'), join(dir, 'addon.xpi')),
   ).toThrow('symlink');
+});
+
+it('produces identical ZIP bytes despite source mtimes and umasks without mutating inputs', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'plugin-archive-test-'));
+  dirs.push(dir);
+  const previous = process.umask();
+  const archives = [];
+  try {
+    for (const [index, mask] of [0o022, 0o077].entries()) {
+      process.umask(mask);
+      const source = join(dir, `source-${index}`);
+      mkdirSync(join(source, 'nested'), { recursive: true });
+      const file = join(source, 'nested/fixture.txt');
+      writeFileSync(file, 'same content');
+      chmodSync(file, index ? 0o600 : 0o755);
+      utimesSync(file, 1600000000 + index * 1000, 1600000000 + index * 1000);
+      const before = statSync(file);
+      const archive = join(dir, `${index}.zip`);
+      archiveDirectory(source, archive);
+      expect(statSync(file).mtimeMs).toBe(before.mtimeMs);
+      expect(statSync(file).mode).toBe(before.mode);
+      archives.push(readFileSync(archive));
+    }
+  } finally {
+    process.umask(previous);
+  }
+  expect(archives[0].equals(archives[1])).toBe(true);
 });

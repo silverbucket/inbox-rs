@@ -10,8 +10,9 @@
  * button in the bookmark view, bulk action in the user menu).
  */
 
-import type { BookmarkItem, InboxItem } from '@inbox-rs/rs-module';
+import type { BookmarkItem, InboxItem, NoteItem } from '@inbox-rs/rs-module';
 import { get, writable } from 'svelte/store';
+import { bookmarkUrlFromNoteBody } from './capture-detect';
 import {
   DEFAULT_SOCKETHUB_ENDPOINT,
   fetchLinkMetadata,
@@ -72,6 +73,52 @@ export function needsEnrichment(item: BookmarkItem): boolean {
     !item.ogImage ||
     !item.siteName
   );
+}
+
+/**
+ * The URL of a note that is nothing but a link — how quick-capture and the
+ * share target save links, since they have no bookmark mode. Such notes
+ * are treated as saved links everywhere previews are counted or fetched.
+ */
+export function linkNoteUrl(item: InboxItem): string | null {
+  // Guard the body: older or foreign records may omit it.
+  return item.type === 'note' && !item.isTodo && typeof item.body === 'string'
+    ? bookmarkUrlFromNoteBody(item.body)
+    : null;
+}
+
+/** True for bookmarks and link-only notes alike. */
+export function isSavedLink(item: InboxItem): boolean {
+  return item.type === 'bookmark' || linkNoteUrl(item) !== null;
+}
+
+/** True when a preview fetch could still add something to this saved link. */
+export function needsLinkPreview(item: InboxItem): boolean {
+  return item.type === 'bookmark'
+    ? needsEnrichment(item)
+    : linkNoteUrl(item) !== null;
+}
+
+/**
+ * Turn a link-only note into a bookmark under the same id. The title is
+ * reset to the URL (so enrichment may replace it) unless the user wrote
+ * their own — i.e. it is neither the body- nor URL-derived fallback.
+ */
+export function noteToBookmark(note: NoteItem, url: string): BookmarkItem {
+  const bodyFallbackTitle = note.body.slice(0, 50);
+  const urlFallbackTitle = url.slice(0, 50);
+  const { body: _body, ...rest } = note;
+  return {
+    ...rest,
+    type: 'bookmark',
+    url,
+    title:
+      !note.title ||
+      note.title === bodyFallbackTitle ||
+      note.title === urlFallbackTitle
+        ? url
+        : note.title,
+  };
 }
 
 /**
@@ -150,10 +197,12 @@ export const bulkEnrichProgress = writable<BulkEnrichProgress | null>(null);
 const BULK_CONCURRENCY = 3;
 
 /**
- * Enrich every existing bookmark that's still missing metadata. Returns a
- * summary for the completion toast, or null when a pass is already running.
- * Individual failures (dead links, pages Sockethub can't reach) are counted
- * and skipped — one bad URL shouldn't abort the backlog.
+ * Enrich every saved link that's still missing metadata: bookmarks, plus
+ * link-only notes, which are first converted into bookmarks (as the card's
+ * own "Fetch link preview" does). Returns a summary for the completion
+ * toast, or null when a pass is already running. Individual failures (dead
+ * links, pages Sockethub can't reach) are counted and skipped — one bad
+ * URL shouldn't abort the backlog.
  */
 export async function enrichAllBookmarks(): Promise<{
   updated: number;
@@ -161,10 +210,7 @@ export async function enrichAllBookmarks(): Promise<{
   total: number;
 } | null> {
   if (get(bulkEnrichProgress)) return null;
-  const candidates = Object.values(get(items)).filter(
-    (item: InboxItem): item is BookmarkItem =>
-      item.type === 'bookmark' && needsEnrichment(item),
-  );
+  const candidates = Object.values(get(items)).filter(needsLinkPreview);
   const total = candidates.length;
   bulkEnrichProgress.set({ done: 0, total });
   let updated = 0;
@@ -173,12 +219,37 @@ export async function enrichAllBookmarks(): Promise<{
     const queue = [...candidates];
     const worker = async () => {
       for (let item = queue.shift(); item; item = queue.shift()) {
+        const url = item.type === 'bookmark' ? item.url : linkNoteUrl(item);
         try {
-          if ((await enrichBookmark(item)) === 'updated') updated++;
-        } catch {
+          let changed = false;
+          let bookmark: BookmarkItem;
+          if (item.type === 'bookmark') {
+            bookmark = item;
+          } else {
+            // The queue holds snapshots taken before the pass started; a
+            // sync may have edited or deleted this note while it waited
+            // behind earlier fetches. Convert the live copy, and only
+            // while it is still the same link-only note — the same
+            // stale-write guard enrichBookmark applies.
+            const current = get(items)[item.id];
+            if (!current || linkNoteUrl(current) !== url) continue;
+            bookmark = noteToBookmark(current as NoteItem, url as string);
+            await storeItem(bookmark);
+            changed = true;
+          }
+          if ((await enrichBookmark(bookmark)) === 'updated') changed = true;
+          if (changed) updated++;
+        } catch (e) {
+          // Without this a bulk pass skips failing URLs with no trace of
+          // why. Worded for the whole operation: the rejection may come
+          // from the metadata fetch or from storing the enriched item.
+          console.warn('Link preview enrichment failed:', url, e);
           failed++;
+        } finally {
+          bulkEnrichProgress.update((p) =>
+            p ? { ...p, done: p.done + 1 } : p,
+          );
         }
-        bulkEnrichProgress.update((p) => (p ? { ...p, done: p.done + 1 } : p));
       }
     };
     await Promise.all(

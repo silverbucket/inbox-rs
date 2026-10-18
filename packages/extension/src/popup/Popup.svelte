@@ -1,7 +1,9 @@
 <script lang="ts">
+  import type { LinkMetadata } from '@inbox-rs/rs-module';
   import browser from 'webextension-polyfill';
   import { DirectRS } from '../lib/rs';
   import { getConfig } from '../lib/storage';
+  import { fetchPageMetadataForSave } from './page-metadata';
   import { isImageUrl } from './save-logic';
   import { runSavePage, runSaveNote } from './save-orchestrator';
 
@@ -73,6 +75,15 @@
     }
   }
 
+  function applyFetchedMetadata(meta: LinkMetadata | null) {
+    if (!meta) return;
+    if (meta.title && (!pageTitle || pageTitle === pageUrl)) pageTitle = meta.title;
+    if (meta.description && !pageDescription) pageDescription = meta.description;
+    if (meta.image && !ogImage) ogImage = meta.image;
+    if (meta.favicon && !favicon) favicon = meta.favicon;
+    if (meta.siteName && !siteName) siteName = meta.siteName;
+  }
+
   function openSetup() {
     browser.runtime.openOptionsPage();
     window.close();
@@ -83,6 +94,7 @@
     saving = true;
     saveError = '';
     try {
+      applyFetchedMetadata(await fetchPageMetadataForSave(rs, pageUrl));
       const result = await runSavePage({
         rs, pageUrl, pageTitle, pageNote, pageDescription,
         embeddedContent, tweetImages, ogImage, favicon, siteName, isDirectImage,

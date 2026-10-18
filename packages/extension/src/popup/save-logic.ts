@@ -117,7 +117,14 @@ export async function saveAsBookmark(
   // Download + store image via service worker.
   // For tweets: only save actual tweet images, not the generic Twitter og:image.
   // For other sites: save the og:image.
-  const isTweetPage = !!embeddedContent || tweetImages.length > 0;
+  const pageHost = (() => {
+    try {
+      return new URL(pageUrl).hostname.replace(/^www\./, '');
+    } catch {
+      return '';
+    }
+  })();
+  const isTweetPage = pageHost === 'twitter.com' || pageHost === 'x.com';
   const imageToSave = isTweetPage ? tweetImages[0] || '' : ogImage || '';
   let filePath: string | undefined;
   let mimeType: string | undefined;

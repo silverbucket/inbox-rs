@@ -17,7 +17,7 @@ Store upload. Source ZIPs contain a root README with the simpler reviewer
 commands (`npm ci` and `npm run package:submission`), exact environment details,
 scoped workspace manifests and a scoped lockfile.
 
-The source archive rebuild must produce identical unpacked files. Dependency
+The source archive rebuild must produce identical unpacked files and whole installable archives. Dependency
 scoping may remove unrelated packages but cannot change retained resolutions.
 The validation command also audits the scoped dependency tree and runs Firefox
 lint. Installable artifacts are unsigned; publishing/signing happens at the store.
@@ -27,3 +27,8 @@ Selenium Manager provides Firefox/geckodriver if necessary. Set FIREFOX_BINARY
 to an existing Firefox executable to use it instead. Screenshots use fictional
 data and are written to `dist/submissions/screenshots/`. See
 `docs/BROWSER-EXTENSION-LISTING.md` for listing copy and manual OAuth checks.
+
+Packaging stages copies with mode 0644 and timestamps set to `SOURCE_DATE_EPOCH`
+(default `315532964`, 1980-01-01T00:02:44Z), using UTC ZIP timestamps. Use the
+same epoch and build tools to reproduce whole archives; the checkout and build
+outputs are never modified.

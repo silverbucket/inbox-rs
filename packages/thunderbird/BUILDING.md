@@ -16,6 +16,10 @@ Thunderbird installation, account or remoteStorage server is needed to rebuild.
 
 The scoped lockfile preserves every retained dependency's version, resolution
 and integrity. The rebuild check installs from that archive, audits its
-required dependencies and compares every unpacked XPI file byte for byte.
-Archive timestamps may differ. See `docs/THUNDERBIRD-LISTING.md` for listing and
+required dependencies and compares every unpacked file and the whole XPI byte for byte. See `docs/THUNDERBIRD-LISTING.md` for listing and
 manual submission steps.
+
+Packaging stages copies with mode 0644 and timestamps set to `SOURCE_DATE_EPOCH`
+(default `315532964`, 1980-01-01T00:02:44Z), using UTC ZIP timestamps. Use the
+same epoch and build tools to reproduce whole archives; the checkout and build
+outputs are never modified.

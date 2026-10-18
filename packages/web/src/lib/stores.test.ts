@@ -33,6 +33,7 @@ const { mockRs, mockInbox } = vi.hoisted(() => {
     on: vi.fn(),
     remote: {},
     startSync: vi.fn(),
+    disconnect: vi.fn(),
     inbox: mockInbox,
   };
   return { mockRs, mockInbox };
@@ -62,10 +63,12 @@ import {
   appConfig,
   archivedCollections,
   archivedGroups,
+  authorizationRequired,
   blobUrls,
   collectionItems,
   collections,
   connected,
+  connectionStatus,
   createCollection,
   deleteCollection,
   deleteGroup,
@@ -98,9 +101,11 @@ import {
   storeCollection,
   storeGroup,
   storeItem,
+  syncing,
   todoItems,
   toggleCollectionFilter,
   toggleGroupFilter,
+  userAddress,
   userSettings,
   visibleGroupedCollections,
   visibleOnCalendarTodos,
@@ -1402,9 +1407,32 @@ describe('collection filter (sidebar)', () => {
     appConfig.set({});
     await toggleCollectionFilter('c1');
     expect(get(appConfig).inactiveCollectionFilters).toEqual(['c1']);
+    expect(get(appConfig).expandedCollections).toBeUndefined();
 
     await toggleCollectionFilter('c1');
     expect(get(appConfig).inactiveCollectionFilters).toEqual([]);
+    expect(get(appConfig).expandedCollections).toEqual(['c1']);
+  });
+
+  it('toggleCollectionFilter preserves existing expansions when re-activating', async () => {
+    appConfig.set({
+      inactiveCollectionFilters: ['c1'],
+      expandedCollections: ['c2'],
+    });
+
+    await toggleCollectionFilter('c1');
+
+    expect(get(appConfig).inactiveCollectionFilters).toEqual([]);
+    expect(get(appConfig).expandedCollections).toEqual(['c2', 'c1']);
+  });
+
+  it('toggleCollectionFilter does not collapse when hiding a collection', async () => {
+    appConfig.set({ expandedCollections: ['c1'] });
+
+    await toggleCollectionFilter('c1');
+
+    expect(get(appConfig).inactiveCollectionFilters).toEqual(['c1']);
+    expect(get(appConfig).expandedCollections).toEqual(['c1']);
   });
 });
 
@@ -1851,6 +1879,7 @@ describe('enableCollectionFilter', () => {
     await enableCollectionFilter('c2');
 
     expect(get(appConfig).activeGroupFilters).toEqual(['g1']);
+    expect(get(appConfig).expandedCollections).toEqual(['c2']);
     // Siblings hidden, c2 visible.
     expect(get(appConfig).inactiveCollectionFilters?.sort()).toEqual([
       'c1',
@@ -1867,6 +1896,7 @@ describe('enableCollectionFilter', () => {
     appConfig.set({
       activeGroupFilters: ['g1'],
       inactiveCollectionFilters: ['c2'],
+      expandedCollections: ['c1'],
     });
 
     await enableCollectionFilter('c2');
@@ -1874,6 +1904,10 @@ describe('enableCollectionFilter', () => {
     // Group unchanged; c2 un-hidden; siblings untouched.
     expect(get(appConfig).activeGroupFilters).toEqual(['g1']);
     expect(get(appConfig).inactiveCollectionFilters).toEqual([]);
+    expect(get(appConfig).expandedCollections).toEqual(['c1', 'c2']);
+
+    await enableCollectionFilter('c2');
+    expect(get(appConfig).expandedCollections).toEqual(['c1', 'c2']);
   });
 
   it('reveals a collection under a default-all (undefined) group filter', async () => {
@@ -1886,6 +1920,7 @@ describe('enableCollectionFilter', () => {
     // Default-all means the group is already active — no materialization.
     expect(get(appConfig).activeGroupFilters).toBeUndefined();
     expect(get(appConfig).inactiveCollectionFilters).toEqual([]);
+    expect(get(appConfig).expandedCollections).toEqual(['c1']);
   });
 
   it('just un-hides an orphan collection (no group)', async () => {
@@ -1896,6 +1931,7 @@ describe('enableCollectionFilter', () => {
 
     expect(get(appConfig).activeGroupFilters).toBeUndefined();
     expect(get(appConfig).inactiveCollectionFilters).toEqual([]);
+    expect(get(appConfig).expandedCollections).toEqual(['c1']);
   });
 });
 
@@ -1915,22 +1951,26 @@ describe('soloCollectionFilter', () => {
   });
 
   it('hides every other group and sibling collection', async () => {
+    appConfig.set({ expandedCollections: ['c3'] });
     await soloCollectionFilter('c1');
 
     expect(get(appConfig).activeGroupFilters).toEqual(['g1']);
     expect(get(appConfig).inactiveCollectionFilters).toEqual(['c2']);
+    expect(get(appConfig).expandedCollections).toEqual(['c3', 'c1']);
   });
 
   it('restores all groups when the collection is already alone', async () => {
     appConfig.set({
       activeGroupFilters: ['g1'],
       inactiveCollectionFilters: ['c2', 'c3'],
+      expandedCollections: ['c1', 'c3'],
     });
 
     await soloCollectionFilter('c1');
 
     expect(get(appConfig).activeGroupFilters).toBeUndefined();
     expect(get(appConfig).inactiveCollectionFilters).toEqual(['c3']);
+    expect(get(appConfig).expandedCollections).toEqual(['c1', 'c3']);
   });
 });
 
@@ -2778,5 +2818,143 @@ describe('reorderGroups', () => {
     await expect(reorderGroups(['g2', 'g1'])).rejects.toThrow('write failed');
 
     expect(get(appConfig).groupsOrder).toEqual(['g1', 'g2']);
+  });
+});
+
+describe('remoteStorage authorization expiry', () => {
+  beforeEach(() => {
+    mockRs.disconnect.mockClear();
+  });
+
+  afterEach(() => {
+    authorizationRequired.set(false);
+    connected.set(false);
+    syncing.set(false);
+  });
+
+  it('shows authorization failure without discarding the account or local items', () => {
+    connected.set(true);
+    userAddress.set('alice@example.com');
+    const cached = {
+      id: 'unsynced',
+      type: 'note',
+      title: 'Local draft',
+    } as InboxItem;
+    items.set({ unsynced: cached });
+    emitRsEvent('wire-busy');
+    expect(get(syncing)).toBe(true);
+    emitRsEvent('error', { name: 'Unauthorized' });
+    expect(mockRs.disconnect).not.toHaveBeenCalled();
+    expect(get(authorizationRequired)).toBe(true);
+    expect(get(syncing)).toBe(false);
+    expect(get(connected)).toBe(true);
+    expect(get(userAddress)).toBe('alice@example.com');
+    expect(get(items).unsynced).toEqual(cached);
+    emitRsEvent('wire-busy');
+    emitRsEvent('sync-done');
+    expect(get(syncing)).toBe(false);
+    expect(get(authorizationRequired)).toBe(true);
+  });
+
+  it('recognizes remotestoragejs UnauthorizedError-shaped errors', () => {
+    connected.set(true);
+    userAddress.set('alice@example.com');
+    const error = new Error('The bearer token is invalid or expired');
+    error.name = 'Unauthorized';
+    emitRsEvent('error', error);
+    expect(get(authorizationRequired)).toBe(true);
+    expect(get(connected)).toBe(true);
+    expect(get(userAddress)).toBe('alice@example.com');
+  });
+
+  it('disconnects when OAuth access is explicitly denied', () => {
+    emitRsEvent('error', { name: 'Unauthorized', code: 'access_denied' });
+    expect(mockRs.disconnect).toHaveBeenCalledOnce();
+    expect(get(authorizationRequired)).toBe(false);
+    expect(get(syncing)).toBe(false);
+  });
+
+  it('offers reconnection for other authorization error codes', () => {
+    emitRsEvent('error', { name: 'Unauthorized', code: 'invalid_token' });
+    expect(mockRs.disconnect).not.toHaveBeenCalled();
+    expect(get(authorizationRequired)).toBe(true);
+  });
+
+  it('does not classify network or discovery errors as revoked access', () => {
+    for (const error of [
+      new Error('Network error'),
+      { name: 'DiscoveryError' },
+      null,
+    ]) {
+      emitRsEvent('error', error);
+      expect(get(authorizationRequired)).toBe(false);
+    }
+  });
+
+  it('clears the warning after authorization succeeds or the user disconnects', () => {
+    authorizationRequired.set(true);
+    emitRsEvent('connected');
+    expect(get(authorizationRequired)).toBe(false);
+    authorizationRequired.set(true);
+    emitRsEvent('disconnected');
+    expect(get(authorizationRequired)).toBe(false);
+  });
+});
+
+describe('connection status during network outages', () => {
+  beforeEach(() => {
+    connected.set(true);
+    authorizationRequired.set(false);
+    syncing.set(false);
+    window.dispatchEvent(new Event('online'));
+    emitRsEvent('network-online');
+  });
+
+  afterEach(() => {
+    window.dispatchEvent(new Event('online'));
+    emitRsEvent('network-online');
+    emitRsEvent('disconnected');
+  });
+
+  it('immediately stops the activity indicator offline and ignores retry activity', () => {
+    emitRsEvent('wire-busy');
+    expect(get(connectionStatus)).toBe('Syncing…');
+    window.dispatchEvent(new Event('offline'));
+    expect(get(syncing)).toBe(false);
+    expect(get(connectionStatus)).toBe('Offline');
+    emitRsEvent('wire-busy');
+    emitRsEvent('wire-done');
+    emitRsEvent('sync-done');
+    expect(get(syncing)).toBe(false);
+    expect(get(connectionStatus)).toBe('Offline');
+  });
+
+  it('waits for server reachability after the browser comes back online', () => {
+    window.dispatchEvent(new Event('offline'));
+    emitRsEvent('network-offline');
+    window.dispatchEvent(new Event('online'));
+    expect(get(connectionStatus)).toBe('Storage unreachable');
+    emitRsEvent('wire-busy');
+    emitRsEvent('sync-done');
+    expect(get(connectionStatus)).toBe('Storage unreachable');
+    emitRsEvent('network-online');
+    expect(get(connectionStatus)).toBe('Connected');
+  });
+
+  it('does not hide an authorization failure behind restored connectivity', () => {
+    authorizationRequired.set(true);
+    window.dispatchEvent(new Event('offline'));
+    emitRsEvent('network-offline');
+    window.dispatchEvent(new Event('online'));
+    emitRsEvent('network-online');
+    expect(get(connectionStatus)).toBe('Reconnect required');
+  });
+
+  it('cancels the pending activity timer on disconnect', () => {
+    emitRsEvent('wire-busy');
+    emitRsEvent('wire-done');
+    emitRsEvent('disconnected');
+    expect(get(syncing)).toBe(false);
+    expect(get(connectionStatus)).toBe('Not connected');
   });
 });

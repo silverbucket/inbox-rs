@@ -1,9 +1,8 @@
 <script lang="ts">
-  import type { BookmarkItem, InboxItem } from '@inbox-rs/rs-module';
+  import type { InboxItem } from '@inbox-rs/rs-module';
   import { tick } from 'svelte';
   import { clearCardDraft } from '../lib/card-draft';
-  import { bookmarkUrlFromNoteBody } from '../lib/capture-detect';
-  import { enrichBookmark } from '../lib/enrich';
+  import { enrichBookmark, linkNoteUrl, noteToBookmark } from '../lib/enrich';
   import {
     collections,
     deleteItem,
@@ -245,20 +244,8 @@
     convertingBookmark = true;
     try {
       await prepareAction();
-      const bodyFallbackTitle = item.type === 'note' ? item.body.slice(0, 50) : '';
-      const urlFallbackTitle = noteBookmarkUrl.slice(0, 50);
-      const updated = {
-        ...item,
-        type: 'bookmark',
-        url: noteBookmarkUrl,
-        title:
-          !item.title ||
-          item.title === bodyFallbackTitle ||
-          item.title === urlFallbackTitle
-            ? noteBookmarkUrl
-            : item.title,
-      } as BookmarkItem;
-      delete (updated as unknown as Record<string, unknown>).body;
+      if (item.type !== 'note') return;
+      const updated = noteToBookmark(item, noteBookmarkUrl);
       clearCardDraft(item.id, localStorage);
       await storeItem(updated);
       void enrichBookmark(updated).catch(() => {});
@@ -272,11 +259,7 @@
 
   const canMakeTodo = $derived(item.type !== 'todo' && !item.isTodo);
   const canMakeRef = $derived(item.isTodo || item.type === 'todo');
-  const noteBookmarkUrl = $derived(
-    item.type === 'note' && !item.isTodo
-      ? bookmarkUrlFromNoteBody(item.body)
-      : null,
-  );
+  const noteBookmarkUrl = $derived(linkNoteUrl(item));
 
   function openMovePicker() {
     pickerMode = 'move';

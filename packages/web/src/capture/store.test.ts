@@ -184,6 +184,45 @@ describe('finishConnectFromRedirect', () => {
 });
 
 describe('capture history + delivery', () => {
+  it('stores a lone URL as a bookmark so the main app treats it as a link', () => {
+    const record = captureNote(' https://x.com/jack/status/20 ');
+    expect(record.mode).toBe('note');
+    expect(record.preview).toBe('https://x.com/jack/status/20');
+    expect(record.item).toEqual({
+      id: record.id,
+      type: 'bookmark',
+      title: 'https://x.com/jack/status/20',
+      url: 'https://x.com/jack/status/20',
+      createdAt: record.item.createdAt,
+    });
+  });
+
+  it('labels a shared link with the title the share sheet supplied', () => {
+    const shared = {
+      url: 'https://x.com/jack/status/20',
+      title: ' jack on X ',
+    };
+    const record = captureNote('https://x.com/jack/status/20', shared);
+    expect(record.item).toMatchObject({
+      type: 'bookmark',
+      title: 'jack on X',
+      url: 'https://x.com/jack/status/20',
+    });
+    expect(record.item).not.toHaveProperty('body');
+
+    // The title only applies to the link it came with.
+    const other = captureNote('https://example.com', shared);
+    expect(other.item).toMatchObject({
+      type: 'bookmark',
+      title: 'https://example.com',
+    });
+  });
+
+  it('keeps text that merely contains a URL as a note', () => {
+    const record = captureNote('read https://x.com/jack later');
+    expect(record.item.type).toBe('note');
+  });
+
   it('queues a note and counts it as pending', () => {
     const record = captureNote('  buy milk  ');
     expect(record.status).toBe('queued');

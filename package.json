@@ -1,6 +1,6 @@
 {
   "name": "inbox-rs",
-  "version": "2.6.1",
+  "version": "2.6.4",
   "private": true,
   "license": "GPL-3.0-or-later",
   "workspaces": [
@@ -26,7 +26,8 @@
     "package:submissions": "node scripts/package-submissions.mjs",
     "package:browsers": "node scripts/package-submissions.mjs chromium firefox",
     "check:submissions": "node scripts/check-submissions.mjs",
-    "test:extensions": "node scripts/test-extensions.mjs"
+    "test:extensions": "node scripts/test-extensions.mjs",
+    "screenshots:thunderbird": "node scripts/capture-thunderbird-screenshots.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.13"

@@ -5,11 +5,11 @@
   import { alertPermission } from '../lib/alerts';
   import { trapFocus } from '../lib/actions';
   import { calendarAccounts } from '../lib/calendar-accounts';
-  import { needsEnrichment } from '../lib/enrich';
+  import { needsLinkPreview } from '../lib/enrich';
   import { layout } from '../lib/layout';
   import { buildDate, versionLabel } from '../lib/build-info';
   import { SETTINGS_SECTIONS, type SectionId, type SettingsSection } from '../lib/settings-sections';
-  import { connected, items, syncing, userAddress, userSettings } from '../lib/stores';
+  import { connectionStatus, connected, items, userAddress, userSettings } from '../lib/stores';
   import { ACCENT_LABELS, isAccent } from '../lib/theme';
   import AboutSettings from './settings/AboutSettings.svelte';
   import AccountSettings from './settings/AccountSettings.svelte';
@@ -33,7 +33,7 @@
 
   const read = (key: string) => { try { return localStorage.getItem(key); } catch { return null; } };
   const itemList = $derived(Object.values($items));
-  const missingPreviews = $derived(itemList.filter((item) => item.type === 'bookmark' && needsEnrichment(item)).length);
+  const missingPreviews = $derived(itemList.filter(needsLinkPreview).length);
   const theme = $derived($userSettings.theme ?? read('inbox-rs:theme') ?? 'system');
   const accentRaw = $derived(read('inbox-rs:accent'));
   const accent = $derived(isAccent(accentRaw) ? ACCENT_LABELS[accentRaw] : 'Indigo');
@@ -47,7 +47,7 @@
       case 'notifications': return $alertPermission === 'granted' ? 'Allowed' : 'Not allowed';
       case 'data': return `${itemList.length} item${itemList.length === 1 ? '' : 's'}`;
       case 'apps': return 'Capture tools';
-      case 'account': return $connected ? 'Synced' : 'Not connected';
+      case 'account': return $connectionStatus;
       case 'about': return versionLabel;
     }
   }
@@ -106,7 +106,7 @@
     </header>
     {#if mobile && selected}<div class="mobile-state">{stateLine(selected)}</div>{/if}
     {#if !mobile || !selected}
-      {#if mobile}<div class="identity"><span class="identity-avatar">{$connected ? ($userSettings.abbreviation?.slice(0, 2) || $userAddress.slice(0,2).toUpperCase()) : '?'}</span><span><strong>{$userAddress || 'Not connected'}</strong><small>{$syncing?'Syncing…':$connected?'Synced':'Connect your storage'}</small></span></div>{/if}
+      {#if mobile}<div class="identity"><span class="identity-avatar">{$connected ? ($userSettings.abbreviation?.slice(0, 2) || $userAddress.slice(0,2).toUpperCase()) : '?'}</span><span><strong>{$userAddress || 'Not connected'}</strong><small>{$connectionStatus}</small></span></div>{/if}
       <div class="tiles">
       {#each SETTINGS_SECTIONS as section (section.id)}
         <SettingsTile {section} value={value(section)} sub={sub(section)} meta={meta(section)} expanded={expanded===section.id} onclick={()=>void choose(section.id)}/>
