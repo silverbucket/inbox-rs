@@ -101,4 +101,11 @@ describe('firefox-specific manifest invariants', () => {
     expect(settings?.gecko?.strict_min_version).toBe('140.0');
     expect(settings?.gecko_android?.strict_min_version).toBe('142.0');
   });
+
+  it('declares browsing activity because Save Page sends URLs to the preview relay', () => {
+    expect(
+      firefoxManifest.browser_specific_settings?.gecko
+        ?.data_collection_permissions?.required,
+    ).toEqual(['browsingActivity']);
+  });
 });

@@ -14,8 +14,9 @@ saves email text directly to your storage and does not use Save Page.
   Firefox for Android 142 (`gecko_android.strict_min_version` `142.0`)
 
 These are the first versions that support the `data_collection_permissions`
-manifest key, which declares that Inbox RS collects no data. The Thunderbird
-add-on uses the same ID with a Thunderbird 128 minimum; see
+manifest key. Inbox RS declares `browsingActivity` because Save Page sends the
+page URL to the link-preview relay described above. The Thunderbird add-on uses
+the same ID with a Thunderbird 128 minimum; see
 [THUNDERBIRD-LISTING.md](THUNDERBIRD-LISTING.md).
 
 ## Listing description
