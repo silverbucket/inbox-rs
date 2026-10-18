@@ -22,9 +22,14 @@ describe('thunderbird manifest', () => {
     expect(manifest.manifest_version).toBe(2);
   });
 
-  it('declares an applications.gecko.id and minimum Thunderbird version', () => {
-    expect(manifest.applications?.gecko?.id).toMatch(/^[\w.+-]+@[\w.-]+$/);
-    expect(manifest.applications?.gecko?.strict_min_version).toBeDefined();
+  it('declares browser_specific_settings.gecko.id and minimum Thunderbird version', () => {
+    expect(manifest.applications).toBeUndefined();
+    expect(manifest.browser_specific_settings?.gecko?.id).toBe(
+      'inbox-rs@silverbucket.net',
+    );
+    expect(manifest.browser_specific_settings?.gecko?.strict_min_version).toBe(
+      '128.0',
+    );
   });
 
   describe('permissions', () => {
