@@ -107,7 +107,7 @@ submits the same files that `check:submissions` verified.
 |---|---|---|---|
 | `publish-chrome` | `extension_bumped` | `CHROME_EXTENSION_ID`, `CHROME_PUBLISHER_ID`, `CHROME_SERVICE_ACCOUNT_JSON` | [`scripts/publish/chrome.mjs`](../scripts/publish/chrome.mjs) uploads the Chromium ZIP with Chrome Web Store API v2 and submits it for publishing |
 | `publish-firefox` | `extension_bumped` | `AMO_JWT_ISSUER`, `AMO_JWT_SECRET` | `web-ext sign --channel=listed` on the Firefox build, with its source ZIP attached; doesn't wait for review |
-| `publish-thunderbird` | `thunderbird_bumped` | `ATN_JWT_ISSUER`, `ATN_JWT_SECRET` | [`scripts/publish/atn.mjs`](../scripts/publish/atn.mjs) uploads the XPI to addons.thunderbird.net, waits for validation, then warns you to upload the source ZIP by hand |
+| `publish-thunderbird` | `thunderbird_bumped` and the `PUBLISH_THUNDERBIRD` repository variable is `true` | `ATN_JWT_ISSUER`, `ATN_JWT_SECRET` | [`scripts/publish/atn.mjs`](../scripts/publish/atn.mjs) uploads the XPI to addons.thunderbird.net, waits for validation, then warns you to upload the source ZIP by hand |
 
 All three behave the same way:
 
@@ -120,6 +120,11 @@ All three behave the same way:
 
 Add the secrets under **Settings → Secrets and variables → Actions** in the
 GitHub repository.
+
+Thunderbird publishing is off by default. Switch it on by adding a repository
+**variable** (not a secret) named `PUBLISH_THUNDERBIRD` with the value `true`
+in the same settings page. Until then `publish-thunderbird` is skipped and the
+release still succeeds; nothing else in the workflow depends on it.
 
 ### Chrome Web Store
 
@@ -162,6 +167,9 @@ later versions to the existing listing.
 
 - `ATN_JWT_ISSUER` and `ATN_JWT_SECRET` — the **JWT issuer** and **JWT secret**
   from [ATN's API key page](https://addons.thunderbird.net/developers/addon/api/key/).
+- `PUBLISH_THUNDERBIRD` repository variable set to `true` — the job doesn't run
+  at all without it, even with the secrets in place. Set it once the first
+  version has been accepted on ATN.
 
 The ATN API can't attach source code. After each upload, the job emits a
 warning naming `inbox-rs-thunderbird-<version>-source.zip`. Download that file
