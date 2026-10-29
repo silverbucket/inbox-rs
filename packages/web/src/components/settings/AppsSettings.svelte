@@ -5,6 +5,10 @@
   import thunderbirdLogo from '../../assets/logos/thunderbird.svg';
   import { pluginArtifacts } from '../../lib/plugin-downloads.generated';
   import OfflineTranscriptionAssets from '../OfflineTranscriptionAssets.svelte';
+
+  // Firefox refuses to install the unsigned XPI we host under /downloads, so
+  // send users to the signed listing on AMO instead.
+  const firefoxAddonUrl = 'https://addons.mozilla.org/firefox/addon/inbox-rs/';
 </script>
 
 <div class="settings-section">
@@ -32,7 +36,7 @@
     </div>
     <div class="row-ctl">
       <a class="btn" href={pluginArtifacts.chromium.url} download>Get for Chrome</a>
-      <a class="btn" href={pluginArtifacts.firefox.url}>Firefox</a>
+      <a class="btn" href={firefoxAddonUrl} target="_blank" rel="noopener">Get for Firefox</a>
     </div>
   </div>
 
