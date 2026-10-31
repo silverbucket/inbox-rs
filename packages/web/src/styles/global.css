@@ -8,14 +8,14 @@
      ticks). --ok / --warn / --danger are fill shades; these are the readable
      text shades for the active mode (≥4.5:1 on bg/surface/surface-hover). */
   --ok-text: #5ed2a1;
-  --warn-text: #ffac37;
-  --danger-text: #f7645a;
+  --warn-text: #ffb351;
+  --danger-text: #fe7065;
   /* Accent comes from data-accent (theme-accents.css); these are fallbacks
      for the first paint before the stored accent is applied. */
   --accent: #4f46e5;
   --accent-deep: #3f38c4;
-  --accent-text-dark: #afbaff;
-  --accent-text-light: #4f46e5;
+  --accent-text-dark: #b4bffe;
+  --accent-text-light: #412dce;
 
   /* Paper-style neutrals: warm off-white with near-black ink; dark mode is
      warm charcoal rather than blue-black. The sidebar gets its own (darker)
@@ -68,9 +68,9 @@
     --text-muted: #6b655b;
     --danger: #c9302c;
     --danger-hover: #a3221f;
-    --danger-text: #c32926;
-    --ok-text: #007551;
-    --warn-text: #a84c03;
+    --danger-text: #b71a1b;
+    --ok-text: #057451;
+    --warn-text: #924102;
     --overlay: rgba(43, 41, 37, 0.4);
     --shadow: rgba(60, 50, 30, 0.12);
     --surface-tint: rgba(43, 41, 37, 0.05);
@@ -92,9 +92,9 @@
   --text-muted: #6b655b;
   --danger: #c9302c;
   --danger-hover: #a3221f;
-  --danger-text: #c32926;
-  --ok-text: #007551;
-  --warn-text: #a84c03;
+  --danger-text: #b71a1b;
+  --ok-text: #057451;
+  --warn-text: #924102;
   --overlay: rgba(43, 41, 37, 0.4);
   --shadow: rgba(60, 50, 30, 0.12);
   --surface-tint: rgba(43, 41, 37, 0.05);

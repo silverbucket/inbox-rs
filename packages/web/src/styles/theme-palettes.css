@@ -25,7 +25,7 @@
   --text-muted: #8b8f9a;
   --danger: #ef4444;
   --danger-hover: #f87171;
-  --danger-text: #fc514f;
+  --danger-text: #fe605b;
   --overlay: rgba(0, 0, 0, 0.6);
   --shadow: rgba(0, 0, 0, 0.3);
   --surface-tint: rgba(255, 255, 255, 0.06);
@@ -44,7 +44,7 @@
     --text-muted: #676c80;
     --danger: #dc2626;
     --danger-hover: #b91c1c;
-    --danger-text: #d51b1f;
+    --danger-text: #c60213;
     --overlay: rgba(0, 0, 0, 0.4);
     --shadow: rgba(0, 0, 0, 0.1);
     --surface-tint: rgba(0, 0, 0, 0.04);
@@ -63,7 +63,7 @@
   --text-muted: #676c80;
   --danger: #dc2626;
   --danger-hover: #b91c1c;
-  --danger-text: #d51b1f;
+  --danger-text: #c60213;
   --overlay: rgba(0, 0, 0, 0.4);
   --shadow: rgba(0, 0, 0, 0.1);
   --surface-tint: rgba(0, 0, 0, 0.04);
@@ -83,7 +83,7 @@
   --text-muted: #b5bed2;
   --danger: #d0707a;
   --danger-hover: #e08a92;
-  --danger-text: #fea6ad;
+  --danger-text: #feb3b8;
   --overlay: rgba(26, 30, 38, 0.6);
   --shadow: rgba(15, 18, 25, 0.4);
   --surface-tint: rgba(216, 222, 233, 0.06);
@@ -102,7 +102,7 @@
     --text-muted: #5b687e;
     --danger: #b8414c;
     --danger-hover: #962f39;
-    --danger-text: #b43e49;
+    --danger-text: #aa3441;
     --overlay: rgba(46, 52, 64, 0.4);
     --shadow: rgba(46, 52, 64, 0.12);
     --surface-tint: rgba(46, 52, 64, 0.05);
@@ -121,7 +121,7 @@
   --text-muted: #5b687e;
   --danger: #b8414c;
   --danger-hover: #962f39;
-  --danger-text: #b43e49;
+  --danger-text: #aa3441;
   --overlay: rgba(46, 52, 64, 0.4);
   --shadow: rgba(46, 52, 64, 0.12);
   --surface-tint: rgba(46, 52, 64, 0.05);
@@ -141,7 +141,7 @@
   --text-muted: #9aabad;
   --danger: #dc322f;
   --danger-hover: #e5615e;
-  --danger-text: #fe8377;
+  --danger-text: #ff8478;
   --overlay: rgba(0, 17, 22, 0.6);
   --shadow: rgba(0, 13, 17, 0.35);
   --surface-tint: rgba(147, 161, 161, 0.07);
@@ -160,7 +160,7 @@
     --text-muted: #596a6f;
     --danger: #dc322f;
     --danger-hover: #b0221f;
-    --danger-text: #cd1e21;
+    --danger-text: #bf0013;
     --overlay: rgba(60, 54, 34, 0.4);
     --shadow: rgba(88, 74, 32, 0.14);
     --surface-tint: rgba(88, 110, 117, 0.06);
@@ -179,7 +179,7 @@
   --text-muted: #596a6f;
   --danger: #dc322f;
   --danger-hover: #b0221f;
-  --danger-text: #cd1e21;
+  --danger-text: #bf0013;
   --overlay: rgba(60, 54, 34, 0.4);
   --shadow: rgba(88, 74, 32, 0.14);
   --surface-tint: rgba(88, 110, 117, 0.06);
@@ -199,7 +199,7 @@
   --text-muted: #b1a18c;
   --danger: #fb4934;
   --danger-hover: #fc6a58;
-  --danger-text: #fe7d69;
+  --danger-text: #ff8b79;
   --overlay: rgba(20, 18, 16, 0.6);
   --shadow: rgba(0, 0, 0, 0.4);
   --surface-tint: rgba(235, 219, 178, 0.06);
@@ -218,7 +218,7 @@
     --text-muted: #6f645a;
     --danger: #cc241d;
     --danger-hover: #9d0006;
-    --danger-text: #c9201a;
+    --danger-text: #bb0207;
     --overlay: rgba(60, 56, 54, 0.4);
     --shadow: rgba(80, 60, 20, 0.14);
     --surface-tint: rgba(60, 56, 54, 0.06);
@@ -237,7 +237,7 @@
   --text-muted: #6f645a;
   --danger: #cc241d;
   --danger-hover: #9d0006;
-  --danger-text: #c9201a;
+  --danger-text: #bb0207;
   --overlay: rgba(60, 56, 54, 0.4);
   --shadow: rgba(80, 60, 20, 0.14);
   --surface-tint: rgba(60, 56, 54, 0.06);
@@ -257,7 +257,7 @@
   --text-muted: #908caa;
   --danger: #eb6f92;
   --danger-hover: #f08eab;
-  --danger-text: #eb6f92;
+  --danger-text: #ed7194;
   --overlay: rgba(12, 10, 20, 0.6);
   --shadow: rgba(5, 3, 15, 0.45);
   --surface-tint: rgba(224, 222, 244, 0.06);
@@ -276,7 +276,7 @@
     --text-muted: #696585;
     --danger: #b4637a;
     --danger-hover: #944e62;
-    --danger-text: #9e4f66;
+    --danger-text: #96485f;
     --overlay: rgba(87, 82, 121, 0.4);
     --shadow: rgba(87, 82, 121, 0.14);
     --surface-tint: rgba(87, 82, 121, 0.06);
@@ -295,7 +295,7 @@
   --text-muted: #696585;
   --danger: #b4637a;
   --danger-hover: #944e62;
-  --danger-text: #9e4f66;
+  --danger-text: #96485f;
   --overlay: rgba(87, 82, 121, 0.4);
   --shadow: rgba(87, 82, 121, 0.14);
   --surface-tint: rgba(87, 82, 121, 0.06);

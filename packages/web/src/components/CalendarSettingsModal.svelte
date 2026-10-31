@@ -573,7 +573,7 @@
   .relay-line.custom {
     color: var(--warn-text);
     border: 1px solid color-mix(in srgb, var(--warn-text) 35%, transparent);
-    background: color-mix(in srgb, var(--warn-text) 8%, transparent);
+    background: color-mix(in srgb, var(--warn) 8%, transparent);
     border-radius: var(--radius-sm);
     padding: 0.45rem 0.55rem;
   }

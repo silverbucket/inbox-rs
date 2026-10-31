@@ -21,8 +21,8 @@
   /* accent (overridden per data-accent below; indigo is the default) */
   --accent: #4f46e5;
   --accent-deep: #3f38c4;
-  --accent-text-dark: #afbaff;
-  --accent-text-light: #4f46e5;
+  --accent-text-dark: #b4bffe;
+  --accent-text-light: #412dce;
   /* Accent as foreground / focus ring — --accent itself is a fill shade and
      unreadable on the dark surfaces (see theme-accents.css). */
   --accent-text: var(--accent-text-light);
