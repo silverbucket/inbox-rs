@@ -156,7 +156,7 @@
 
   .type-badge {
     background: var(--accent-subtle);
-    color: var(--accent);
+    color: var(--accent-text);
     padding: 0.1rem 0.4rem;
     border-radius: 999px;
     font-size: 0.65rem;

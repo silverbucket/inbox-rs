@@ -12,8 +12,8 @@
   --bg: #f6efdc;
   --surface: #fdf6e3;
   --seg: #eee8d5;
-  --ink: #586e75;
-  --ink-soft: #6d8188;
+  --ink: #3c5158;
+  --ink-soft: #596a6f;
   --ink-faint: #8fa0a3;
   --line: #d9d2ba;
   --on-accent: #fdf6e3;
@@ -21,6 +21,12 @@
   /* accent (overridden per data-accent below; indigo is the default) */
   --accent: #4f46e5;
   --accent-deep: #3f38c4;
+  --accent-text-dark: #b4bffe;
+  --accent-text-light: #412dce;
+  /* Accent as foreground / focus ring — --accent itself is a fill shade and
+     unreadable on the dark surfaces (see theme-accents.css). */
+  --accent-text: var(--accent-text-light);
+  --danger-text: #b3402f;
 
   --accent-tint: color-mix(in oklab, var(--accent) 22%, var(--bg));
   --accent-shadow: color-mix(in oklab, var(--accent) 30%, transparent);
@@ -34,10 +40,12 @@
   --bg: #002b36;
   --surface: #073642;
   --seg: #0d4152;
-  --ink: #93a1a1;
-  --ink-soft: #7b8e93;
+  --ink: #c3d1d1;
+  --ink-soft: #9aabad;
   --ink-faint: #657b83;
   --line: #1a4a5a;
+  --accent-text: var(--accent-text-dark);
+  --danger-text: #fe846f;
 
   color-scheme: dark;
 }
@@ -48,10 +56,12 @@
     --bg: #002b36;
     --surface: #073642;
     --seg: #0d4152;
-    --ink: #93a1a1;
-    --ink-soft: #7b8e93;
+    --ink: #c3d1d1;
+    --ink-soft: #9aabad;
     --ink-faint: #657b83;
     --line: #1a4a5a;
+    --accent-text: var(--accent-text-dark);
+    --danger-text: #fe846f;
 
     color-scheme: dark;
   }

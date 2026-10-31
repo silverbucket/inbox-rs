@@ -441,7 +441,7 @@
   }
 
   .mini-btn.danger:hover {
-    color: var(--danger);
+    color: var(--danger-text);
     border-color: var(--danger);
   }
 
@@ -509,7 +509,7 @@
   }
 
   .star-btn.on {
-    color: #eab308;
+    color: var(--warn-text);
   }
 
   .vis-label {
@@ -571,9 +571,9 @@
   }
 
   .relay-line.custom {
-    color: #d97706;
-    border: 1px solid color-mix(in srgb, #d97706 35%, transparent);
-    background: color-mix(in srgb, #d97706 8%, transparent);
+    color: var(--warn-text);
+    border: 1px solid color-mix(in srgb, var(--warn-text) 35%, transparent);
+    background: color-mix(in srgb, var(--warn) 8%, transparent);
     border-radius: var(--radius-sm);
     padding: 0.45rem 0.55rem;
   }
@@ -587,7 +587,7 @@
   .error {
     margin-top: 0.6rem;
     font-size: 0.78rem;
-    color: var(--danger);
+    color: var(--danger-text);
     line-height: 1.45;
   }
 
@@ -635,6 +635,6 @@
 
   .btn-add:hover {
     border-color: var(--accent);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 </style>

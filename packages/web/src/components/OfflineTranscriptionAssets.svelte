@@ -95,6 +95,6 @@
   }
 
   .offline-transcription .error {
-    color: var(--danger);
+    color: var(--danger-text);
   }
 </style>

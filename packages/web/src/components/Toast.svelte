@@ -40,11 +40,11 @@
     flex-shrink: 0;
     border: none;
     background: none;
-    color: var(--accent);
+    color: var(--accent-text);
     font: inherit;
     font-weight: 600;
     cursor: pointer;
     padding: 0.1rem 0.3rem;
   }
-  .action:hover { color: var(--accent-hover); }
+  .action:hover { color: var(--accent-text-hover); }
 </style>

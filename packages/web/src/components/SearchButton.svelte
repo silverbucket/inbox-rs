@@ -46,11 +46,11 @@
   .search-trigger.active {
     border-color: var(--accent);
     background: var(--accent-subtle);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .search-trigger:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--accent-text);
     outline-offset: 2px;
   }
 </style>

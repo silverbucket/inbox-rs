@@ -171,13 +171,13 @@ export const PALETTE_PREVIEWS: Record<
       bg: '#f6efdc',
       sidebar: '#eee8d5',
       surface: '#fdf6e3',
-      text: '#586e75',
+      text: '#3c5158',
     },
     dark: {
       bg: '#002b36',
       sidebar: '#00222b',
       surface: '#073642',
-      text: '#93a1a1',
+      text: '#c3d1d1',
     },
   },
   hearth: {

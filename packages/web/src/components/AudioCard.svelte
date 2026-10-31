@@ -137,7 +137,7 @@
     align-items: center;
     justify-content: center;
     background: var(--accent-subtle);
-    color: var(--accent);
+    color: var(--accent-text);
     cursor: pointer;
     transition: background 150ms ease, transform 120ms ease;
   }

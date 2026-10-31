@@ -684,7 +684,7 @@
      reflect a programmatically-set file). */
   .form :global(.picked) {
     font-size: 0.82rem;
-    color: var(--accent);
+    color: var(--accent-text);
     font-weight: 500;
     word-break: break-all;
   }
@@ -746,7 +746,7 @@
   }
 
   .form :global(.error) {
-    color: #ef4444;
+    color: var(--danger-text);
     font-size: 0.8rem;
     margin: 0;
   }
@@ -808,12 +808,12 @@
 
   .form :global(.rec-start) {
     border-color: var(--accent);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .form :global(.rec-stop) {
-    border-color: #ef4444;
-    color: #ef4444;
+    border-color: var(--danger-text);
+    color: var(--danger-text);
   }
 
   .form :global(.rec-discard) {
@@ -869,7 +869,7 @@
   }
 
   .form :global(.tab.active) {
-    color: var(--accent);
+    color: var(--accent-text);
     border-color: var(--accent);
   }
 
@@ -929,7 +929,7 @@
     color: var(--text-muted);
   }
   .form :global(.markdown-body a) {
-    color: var(--accent);
+    color: var(--accent-text);
     text-decoration: none;
   }
   .form :global(.markdown-body a:hover) {
@@ -979,7 +979,7 @@
     margin-right: auto;
     background: none;
     border: 1px solid var(--border);
-    color: var(--danger, #ef4444);
+    color: var(--danger-text);
     padding: 0.45rem 0.75rem;
     border-radius: var(--radius-sm);
     font-size: 0.8rem;
@@ -992,7 +992,7 @@
 
   .btn-delete-item:hover {
     background: color-mix(in srgb, var(--danger) 10%, transparent 90%);
-    border-color: var(--danger, #ef4444);
+    border-color: var(--danger-text);
   }
 
   .btn-delete-item:disabled {
@@ -1120,7 +1120,7 @@
   .btn-when.has-time {
     border-color: var(--accent-subtle-strong);
     background: var(--accent-subtler);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .btn-when-clear {
@@ -1138,7 +1138,7 @@
   }
 
   .btn-when-clear:hover {
-    color: var(--danger);
+    color: var(--danger-text);
     background: color-mix(in srgb, var(--danger) 10%, transparent);
   }
 

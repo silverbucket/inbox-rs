@@ -127,7 +127,7 @@
   }
 
   .fab:hover {
-    background: color-mix(in srgb, var(--accent) 88%, white 12%);
+    background: var(--accent-deep);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
   }
 
@@ -137,7 +137,7 @@
   }
 
   .fab:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--accent-text);
     outline-offset: 3px;
   }
 
@@ -173,7 +173,7 @@
 
     .fab:hover {
       box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.2);
-      background: color-mix(in srgb, var(--accent) 88%, white 12%);
+      background: var(--accent-deep);
       transform: translateY(calc(var(--fab-offset-y, 0px) * -1 - 2px));
     }
 

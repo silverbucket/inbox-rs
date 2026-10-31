@@ -147,7 +147,7 @@
 
   .cal-row.sel {
     background: var(--accent-subtle);
-    outline: 1.5px solid var(--accent);
+    outline: 1.5px solid var(--accent-text);
     outline-offset: -1.5px;
   }
 
@@ -188,7 +188,7 @@
 
   .tag.star {
     border: none;
-    color: #eab308;
+    color: var(--warn-text);
     padding: 0;
   }
 

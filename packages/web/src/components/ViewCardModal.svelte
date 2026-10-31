@@ -914,7 +914,7 @@
 
   .type-badge {
     background: var(--accent-subtle);
-    color: var(--accent);
+    color: var(--accent-text);
     padding: 0.15rem 0.5rem;
     border-radius: 999px;
     font-size: 0.7rem;
@@ -949,7 +949,7 @@
   }
 
   .save-status.error {
-    color: var(--danger);
+    color: var(--danger-text);
     cursor: pointer;
   }
 
@@ -990,7 +990,7 @@
   }
 
   .modal :global(.title a:hover) {
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .modal :global(.title .link-icon) {
@@ -1061,7 +1061,7 @@
 
   .modal :global(.btn-action) {
     background: var(--accent-subtle);
-    color: var(--accent);
+    color: var(--accent-text);
     border: none;
     padding: 0.35rem 0.75rem;
     border-radius: var(--radius-sm);
@@ -1103,7 +1103,7 @@
   }
 
   .modal :global(.notes-block .content-text) {
-    color: var(--accent);
+    color: var(--accent-text);
     font-style: italic;
   }
 
@@ -1173,7 +1173,7 @@
   }
 
   .modal :global(.markdown-body a) {
-    color: var(--accent);
+    color: var(--accent-text);
     text-decoration: none;
   }
   .modal :global(.markdown-body a:hover) {
@@ -1304,12 +1304,12 @@
   }
 
   .actions-menu-danger {
-    color: var(--danger);
+    color: var(--danger-text);
   }
 
   .actions-menu-danger:hover,
   .actions-menu-danger:focus-visible {
-    color: var(--danger);
+    color: var(--danger-text);
     background: color-mix(in srgb, var(--danger) 10%, transparent);
   }
 
@@ -1359,7 +1359,7 @@
   }
 
   .meta-item.overdue {
-    color: var(--danger);
+    color: var(--danger-text);
   }
 
   /* ── Primary filing action ────────────── */
@@ -1372,7 +1372,7 @@
     width: 100%;
     background: var(--accent-subtle);
     border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
-    color: var(--accent);
+    color: var(--accent-text);
     padding: 0.6rem 1rem;
     border-radius: var(--radius-sm);
     font-size: 0.9rem;

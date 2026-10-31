@@ -390,7 +390,7 @@
   .chip.sel {
     border-color: var(--accent);
     background: var(--accent-subtle);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .chip:disabled {
@@ -482,7 +482,7 @@
     margin-top: 0.35rem;
     background: none;
     border: none;
-    color: var(--danger);
+    color: var(--danger-text);
     padding: 0.4rem;
     font-size: 0.78rem;
     font-family: inherit;

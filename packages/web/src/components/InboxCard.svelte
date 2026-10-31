@@ -294,7 +294,7 @@
   }
 
   .card-select:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--accent-text);
     outline-offset: -3px;
   }
 
@@ -340,12 +340,12 @@
   .pin-button:hover,
   .pin-button:focus-visible,
   .pin-button.active {
-    color: var(--accent);
+    color: var(--accent-text);
     background: var(--accent-subtler);
   }
 
   .pin-button:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--accent-text);
     outline-offset: 1px;
   }
 
@@ -438,7 +438,7 @@
     align-items: center;
     gap: 0.3rem;
     font-size: 0.7rem;
-    color: var(--accent);
+    color: var(--accent-text);
     background: var(--accent-subtler);
     border: 1px solid var(--accent-subtle-strong);
     border-radius: 999px;
@@ -450,7 +450,7 @@
   }
 
   .sched-chip.overdue {
-    color: var(--danger);
+    color: var(--danger-text);
     background: color-mix(in srgb, var(--danger) 8%, transparent);
     border-color: color-mix(in srgb, var(--danger) 35%, transparent);
   }

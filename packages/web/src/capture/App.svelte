@@ -659,7 +659,7 @@
     border-radius: 0.7rem;
   }
   .icon-btn:focus-visible {
-    outline: 3px solid var(--accent);
+    outline: 3px solid var(--accent-text);
     outline-offset: 2px;
   }
   .badge {
@@ -706,7 +706,7 @@
     height: 1.4rem;
   }
   .seg:focus-visible {
-    outline: 3px solid var(--accent);
+    outline: 3px solid var(--accent-text);
     outline-offset: 2px;
   }
   .seg[aria-pressed='true'] {
@@ -757,7 +757,7 @@
     font-weight: 750;
   }
   .paste:focus-visible {
-    outline: 3px solid var(--accent);
+    outline: 3px solid var(--accent-text);
     outline-offset: 2px;
   }
   .field::placeholder {
@@ -815,7 +815,7 @@
     color: var(--ink);
   }
   .pad-line.error {
-    color: #b3402f;
+    color: var(--danger-text);
   }
   .record {
     width: 6rem;
@@ -834,7 +834,7 @@
     height: 2.4rem;
   }
   .record:focus-visible {
-    outline: 3px solid var(--accent);
+    outline: 3px solid var(--accent-text);
     outline-offset: 3px;
   }
   .record.recording {
@@ -980,16 +980,16 @@
     margin-top: 2px;
   }
   .rec-err {
-    color: #b3402f;
+    color: var(--danger-text);
   }
   .chip {
     font-weight: 700;
   }
   .chip-synced {
-    color: var(--accent);
+    color: var(--accent-text);
   }
   .chip-failed {
-    color: #b3402f;
+    color: var(--danger-text);
   }
 
   .settings-block {

@@ -86,7 +86,7 @@
   }
 
   .title a:hover {
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .title :global(.link-icon) {

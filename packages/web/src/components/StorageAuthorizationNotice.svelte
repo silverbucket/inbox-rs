@@ -29,5 +29,5 @@
   .authorization-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin: 1rem; padding: 1rem; border: 1px solid var(--danger, #dc2626); border-radius: var(--radius-sm, 8px); background: var(--surface); color: var(--text); }
   .authorization-notice > div { flex: 1 1 15rem; }
   p { margin: .35rem 0 0; }
-  button { padding: .5rem 1rem; border: 1px solid var(--border); border-radius: var(--radius-sm, 8px); background: var(--accent); color: var(--accent-text, white); cursor: pointer; }
+  button { padding: .5rem 1rem; border: 1px solid var(--border); border-radius: var(--radius-sm, 8px); background: var(--accent); color: #fff; cursor: pointer; }
 </style>

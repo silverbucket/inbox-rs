@@ -474,7 +474,7 @@
   }
 
   .quick-add button:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--accent-text);
     outline-offset: 3px;
   }
 
@@ -580,7 +580,7 @@
   .quick-add button.quick-add__when.has-time {
     border-color: var(--accent-subtle-strong);
     background: var(--accent-subtler);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .quick-add--compact button.quick-add__when {
@@ -589,7 +589,7 @@
 
   .quick-error {
     margin: 0;
-    color: var(--danger);
+    color: var(--danger-text);
     font-size: 0.82rem;
   }
 

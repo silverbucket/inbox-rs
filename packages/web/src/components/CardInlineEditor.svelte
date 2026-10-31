@@ -346,7 +346,7 @@
     flex-shrink: 0;
     border: none;
     background: transparent;
-    color: var(--accent);
+    color: var(--accent-text);
     font: inherit;
     font-size: 1rem;
     font-weight: 600;
@@ -384,7 +384,7 @@
 
   .source-link {
     flex-shrink: 0;
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: 0.8rem;
   }
 
@@ -419,7 +419,7 @@
   }
 
   .complete-toggle input:focus-visible + span {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--accent-text);
     outline-offset: 3px;
   }
 
