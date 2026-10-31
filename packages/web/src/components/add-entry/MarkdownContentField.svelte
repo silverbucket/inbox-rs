@@ -170,7 +170,7 @@
   .tab.active {
     border-color: var(--border);
     background: var(--surface-hover);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .tab:disabled {

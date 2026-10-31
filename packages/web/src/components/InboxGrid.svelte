@@ -256,7 +256,7 @@
   }
 
   .zero-icon {
-    color: var(--accent);
+    color: var(--accent-text);
     opacity: 0.7;
     margin-bottom: 0.5rem;
     animation: fade-in 0.6s ease-out;
@@ -279,7 +279,7 @@
     display: inline;
     border: 0;
     background: none;
-    color: var(--accent);
+    color: var(--accent-text);
     font: inherit;
     font-weight: 600;
     padding: 0;
@@ -290,11 +290,11 @@
   }
 
   .connect-link:hover {
-    color: var(--accent-hover);
+    color: var(--accent-text-hover);
   }
 
   .connect-link:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--accent-text);
     outline-offset: 3px;
     border-radius: 2px;
   }

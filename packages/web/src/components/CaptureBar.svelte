@@ -241,7 +241,7 @@
     display: inline-flex; align-items: center; gap: 0.35rem;
     flex-shrink: 0; max-width: 45%;
     padding: 0.2rem 0.35rem 0.2rem 0.5rem;
-    background: var(--accent-subtle); color: var(--accent);
+    background: var(--accent-subtle); color: var(--accent-text);
     border-radius: 8px;
     font-size: 0.8rem;
   }
@@ -264,7 +264,7 @@
     cursor: pointer;
   }
   .icon svg { width: 16px; height: 16px; }
-  .plus { background: var(--accent-subtle); color: var(--accent); }
+  .plus { background: var(--accent-subtle); color: var(--accent-text); }
   .plus:hover { background: var(--accent-subtle-strong); }
   .mic { background: none; color: var(--text-muted); }
   .mic:hover { background: var(--surface-hover); color: var(--text); }

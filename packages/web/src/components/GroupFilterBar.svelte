@@ -243,7 +243,7 @@
     border-radius: 999px;
     border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border) 65%);
     background: color-mix(in srgb, var(--accent) 10%, var(--surface) 90%);
-    color: var(--accent);
+    color: var(--accent-text);
     cursor: pointer;
     transition: background 150ms, border-color 150ms, transform 150ms;
     -webkit-tap-highlight-color: transparent;
@@ -256,7 +256,7 @@
   }
 
   .add-group:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--accent-text);
     outline-offset: 2px;
   }
 
@@ -275,7 +275,7 @@
   }
 
   .empty-cta:hover {
-    color: var(--accent);
+    color: var(--accent-text);
     border-color: var(--accent);
   }
 

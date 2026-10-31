@@ -3,62 +3,96 @@
  * Single source of truth for the theme accents. Each sets the base accent + a
  * deeper shade; apps derive softer/hover variants from these. Every base is
  * chosen to stay legible with white text on a solid fill (≥4.5:1).
+ *
+ * Those fill-strength bases are too dark to read *as text* on dark surfaces
+ * (as low as 1.3:1), so each accent also carries text shades: a pastel
+ * --accent-text-dark and a (sometimes slightly deepened) --accent-text-light.
+ * Both clear 4.5:1 on every palette's bg/surface/surface-hover in their mode.
+ * global.css picks one as --accent-text for the active mode.
  * Keyed off `data-accent` on the document root (see lib/theme.ts).
  */
 
 :root[data-accent="indigo"] {
   --accent: #4f46e5;
   --accent-deep: #3f38c4;
+  --accent-text-dark: #afbaff;
+  --accent-text-light: #4f46e5;
 }
 :root[data-accent="violet"] {
   --accent: #7c3aed;
   --accent-deep: #6d28d9;
+  --accent-text-dark: #c3b4fe;
+  --accent-text-light: #7c3aed;
 }
 :root[data-accent="blue"] {
   --accent: #2563eb;
   --accent-deep: #1d4ed8;
+  --accent-text-dark: #9cbeff;
+  --accent-text-light: #1e5ce3;
 }
 :root[data-accent="cyan"] {
   --accent: #0e7490;
   --accent-deep: #0c5e74;
+  --accent-text-dark: #73c9e7;
+  --accent-text-light: #04708c;
 }
 :root[data-accent="teal"] {
   --accent: #2f8079;
   --accent-deep: #266860;
+  --accent-text-dark: #7dcbc3;
+  --accent-text-light: #1d726b;
 }
 :root[data-accent="forest"] {
   --accent: #3f7d54;
   --accent-deep: #336545;
+  --accent-text-dark: #8ccc9f;
+  --accent-text-light: #35734b;
 }
 :root[data-accent="mustard"] {
   --accent: #8a6a1f;
   --accent-deep: #6f551a;
+  --accent-text-dark: #dcba72;
+  --accent-text-light: #816113;
 }
 :root[data-accent="ember"] {
   --accent: #c2410c;
   --accent-deep: #9a3412;
+  --accent-text-dark: #ffa88d;
+  --accent-text-light: #b93a01;
 }
 :root[data-accent="crimson"] {
   --accent: #be123c;
   --accent-deep: #9f1239;
+  --accent-text-dark: #fea7aa;
+  --accent-text-light: #be123c;
 }
 :root[data-accent="rose"] {
   --accent: #b15775;
   --accent-deep: #984862;
+  --accent-text-dark: #ffa3bf;
+  --accent-text-light: #a14967;
 }
 :root[data-accent="magenta"] {
   --accent: #a21caf;
   --accent-deep: #86198f;
+  --accent-text-dark: #f69efe;
+  --accent-text-light: #a21caf;
 }
 :root[data-accent="plum"] {
   --accent: #8a4a6f;
   --accent-deep: #743c5e;
+  --accent-text-dark: #f1a8d0;
+  --accent-text-light: #8a4a6f;
 }
 :root[data-accent="slate"] {
   --accent: #41607f;
   --accent-deep: #34506c;
+  --accent-text-dark: #9fc1e4;
+  --accent-text-light: #41607f;
 }
 :root[data-accent="graphite"] {
   --accent: #5b6b8c;
   --accent-deep: #4a5876;
+  --accent-text-dark: #acbee3;
+  --accent-text-light: #576787;
 }

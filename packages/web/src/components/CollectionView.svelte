@@ -862,7 +862,7 @@
 
   .check-icon {
     margin-left: auto;
-    color: var(--accent);
+    color: var(--accent-text);
     flex-shrink: 0;
   }
 
@@ -944,7 +944,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--danger);
+    color: var(--danger-text);
     padding: 0 0.25rem;
   }
 
@@ -1048,7 +1048,7 @@
   }
 
   .btn-card-action:hover {
-    color: var(--accent);
+    color: var(--accent-text);
     background: var(--bg);
   }
 

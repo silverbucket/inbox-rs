@@ -35,7 +35,7 @@
 <style>
   .trigger { position: relative; display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); cursor: pointer; }
   .trigger:hover { border-color: var(--accent); background: var(--accent-subtler); }
-  .avatar { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--accent-subtle); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); font-size: 0.8rem; font-weight: 700; }
+  .avatar { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--accent-subtle); color: var(--accent-text); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); font-size: 0.8rem; font-weight: 700; }
   .status-dot { position: absolute; right: -1px; bottom: 1px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--surface); background: var(--text-muted); }
   .status-dot.connected { background: var(--ok, #059669); }
   .status-dot.syncing { background: var(--accent); animation: pulse 1s ease-in-out infinite; }

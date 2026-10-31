@@ -175,7 +175,7 @@
   }
 
   .warning {
-    color: var(--danger);
+    color: var(--danger-text);
     opacity: 1;
   }
 
@@ -189,7 +189,7 @@
   }
 
   .error-message {
-    color: var(--danger);
+    color: var(--danger-text);
     opacity: 1;
   }
 

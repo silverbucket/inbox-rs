@@ -347,7 +347,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--danger);
+    color: var(--danger-text);
     padding: 0 0.25rem;
   }
 

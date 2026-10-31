@@ -827,7 +827,7 @@
     transition: outline-color 0.12s ease;
   }
   .feed-dropzone.drag-over {
-    outline-color: var(--accent);
+    outline-color: var(--accent-text);
   }
 
   .page-toolbar {

@@ -4,10 +4,18 @@
 :root {
   --ok: #059669;
   --warn: #b45309;
+  /* Status colours as foreground (error messages, overdue labels, "saved"
+     ticks). --ok / --warn / --danger are fill shades; these are the readable
+     text shades for the active mode (≥4.5:1 on bg/surface/surface-hover). */
+  --ok-text: #5ed2a1;
+  --warn-text: #ffac37;
+  --danger-text: #f7645a;
   /* Accent comes from data-accent (theme-accents.css); these are fallbacks
      for the first paint before the stored accent is applied. */
   --accent: #4f46e5;
   --accent-deep: #3f38c4;
+  --accent-text-dark: #afbaff;
+  --accent-text-light: #4f46e5;
 
   /* Paper-style neutrals: warm off-white with near-black ink; dark mode is
      warm charcoal rather than blue-black. The sidebar gets its own (darker)
@@ -33,6 +41,17 @@
   --accent-subtle: color-mix(in srgb, var(--accent) 16%, transparent);
   --accent-subtler: color-mix(in srgb, var(--accent) 10%, transparent);
   --accent-subtle-strong: color-mix(in srgb, var(--accent) 26%, transparent);
+
+  /* Accent as foreground (links, active labels, icon buttons). Use these, not
+     --accent, for anything read on a neutral surface — --accent is tuned for
+     fills under white text and is unreadable as text in dark mode. */
+  --accent-text: var(--accent-text-dark);
+  --accent-text-hover: color-mix(in srgb, var(--accent-text) 70%, white);
+
+  /* Native UI (scrollbars, date pickers, checkboxes) follows the mode too —
+     applyMode() only sets this inline for an explicit choice, not 'system'. */
+  color-scheme: dark;
+  accent-color: var(--accent);
 }
 
 /* Light neutrals. The accent itself still comes from data-accent; only the
@@ -46,14 +65,20 @@
     --surface-hover: #f0ece3;
     --border: #d6d0c3;
     --text: #2b2925;
-    --text-muted: #6e685e;
+    --text-muted: #6b655b;
     --danger: #c9302c;
     --danger-hover: #a3221f;
+    --danger-text: #c32926;
+    --ok-text: #007551;
+    --warn-text: #a84c03;
     --overlay: rgba(43, 41, 37, 0.4);
     --shadow: rgba(60, 50, 30, 0.12);
     --surface-tint: rgba(43, 41, 37, 0.05);
     --surface-tint-hover: rgba(43, 41, 37, 0.08);
     --accent-hover: color-mix(in srgb, var(--accent) 84%, black);
+    --accent-text: var(--accent-text-light);
+    --accent-text-hover: color-mix(in srgb, var(--accent-text) 80%, black);
+    color-scheme: light;
   }
 }
 
@@ -64,14 +89,20 @@
   --surface-hover: #f0ece3;
   --border: #d6d0c3;
   --text: #2b2925;
-  --text-muted: #6e685e;
+  --text-muted: #6b655b;
   --danger: #c9302c;
   --danger-hover: #a3221f;
+  --danger-text: #c32926;
+  --ok-text: #007551;
+  --warn-text: #a84c03;
   --overlay: rgba(43, 41, 37, 0.4);
   --shadow: rgba(60, 50, 30, 0.12);
   --surface-tint: rgba(43, 41, 37, 0.05);
   --surface-tint-hover: rgba(43, 41, 37, 0.08);
   --accent-hover: color-mix(in srgb, var(--accent) 84%, black);
+  --accent-text: var(--accent-text-light);
+  --accent-text-hover: color-mix(in srgb, var(--accent-text) 80%, black);
+  color-scheme: light;
 }
 
 * {
@@ -129,13 +160,17 @@ button {
   font-family: inherit;
 }
 
+::selection {
+  background: color-mix(in srgb, var(--accent-text) 30%, transparent);
+}
+
 a {
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: none;
 }
 
 a:hover {
-  color: var(--accent-hover);
+  color: var(--accent-text-hover);
 }
 
 @media (max-width: 600px) {

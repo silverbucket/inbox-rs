@@ -131,7 +131,7 @@
   }
 
   .accent {
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .subtitle {
@@ -181,7 +181,7 @@
   }
 
   .step-detail a {
-    color: var(--accent);
+    color: var(--accent-text);
     text-decoration: none;
   }
 

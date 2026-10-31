@@ -637,8 +637,8 @@
     font-size: 0.62rem;
     font-weight: 600;
     letter-spacing: 0.03em;
-    color: #f59e0b;
-    background: color-mix(in srgb, #f59e0b 16%, transparent);
+    color: var(--warn-text);
+    background: color-mix(in srgb, var(--warn-text) 16%, transparent);
     padding: 0.12rem 0.4rem;
     border-radius: 4px;
     flex-shrink: 0;
@@ -657,19 +657,7 @@
   }
 
   .group-label.suggested {
-    color: #f59e0b;
-  }
-
-  @media (prefers-color-scheme: light) {
-    :global(:root:not([data-theme='dark'])) .reason,
-    :global(:root:not([data-theme='dark'])) .group-label.suggested {
-      color: #b45309;
-    }
-  }
-
-  :global(:root[data-theme='light']) .reason,
-  :global(:root[data-theme='light']) .group-label.suggested {
-    color: #b45309;
+    color: var(--warn-text);
   }
 
   .rule {
@@ -679,7 +667,7 @@
   }
 
   .create-option {
-    color: var(--accent);
+    color: var(--accent-text);
     font-weight: 500;
   }
 
@@ -692,7 +680,7 @@
   .error {
     padding: 0.2rem 0.55rem 0.4rem;
     font-size: 0.8rem;
-    color: var(--danger);
+    color: var(--danger-text);
   }
 
   /* Inline create form */
@@ -741,7 +729,7 @@
     padding: 0;
     border: none;
     background: none;
-    color: var(--accent);
+    color: var(--accent-text);
     font: inherit;
     font-size: 0.82rem;
     cursor: pointer;

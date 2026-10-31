@@ -85,11 +85,11 @@
   .backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 1.25rem; background: var(--overlay); backdrop-filter: blur(4px); }
   .modal { width: min(680px, 100%); max-height: min(760px, calc(100dvh - 2.5rem)); overflow: auto; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); box-shadow: 0 24px 70px var(--shadow); }
   header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1.4rem 1.5rem 1.1rem; border-bottom: 1px solid var(--border); }
-  .eyebrow { margin-bottom: 0.15rem; color: var(--accent); font-size: 0.72rem; font-weight: 750; letter-spacing: 0.09em; text-transform: uppercase; }
+  .eyebrow { margin-bottom: 0.15rem; color: var(--accent-text); font-size: 0.72rem; font-weight: 750; letter-spacing: 0.09em; text-transform: uppercase; }
   h2 { font-size: 1.3rem; line-height: 1.25; }
   .close { display: grid; place-items: center; width: 36px; height: 36px; flex: none; padding: 0; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--text-muted); }
   .close:hover { background: var(--surface-hover); color: var(--text); }
-  .close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .close:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
   .sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.4rem 2rem; padding: 1.4rem 1.5rem; }
   .shortcut-section:last-child { grid-column: 1 / -1; }
   h3 { margin-bottom: 0.55rem; color: var(--text-muted); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }

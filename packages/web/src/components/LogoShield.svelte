@@ -38,6 +38,6 @@
     fill: var(--text);
   }
   .rs {
-    fill: var(--accent);
+    fill: var(--accent-text);
   }
 </style>

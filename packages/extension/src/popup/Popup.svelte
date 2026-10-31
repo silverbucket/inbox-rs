@@ -215,7 +215,7 @@
   }
 
   .accent {
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .btn-text {
@@ -339,7 +339,7 @@
 
   .tweet-images-note {
     font-size: 0.75rem;
-    color: var(--accent);
+    color: var(--accent-text);
     font-weight: 500;
   }
 

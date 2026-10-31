@@ -83,7 +83,7 @@
 {#if shareState === 'done'}
   <div class="share-result">
     <span class="saved-indicator">
-      <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
       Sharesome
     </span>
     <button type="button" class="btn-copy" onclick={copyUrl}>
@@ -129,7 +129,7 @@
   }
 
   .btn-share:hover:not(:disabled) {
-    color: var(--accent);
+    color: var(--accent-text);
     border-color: var(--accent);
   }
 
@@ -163,7 +163,7 @@
     align-items: center;
     gap: 0.25rem;
     font-size: 0.75rem;
-    color: #4ade80;
+    color: var(--ok-text);
   }
 
   .btn-copy {
@@ -178,6 +178,6 @@
   }
 
   .btn-copy:hover {
-    background: var(--accent-hover);
+    background: var(--accent-deep);
   }
 </style>

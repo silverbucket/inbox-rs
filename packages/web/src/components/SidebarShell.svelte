@@ -1197,7 +1197,7 @@
     overflow: hidden;
     font-size: 0.7rem;
     font-weight: 700;
-    color: var(--accent);
+    color: var(--accent-text);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -1247,7 +1247,7 @@
     border-radius: 999px;
     border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border) 70%);
     background: color-mix(in srgb, var(--accent) 8%, transparent);
-    color: var(--accent);
+    color: var(--accent-text);
     cursor: pointer;
     transition: background 150ms, transform 150ms;
   }
@@ -1590,7 +1590,7 @@
   }
 
   .row-add:hover {
-    color: var(--accent);
+    color: var(--accent-text);
     background: color-mix(in srgb, var(--accent) 14%, transparent);
   }
 
@@ -1653,7 +1653,7 @@
      Same layout-neutral rule as the filing target: colour and outline only, and
      the row owns hit-testing for the whole gesture. */
   .group-row.collection-drop-target {
-    outline: 1px dashed color-mix(in srgb, var(--accent) 55%, var(--border));
+    outline: 1px dashed color-mix(in srgb, var(--accent-text) 55%, var(--border));
     outline-offset: -1px;
   }
 
@@ -1663,7 +1663,7 @@
 
   .group-row.collection-drop-over {
     background: color-mix(in srgb, var(--accent) 18%, var(--surface));
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--accent-text);
   }
 
   /* The collection being carried dims in place, so it's obvious what moved. */
@@ -1735,7 +1735,7 @@
   }
 
   .empty-cta:hover {
-    color: var(--accent);
+    color: var(--accent-text);
     border-color: var(--accent);
   }
 
@@ -1757,7 +1757,7 @@
   }
 
   .new-group:hover {
-    color: var(--accent);
+    color: var(--accent-text);
     border-color: var(--accent);
   }
 

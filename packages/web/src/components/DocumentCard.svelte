@@ -75,7 +75,7 @@
   .download-btn {
     margin-top: 0.5rem;
     background: var(--accent-subtle);
-    color: var(--accent);
+    color: var(--accent-text);
     border: none;
     padding: 0.35rem 0.75rem;
     border-radius: var(--radius-sm);
