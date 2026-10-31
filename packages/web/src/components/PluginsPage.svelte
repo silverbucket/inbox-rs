@@ -3,6 +3,7 @@
   import firefoxLogo from '../assets/logos/firefox.svg';
   import thunderbirdLogo from '../assets/logos/thunderbird.svg';
   import captureLogo from '../assets/logos/favicon-shield.svg';
+  import { BROWSER_STORE_URLS } from '../lib/constants';
   import { pluginArtifacts } from '../lib/plugin-downloads.generated';
 
   type DownloadOption = {
@@ -18,36 +19,20 @@
     logoSrc: string;
   };
 
-  const browserDownloads: DownloadOption[] = [
+  const browserDownloads = [
     {
       name: 'Chromium',
       compatibility: 'Chrome, Brave, Edge, and other Chromium browsers',
-      downloadLabel: 'Download Chromium Bundle',
-      downloadHref: pluginArtifacts.chromium.url,
-      artifactVersion: pluginArtifacts.chromium.version,
-      format: 'ZIP',
-      note: 'Chromium browsers require loading this as an unpacked extension.',
-      steps: [
-        'Download and extract the ZIP.',
-        'Open your browser\'s extensions page and enable Developer mode.',
-        'Click Load unpacked and select the extracted folder.',
-      ],
+      downloadLabel: 'Add to Chrome',
+      downloadHref: BROWSER_STORE_URLS.chromium,
       accentClass: 'chrome',
       logoSrc: chromeLogo,
     },
     {
       name: 'Firefox',
-      compatibility: 'Firefox 109+',
-      downloadLabel: 'Download Firefox Add-on',
-      downloadHref: pluginArtifacts.firefox.url,
-      artifactVersion: pluginArtifacts.firefox.version,
-      format: 'XPI',
-      note: 'Unsigned builds require temporary installation via the debugging page.',
-      steps: [
-        'Download the .xpi file.',
-        'Open about:debugging#/runtime/this-firefox.',
-        'Click Load Temporary Add-on and select the file.',
-      ],
+      compatibility: 'Firefox 140+',
+      downloadLabel: 'Add to Firefox',
+      downloadHref: BROWSER_STORE_URLS.firefox,
       accentClass: 'firefox',
       logoSrc: firefoxLogo,
     },
@@ -116,22 +101,11 @@
                 <span class="compatibility">{dl.compatibility}</span>
               </div>
             </div>
-            <span class="file-pill">{dl.format} · v{dl.artifactVersion}</span>
           </div>
 
-          <a class="download-button" href={dl.downloadHref} download>
+          <a class="download-button" href={dl.downloadHref} target="_blank" rel="noopener">
             {dl.downloadLabel}
           </a>
-
-          <details class="install-details">
-            <summary>Installation steps</summary>
-            <p class="install-note">{dl.note}</p>
-            <ol class="steps">
-              {#each dl.steps as step}
-                <li>{step}</li>
-              {/each}
-            </ol>
-          </details>
         </article>
       {/each}
     </div>

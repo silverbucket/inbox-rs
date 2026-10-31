@@ -3,12 +3,9 @@
   import captureLogo from '../../assets/logos/favicon-shield.svg';
   import firefoxLogo from '../../assets/logos/firefox.svg';
   import thunderbirdLogo from '../../assets/logos/thunderbird.svg';
+  import { BROWSER_STORE_URLS } from '../../lib/constants';
   import { pluginArtifacts } from '../../lib/plugin-downloads.generated';
   import OfflineTranscriptionAssets from '../OfflineTranscriptionAssets.svelte';
-
-  // Firefox refuses to install the unsigned XPI we host under /downloads, so
-  // send users to the signed listing on AMO instead.
-  const firefoxAddonUrl = 'https://addons.mozilla.org/firefox/addon/inbox-rs/';
 </script>
 
 <div class="settings-section">
@@ -35,8 +32,8 @@
       <div class="row-desc">Save the page you're on with one click. Chrome and Firefox.</div>
     </div>
     <div class="row-ctl">
-      <a class="btn" href={pluginArtifacts.chromium.url} download>Get for Chrome</a>
-      <a class="btn" href={firefoxAddonUrl} target="_blank" rel="noopener">Get for Firefox</a>
+      <a class="btn" href={BROWSER_STORE_URLS.chromium} target="_blank" rel="noopener">Get for Chrome</a>
+      <a class="btn" href={BROWSER_STORE_URLS.firefox} target="_blank" rel="noopener">Get for Firefox</a>
     </div>
   </div>
 

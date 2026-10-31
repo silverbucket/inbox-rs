@@ -1,3 +1,9 @@
+export const BROWSER_STORE_URLS = {
+  chromium:
+    'https://chromewebstore.google.com/detail/inbox-rs/dpbpfajhfjomkbeihkkbfekabllffilo',
+  firefox: 'https://addons.mozilla.org/firefox/addon/inbox-rs/',
+} as const;
+
 export const PRESET_COLORS = [
   // violet → pink → red → orange
   '#6366f1',
