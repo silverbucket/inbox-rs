@@ -50,8 +50,11 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-/** Pull `--name: #hex` declarations out of the first block matching `selector`. */
-function tokens(source: string, selector: string): Record<string, string> {
+/** All `--name: value` declarations in the first block matching `selector`. */
+function declarations(
+  source: string,
+  selector: string,
+): Record<string, string> {
   const start = source.indexOf(selector);
   if (start < 0) throw new Error(`missing ${selector}`);
   const body = source.slice(
@@ -59,12 +62,31 @@ function tokens(source: string, selector: string): Record<string, string> {
     source.indexOf('}', start),
   );
   return Object.fromEntries(
-    [...body.matchAll(/(--[\w-]+):\s*(#[0-9a-f]{6})/gi)].map((m) => [
-      m[1],
-      m[2],
-    ]),
+    [...body.matchAll(/(--[\w-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2]]),
   );
 }
+
+/** Just the `--name: #hex` declarations. */
+function tokens(source: string, selector: string): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(declarations(source, selector)).filter(([, v]) =>
+      /^#[0-9a-f]{6}$/i.test(v),
+    ),
+  );
+}
+
+/** Explicit and system-preference light blocks for each stylesheet. */
+const LIGHT_BLOCKS: [source: string, explicit: string, system: string][] = [
+  [globalCss, ':root[data-theme="light"]', ':root:not([data-theme="dark"])'],
+  ...PALETTES.filter((p) => p !== 'paper').map(
+    (p) =>
+      [
+        palettesCss,
+        `:root[data-palette="${p}"][data-theme="light"]`,
+        `:root[data-palette="${p}"]:not([data-theme="dark"])`,
+      ] as [string, string, string],
+  ),
+];
 
 /** Paper (global.css) is the base; other palettes override its neutrals. */
 function palette(name: string, mode: 'dark' | 'light') {
@@ -141,6 +163,53 @@ describe('theme contrast', () => {
       });
     }
   }
+
+  it('system-preference light blocks match the explicit light blocks', () => {
+    for (const [source, explicit, system] of LIGHT_BLOCKS) {
+      expect(declarations(source, system), system).toEqual(
+        declarations(source, explicit),
+      );
+    }
+  });
+
+  it('--accent-text points at the shade for its mode', () => {
+    expect(declarations(globalCss, ':root {')['--accent-text']).toBe(
+      'var(--accent-text-dark)',
+    );
+    for (const selector of [
+      ':root[data-theme="light"]',
+      ':root:not([data-theme="dark"])',
+    ]) {
+      expect(declarations(globalCss, selector)['--accent-text']).toBe(
+        'var(--accent-text-light)',
+      );
+    }
+  });
+
+  it('selected text stays readable on the selection tint', () => {
+    for (const mode of ['dark', 'light'] as const) {
+      const selection = declarations(
+        globalCss,
+        mode === 'dark' ? ':root {' : ':root[data-theme="light"]',
+      )['--selection'];
+      const pct = selection.match(/var\(--accent\) (\d+)%/)?.[1];
+      expect(pct, selection).toBeDefined();
+      for (const name of PALETTES) {
+        const t = palette(name, mode);
+        for (const accent of ACCENTS) {
+          const fill = tokens(accentsCss, `:root[data-accent="${accent}"]`)[
+            '--accent'
+          ];
+          for (const bg of surfaces(t)) {
+            expect(
+              contrast(t['--text'], tint(fill, bg, Number(pct) / 100)),
+              `${name} ${mode} ${accent} on ${bg}`,
+            ).toBeGreaterThanOrEqual(MIN);
+          }
+        }
+      }
+    }
+  });
 
   it('white text stays readable on every accent fill and its hover', () => {
     for (const accent of ACCENTS) {

@@ -638,7 +638,8 @@
     font-weight: 600;
     letter-spacing: 0.03em;
     color: var(--warn-text);
-    background: color-mix(in srgb, var(--warn) 16%, transparent);
+    /* Opaque, so a hovered row's accent tint can't compound under it. */
+    background: color-mix(in srgb, var(--warn) 16%, var(--surface));
     padding: 0.12rem 0.4rem;
     border-radius: 4px;
     flex-shrink: 0;

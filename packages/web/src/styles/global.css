@@ -47,6 +47,9 @@
      fills under white text and is unreadable as text in dark mode. */
   --accent-text: var(--accent-text-dark);
   --accent-text-hover: color-mix(in srgb, var(--accent-text) 70%, white);
+  /* Text selection: a fill-based tint, lighter in light mode, so --text keeps
+     4.5:1 on it. */
+  --selection: color-mix(in srgb, var(--accent) 30%, transparent);
 
   /* Native UI (scrollbars, date pickers, checkboxes) follows the mode too —
      applyMode() only sets this inline for an explicit choice, not 'system'. */
@@ -78,6 +81,7 @@
     --accent-hover: color-mix(in srgb, var(--accent) 84%, black);
     --accent-text: var(--accent-text-light);
     --accent-text-hover: color-mix(in srgb, var(--accent-text) 80%, black);
+    --selection: color-mix(in srgb, var(--accent) 16%, transparent);
     color-scheme: light;
   }
 }
@@ -102,6 +106,7 @@
   --accent-hover: color-mix(in srgb, var(--accent) 84%, black);
   --accent-text: var(--accent-text-light);
   --accent-text-hover: color-mix(in srgb, var(--accent-text) 80%, black);
+  --selection: color-mix(in srgb, var(--accent) 16%, transparent);
   color-scheme: light;
 }
 
@@ -161,7 +166,8 @@ button {
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--accent-text) 30%, transparent);
+  background: var(--selection);
+  color: var(--text);
 }
 
 a {
