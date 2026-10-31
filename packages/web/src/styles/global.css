@@ -50,6 +50,9 @@
   /* Text selection: a fill-based tint, lighter in light mode, so --text keeps
      4.5:1 on it. */
   --selection: color-mix(in srgb, var(--accent) 30%, transparent);
+  /* Markdown code blocks stay dark (#0d1117, #e6edf3 text) in both modes,
+     so they get their own opaque selection rather than --selection. */
+  --code-selection: color-mix(in srgb, var(--accent) 50%, #0d1117);
 
   /* Native UI (scrollbars, date pickers, checkboxes) follows the mode too —
      applyMode() only sets this inline for an explicit choice, not 'system'. */
@@ -168,6 +171,12 @@ button {
 ::selection {
   background: var(--selection);
   color: var(--text);
+}
+
+pre::selection,
+pre ::selection {
+  background: var(--code-selection);
+  color: #e6edf3;
 }
 
 a {

@@ -211,6 +211,27 @@ describe('theme contrast', () => {
     }
   });
 
+  it('selected code stays readable in the always-dark code blocks', () => {
+    const [, pct, codeBg] =
+      declarations(globalCss, ':root {')['--code-selection'].match(
+        /var\(--accent\) (\d+)%, (#[0-9a-f]{6})/i,
+      ) ?? [];
+    const codeText = globalCss.match(
+      /pre ::selection \{[^}]*color: (#[0-9a-f]{6})/i,
+    )?.[1];
+    expect(codeBg).toBeDefined();
+    expect(codeText).toBeDefined();
+    for (const accent of ACCENTS) {
+      const fill = tokens(accentsCss, `:root[data-accent="${accent}"]`)[
+        '--accent'
+      ];
+      expect(
+        contrast(codeText as string, tint(fill, codeBg, Number(pct) / 100)),
+        accent,
+      ).toBeGreaterThanOrEqual(MIN);
+    }
+  });
+
   it('white text stays readable on every accent fill and its hover', () => {
     for (const accent of ACCENTS) {
       const t = tokens(accentsCss, `:root[data-accent="${accent}"]`);
