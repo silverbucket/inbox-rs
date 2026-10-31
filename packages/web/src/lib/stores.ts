@@ -2240,10 +2240,20 @@ export const visibleOpenTodos = derived(visibleTodos, ($visibleTodos) =>
 );
 
 /**
- * Persist a new order for todos on the flat Todos page. Only stores the ids
- * the caller passed — any todos that appear later fall back to createdAt
- * ordering via `sortWithConfiguredOrder`.
+ * Persist a new order for the open todos the flat Todos page had on screen.
+ *
+ * That list is a filtered view: the group filter hides other groups' todos,
+ * and completed or on-calendar todos are not in the drag list. Replacing
+ * `todosGlobalOrder` with it would drop everyone the user could not see, so
+ * clearing the filter (or un-completing a todo) would find them dumped at
+ * the end, in `createdAt` order. Splice the dragged order into the stored
+ * one instead — the same rule as `reorderGroups`. Ids that show up later,
+ * with no slot yet, still fall back to `createdAt` via
+ * `sortWithConfiguredOrder` until a later reorder appends them.
  */
 export async function reorderTodosGlobal(newOrder: string[]) {
-  await updateConfig({ todosGlobalOrder: newOrder });
+  const existing = get(appConfig).todosGlobalOrder ?? [];
+  await updateConfig({
+    todosGlobalOrder: spliceIntoOrder(existing, newOrder),
+  });
 }
