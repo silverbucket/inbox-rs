@@ -1,6 +1,6 @@
 {
   "name": "@inbox-rs/extension",
-  "version": "2.6.5",
+  "version": "2.6.7",
   "private": true,
   "type": "module",
   "scripts": {
