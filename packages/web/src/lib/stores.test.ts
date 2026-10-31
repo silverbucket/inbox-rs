@@ -2374,6 +2374,30 @@ describe('reorderTodosGlobal', () => {
 
     expect(get(appConfig).todosGlobalOrder).toEqual(['t2', 't1']);
   });
+
+  it('keeps todos the page did not have on screen', async () => {
+    // The Todos page hands back only the open rows in the current group
+    // filter. Persisting that list verbatim would evict the rest, and
+    // clearing the filter would find them dumped at the end.
+    appConfig.set({ todosGlobalOrder: ['hidden', 't1', 'done', 't2'] });
+
+    await reorderTodosGlobal(['t2', 't1']);
+
+    expect(get(appConfig).todosGlobalOrder).toEqual([
+      'hidden',
+      't2',
+      'done',
+      't1',
+    ]);
+  });
+
+  it('leaves the stored order alone when given an empty array', async () => {
+    appConfig.set({ todosGlobalOrder: ['t1', 't2'] });
+
+    await reorderTodosGlobal([]);
+
+    expect(get(appConfig).todosGlobalOrder).toEqual(['t1', 't2']);
+  });
 });
 
 // ---- deleteCollection: must-be-empty guard ----
