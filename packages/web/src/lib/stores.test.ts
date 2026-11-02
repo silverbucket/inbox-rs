@@ -65,6 +65,7 @@ import {
   archivedGroups,
   authorizationRequired,
   blobUrls,
+  clearSessionVisibleTodos,
   collectionItems,
   collections,
   connected,
@@ -76,8 +77,10 @@ import {
   enableCollectionFilter,
   groupCollections,
   groups,
+  hiddenCollectionIds,
   inactiveCollectionIds,
   items,
+  keepTodoVisible,
   loadFileBlobUrl,
   moveCollectionToGroup,
   moveItemToCollection,
@@ -90,6 +93,7 @@ import {
   reorderGroups,
   reorderTodosGlobal,
   reorderUnfiledTodos,
+  sessionVisibleTodoIds,
   setActiveGroupFilters,
   setCollectionArchived,
   setGroupArchived,
@@ -1378,6 +1382,23 @@ describe('visibleGroupedCollections', () => {
 
     expect(get(soleVisibleCollectionId)).toBeUndefined();
   });
+
+  it('lists the collections the filters keep out of view', () => {
+    const c1 = makeCollection('c1', 'g1');
+    const c2 = makeCollection('c2', 'g1');
+    const c3 = makeCollection('c3', 'g2');
+    collections.set({ c1, c2, c3 });
+    groups.set({
+      g1: makeGroup('g1', ['c1', 'c2']),
+      g2: makeGroup('g2', ['c3']),
+    });
+    appConfig.set({
+      activeGroupFilters: ['g1'],
+      inactiveCollectionFilters: ['c2'],
+    });
+
+    expect([...get(hiddenCollectionIds)].sort()).toEqual(['c2', 'c3']);
+  });
 });
 
 describe('collection filter (sidebar)', () => {
@@ -2201,6 +2222,43 @@ describe('visibleTodos', () => {
     });
 
     expect(get(visibleTodos).map((t) => t.id)).toEqual(['c1']);
+  });
+
+  it('keeps a todo deliberately filed into a hidden collection, until the filter changes', () => {
+    clearSessionVisibleTodos();
+    items.set({
+      c1: makeTodo('c1', { collectionId: 'col-active' }),
+      c2: makeTodo('c2', { collectionId: 'col-hidden' }),
+    });
+    collections.set({
+      'col-active': { ...makeCollection('col-active', 'g-active') },
+      'col-hidden': { ...makeCollection('col-hidden', 'g-hidden') },
+    });
+    groups.set({
+      'g-active': makeGroup('g-active', ['col-active']),
+      'g-hidden': makeGroup('g-hidden', ['col-hidden']),
+    });
+    appConfig.set({ activeGroupFilters: ['g-active'] });
+    expect(get(visibleTodos).map((t) => t.id)).toEqual(['c1']);
+
+    keepTodoVisible('c2');
+    expect(
+      get(visibleTodos)
+        .map((t) => t.id)
+        .sort(),
+    ).toEqual(['c1', 'c2']);
+
+    // Unrelated config churn leaves the pin alone…
+    appConfig.set({
+      activeGroupFilters: ['g-active'],
+      todosGlobalOrder: ['c1'],
+    });
+    expect(get(sessionVisibleTodoIds).has('c2')).toBe(true);
+
+    // …a filter change hands the list back to the filter.
+    appConfig.set({ activeGroupFilters: ['g-hidden'] });
+    expect(get(sessionVisibleTodoIds).size).toBe(0);
+    expect(get(visibleTodos).map((t) => t.id)).toEqual(['c2']);
   });
 
   it('hides todos from collections without a real group', () => {

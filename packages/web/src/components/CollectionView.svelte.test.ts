@@ -26,6 +26,9 @@ vi.mock('../lib/stores', async () => {
     groups: writable({}),
     collections: writable({}),
     groupCollections: writable({}),
+    visibleGroupedCollections: writable([]),
+    hiddenCollectionIds: writable(new Set()),
+    keepTodoVisible: vi.fn(),
     ...storeFns,
   };
 });

@@ -1,4 +1,5 @@
 import type { Collection, InboxItem } from '@inbox-rs/rs-module';
+import { writable } from 'svelte/store';
 
 /**
  * Collection-filing suggestions for the card view's picker.
@@ -41,6 +42,13 @@ const RECENT_KEY = 'inbox-rs:recent-collections';
 const RECENT_MAX = 12;
 export const SUGGESTION_MAX = 3;
 
+/**
+ * Bumped on every `recordCollectionUse`, so stores that fold recency into a
+ * derived value (the todo destination default) recompute without the
+ * localStorage list itself having to be a store.
+ */
+export const recentCollectionsVersion = writable(0);
+
 /** Most-recently-used collection ids, newest first. */
 export function getRecentCollectionIds(): string[] {
   try {
@@ -63,6 +71,7 @@ export function recordCollectionUse(collectionId: string): void {
       ...getRecentCollectionIds().filter((id) => id !== collectionId),
     ].slice(0, RECENT_MAX);
     localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+    recentCollectionsVersion.update((v) => v + 1);
   } catch {
     // Storage unavailable (private mode, quota) — suggestions just lose the
     // recency signal; filing itself is unaffected.

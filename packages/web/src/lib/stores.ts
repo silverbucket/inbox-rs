@@ -1856,6 +1856,68 @@ export const soleVisibleCollectionId = derived(
 );
 
 /**
+ * Grouped collections the current filters keep out of view — their group is
+ * switched off, or they are individually hidden. The inverse of
+ * `visibleGroupedCollections`; capture surfaces use it to keep a hidden
+ * destination from becoming a default, and the picker to section hidden
+ * collections off from the ones in view.
+ */
+export const hiddenCollectionIds = derived(
+  [sortedGroups, groupCollections, visibleGroupedCollections],
+  ([$sortedGroups, $groupCollections, $sections]): Set<string> => {
+    const visible = new Set<string>();
+    for (const section of $sections) {
+      for (const col of section.collections) visible.add(col.id);
+    }
+    const hidden = new Set<string>();
+    for (const g of $sortedGroups) {
+      for (const col of $groupCollections[g.id] ?? []) {
+        if (!visible.has(col.id)) hidden.add(col.id);
+      }
+    }
+    return hidden;
+  },
+);
+
+/**
+ * Todos the Todos page keeps showing even though the group filter would
+ * drop them: a todo just filed, on purpose, into a hidden collection. The
+ * user watched it land, so it stays put instead of vanishing. Cleared when
+ * the filters change (the list is then rebuilt on the user's new terms) or
+ * when the page is left.
+ */
+export const sessionVisibleTodoIds = writable<Set<string>>(new Set());
+
+export function keepTodoVisible(id: string): void {
+  sessionVisibleTodoIds.update((set) => {
+    if (set.has(id)) return set;
+    const next = new Set(set);
+    next.add(id);
+    return next;
+  });
+}
+
+export function clearSessionVisibleTodos(): void {
+  if (get(sessionVisibleTodoIds).size === 0) return;
+  sessionVisibleTodoIds.set(new Set());
+}
+
+// Any change to the effective filters resets the kept-visible set. Compared
+// by content: the derived sets are rebuilt on unrelated changes (a filed
+// todo bumps `groupCollections`), and that must not clear the pins.
+let lastFilterKey: string | undefined;
+derived(
+  [activeGroupIds, inactiveCollectionIds],
+  ([$groups, $cols]) =>
+    `${[...$groups].sort().join(',')}|${[...$cols].sort().join(',')}`,
+).subscribe((key) => {
+  if (lastFilterKey !== undefined && key !== lastFilterKey) {
+    clearSessionVisibleTodos();
+  }
+  lastFilterKey = key;
+});
+
+/**
  * Collections whose `groupId` is unset or refers to a group that no longer
  * exists. Surfaced read-only on the Collections page as an advisory section
  * so users can edit each one back into a real group (or delete it). We do
@@ -2143,8 +2205,10 @@ function todoPassesGroupFilter(
 
 /**
  * Todos visible on the flat Todos page. Unfiled todos are always visible;
- * filed todos honour the group-filter row. Sorted by `todosGlobalOrder`; ids
- * missing from that order fall back to newest-first on `createdAt`. Completed
+ * filed todos honour the group-filter row, except those the user just filed
+ * into a hidden collection on purpose (`sessionVisibleTodoIds`). Sorted by
+ * `todosGlobalOrder`; ids missing from that order fall back to newest-first
+ * on `createdAt`. Completed
  * and open todos are mixed — the page splits them at render time.
  */
 export const visibleTodos = derived(
@@ -2155,6 +2219,7 @@ export const visibleTodos = derived(
     inactiveCollectionIds,
     appConfig,
     todayStart,
+    sessionVisibleTodoIds,
   ],
   ([
     $allTodos,
@@ -2163,16 +2228,18 @@ export const visibleTodos = derived(
     $inactiveCollectionIds,
     $config,
     $todayStart,
+    $kept,
   ]) => {
     const filtered = $allTodos.filter(
       (todo) =>
         !todo.archived &&
-        todoPassesGroupFilter(
-          todo,
-          $collections,
-          $activeGroupIds,
-          $inactiveCollectionIds,
-        ),
+        ($kept.has(todo.id) ||
+          todoPassesGroupFilter(
+            todo,
+            $collections,
+            $activeGroupIds,
+            $inactiveCollectionIds,
+          )),
     );
 
     const sorted = sortWithConfiguredOrder(

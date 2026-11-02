@@ -15,10 +15,10 @@
     shouldUseRecentDestination,
   } from '../lib/add-entry-modal';
   import { get } from 'svelte/store';
-  import { collections } from '../lib/stores';
+  import { hiddenCollectionIds } from '../lib/stores';
+  import { todoDestinationDefault } from '../lib/todo-destination';
   import { enrichBookmark, needsEnrichment } from '../lib/enrich';
   import {
-    getRecentCollectionIds,
     recordCollectionUse,
     type FilingSubject,
   } from '../lib/collection-suggest';
@@ -71,9 +71,10 @@
   let draftUrl = $state('');
 
   /**
-   * The most recent filing target that still exists, for callers that gave no
-   * destination context. Todos only: repeat todo captures usually file to the
-   * same place, and the meta strip's Unfiled reset makes escaping it one click.
+   * The default destination for callers that gave no context. Todos only,
+   * and the same rule as the Todos page composer (`todo-destination.ts`):
+   * recency when the view is unfiltered, and never a collection the current
+   * filter hides. The meta strip's Unfiled reset makes escaping it one click.
    * Refs deliberately opt out — capturing from the inbox should land in the
    * Inbox, not get whisked off to wherever you last filed something. Recency
    * still ranks the picker's suggestions, so the last target is one tap away.
@@ -81,11 +82,7 @@
    */
   function rememberedDestination(): string | undefined {
     if (!shouldUseRecentDestination(isEdit, type)) return undefined;
-    const cols = get(collections);
-    for (const id of getRecentCollectionIds()) {
-      if (cols[id]) return id;
-    }
-    return undefined;
+    return get(todoDestinationDefault);
   }
 
   let selectedCollectionId = $state<string | undefined>(
@@ -547,6 +544,7 @@
       <CollectionPicker
         item={pickerSubject}
         mode={isTodoType ? 'todo' : 'move'}
+        hiddenCollectionIds={isTodoType ? $hiddenCollectionIds : undefined}
         onpick={selectCollection}
         onclose={() => (collectionPickerOpen = false)}
       />

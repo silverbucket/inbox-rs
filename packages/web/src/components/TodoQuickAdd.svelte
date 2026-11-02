@@ -6,28 +6,35 @@
    * capture bar.
    *
    * When `fixedCollectionId` is set (collection view), todos are filed there
-   * and the collection select is hidden. Otherwise the select lets the user
-   * pick a destination, persisted per-device.
+   * and the collection select is hidden. Otherwise the destination follows
+   * the shared rule in `todo-destination.ts`: it never points outside the
+   * current view, so a plain-Enter capture always lands in the list it was
+   * typed into. The chip lets the user pick anything — including a hidden
+   * collection, which then stays an explicit, session-only choice.
    */
   import { tick } from 'svelte';
-  import { get } from 'svelte/store';
   import { canCaptureTodo, makeUnfiledTodo } from '../lib/add-entry-modal';
   import { autofocusIf } from '../lib/actions';
   import { modLabel } from '../lib/platform';
-  import { showToast } from '../lib/toast';
-  import type { FilingSubject } from '../lib/collection-suggest';
+  import {
+    type FilingSubject,
+    recordCollectionUse,
+  } from '../lib/collection-suggest';
   import { formatScheduled, type PendingSchedule } from '../lib/schedule';
   import { applyPendingSchedule } from '../lib/schedule-sync';
+  import {
+    rememberTodoDestination,
+    todoDestinationDefault,
+  } from '../lib/todo-destination';
   import CollectionPicker from './CollectionPicker.svelte';
   import ScheduleSheet from './ScheduleSheet.svelte';
   import {
-    activeGroupIds,
     collections,
+    hiddenCollectionIds,
+    keepTodoVisible,
     moveItemToCollection,
-    soleVisibleCollectionId,
     sortedGroups,
     storeItem,
-    toggleGroupFilter,
   } from '../lib/stores';
 
   let {
@@ -68,61 +75,31 @@
     return out;
   });
 
-  // Per-device quick-add destination (hidden when a fixed collection is given).
-  // localStorage rather than synced config so a stale remote copy can't clobber
-  // a just-set local value.
-  const QUICK_ADD_KEY = 'inbox-rs:quickAddCollectionId';
-  function readStoredQuickAddId(): string | undefined {
-    try {
-      return localStorage.getItem(QUICK_ADD_KEY) ?? undefined;
-    } catch {
-      return undefined;
-    }
-  }
-  let storedQuickAddId = $state<string | undefined>(readStoredQuickAddId());
-  // Whether the user has actively chosen a destination in this composer
-  // instance. Distinguishes a deliberate in-session pick (honored verbatim,
-  // even into a hidden group) from the passively-restored default (guarded
-  // below). Resets on remount, so a stale hidden default never silently
-  // reapplies across reloads.
-  let userPicked = $state(false);
-
-  /** True when the collection exists, belongs to a known group, and that group
-   *  is currently filtered out of view — i.e. filing here makes the todo
-   *  vanish from the list. Ungrouped/orphan collections are never hidden. */
+  /** True when filing here would put the todo outside the current view. */
   function isOutOfView(id: string | undefined): boolean {
-    const gid = id ? collectionMap[id]?.groupId : undefined;
-    return !!gid && !!groupMap()[gid] && !$activeGroupIds.has(gid);
+    return !!id && $hiddenCollectionIds.has(id);
   }
 
-  // The remembered preference, if it still resolves to a real collection.
-  const pickedId = $derived(
-    storedQuickAddId && collectionMap[storedQuickAddId]
-      ? storedQuickAddId
-      : undefined,
-  );
-  // The passive default never targets a hidden group: a plain-Enter add would
-  // file the todo where it can't be seen. When the filters leave one visible
-  // collection, that focused collection takes priority; otherwise use the
-  // safe remembered destination or leave the todo Unfiled.
-  const defaultCollectionId = $derived(
-    $soleVisibleCollectionId ??
-      (pickedId && !isOutOfView(pickedId) ? pickedId : undefined),
-  );
-  // Live select value: an explicit in-session pick wins (you may deliberately
-  // file into a hidden group — addQuickTodo surfaces a "Show" toast for that);
-  // otherwise use the guarded default.
-  const quickAddCollectionId = $derived(userPicked ? pickedId : defaultCollectionId);
-  function setQuickAddCollection(id: string | undefined) {
-    storedQuickAddId = id;
-    userPicked = true;
-    try {
-      if (id) localStorage.setItem(QUICK_ADD_KEY, id);
-      else localStorage.removeItem(QUICK_ADD_KEY);
-    } catch (error) {
-      console.error('Failed to persist quick-add collection', error);
+  // A pick the shared default can't express: a hidden collection (`string`)
+  // or Unfiled while the view is narrowed (`null`). Session-only, and
+  // dropped the moment the filters change — the new filter is the user's
+  // newer, stronger statement of where they are working.
+  let explicitPick = $state<string | null | undefined>(undefined);
+  const filterKey = $derived([...$hiddenCollectionIds].sort().join(','));
+  let lastFilterKey: string | undefined;
+  $effect(() => {
+    const key = filterKey;
+    if (lastFilterKey !== undefined && key !== lastFilterKey) {
+      explicitPick = undefined;
     }
-  }
+    lastFilterKey = key;
+  });
+
+  const quickAddCollectionId = $derived(
+    explicitPick === null
+      ? undefined
+      : (explicitPick ?? $todoDestinationDefault),
+  );
 
   const targetCollectionId = $derived(fixedCollectionId ?? quickAddCollectionId);
 
@@ -153,8 +130,12 @@
     const col = quickAddCollectionId
       ? collectionMap[quickAddCollectionId]
       : undefined;
-    if (!col) return { name: 'Unfiled', color: '#9ca3af' };
-    return { name: col.name, color: col.color || '#6366f1' };
+    if (!col) return { name: 'Unfiled', color: '#9ca3af', hidden: false };
+    return {
+      name: col.name,
+      color: col.color || '#6366f1',
+      hidden: isOutOfView(col.id),
+    };
   });
 
   /** What the picker files: the composed title feeds name-match suggestions. */
@@ -165,22 +146,24 @@
   });
 
   function handlePick(id: string | undefined) {
-    setQuickAddCollection(id);
+    // Visible picks become the remembered default; the shared rule then
+    // keeps or drops them as the view changes. Anything the rule can't hold
+    // (a hidden collection, Unfiled under a filter) is kept here explicitly.
+    rememberTodoDestination(id ?? null);
+    explicitPick = id === undefined ? null : isOutOfView(id) ? id : undefined;
     pickerOpen = false;
     // Hand focus back to the title so capture flow isn't interrupted.
     quickInputEl?.focus();
   }
 
   // Where plain Enter will file the todo, shown in the hint while composing so
-  // the destination is predictable before submitting. Flags an out-of-view
-  // target so an explicit hidden pick isn't a surprise.
+  // the destination is predictable before submitting.
   const destinationLabel = $derived.by(() => {
     const id = targetCollectionId;
     const col = id ? collectionMap[id] : undefined;
     if (!col) return 'Unfiled';
     const group = col.groupId ? groupMap()[col.groupId] : undefined;
-    const base = group ? `${group.name} › ${col.name}` : col.name;
-    return isOutOfView(id) ? `${base} (hidden)` : base;
+    return group ? `${group.name} › ${col.name}` : col.name;
   });
 
   async function addQuickTodo() {
@@ -201,7 +184,10 @@
       // Separate step keeps collection.itemIds in sync, matching AddEntryModal.
       if (targetCollectionId) {
         await moveItemToCollection(todo.id, targetCollectionId);
-        notifyIfOutOfView(targetCollectionId);
+        recordCollectionUse(targetCollectionId);
+        // Filed somewhere the filter hides on purpose: the row stays in the
+        // list, tagged with its collection, instead of vanishing on Enter.
+        if (isOutOfView(targetCollectionId)) keepTodoVisible(todo.id);
       }
       filed = true;
       if (pendingSchedule) {
@@ -234,29 +220,6 @@
       await tick();
       quickInputEl?.focus();
     }
-  }
-
-  // After filing into a collection whose group is filtered out of view, the
-  // todo is intact but invisible here. Confirm where it went and offer a
-  // one-tap reveal so it never feels like it vanished — no after-the-fact edit.
-  function notifyIfOutOfView(collectionId: string) {
-    if (!isOutOfView(collectionId)) return;
-    const col = collectionMap[collectionId];
-    const gid = col?.groupId;
-    if (!gid) return;
-    showToast(`Added to ${col.name} — hidden from this view`, {
-      label: 'Show',
-      // Guard against a double-toggle if the group was revealed meanwhile.
-      run: () => {
-        if (get(activeGroupIds).has(gid)) return;
-        // A failed config write would otherwise be an unhandled rejection;
-        // tell the user the reveal didn't take so they can retry.
-        void toggleGroupFilter(gid).catch((error) => {
-          console.error('Failed to reveal hidden group', error);
-          showToast('Could not show the group. Please try again.');
-        });
-      },
-    });
   }
 
   // Clear a stale error once the user edits the input. Driven by the input's
@@ -317,7 +280,10 @@
     <button
       type="button"
       class="quick-add__collection"
-      aria-label="File into collection"
+      class:is-hidden-pick={chip.hidden}
+      aria-label={chip.hidden
+        ? `File into collection — ${chip.name} is hidden by your filter`
+        : 'File into collection'}
       aria-haspopup="dialog"
       aria-expanded={pickerOpen}
       disabled={quickSaving}
@@ -329,6 +295,26 @@
         aria-hidden="true"
       ></span>
       <span class="chip-name">{chip.name}</span>
+      {#if chip.hidden}
+        <!-- Eye-off: this destination is outside the filtered view. -->
+        <svg
+          aria-hidden="true"
+          class="chip-hidden"
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"></path>
+          <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path>
+          <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"></path>
+          <line x1="1" y1="1" x2="23" y2="23"></line>
+        </svg>
+      {/if}
       <svg
         aria-hidden="true"
         class="chip-chevron"
@@ -393,6 +379,7 @@
   <CollectionPicker
     item={pickerSubject}
     mode="todo"
+    hiddenCollectionIds={$hiddenCollectionIds}
     onpick={handlePick}
     onclose={() => (pickerOpen = false)}
   />
@@ -537,6 +524,18 @@
   .chip-chevron {
     flex-shrink: 0;
     opacity: 0.6;
+    color: var(--text-muted);
+  }
+
+  /* A deliberate pick outside the filtered view reads muted, with the eye-off
+     mark carrying the "hidden" meaning so the chip needs no extra words. */
+  .quick-add button.quick-add__collection.is-hidden-pick {
+    color: var(--text-muted);
+    border-style: dashed;
+  }
+
+  .chip-hidden {
+    flex-shrink: 0;
     color: var(--text-muted);
   }
 

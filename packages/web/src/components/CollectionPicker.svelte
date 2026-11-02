@@ -24,6 +24,7 @@
   let {
     item,
     mode = 'move',
+    hiddenCollectionIds = undefined,
     onpick,
     onclose,
   }: {
@@ -34,6 +35,14 @@
      * 'todo' — choosing where a converted todo lands; always offers Unfiled.
      */
     mode?: 'move' | 'todo';
+    /**
+     * Collections the caller's view currently hides (group filtered out or
+     * individually switched off). They leave their group sections and
+     * suggestions for a trailing "Hidden by your filter" section, so filing
+     * outside the view is always a deliberate choice. Omit to treat every
+     * collection as in view.
+     */
+    hiddenCollectionIds?: Set<string>;
     /** `undefined` collectionId = Inbox / Unfiled. */
     onpick: (collectionId: string | undefined) => void;
     onclose: () => void;
@@ -72,11 +81,19 @@
     ...$orphanCollections,
   ]);
 
-  // Suggestions only lead when the user isn't already narrowing by hand.
+  const isHidden = (col: Collection) => !!hiddenCollectionIds?.has(col.id);
+
+  // Suggestions only lead when the user isn't already narrowing by hand,
+  // and never point outside the caller's view.
   const suggestions = $derived(
     query.trim()
       ? []
-      : suggestCollections(item, allCollections, $items, getRecentCollectionIds()),
+      : suggestCollections(
+          item,
+          allCollections.filter((c) => !isHidden(c)),
+          $items,
+          getRecentCollectionIds(),
+        ),
   );
 
   const REASON_LABEL: Record<SuggestionReason, string> = {
@@ -85,21 +102,34 @@
     recent: 'recent',
   };
 
-  /** Groups with their collections, filtered by the query, current home excluded. */
+  const matchesQuery = (col: Collection, group: CollectionGroup, q: string) =>
+    col.id !== item.collectionId &&
+    (!q ||
+      col.name.toLowerCase().includes(q) ||
+      group.name.toLowerCase().includes(q));
+
+  /** Groups with their in-view collections, filtered by the query, current home excluded. */
   const filteredGroups = $derived.by(() => {
     const q = query.trim().toLowerCase();
     return $sortedGroups
       .map((group) => ({
         group,
         cols: ($groupCollections[group.id] ?? []).filter(
-          (col) =>
-            col.id !== item.collectionId &&
-            (!q ||
-              col.name.toLowerCase().includes(q) ||
-              group.name.toLowerCase().includes(q)),
+          (col) => !isHidden(col) && matchesQuery(col, group, q),
         ),
       }))
       .filter(({ cols }) => cols.length > 0);
+  });
+
+  /** Collections the caller's filter hides, query-filtered, each with its group. */
+  const filteredHidden = $derived.by(() => {
+    if (!hiddenCollectionIds || hiddenCollectionIds.size === 0) return [];
+    const q = query.trim().toLowerCase();
+    return $sortedGroups.flatMap((group) =>
+      ($groupCollections[group.id] ?? [])
+        .filter((col) => isHidden(col) && matchesQuery(col, group, q))
+        .map((col) => ({ col, group })),
+    );
   });
 
   /** Ungrouped collections, query-filtered — rendered under "Other". */
@@ -182,7 +212,10 @@
 
   function handleSearchKeydown(e: KeyboardEvent) {
     if (e.key !== 'Enter') return;
-    const first = filteredGroups[0]?.cols[0] ?? filteredOrphans[0];
+    const first =
+      filteredGroups[0]?.cols[0] ??
+      filteredOrphans[0] ??
+      filteredHidden[0]?.col;
     if (query.trim() && first) {
       onpick(first.id);
     } else if (query.trim() && !queryHasExactMatch) {
@@ -414,7 +447,36 @@
           {/each}
         {/if}
 
-        {#if hasAnyCollections && query.trim() && filteredGroups.length === 0 && filteredOrphans.length === 0}
+        {#if filteredHidden.length > 0}
+          <div class="group-label hidden-label">
+            <svg
+              aria-hidden="true"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"></path>
+              <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path>
+              <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"></path>
+              <line x1="1" y1="1" x2="23" y2="23"></line>
+            </svg>
+            Hidden by your filter
+          </div>
+          {#each filteredHidden as { col, group } (col.id)}
+            <button type="button" class="option option--hidden" onclick={() => onpick(col.id)}>
+              <span class="dot" style="background: {col.color || '#6366f1'}"></span>
+              <span class="col-name">{col.name}</span>
+              <span class="suggestion-group">{group.name}</span>
+            </button>
+          {/each}
+        {/if}
+
+        {#if hasAnyCollections && query.trim() && filteredGroups.length === 0 && filteredOrphans.length === 0 && filteredHidden.length === 0}
           <div class="empty">No matching collections</div>
         {/if}
 
@@ -630,6 +692,20 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  /* Hidden-by-filter section: muted so it reads as "outside the view",
+     with the eye-off mark on the label rather than extra words per row. */
+  .hidden-label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--text-muted);
+  }
+
+  .option--hidden .col-name {
+    color: var(--text-muted);
+  }
+
 
   /* Amber "why" tag. Dark is the app default; light overrides mirror the
      token pattern in global.css (media query + explicit data-theme). */
