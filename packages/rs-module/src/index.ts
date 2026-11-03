@@ -28,7 +28,11 @@ import type {
 import type { MigrateResult } from './vendor/rs-migrate.js';
 
 export { recoverLegacyBinaryStringEncoding } from './legacy/binary-recovery.js';
-export type { LinkMetadata, SockethubInfo } from './link-metadata.js';
+export type {
+  LinkEvent,
+  LinkMetadata,
+  SockethubInfo,
+} from './link-metadata.js';
 export {
   DEFAULT_SOCKETHUB_ENDPOINT,
   fetchLinkMetadata,

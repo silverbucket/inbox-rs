@@ -224,6 +224,50 @@ describe('applyLinkMetadata', () => {
   it('returns null when the metadata adds nothing', () => {
     expect(applyLinkMetadata(bookmark(), {})).toBeNull();
   });
+
+  it('schedules an unscheduled bookmark from the page event', () => {
+    const updated = applyLinkMetadata(bookmark(), {
+      event: {
+        name: 'Tech Talks',
+        startDate: '2026-11-09T18:00:00-06:00',
+        endDate: '2026-11-09T20:00:00-06:00',
+        location: 'Austin, TX',
+      },
+    });
+    expect(updated).toMatchObject({
+      scheduleKind: 'event',
+      startsAt: '2026-11-10T00:00:00.000Z',
+      endsAt: '2026-11-10T02:00:00.000Z',
+      body: '📍 Austin, TX',
+    });
+    expect(updated?.allDay).toBeUndefined();
+  });
+
+  it('treats a date-only event start as all-day on that local date', () => {
+    const updated = applyLinkMetadata(bookmark(), {
+      event: { name: 'Conf', startDate: '2026-11-09' },
+    });
+    expect(updated?.allDay).toBe(true);
+    expect(updated?.startsAt).toBe(new Date(2026, 10, 9).toISOString());
+  });
+
+  it('never overrides a time the user already set', () => {
+    const item = bookmark({
+      title: 'T',
+      description: 'D',
+      ogImage: 'i',
+      siteName: 'S',
+      favicon: 'f',
+      body: 'notes',
+      startsAt: '2026-01-01T10:00:00.000Z',
+      scheduleKind: 'task',
+    });
+    expect(
+      applyLinkMetadata(item, {
+        event: { name: 'E', startDate: '2026-11-09T18:00:00Z', location: 'X' },
+      }),
+    ).toBeNull();
+  });
 });
 
 describe('enrichBookmark', () => {

@@ -27,6 +27,8 @@ import type {
 } from '@inbox-rs/rs-module';
 import { noteTitleFromBody } from '@inbox-rs/rs-module';
 import { type BuildItemResult, getFileExtension } from './add-entry-modal';
+import { isCalendarFile, parseIcs } from './ics';
+import { applySchedule } from './schedule';
 import { generateThumbnail, THUMB_MIME_TYPE } from './thumbnail';
 
 export interface BuildContext {
@@ -274,6 +276,31 @@ export async function buildDocumentItem(
   ctx: BuildContext,
   data: DocumentFormData,
 ): Promise<BuildItemResult | null> {
+  // A calendar file (mail invite, event-site export) is worth more as a
+  // scheduled note than as an opaque file: title, time and details land on
+  // the card and it can go straight to a calendar. Unparseable files still
+  // store as documents.
+  if (data.file && !ctx.editItem && isCalendarFile(data.file)) {
+    const parsed = parseIcs(await data.file.text());
+    if (parsed) {
+      const note = buildNoteItem(ctx, {
+        title: data.title || parsed.title,
+        body: parsed.body,
+        description: data.description,
+      });
+      const durationMin = parsed.end
+        ? Math.round((parsed.end.getTime() - parsed.start.getTime()) / 60_000)
+        : undefined;
+      return {
+        item: applySchedule(note.item, {
+          kind: parsed.kind,
+          start: parsed.start,
+          durationMin,
+          allDay: parsed.allDay,
+        }),
+      };
+    }
+  }
   if (data.file) {
     const existingPath =
       ctx.editItem?.type === 'document' ? ctx.editItem.filePath : undefined;

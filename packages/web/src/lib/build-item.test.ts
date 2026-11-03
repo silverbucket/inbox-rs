@@ -638,6 +638,40 @@ describe('buildAudioItem', () => {
 });
 
 describe('buildDocumentItem', () => {
+  it('turns a calendar file into a scheduled note instead of a document', async () => {
+    const ics =
+      'BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:Standup\nDTSTART:20261110T090000Z\nDTEND:20261110T093000Z\nLOCATION:Room 1\nEND:VEVENT\nEND:VCALENDAR';
+    const result = await buildDocumentItem(ctx({ id: 'cal-1' }), {
+      title: '',
+      description: '',
+      file: new File([ics], 'invite.ics', { type: 'text/calendar' }),
+    });
+    expect(result?.fileData).toBeUndefined();
+    expect(result?.item).toMatchObject({
+      id: 'cal-1',
+      type: 'note',
+      title: 'Standup',
+      body: '📍 Room 1',
+      scheduleKind: 'event',
+      startsAt: '2026-11-10T09:00:00.000Z',
+      endsAt: '2026-11-10T09:30:00.000Z',
+    });
+  });
+
+  it('stores an unparseable .ics as a plain document', async () => {
+    const result = await buildDocumentItem(ctx({ id: 'cal-2' }), {
+      title: '',
+      description: '',
+      file: new File(['not a calendar'], 'broken.ics', {
+        type: 'text/calendar',
+      }),
+    });
+    expect(result?.item).toMatchObject({
+      type: 'document',
+      fileName: 'broken.ics',
+    });
+  });
+
   it('returns null without a file or edit target', async () => {
     expect(
       await buildDocumentItem(ctx(), {

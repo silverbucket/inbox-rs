@@ -14,12 +14,22 @@ const METADATA_CONTEXT = [
 
 const FETCH_TIMEOUT_MS = 30_000;
 
+/** A schema.org Event the page declares (Luma, Meetup, Eventbrite, …). */
+export interface LinkEvent {
+  name: string;
+  /** ISO 8601 as published; a date-only value means all-day. */
+  startDate: string;
+  endDate?: string;
+  location?: string;
+}
+
 export interface LinkMetadata {
   title?: string;
   description?: string;
   image?: string;
   siteName?: string;
   favicon?: string;
+  event?: LinkEvent;
 }
 
 export interface SockethubInfo {
@@ -93,6 +103,25 @@ function asHttpUrl(
   return undefined;
 }
 
+function asIsoDate(value: unknown): string | undefined {
+  const text = asNonEmptyString(value);
+  return text && !Number.isNaN(Date.parse(text)) ? text : undefined;
+}
+
+function asEvent(value: unknown): LinkEvent | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const event = value as Record<string, unknown>;
+  const name = asNonEmptyString(event.name);
+  const startDate = asIsoDate(event.startDate);
+  if (!name || !startDate) return undefined;
+  return {
+    name,
+    startDate,
+    endDate: asIsoDate(event.endDate),
+    location: asNonEmptyString(event.location),
+  };
+}
+
 export function normalizeMetadata(
   object: unknown,
   baseUrl?: string,
@@ -119,12 +148,14 @@ export function normalizeMetadata(
       asNonEmptyString(metadata.favicon) ?? asNonEmptyString(metadata.icon),
       baseUrl,
     ),
+    event: asEvent(metadata.event),
   };
   return normalized.title ||
     normalized.description ||
     normalized.image ||
     normalized.siteName ||
-    normalized.favicon
+    normalized.favicon ||
+    normalized.event
     ? normalized
     : null;
 }
