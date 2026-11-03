@@ -486,6 +486,29 @@ describe('TodoQuickAdd', () => {
     expect(chipText()).toBe('Roadmap');
   });
 
+  it('files into the destination shown at submit even if the filter changes mid-save', async () => {
+    seed({ hiddenGroups: ['g-home'] });
+    rememberTodoDestination('col-road');
+    render();
+    expect(chipText()).toBe('Roadmap');
+    let finishStore!: () => void;
+    storeItem.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishStore = resolve)),
+    );
+    type('ship it');
+    submitBtn().click();
+    await vi.waitFor(() => expect(storeItem).toHaveBeenCalled());
+    // Filter flips while the store write is in flight: Roadmap is now hidden.
+    seed({ hiddenGroups: ['g-work'] });
+    flushSync();
+    expect(chipText()).toBe('Garden');
+    finishStore();
+    await vi.waitFor(() => expect(moveItemToCollection).toHaveBeenCalled());
+    expect(moveItemToCollection.mock.calls[0][1]).toBe('col-road');
+    // …and it is not pinned: the list is already on the user's new terms.
+    expect(keepTodoVisible).not.toHaveBeenCalled();
+  });
+
   it('pins a hidden pick before the move so the row never blinks out', async () => {
     seed({ hiddenGroups: ['g-home'] });
     render();

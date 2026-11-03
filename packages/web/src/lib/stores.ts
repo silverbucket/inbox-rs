@@ -1903,17 +1903,17 @@ export function clearSessionVisibleTodos(): void {
 }
 
 /**
- * Content key of the effective todo filters (active groups + inactive
- * collections). Changes only when the user actually changes a filter; the
- * underlying sets are rebuilt on unrelated churn (a filed todo bumps
- * `groupCollections`), and that must not count. Session-only state keyed
- * on the filter — the pins below, the composer's explicit pick — resets
- * when this changes.
+ * Content key of the *stored* todo filter settings (group allow-list +
+ * collection deny-list). Changes only when a filter setting changes — not
+ * when a group arrives by sync under the default "all groups" filter, and
+ * not on unrelated store churn. Session-only state keyed on the filter —
+ * the pins below, the composer's explicit pick — resets when this changes.
  */
-export const todoFilterKey = derived(
-  [activeGroupIds, inactiveCollectionIds],
-  ([$groups, $cols]) =>
-    `${[...$groups].sort().join(',')}|${[...$cols].sort().join(',')}`,
+export const todoFilterKey = derived(appConfig, ($config) =>
+  JSON.stringify([
+    $config.activeGroupFilters ?? null,
+    [...($config.inactiveCollectionFilters ?? [])].sort(),
+  ]),
 );
 
 let lastFilterKey: string | undefined;

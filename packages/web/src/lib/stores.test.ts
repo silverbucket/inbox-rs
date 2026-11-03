@@ -2274,6 +2274,24 @@ describe('visibleTodos', () => {
     expect(get(visibleTodos).map((t) => t.id)).toEqual(['c2']);
   });
 
+  it('keeps pins when a group merely arrives under the default filter', () => {
+    clearSessionVisibleTodos();
+    items.set({ c2: makeTodo('c2', { collectionId: 'col-hidden' }) });
+    collections.set({
+      'col-hidden': { ...makeCollection('col-hidden', 'g-hidden') },
+    });
+    groups.set({ 'g-hidden': makeGroup('g-hidden', ['col-hidden']) });
+    appConfig.set({ inactiveCollectionFilters: ['col-hidden'] });
+    expect(get(visibleTodos)).toEqual([]);
+    keepTodoVisible('c2');
+    expect(get(visibleTodos).map((t) => t.id)).toEqual(['c2']);
+
+    // A synced-in group changes the active group set, not the filter.
+    groups.update((g) => ({ ...g, 'g-new': makeGroup('g-new') }));
+    expect(get(sessionVisibleTodoIds).has('c2')).toBe(true);
+    expect(get(visibleTodos).map((t) => t.id)).toEqual(['c2']);
+  });
+
   it('hides todos from collections without a real group', () => {
     items.set({
       orphan: makeTodo('orphan', { collectionId: 'col-orphan' }),

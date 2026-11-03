@@ -15,7 +15,11 @@
     shouldUseRecentDestination,
   } from '../lib/add-entry-modal';
   import { get } from 'svelte/store';
-  import { hiddenCollectionIds, keepTodoVisible } from '../lib/stores';
+  import {
+    hiddenCollectionIds,
+    keepTodoVisible,
+    todoFilterKey,
+  } from '../lib/stores';
   import { todoDestinationDefault } from '../lib/todo-destination';
   import { enrichBookmark, needsEnrichment } from '../lib/enrich';
   import {
@@ -89,6 +93,20 @@
     initialDestination(collectionId, rememberedDestination()),
   );
   let collectionPickerOpen = $state(false);
+  // The default destination follows the Todos filter while the modal is
+  // open (a synced filter change can hide it): same rule as the quick-add
+  // composer. A destination the user picked here is theirs to keep.
+  let pickedExplicitly = false;
+  $effect(() => {
+    if (
+      !pickedExplicitly &&
+      type === 'todo' &&
+      selectedCollectionId !== undefined &&
+      $hiddenCollectionIds.has(selectedCollectionId)
+    ) {
+      selectedCollectionId = $todoDestinationDefault;
+    }
+  });
   // For refs, `undefined` means Inbox. For todos, `undefined` means unfiled:
   // no collectionId is written, and the todo stays available to organize
   // later without creating any synthetic group or collection.
@@ -159,6 +177,7 @@
 
   function selectCollection(id: string | undefined) {
     selectedCollectionId = id;
+    pickedExplicitly = true;
     collectionPickerOpen = false;
   }
 
@@ -202,6 +221,12 @@
     if (!formBuildItem || !formCanSubmit) return;
     saving = true;
     error = '';
+    // Capture the destination the user saw at Save: every step below must
+    // agree on one collection even if the filter changes mid-write.
+    const destination = selectedCollectionId;
+    const pinWanted =
+      isTodoType && !isEdit && !!destination && $hiddenCollectionIds.has(destination);
+    const filterAtSubmit = $todoFilterKey;
     try {
       const id = isEdit ? (editItem?.id ?? crypto.randomUUID()) : crypto.randomUUID();
       const createdAt = isEdit
@@ -237,27 +262,28 @@
         if (removePaths) {
           for (const path of removePaths) await removeFile(path);
         }
-        if (selectedCollectionId && !isEdit) {
+        if (destination && !isEdit) {
           // A todo filed on purpose into a collection the Todos filter
           // hides stays listed there for the session (same as the quick-add
           // composer) instead of vanishing on Save. Pinned before the move
-          // so the row never blinks out; the Todos page clears pins on
-          // mount, so one made from another page cannot leak into a later
-          // visit.
-          if (isTodoType && $hiddenCollectionIds.has(selectedCollectionId)) {
+          // so the row never blinks out; skipped if the filter changed
+          // while the item was being stored (the list is already on the
+          // user's new terms). The Todos page clears pins on mount, so one
+          // made from another page cannot leak into a later visit.
+          if (pinWanted && $todoFilterKey === filterAtSubmit) {
             keepTodoVisible(item.id);
           }
-          await moveItemToCollection(item.id, selectedCollectionId);
+          await moveItemToCollection(item.id, destination);
           // Feed the recency signal so the next capture defaults here and
           // the picker's Suggested block stays honest.
-          recordCollectionUse(selectedCollectionId);
+          recordCollectionUse(destination);
         }
         if (pendingSchedule && !isEdit) {
           // Apply after the move so the stored item keeps its collectionId.
           // Posts to the picked calendar best-effort — see applyPendingSchedule.
           await applyPendingSchedule(
-            selectedCollectionId
-              ? { ...item, collectionId: selectedCollectionId }
+            destination
+              ? { ...item, collectionId: destination }
               : item,
             pendingSchedule,
           );
@@ -412,7 +438,7 @@
             <button
               type="button"
               class="btn-reset"
-              onclick={() => (selectedCollectionId = undefined)}
+              onclick={() => selectCollection(undefined)}
             >
               <svg
                 aria-hidden="true"

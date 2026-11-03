@@ -176,20 +176,29 @@
     // which would store a duplicate todo on retry.
     let created = false;
     let filed = false;
+    // Capture the destination the user saw at submit: a filter change during
+    // the writes recomputes `targetCollectionId`, and every step below must
+    // agree on one collection.
+    const destination = targetCollectionId;
+    const pinWanted = isOutOfView(destination);
+    const filterAtSubmit = $todoFilterKey;
     try {
       const todo = makeUnfiledTodo(quickTitle);
       await storeItem(todo);
       created = true;
       quickTitle = '';
       // Separate step keeps collection.itemIds in sync, matching AddEntryModal.
-      if (targetCollectionId) {
+      if (destination) {
         // Filed somewhere the filter hides on purpose: the row stays in the
         // list, tagged with its collection, instead of vanishing on Enter.
         // Pinned before the move so the row never blinks out between the
-        // write and the pin.
-        if (isOutOfView(targetCollectionId)) keepTodoVisible(todo.id);
-        await moveItemToCollection(todo.id, targetCollectionId);
-        recordCollectionUse(targetCollectionId);
+        // write and the pin — unless the filter changed meanwhile, in which
+        // case the list is already on the user's new terms.
+        if (pinWanted && $todoFilterKey === filterAtSubmit) {
+          keepTodoVisible(todo.id);
+        }
+        await moveItemToCollection(todo.id, destination);
+        recordCollectionUse(destination);
       }
       filed = true;
       if (pendingSchedule) {
@@ -197,9 +206,7 @@
         // Posts to the picked calendar best-effort (local-first, toasts on
         // failure) — see applyPendingSchedule.
         await applyPendingSchedule(
-          targetCollectionId
-            ? { ...todo, collectionId: targetCollectionId }
-            : todo,
+          destination ? { ...todo, collectionId: destination } : todo,
           pendingSchedule,
         );
       }
