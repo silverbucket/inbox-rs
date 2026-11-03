@@ -24,6 +24,7 @@ vi.mock('../lib/stores', async () => {
     visibleGroupedCollections: writable([]),
     hiddenCollectionIds: writable(new Set<string>()),
     sessionPinGeneration: writable(0),
+    explicitTodoPick: writable(undefined),
     groups: writable({}),
     items: writable({}),
     appConfig: writable({}),
@@ -38,9 +39,11 @@ import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
 import type { Writable } from 'svelte/store';
 import {
   collections,
+  explicitTodoPick,
   groupCollections,
   groups,
   hiddenCollectionIds,
+  orphanCollections,
   sessionPinGeneration,
   sortedGroups,
   visibleGroupedCollections,
@@ -117,8 +120,10 @@ function seed({
   for (const c of COLS)
     if (hiddenGroups.includes(c.groupId ?? '')) hidden.add(c.id);
   w<Set<string>>(hiddenCollectionIds).set(hidden);
-  // The real store bumps this whenever the filter changes.
+  // The real store bumps the generation and drops the explicit pick
+  // whenever the filter changes.
   w<number>(sessionPinGeneration).update((n) => n + 1);
+  w<string | null | undefined>(explicitTodoPick).set(undefined);
   w<unknown[]>(visibleGroupedCollections).set(
     GROUPS.filter((g) => !hiddenGroups.includes(g.id)).map((group) => ({
       group,
@@ -472,15 +477,36 @@ describe('TodoQuickAdd', () => {
     expect(chipText()).toBe('Garden');
   });
 
-  it('forgets explicit picks on a filter change that hides no new collection', () => {
+  it('keeps an explicit Unfiled pick across a remount (hero → compact)', () => {
     seed({ hiddenGroups: ['g-home'] });
     render();
     pickCollection('Unfiled');
     expect(chipText()).toBe('Unfiled');
-    // e.g. toggling a group that has no collections yet
-    w<number>(sessionPinGeneration).update((n) => n + 1);
-    flushSync();
+    if (component) unmount(component);
+    render({ compact: true });
+    expect(chipText()).toBe('Unfiled');
+  });
+
+  it('keeps a pick of an ungrouped ("Other") collection', () => {
+    seed({ hiddenGroups: ['g-home'] });
+    const loose: Collection = {
+      id: 'col-loose',
+      name: 'Loose ends',
+      itemIds: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    w<Record<string, Collection>>(collections).update((c) => ({
+      ...c,
+      [loose.id]: loose,
+    }));
+    w<Collection[]>(orphanCollections).set([loose]);
+    render();
     expect(chipText()).toBe('Roadmap');
+    pickCollection('Loose ends');
+    expect(chipText()).toBe('Loose ends');
+    focus();
+    type('tidy');
+    expect(hintText()).toContain('Add to Loose ends');
   });
 
   it('files into the destination shown at submit even if the filter changes mid-save', async () => {

@@ -13,6 +13,7 @@
    * collection, which then stays an explicit, session-only choice.
    */
   import { tick } from 'svelte';
+  import { get } from 'svelte/store';
   import { canCaptureTodo, makeUnfiledTodo } from '../lib/add-entry-modal';
   import { autofocusIf } from '../lib/actions';
   import { modLabel } from '../lib/platform';
@@ -30,6 +31,7 @@
   import ScheduleSheet from './ScheduleSheet.svelte';
   import {
     collections,
+    explicitTodoPick,
     hiddenCollectionIds,
     keepTodoVisible,
     moveItemToCollection,
@@ -81,24 +83,13 @@
     return !!id && $hiddenCollectionIds.has(id);
   }
 
-  // A pick the shared default can't express: a hidden collection (`string`)
-  // or Unfiled while the view is narrowed (`null`). Session-only, and
-  // dropped the moment the filters change — the new filter is the user's
-  // newer, stronger statement of where they are working.
-  let explicitPick = $state<string | null | undefined>(undefined);
-  let lastFilterKey: number | undefined;
-  $effect(() => {
-    const key = $sessionPinGeneration;
-    if (lastFilterKey !== undefined && key !== lastFilterKey) {
-      explicitPick = undefined;
-    }
-    lastFilterKey = key;
-  });
-
+  // A pick the shared default can't express (see `explicitTodoPick`):
+  // kept in the store so it survives this component's hero→compact
+  // remount, and reset there whenever the filters change.
   const quickAddCollectionId = $derived(
-    explicitPick === null
+    $explicitTodoPick === null
       ? undefined
-      : (explicitPick ?? $todoDestinationDefault),
+      : ($explicitTodoPick ?? $todoDestinationDefault),
   );
 
   const targetCollectionId = $derived(fixedCollectionId ?? quickAddCollectionId);
@@ -148,9 +139,19 @@
   function handlePick(id: string | undefined) {
     // Visible picks become the remembered default; the shared rule then
     // keeps or drops them as the view changes. Anything the rule can't hold
-    // (a hidden collection, Unfiled under a filter) is kept here explicitly.
+    // (a hidden or ungrouped collection, Unfiled under a filter) is kept
+    // explicitly — detected by asking the rule, so every such case is one.
     rememberTodoDestination(id ?? null);
-    explicitPick = id === undefined ? null : isOutOfView(id) ? id : undefined;
+    const resolved = get(todoDestinationDefault);
+    explicitTodoPick.set(
+      id === undefined
+        ? resolved === undefined
+          ? undefined
+          : null
+        : resolved === id
+          ? undefined
+          : id,
+    );
     pickerOpen = false;
     // Hand focus back to the title so capture flow isn't interrupted.
     quickInputEl?.focus();

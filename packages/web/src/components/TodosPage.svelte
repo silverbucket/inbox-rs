@@ -11,7 +11,6 @@
     collections, sortedGroups, appConfig, updateConfig,
     clearSessionVisibleTodos,
   } from '../lib/stores';
-  import { todoDestinationDefault } from '../lib/todo-destination';
   import { isDueTodayOrOverdue } from '../lib/schedule';
   import { todayStart } from '../lib/now';
   import AlertsPermissionBanner from './AlertsPermissionBanner.svelte';
@@ -162,7 +161,11 @@
          ⌘/Ctrl-Shift-Enter opens the modal). Mobile: the Fab is position:fixed, a
          floating + circle in the thumb zone. -->
     <div class="page-toolbar">
-      <Fab onclick={() => onaddtodo('', $todoDestinationDefault)} label="New todo" />
+      <!-- No destination context: the modal then starts on the shared
+           default and keeps following the filter while open. A collection
+           id here would fix the destination, as collection-specific entry
+           points want. -->
+      <Fab onclick={() => onaddtodo('')} label="New todo" />
     </div>
   {/snippet}
 

@@ -75,6 +75,7 @@ import {
   deleteGroup,
   deleteItem,
   enableCollectionFilter,
+  explicitTodoPick,
   groupCollections,
   groups,
   hiddenCollectionIds,
@@ -2268,10 +2269,23 @@ describe('visibleTodos', () => {
       ...c,
       'col-hidden': { ...c['col-hidden'], archived: undefined },
     }));
+    // …and so does archiving its whole group (which leaves the
+    // collection's own flag unset).
+    groups.update((g) => ({
+      ...g,
+      'g-hidden': { ...g['g-hidden'], archived: true },
+    }));
+    expect(get(visibleTodos).map((t) => t.id)).toEqual(['c1']);
+    groups.update((g) => ({
+      ...g,
+      'g-hidden': { ...g['g-hidden'], archived: undefined },
+    }));
 
     // …a filter change hands the list back to the filter.
+    explicitTodoPick.set('col-hidden');
     appConfig.set({ activeGroupFilters: ['g-hidden'] });
     expect(get(sessionVisibleTodoIds).size).toBe(0);
+    expect(get(explicitTodoPick)).toBeUndefined();
     expect(get(visibleTodos).map((t) => t.id)).toEqual(['c2']);
   });
 

@@ -1905,8 +1905,20 @@ export function keepTodoVisible(id: string): void {
  */
 export const sessionPinGeneration = writable(0);
 
+/**
+ * The quick-add composer's destination override — a pick the shared
+ * default can't express: a hidden or ungrouped collection (`string`), or
+ * Unfiled while the view is narrowed (`null`). Lives here, not in the
+ * composer, because the composer remounts between its hero and compact
+ * layouts (first todo added) and the pick must survive that. Session-only,
+ * and reset with the pins: the new filter is the user's newer, stronger
+ * statement of where they are working.
+ */
+export const explicitTodoPick = writable<string | null | undefined>(undefined);
+
 export function clearSessionVisibleTodos(): void {
   sessionPinGeneration.update((n) => n + 1);
+  explicitTodoPick.set(undefined);
   if (get(sessionVisibleTodoIds).size === 0) return;
   sessionVisibleTodoIds.set(new Set());
 }
@@ -2237,6 +2249,7 @@ export const visibleTodos = derived(
     appConfig,
     todayStart,
     sessionVisibleTodoIds,
+    groups,
   ],
   ([
     $allTodos,
@@ -2246,11 +2259,19 @@ export const visibleTodos = derived(
     $config,
     $todayStart,
     $kept,
+    $groups,
   ]) => {
     // A pin bypasses the filter, not archiving: a kept todo whose
-    // collection gets archived mid-session leaves like any other.
-    const inArchivedCollection = (todo: InboxItem) =>
-      !!todo.collectionId && !!$collections[todo.collectionId]?.archived;
+    // collection — or its whole group — gets archived mid-session leaves
+    // like any other. (Archiving a group does not flag its collections.)
+    const inArchivedCollection = (todo: InboxItem) => {
+      if (!todo.collectionId) return false;
+      const col = $collections[todo.collectionId];
+      if (!col) return false;
+      return (
+        !!col.archived || !!(col.groupId && $groups[col.groupId]?.archived)
+      );
+    };
     const filtered = $allTodos.filter(
       (todo) =>
         !todo.archived &&
