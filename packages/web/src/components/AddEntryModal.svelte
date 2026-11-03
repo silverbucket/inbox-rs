@@ -15,10 +15,15 @@
     shouldUseRecentDestination,
   } from '../lib/add-entry-modal';
   import { get } from 'svelte/store';
-  import { collections } from '../lib/stores';
+  import {
+    collections,
+    hiddenCollectionIds,
+    keepTodoVisible,
+    sessionPinGeneration,
+  } from '../lib/stores';
+  import { todoDestinationDefault } from '../lib/todo-destination';
   import { enrichBookmark, needsEnrichment } from '../lib/enrich';
   import {
-    getRecentCollectionIds,
     recordCollectionUse,
     type FilingSubject,
   } from '../lib/collection-suggest';
@@ -71,9 +76,10 @@
   let draftUrl = $state('');
 
   /**
-   * The most recent filing target that still exists, for callers that gave no
-   * destination context. Todos only: repeat todo captures usually file to the
-   * same place, and the meta strip's Unfiled reset makes escaping it one click.
+   * The default destination for callers that gave no context. Todos only,
+   * and the same rule as the Todos page composer (`todo-destination.ts`):
+   * recency when the view is unfiltered, and never a collection the current
+   * filter hides. The meta strip's Unfiled reset makes escaping it one click.
    * Refs deliberately opt out — capturing from the inbox should land in the
    * Inbox, not get whisked off to wherever you last filed something. Recency
    * still ranks the picker's suggestions, so the last target is one tap away.
@@ -81,17 +87,24 @@
    */
   function rememberedDestination(): string | undefined {
     if (!shouldUseRecentDestination(isEdit, type)) return undefined;
-    const cols = get(collections);
-    for (const id of getRecentCollectionIds()) {
-      if (cols[id]) return id;
-    }
-    return undefined;
+    return get(todoDestinationDefault);
   }
 
   let selectedCollectionId = $state<string | undefined>(
     initialDestination(collectionId, rememberedDestination()),
   );
   let collectionPickerOpen = $state(false);
+  // A todo's default destination keeps following the Todos filter while
+  // the modal is open (a synced filter change can hide it, or bring the
+  // only visible collection into view): same rule as the quick-add
+  // composer. Only the unpicked default moves — a destination the user
+  // picked here, or the opener fixed (`collectionId` given), is kept.
+  let pickedExplicitly = false;
+  $effect(() => {
+    if (pickedExplicitly || isEdit || type !== 'todo') return;
+    if (collectionId !== undefined) return;
+    selectedCollectionId = $todoDestinationDefault;
+  });
   // For refs, `undefined` means Inbox. For todos, `undefined` means unfiled:
   // no collectionId is written, and the todo stays available to organize
   // later without creating any synthetic group or collection.
@@ -162,6 +175,7 @@
 
   function selectCollection(id: string | undefined) {
     selectedCollectionId = id;
+    pickedExplicitly = true;
     collectionPickerOpen = false;
   }
 
@@ -205,6 +219,12 @@
     if (!formBuildItem || !formCanSubmit) return;
     saving = true;
     error = '';
+    // Capture the destination the user saw at Save: every step below must
+    // agree on one collection even if the filter changes mid-write.
+    const destination = selectedCollectionId;
+    const pinWanted =
+      isTodoType && !isEdit && !!destination && $hiddenCollectionIds.has(destination);
+    const pinGeneration = $sessionPinGeneration;
     try {
       const id = isEdit ? (editItem?.id ?? crypto.randomUUID()) : crypto.randomUUID();
       const createdAt = isEdit
@@ -240,19 +260,32 @@
         if (removePaths) {
           for (const path of removePaths) await removeFile(path);
         }
-        if (selectedCollectionId && !isEdit) {
-          await moveItemToCollection(item.id, selectedCollectionId);
+        if (destination && !isEdit) {
+          // A todo filed on purpose into a collection the Todos filter
+          // hides stays listed there for the session (same as the quick-add
+          // composer) instead of vanishing on Save. Pinned before the move
+          // so the row never blinks out; skipped if the pins were reset
+          // while the item was being stored (filter changed, Todos page
+          // left or re-entered) — the list is already on new terms, and a
+          // late pin must not leak into them.
+          if (pinWanted && $sessionPinGeneration === pinGeneration) {
+            keepTodoVisible(item.id);
+          }
+          await moveItemToCollection(item.id, destination);
           // Feed the recency signal so the next capture defaults here and
           // the picker's Suggested block stays honest.
-          recordCollectionUse(selectedCollectionId);
+          recordCollectionUse(destination);
         }
         if (pendingSchedule && !isEdit) {
           // Apply after the move so the stored item keeps its collectionId.
           // Posts to the picked calendar best-effort — see applyPendingSchedule.
+          // Keep collectionId only if the move actually filed it: the
+          // collection may have been deleted mid-write, and the move then
+          // no-ops.
+          const filedInto =
+            destination && $collections[destination] ? destination : undefined;
           await applyPendingSchedule(
-            selectedCollectionId
-              ? { ...item, collectionId: selectedCollectionId }
-              : item,
+            filedInto ? { ...item, collectionId: filedInto } : item,
             pendingSchedule,
           );
         }
@@ -406,7 +439,7 @@
             <button
               type="button"
               class="btn-reset"
-              onclick={() => (selectedCollectionId = undefined)}
+              onclick={() => selectCollection(undefined)}
             >
               <svg
                 aria-hidden="true"
@@ -547,6 +580,7 @@
       <CollectionPicker
         item={pickerSubject}
         mode={isTodoType ? 'todo' : 'move'}
+        hiddenCollectionIds={isTodoType ? $hiddenCollectionIds : undefined}
         onpick={selectCollection}
         onclose={() => (collectionPickerOpen = false)}
       />

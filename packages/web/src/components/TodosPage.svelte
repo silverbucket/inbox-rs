@@ -5,10 +5,11 @@
   import { slide, fade } from 'svelte/transition';
   import { createDndLeaveGuard } from '../lib/dnd-leave-guard';
   import { createReorderFade } from '../lib/reorder-fade';
+  import { onDestroy, onMount } from 'svelte';
   import {
     visibleTodos, visibleOnCalendarTodos, reorderTodosGlobal,
     collections, sortedGroups, appConfig, updateConfig,
-    soleVisibleCollectionId,
+    clearSessionVisibleTodos,
   } from '../lib/stores';
   import { isDueTodayOrOverdue } from '../lib/schedule';
   import { todayStart } from '../lib/now';
@@ -33,6 +34,12 @@
   } = $props();
 
   const todos = $derived($visibleTodos);
+  // Todos deliberately filed into a hidden collection stay listed while the
+  // page is open; leaving it hands the list back to the filter.
+  // Session pins belong to one visit: start clean (a todo modal elsewhere
+  // may have pinned an id) and leave clean.
+  onMount(clearSessionVisibleTodos);
+  onDestroy(clearSessionVisibleTodos);
   const openTodos = $derived(todos.filter(t => !t.completed));
   // The store pins due todos first (earliest due leading); the page renders
   // them as a separate non-draggable band so manual ordering stays meaningful
@@ -154,7 +161,11 @@
          ⌘/Ctrl-Shift-Enter opens the modal). Mobile: the Fab is position:fixed, a
          floating + circle in the thumb zone. -->
     <div class="page-toolbar">
-      <Fab onclick={() => onaddtodo('', $soleVisibleCollectionId)} label="New todo" />
+      <!-- No destination context: the modal then starts on the shared
+           default and keeps following the filter while open. A collection
+           id here would fix the destination, as collection-specific entry
+           points want. -->
+      <Fab onclick={() => onaddtodo('')} label="New todo" />
     </div>
   {/snippet}
 

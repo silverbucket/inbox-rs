@@ -2,51 +2,135 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { storeItem, moveItemToCollection, toggleGroupFilter, showToast } =
-  vi.hoisted(() => ({
-    storeItem: vi.fn().mockResolvedValue(undefined),
-    moveItemToCollection: vi.fn().mockResolvedValue(undefined),
-    toggleGroupFilter: vi.fn().mockResolvedValue(undefined),
-    showToast: vi.fn(),
-  }));
+const { storeItem, moveItemToCollection, keepTodoVisible } = vi.hoisted(() => ({
+  storeItem: vi.fn().mockResolvedValue(undefined),
+  moveItemToCollection: vi.fn().mockResolvedValue(undefined),
+  keepTodoVisible: vi.fn(),
+}));
 
 // Mock the data layer. The stores the component subscribes to are real
-// writables so `$`-auto-subscription works; the CRUD/toggle calls are spies.
-// The extra stores/functions beyond TodoQuickAdd's own imports are consumed
-// by the CollectionPicker it renders.
+// writables so `$`-auto-subscription works; the CRUD calls are spies. The
+// extra stores/functions beyond TodoQuickAdd's own imports are consumed by
+// the CollectionPicker it renders and the todo-destination resolver.
 vi.mock('../lib/stores', async () => {
   const { writable } = await import('svelte/store');
   return {
     storeItem,
     moveItemToCollection,
-    toggleGroupFilter,
+    keepTodoVisible,
     collections: writable({}),
     groupCollections: writable({}),
     sortedGroups: writable([]),
-    activeGroupIds: writable(new Set<string>()),
-    soleVisibleCollectionId: writable(undefined),
+    visibleGroupedCollections: writable([]),
+    hiddenCollectionIds: writable(new Set<string>()),
+    sessionPinGeneration: writable(0),
+    explicitTodoPick: writable(undefined),
     groups: writable({}),
     items: writable({}),
     appConfig: writable({}),
     orphanCollections: writable([]),
     createCollection: vi.fn().mockResolvedValue(undefined),
+    storeGroup: vi.fn().mockResolvedValue(undefined),
     updateConfig: vi.fn().mockResolvedValue(undefined),
   };
 });
-vi.mock('../lib/toast', () => ({ showToast }));
 
+import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
 import type { Writable } from 'svelte/store';
 import {
-  activeGroupIds,
   collections,
+  explicitTodoPick,
   groupCollections,
-  soleVisibleCollectionId,
+  groups,
+  hiddenCollectionIds,
+  orphanCollections,
+  sessionPinGeneration,
   sortedGroups,
+  visibleGroupedCollections,
 } from '../lib/stores';
+import {
+  rememberedTodoDestination,
+  rememberTodoDestination,
+} from '../lib/todo-destination';
 import TodoQuickAdd from './TodoQuickAdd.svelte';
 
 // The mocked stores are plain writables; the real types are derived (no .set).
 const w = <T>(store: unknown) => store as Writable<T>;
+
+// Two groups: Work (Roadmap, Hiring) and Home (Garden). `hiddenGroups` and
+// `hiddenCollections` stand in for the sidebar filter; the derived stores
+// the component reads are mocked writables, so this sets them coherently.
+const GROUPS: CollectionGroup[] = [
+  {
+    id: 'g-work',
+    name: 'Work',
+    collectionIds: ['col-road', 'col-hiring'],
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'g-home',
+    name: 'Home',
+    collectionIds: ['col-garden'],
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+];
+const COLS: Collection[] = [
+  {
+    id: 'col-road',
+    name: 'Roadmap',
+    groupId: 'g-work',
+    itemIds: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'col-hiring',
+    name: 'Hiring',
+    groupId: 'g-work',
+    itemIds: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'col-garden',
+    name: 'Garden',
+    groupId: 'g-home',
+    itemIds: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+];
+
+function seed({
+  hiddenGroups,
+  hiddenCollections = [],
+}: {
+  hiddenGroups: string[];
+  hiddenCollections?: string[];
+}) {
+  const byGroup: Record<string, Collection[]> = {};
+  for (const g of GROUPS)
+    byGroup[g.id] = COLS.filter((c) => c.groupId === g.id);
+  w<Record<string, Collection>>(collections).set(
+    Object.fromEntries(COLS.map((c) => [c.id, c])),
+  );
+  w<Record<string, CollectionGroup>>(groups).set(
+    Object.fromEntries(GROUPS.map((g) => [g.id, g])),
+  );
+  w<CollectionGroup[]>(sortedGroups).set(GROUPS);
+  w<Record<string, Collection[]>>(groupCollections).set(byGroup);
+  const hidden = new Set<string>(hiddenCollections);
+  for (const c of COLS)
+    if (hiddenGroups.includes(c.groupId ?? '')) hidden.add(c.id);
+  w<Set<string>>(hiddenCollectionIds).set(hidden);
+  // The real store bumps the generation and drops the explicit pick
+  // whenever the filter changes.
+  w<number>(sessionPinGeneration).update((n) => n + 1);
+  w<string | null | undefined>(explicitTodoPick).set(undefined);
+  w<unknown[]>(visibleGroupedCollections).set(
+    GROUPS.filter((g) => !hiddenGroups.includes(g.id)).map((group) => ({
+      group,
+      collections: byGroup[group.id].filter((c) => !hidden.has(c.id)),
+    })),
+  );
+}
 
 describe('TodoQuickAdd', () => {
   let host: HTMLElement;
@@ -58,11 +142,8 @@ describe('TodoQuickAdd', () => {
     storeItem.mockResolvedValue(undefined);
     moveItemToCollection.mockResolvedValue(undefined);
     localStorage.clear();
-    w<Record<string, unknown>>(collections).set({});
-    w<unknown[]>(sortedGroups).set([]);
-    w<Record<string, unknown>>(groupCollections).set({});
-    w<Set<string>>(activeGroupIds).set(new Set());
-    w<string | undefined>(soleVisibleCollectionId).set(undefined);
+    rememberedTodoDestination.set(undefined);
+    seed({ hiddenGroups: [] });
     onopenmodal = vi.fn();
     host = document.createElement('div');
     document.body.appendChild(host);
@@ -165,17 +246,12 @@ describe('TodoQuickAdd', () => {
   });
 
   it('defaults to the sole visible collection', async () => {
-    seedVisibleGroup();
-    w<string | undefined>(soleVisibleCollectionId).set('col-road');
+    seed({ hiddenGroups: ['g-home'], hiddenCollections: ['col-hiring'] });
     render();
     expect(chipText()).toBe('Roadmap');
     type('write spec');
     submit();
-    await vi.waitFor(() => {
-      expect(moveItemToCollection).toHaveBeenCalledOnce();
-    });
-    const todoId = (storeItem.mock.calls[0][0] as { id: string }).id;
-    expect(moveItemToCollection).toHaveBeenCalledWith(todoId, 'col-road');
+    await expectFiledInto('col-road');
   });
 
   it('files into the fixed collection and hides the collection select', async () => {
@@ -291,41 +367,96 @@ describe('TodoQuickAdd', () => {
     expect(input().value).toBe('store fail');
   });
 
-  // Seed a persisted quick-add default pointing at `col-h`, which lives in
-  // group `g-hidden`. The caller decides whether that group is visible.
-  function seedHiddenGroupDefault({ visible }: { visible: boolean }) {
-    localStorage.setItem('inbox-rs:quickAddCollectionId', 'col-h');
-    const col = {
-      id: 'col-h',
-      name: 'Hidden Col',
-      itemIds: [],
-      createdAt: '2026-01-01T00:00:00.000Z',
-      groupId: 'g-hidden',
-    };
-    w<Record<string, unknown>>(collections).set({ 'col-h': col });
-    w<unknown[]>(sortedGroups).set([
-      {
-        id: 'g-hidden',
-        name: 'Hidden',
-        collectionIds: ['col-h'],
-        createdAt: '2026-01-01T00:00:00.000Z',
-      },
-    ]);
-    w<Record<string, unknown>>(groupCollections).set({ 'g-hidden': [col] });
-    w<Set<string>>(activeGroupIds).set(
-      visible ? new Set(['g-hidden']) : new Set(),
-    );
-  }
-
   const chipTrigger = () =>
     host.querySelector('.quick-add__collection') as HTMLButtonElement;
   const chipText = () =>
     host.querySelector('.chip-name')?.textContent?.trim() ?? '';
 
+  async function expectFiledInto(collectionId: string) {
+    await vi.waitFor(() => {
+      flushSync();
+      expect(moveItemToCollection).toHaveBeenCalledOnce();
+    });
+    const todoId = (storeItem.mock.calls[0][0] as { id: string }).id;
+    expect(moveItemToCollection).toHaveBeenCalledWith(todoId, collectionId);
+    return todoId;
+  }
+
+  // --- The default never points outside the current view ---
+
   it('ignores a persisted default whose group is filtered out of view', async () => {
-    seedHiddenGroupDefault({ visible: false });
+    rememberTodoDestination('col-garden');
+    seed({ hiddenGroups: ['g-home'] });
     render();
-    // The default resolves to Unfiled so the just-added todo stays visible.
+    // The view is narrowed to Work, so the default is a Work collection —
+    // not Garden (hidden) and not Unfiled (outside the filtered groups).
+    expect(chipText()).toBe('Roadmap');
+    type('buy milk');
+    submit();
+    await expectFiledInto('col-road');
+    expect(keepTodoVisible).not.toHaveBeenCalled();
+  });
+
+  it('honors a persisted default whose group is currently visible', async () => {
+    rememberTodoDestination('col-garden');
+    render();
+    expect(chipText()).toBe('Garden');
+    type('plant tulips');
+    submit();
+    await expectFiledInto('col-garden');
+  });
+
+  it('drops an in-session pick the moment its group is hidden', () => {
+    render();
+    pickCollection('Garden');
+    expect(chipText()).toBe('Garden');
+    seed({ hiddenGroups: ['g-home'] });
+    flushSync();
+    expect(chipText()).toBe('Roadmap');
+  });
+
+  it('starts Unfiled only when nothing narrows the view', () => {
+    render();
+    expect(chipText()).toBe('Unfiled');
+  });
+
+  // --- Filing outside the view stays possible, but only on purpose ---
+
+  it('lists hidden collections apart, under "Hidden by your filter"', () => {
+    seed({ hiddenGroups: ['g-home'] });
+    render();
+    chipTrigger().click();
+    flushSync();
+    const label = host.querySelector('.panel .hidden-label');
+    expect(label?.textContent?.trim()).toBe('Hidden by your filter');
+    const hiddenRow = host.querySelector('.panel .option--hidden');
+    expect(hiddenRow?.textContent).toContain('Garden');
+    expect(hiddenRow?.textContent).toContain('Home');
+    // Garden appears once — in the hidden section, not under its group.
+    const gardenRows = [
+      ...host.querySelectorAll<HTMLButtonElement>('.panel .option'),
+    ].filter((o) => o.textContent?.includes('Garden'));
+    expect(gardenRows).toHaveLength(1);
+  });
+
+  it('keeps an explicit hidden pick, marks the chip, and keeps the todo listed', async () => {
+    seed({ hiddenGroups: ['g-home'] });
+    render();
+    pickCollection('Garden');
+    expect(chipText()).toBe('Garden');
+    expect(chipTrigger().classList.contains('is-hidden-pick')).toBe(true);
+    expect(chipTrigger().getAttribute('aria-label')).toContain('hidden');
+    type('plant tulips');
+    submit();
+    const todoId = await expectFiledInto('col-garden');
+    expect(keepTodoVisible).toHaveBeenCalledWith(todoId);
+  });
+
+  it('keeps an explicit Unfiled pick while the view is narrowed', async () => {
+    seed({ hiddenGroups: ['g-home'] });
+    render();
+    expect(chipText()).toBe('Roadmap');
+    pickCollection('Unfiled');
     expect(chipText()).toBe('Unfiled');
     type('buy milk');
     submit();
@@ -336,43 +467,103 @@ describe('TodoQuickAdd', () => {
     expect(moveItemToCollection).not.toHaveBeenCalled();
   });
 
-  it('honors a persisted default whose group is currently visible', async () => {
-    seedHiddenGroupDefault({ visible: true });
+  it('forgets explicit picks when the filter changes', () => {
+    seed({ hiddenGroups: ['g-home'] });
     render();
-    expect(chipText()).toBe('Hidden Col');
-    type('buy milk');
-    submit();
-    await vi.waitFor(() => {
-      flushSync();
-      expect(moveItemToCollection).toHaveBeenCalledOnce();
-    });
-    const todoId = (storeItem.mock.calls[0][0] as { id: string }).id;
-    expect(moveItemToCollection).toHaveBeenCalledWith(todoId, 'col-h');
+    pickCollection('Unfiled');
+    expect(chipText()).toBe('Unfiled');
+    seed({ hiddenGroups: ['g-work'] });
+    flushSync();
+    expect(chipText()).toBe('Garden');
   });
 
-  // Seed one visible group `g-work` with collection `col-road`.
-  function seedVisibleGroup() {
-    const col = {
-      id: 'col-road',
-      name: 'Roadmap',
+  it('keeps an explicit Unfiled pick across a remount (hero → compact)', () => {
+    seed({ hiddenGroups: ['g-home'] });
+    render();
+    pickCollection('Unfiled');
+    expect(chipText()).toBe('Unfiled');
+    if (component) unmount(component);
+    render({ compact: true });
+    expect(chipText()).toBe('Unfiled');
+  });
+
+  it('keeps a pick of an ungrouped ("Other") collection', () => {
+    seed({ hiddenGroups: ['g-home'] });
+    const loose: Collection = {
+      id: 'col-loose',
+      name: 'Loose ends',
       itemIds: [],
       createdAt: '2026-01-01T00:00:00.000Z',
-      groupId: 'g-work',
     };
-    w<Record<string, unknown>>(collections).set({ 'col-road': col });
-    w<unknown[]>(sortedGroups).set([
-      {
-        id: 'g-work',
-        name: 'Work',
-        collectionIds: ['col-road'],
-        createdAt: '2026-01-01T00:00:00.000Z',
-      },
-    ]);
-    w<Record<string, unknown>>(groupCollections).set({ 'g-work': [col] });
-    w<Set<string>>(activeGroupIds).set(new Set(['g-work']));
-  }
+    w<Record<string, Collection>>(collections).update((c) => ({
+      ...c,
+      [loose.id]: loose,
+    }));
+    w<Collection[]>(orphanCollections).set([loose]);
+    render();
+    expect(chipText()).toBe('Roadmap');
+    pickCollection('Loose ends');
+    expect(chipText()).toBe('Loose ends');
+    focus();
+    type('tidy');
+    expect(hintText()).toContain('Add to Loose ends');
+  });
 
-  // --- Win 1: destination echo in the hint line ---
+  it('files into the destination shown at submit even if the filter changes mid-save', async () => {
+    seed({ hiddenGroups: ['g-home'] });
+    rememberTodoDestination('col-road');
+    render();
+    expect(chipText()).toBe('Roadmap');
+    let finishStore!: () => void;
+    storeItem.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishStore = resolve)),
+    );
+    type('ship it');
+    submitBtn().click();
+    await vi.waitFor(() => expect(storeItem).toHaveBeenCalled());
+    // Filter flips while the store write is in flight: Roadmap is now hidden.
+    seed({ hiddenGroups: ['g-work'] });
+    flushSync();
+    expect(chipText()).toBe('Garden');
+    finishStore();
+    await vi.waitFor(() => expect(moveItemToCollection).toHaveBeenCalled());
+    expect(moveItemToCollection.mock.calls[0][1]).toBe('col-road');
+    // …and it is not pinned: the list is already on the user's new terms.
+    expect(keepTodoVisible).not.toHaveBeenCalled();
+  });
+
+  it('skips the pin when the Todos page was left and re-entered mid-save', async () => {
+    seed({ hiddenGroups: ['g-home'] });
+    render();
+    pickCollection('Garden');
+    let finishStore!: () => void;
+    storeItem.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishStore = resolve)),
+    );
+    type('water beds');
+    submitBtn().click();
+    await vi.waitFor(() => expect(storeItem).toHaveBeenCalled());
+    // Leaving / re-entering the page clears the pins and bumps the generation.
+    w<number>(sessionPinGeneration).update((n) => n + 1);
+    finishStore();
+    await vi.waitFor(() => expect(moveItemToCollection).toHaveBeenCalled());
+    expect(moveItemToCollection.mock.calls[0][1]).toBe('col-garden');
+    expect(keepTodoVisible).not.toHaveBeenCalled();
+  });
+
+  it('pins a hidden pick before the move so the row never blinks out', async () => {
+    seed({ hiddenGroups: ['g-home'] });
+    render();
+    pickCollection('Garden');
+    type('water beds');
+    submitBtn().click();
+    await vi.waitFor(() => expect(moveItemToCollection).toHaveBeenCalled());
+    expect(keepTodoVisible.mock.invocationCallOrder[0]).toBeLessThan(
+      moveItemToCollection.mock.invocationCallOrder[0],
+    );
+  });
+
+  // --- Destination echo in the hint line ---
 
   it('echoes "Unfiled" as the destination when nothing is selected', () => {
     render();
@@ -381,95 +572,12 @@ describe('TodoQuickAdd', () => {
     expect(hintText()).toContain('Add to Unfiled');
   });
 
-  it('echoes the group › collection destination of a visible default', () => {
-    seedVisibleGroup();
-    localStorage.setItem('inbox-rs:quickAddCollectionId', 'col-road');
+  it('echoes the group › collection destination of the default', () => {
+    rememberTodoDestination('col-road');
     render();
     focus();
     type('buy milk');
     expect(hintText()).toContain('Add to Work › Roadmap');
-  });
-
-  it('flags the destination as hidden in the echo when its group is filtered out', () => {
-    seedHiddenGroupDefault({ visible: false });
-    render();
-    // The default is guarded to Unfiled, so explicitly pick the hidden one.
-    pickCollection('Hidden Col');
-    focus();
-    type('buy milk');
-    expect(hintText()).toContain('Add to Hidden › Hidden Col (hidden)');
-  });
-
-  // --- Win 2: filing into a hidden group is allowed, with a Show toast ---
-
-  it('honors an explicit pick into a hidden group instead of bouncing to Unfiled', () => {
-    seedHiddenGroupDefault({ visible: false });
-    render();
-    expect(chipText()).toBe('Unfiled');
-    pickCollection('Hidden Col');
-    // The explicit choice sticks — it does NOT revert to Unfiled.
-    expect(chipText()).toBe('Hidden Col');
-  });
-
-  it('files into the hidden group and shows a Show toast that reveals it', async () => {
-    seedHiddenGroupDefault({ visible: false });
-    render();
-    pickCollection('Hidden Col');
-    type('buy milk');
-    submit();
-    await vi.waitFor(() => {
-      flushSync();
-      expect(moveItemToCollection).toHaveBeenCalledOnce();
-    });
-    const todoId = (storeItem.mock.calls[0][0] as { id: string }).id;
-    expect(moveItemToCollection).toHaveBeenCalledWith(todoId, 'col-h');
-    // A toast names the hidden destination and offers a Show action.
-    expect(showToast).toHaveBeenCalledOnce();
-    const [message, action] = showToast.mock.calls[0] as [
-      string,
-      { label: string; run: () => void },
-    ];
-    expect(message).toContain('Hidden Col');
-    expect(action.label).toBe('Show');
-    action.run();
-    expect(toggleGroupFilter).toHaveBeenCalledWith('g-hidden');
-  });
-
-  it('surfaces an error toast when the Show action fails to reveal the group', async () => {
-    toggleGroupFilter.mockRejectedValueOnce(new Error('config write failed'));
-    seedHiddenGroupDefault({ visible: false });
-    render();
-    pickCollection('Hidden Col');
-    type('buy milk');
-    submit();
-    await vi.waitFor(() => {
-      flushSync();
-      expect(showToast).toHaveBeenCalledOnce();
-    });
-    const [, action] = showToast.mock.calls[0] as [
-      string,
-      { label: string; run: () => void },
-    ];
-    action.run();
-    expect(toggleGroupFilter).toHaveBeenCalledWith('g-hidden');
-    // The rejected reveal is caught and reported instead of going unhandled.
-    await vi.waitFor(() => {
-      expect(showToast).toHaveBeenLastCalledWith(
-        'Could not show the group. Please try again.',
-      );
-    });
-  });
-
-  it('does not toast when filing into a currently visible group', async () => {
-    seedHiddenGroupDefault({ visible: true });
-    render();
-    type('buy milk');
-    submit();
-    await vi.waitFor(() => {
-      flushSync();
-      expect(moveItemToCollection).toHaveBeenCalledOnce();
-    });
-    expect(showToast).not.toHaveBeenCalled();
   });
 
   it('disables the Add button until there is a title', () => {
