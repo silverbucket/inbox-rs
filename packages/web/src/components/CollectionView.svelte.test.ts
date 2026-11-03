@@ -28,7 +28,7 @@ vi.mock('../lib/stores', async () => {
     groupCollections: writable({}),
     visibleGroupedCollections: writable([]),
     hiddenCollectionIds: writable(new Set()),
-    todoFilterKey: writable(''),
+    sessionPinGeneration: writable(0),
     keepTodoVisible: vi.fn(),
     ...storeFns,
   };

@@ -1897,7 +1897,16 @@ export function keepTodoVisible(id: string): void {
   });
 }
 
+/**
+ * Bumped every time the pins are cleared (filter change, Todos page
+ * entered or left). A submit captures it before its first await and skips
+ * its pin if it moved meanwhile: the list is already on new terms, and a
+ * late pin must not leak into them.
+ */
+export const sessionPinGeneration = writable(0);
+
 export function clearSessionVisibleTodos(): void {
+  sessionPinGeneration.update((n) => n + 1);
   if (get(sessionVisibleTodoIds).size === 0) return;
   sessionVisibleTodoIds.set(new Set());
 }
@@ -1911,7 +1920,8 @@ export function clearSessionVisibleTodos(): void {
  */
 export const todoFilterKey = derived(appConfig, ($config) =>
   JSON.stringify([
-    $config.activeGroupFilters ?? null,
+    // Order-insensitive; `undefined` (all groups) stays distinct from `[]`.
+    $config.activeGroupFilters ? [...$config.activeGroupFilters].sort() : null,
     [...($config.inactiveCollectionFilters ?? [])].sort(),
   ]),
 );

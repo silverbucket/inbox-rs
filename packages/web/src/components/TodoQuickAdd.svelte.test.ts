@@ -23,7 +23,7 @@ vi.mock('../lib/stores', async () => {
     sortedGroups: writable([]),
     visibleGroupedCollections: writable([]),
     hiddenCollectionIds: writable(new Set<string>()),
-    todoFilterKey: writable(''),
+    sessionPinGeneration: writable(0),
     groups: writable({}),
     items: writable({}),
     appConfig: writable({}),
@@ -41,8 +41,8 @@ import {
   groupCollections,
   groups,
   hiddenCollectionIds,
+  sessionPinGeneration,
   sortedGroups,
-  todoFilterKey,
   visibleGroupedCollections,
 } from '../lib/stores';
 import {
@@ -117,11 +117,8 @@ function seed({
   for (const c of COLS)
     if (hiddenGroups.includes(c.groupId ?? '')) hidden.add(c.id);
   w<Set<string>>(hiddenCollectionIds).set(hidden);
-  w<string>(todoFilterKey).set(
-    `${GROUPS.map((g) => g.id)
-      .filter((id) => !hiddenGroups.includes(id))
-      .join(',')}|${hiddenCollections.join(',')}`,
-  );
+  // The real store bumps this whenever the filter changes.
+  w<number>(sessionPinGeneration).update((n) => n + 1);
   w<unknown[]>(visibleGroupedCollections).set(
     GROUPS.filter((g) => !hiddenGroups.includes(g.id)).map((group) => ({
       group,
@@ -481,7 +478,7 @@ describe('TodoQuickAdd', () => {
     pickCollection('Unfiled');
     expect(chipText()).toBe('Unfiled');
     // e.g. toggling a group that has no collections yet
-    w<string>(todoFilterKey).set('g-work,g-empty|');
+    w<number>(sessionPinGeneration).update((n) => n + 1);
     flushSync();
     expect(chipText()).toBe('Roadmap');
   });
@@ -506,6 +503,25 @@ describe('TodoQuickAdd', () => {
     await vi.waitFor(() => expect(moveItemToCollection).toHaveBeenCalled());
     expect(moveItemToCollection.mock.calls[0][1]).toBe('col-road');
     // …and it is not pinned: the list is already on the user's new terms.
+    expect(keepTodoVisible).not.toHaveBeenCalled();
+  });
+
+  it('skips the pin when the Todos page was left and re-entered mid-save', async () => {
+    seed({ hiddenGroups: ['g-home'] });
+    render();
+    pickCollection('Garden');
+    let finishStore!: () => void;
+    storeItem.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishStore = resolve)),
+    );
+    type('water beds');
+    submitBtn().click();
+    await vi.waitFor(() => expect(storeItem).toHaveBeenCalled());
+    // Leaving / re-entering the page clears the pins and bumps the generation.
+    w<number>(sessionPinGeneration).update((n) => n + 1);
+    finishStore();
+    await vi.waitFor(() => expect(moveItemToCollection).toHaveBeenCalled());
+    expect(moveItemToCollection.mock.calls[0][1]).toBe('col-garden');
     expect(keepTodoVisible).not.toHaveBeenCalled();
   });
 

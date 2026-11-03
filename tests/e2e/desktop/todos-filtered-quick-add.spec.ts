@@ -92,7 +92,12 @@ test('the composer follows the group filter, and hidden picks stay listed', asyn
 
   // Changing the filter hands the list back to the filter: the deliberate
   // Garden todo goes with its group, and the explicit pick is forgotten.
+  // Show Home: Garden is in view again, so the chip returns to the
+  // remembered Garden and the row stays on its own merits. Wait for that
+  // before hiding Home again — two back-to-back toggles race each other's
+  // config write.
   await page.getByRole('button', { name: /^Home \d/ }).click();
+  await expect(chip).toContainText('Garden');
   await page.getByRole('button', { name: /^Home \d/ }).click();
   await expect(beds).not.toBeVisible();
   await expect(chip).toContainText('Reports');

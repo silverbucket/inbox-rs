@@ -16,9 +16,10 @@
   } from '../lib/add-entry-modal';
   import { get } from 'svelte/store';
   import {
+    collections,
     hiddenCollectionIds,
     keepTodoVisible,
-    todoFilterKey,
+    sessionPinGeneration,
   } from '../lib/stores';
   import { todoDestinationDefault } from '../lib/todo-destination';
   import { enrichBookmark, needsEnrichment } from '../lib/enrich';
@@ -93,19 +94,16 @@
     initialDestination(collectionId, rememberedDestination()),
   );
   let collectionPickerOpen = $state(false);
-  // The default destination follows the Todos filter while the modal is
-  // open (a synced filter change can hide it): same rule as the quick-add
-  // composer. A destination the user picked here is theirs to keep.
+  // A todo's default destination keeps following the Todos filter while
+  // the modal is open (a synced filter change can hide it, or bring the
+  // only visible collection into view): same rule as the quick-add
+  // composer. Only the unpicked default moves — a destination the user
+  // picked here, or the opener fixed (`collectionId` given), is kept.
   let pickedExplicitly = false;
   $effect(() => {
-    if (
-      !pickedExplicitly &&
-      type === 'todo' &&
-      selectedCollectionId !== undefined &&
-      $hiddenCollectionIds.has(selectedCollectionId)
-    ) {
-      selectedCollectionId = $todoDestinationDefault;
-    }
+    if (pickedExplicitly || isEdit || type !== 'todo') return;
+    if (collectionId !== undefined) return;
+    selectedCollectionId = $todoDestinationDefault;
   });
   // For refs, `undefined` means Inbox. For todos, `undefined` means unfiled:
   // no collectionId is written, and the todo stays available to organize
@@ -226,7 +224,7 @@
     const destination = selectedCollectionId;
     const pinWanted =
       isTodoType && !isEdit && !!destination && $hiddenCollectionIds.has(destination);
-    const filterAtSubmit = $todoFilterKey;
+    const pinGeneration = $sessionPinGeneration;
     try {
       const id = isEdit ? (editItem?.id ?? crypto.randomUUID()) : crypto.randomUUID();
       const createdAt = isEdit
@@ -266,11 +264,11 @@
           // A todo filed on purpose into a collection the Todos filter
           // hides stays listed there for the session (same as the quick-add
           // composer) instead of vanishing on Save. Pinned before the move
-          // so the row never blinks out; skipped if the filter changed
-          // while the item was being stored (the list is already on the
-          // user's new terms). The Todos page clears pins on mount, so one
-          // made from another page cannot leak into a later visit.
-          if (pinWanted && $todoFilterKey === filterAtSubmit) {
+          // so the row never blinks out; skipped if the pins were reset
+          // while the item was being stored (filter changed, Todos page
+          // left or re-entered) — the list is already on new terms, and a
+          // late pin must not leak into them.
+          if (pinWanted && $sessionPinGeneration === pinGeneration) {
             keepTodoVisible(item.id);
           }
           await moveItemToCollection(item.id, destination);
@@ -281,10 +279,13 @@
         if (pendingSchedule && !isEdit) {
           // Apply after the move so the stored item keeps its collectionId.
           // Posts to the picked calendar best-effort — see applyPendingSchedule.
+          // Keep collectionId only if the move actually filed it: the
+          // collection may have been deleted mid-write, and the move then
+          // no-ops.
+          const filedInto =
+            destination && $collections[destination] ? destination : undefined;
           await applyPendingSchedule(
-            destination
-              ? { ...item, collectionId: destination }
-              : item,
+            filedInto ? { ...item, collectionId: filedInto } : item,
             pendingSchedule,
           );
         }

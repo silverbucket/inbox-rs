@@ -93,6 +93,7 @@ import {
   reorderGroups,
   reorderTodosGlobal,
   reorderUnfiledTodos,
+  sessionPinGeneration,
   sessionVisibleTodoIds,
   setActiveGroupFilters,
   setCollectionArchived,
@@ -2290,6 +2291,35 @@ describe('visibleTodos', () => {
     groups.update((g) => ({ ...g, 'g-new': makeGroup('g-new') }));
     expect(get(sessionVisibleTodoIds).has('c2')).toBe(true);
     expect(get(visibleTodos).map((t) => t.id)).toEqual(['c2']);
+  });
+
+  it('does not treat a reordered group filter as a filter change', () => {
+    clearSessionVisibleTodos();
+    items.set({ c2: makeTodo('c2', { collectionId: 'col-hidden' }) });
+    collections.set({
+      'col-a': makeCollection('col-a', 'g-a'),
+      'col-hidden': makeCollection('col-hidden', 'g-b'),
+    });
+    groups.set({
+      'g-a': makeGroup('g-a', ['col-a']),
+      'g-b': makeGroup('g-b', ['col-hidden']),
+    });
+    appConfig.set({
+      activeGroupFilters: ['g-a', 'g-b'],
+      inactiveCollectionFilters: ['col-hidden'],
+    });
+    keepTodoVisible('c2');
+    const before = get(sessionPinGeneration);
+    appConfig.set({
+      activeGroupFilters: ['g-b', 'g-a'],
+      inactiveCollectionFilters: ['col-hidden'],
+    });
+    expect(get(sessionPinGeneration)).toBe(before);
+    expect(get(sessionVisibleTodoIds).has('c2')).toBe(true);
+    // Dropping to the default "all groups" filter is a change.
+    appConfig.set({ inactiveCollectionFilters: ['col-hidden'] });
+    expect(get(sessionPinGeneration)).toBe(before + 1);
+    expect(get(sessionVisibleTodoIds).size).toBe(0);
   });
 
   it('hides todos from collections without a real group', () => {

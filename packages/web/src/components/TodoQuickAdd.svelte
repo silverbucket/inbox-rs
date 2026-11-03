@@ -33,7 +33,7 @@
     hiddenCollectionIds,
     keepTodoVisible,
     moveItemToCollection,
-    todoFilterKey,
+    sessionPinGeneration,
     sortedGroups,
     storeItem,
   } from '../lib/stores';
@@ -86,9 +86,9 @@
   // dropped the moment the filters change — the new filter is the user's
   // newer, stronger statement of where they are working.
   let explicitPick = $state<string | null | undefined>(undefined);
-  let lastFilterKey: string | undefined;
+  let lastFilterKey: number | undefined;
   $effect(() => {
-    const key = $todoFilterKey;
+    const key = $sessionPinGeneration;
     if (lastFilterKey !== undefined && key !== lastFilterKey) {
       explicitPick = undefined;
     }
@@ -181,7 +181,7 @@
     // agree on one collection.
     const destination = targetCollectionId;
     const pinWanted = isOutOfView(destination);
-    const filterAtSubmit = $todoFilterKey;
+    const pinGeneration = $sessionPinGeneration;
     try {
       const todo = makeUnfiledTodo(quickTitle);
       await storeItem(todo);
@@ -192,9 +192,10 @@
         // Filed somewhere the filter hides on purpose: the row stays in the
         // list, tagged with its collection, instead of vanishing on Enter.
         // Pinned before the move so the row never blinks out between the
-        // write and the pin — unless the filter changed meanwhile, in which
-        // case the list is already on the user's new terms.
-        if (pinWanted && $todoFilterKey === filterAtSubmit) {
+        // write and the pin — unless the pins were reset meanwhile (filter
+        // changed, page left), in which case the list is already on the
+        // user's new terms.
+        if (pinWanted && $sessionPinGeneration === pinGeneration) {
           keepTodoVisible(todo.id);
         }
         await moveItemToCollection(todo.id, destination);
@@ -202,11 +203,15 @@
       }
       filed = true;
       if (pendingSchedule) {
-        // Apply after the move so the stored item keeps its collectionId.
+        // Apply after the move so the stored item keeps its collectionId —
+        // only if the move actually filed it (the collection may have been
+        // deleted while the store write was in flight; the move then no-ops).
         // Posts to the picked calendar best-effort (local-first, toasts on
         // failure) — see applyPendingSchedule.
+        const filedInto =
+          destination && collectionMap[destination] ? destination : undefined;
         await applyPendingSchedule(
-          destination ? { ...todo, collectionId: destination } : todo,
+          filedInto ? { ...todo, collectionId: filedInto } : todo,
           pendingSchedule,
         );
       }
