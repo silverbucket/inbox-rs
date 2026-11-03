@@ -751,6 +751,19 @@ describe('collection todo consistency', () => {
     expect(get(collectionItems).c1).toEqual([]);
     expect(get(todoItems).map((todo) => todo.id)).toEqual(['t1']);
   });
+
+  it('lists an item by its saved collectionId when the collection itemIds lack it', () => {
+    // A pre-filed item whose collection write failed (or has not synced yet)
+    // must still show up in its collection, after the ordered items.
+    const ordered = makeTodo('t1', { collectionId: 'c1' });
+    const straggler = makeTodo('t2', { collectionId: 'c1' });
+    const collection = { ...makeCollection('c1'), itemIds: ['t1'] };
+
+    items.set({ t2: straggler, t1: ordered });
+    collections.set({ c1: collection });
+
+    expect(get(collectionItems).c1.map((i) => i.id)).toEqual(['t1', 't2']);
+  });
 });
 
 describe('moveItemToCollection', () => {

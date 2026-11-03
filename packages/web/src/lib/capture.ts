@@ -83,9 +83,13 @@ export async function captureDetected(
   }
 
   // Stored pre-filed so the item is written once; the move only registers
-  // it in the collection's itemIds (see moveItemToCollection).
-  if (collectionId) built.item.collectionId = collectionId;
-  await storeItem(built.item, built.fileData, built.thumbData);
+  // it in the collection's itemIds (see moveItemToCollection). The returned
+  // draft stays as built, like before.
+  await storeItem(
+    collectionId ? { ...built.item, collectionId } : built.item,
+    built.fileData,
+    built.thumbData,
+  );
   if (collectionId) {
     await moveItemToCollection(built.item.id, collectionId);
   }
@@ -125,9 +129,13 @@ export async function captureFile(
   if (!built) return null;
 
   // Stored pre-filed so the item is written once; the move only registers
-  // it in the collection's itemIds (see moveItemToCollection).
-  if (collectionId) built.item.collectionId = collectionId;
-  await storeItem(built.item, built.fileData, built.thumbData);
+  // it in the collection's itemIds (see moveItemToCollection). The returned
+  // draft stays as built, like before.
+  await storeItem(
+    collectionId ? { ...built.item, collectionId } : built.item,
+    built.fileData,
+    built.thumbData,
+  );
   if (collectionId) {
     await moveItemToCollection(built.item.id, collectionId);
   }

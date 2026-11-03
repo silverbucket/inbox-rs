@@ -187,11 +187,14 @@
       // Stored already filed: a create-then-move writes the item twice in
       // quick succession, which can 412 and lose the move (see
       // moveItemToCollection). The move below then only updates itemIds.
-      const todo =
+      // The local draft stays unfiled so the schedule fallback below cannot
+      // write a collection back that vanished during the store.
+      const todo = makeUnfiledTodo(quickTitle);
+      await storeItem(
         destination && collectionMap[destination]
-          ? { ...makeUnfiledTodo(quickTitle), collectionId: destination }
-          : makeUnfiledTodo(quickTitle);
-      await storeItem(todo);
+          ? { ...todo, collectionId: destination }
+          : todo,
+      );
       created = true;
       quickTitle = '';
       // Separate step keeps collection.itemIds in sync, matching AddEntryModal.

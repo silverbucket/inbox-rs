@@ -915,12 +915,26 @@ export const collectionItems = derived(
   ([$items, $collections]) => {
     const result: Record<string, InboxItem[]> = {};
     const itemMap = new Map(Object.values($items).map((i) => [i.id, i]));
+    // Items filed into a collection that never made it into its itemIds —
+    // the item is stored pre-filed and the collection write failed or has
+    // not arrived by sync yet. Listed after the ordered ones so they show
+    // somewhere rather than in no view at all.
+    const stragglers: Record<string, InboxItem[]> = {};
+    for (const i of itemMap.values()) {
+      if (!i.collectionId) continue;
+      (stragglers[i.collectionId] ??= []).push(i);
+    }
     for (const [cid, col] of Object.entries($collections)) {
-      result[cid] = col.itemIds
+      const ordered = col.itemIds
         .map((id) => itemMap.get(id))
         .filter(
           (i): i is InboxItem => i !== undefined && i.collectionId === cid,
         );
+      const listed = new Set(ordered.map((i) => i.id));
+      result[cid] = [
+        ...ordered,
+        ...(stragglers[cid] ?? []).filter((i) => !listed.has(i.id)),
+      ];
     }
     return result;
   },
