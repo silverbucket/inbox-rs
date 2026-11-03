@@ -196,6 +196,10 @@ describe('captureDetected', () => {
   it('files the item into a collection when a collectionId is given', async () => {
     const res = await captureDetected('remember the milk', 'col-1');
     expect(storeItem).toHaveBeenCalledOnce();
+    // Stored pre-filed so the item is only written once.
+    expect(
+      (storeItem.mock.calls[0][0] as { collectionId?: string }).collectionId,
+    ).toBe('col-1');
     expect(moveItemToCollection).toHaveBeenCalledWith(res?.item.id, 'col-1');
   });
 

@@ -102,9 +102,9 @@ test('the composer follows the group filter, and hidden picks stay listed', asyn
   await expect(beds).not.toBeVisible();
   await expect(chip).toContainText('Reports');
 
-  // Filing a quick-added todo PUTs the item twice in quick succession
-  // (create, then move), and remoteStorage.js sometimes sends the second
-  // with a stale ETag — a 412 the sync layer retries. It predates this
-  // feature (reproducible on master) and is not what this spec guards.
+  // A todo is stored already filed (one PUT), so the create-then-move 412
+  // that used to drop the filing and leave the todo Unfiled is gone. Any
+  // 412 the sync layer still logs for other paths is not what this spec
+  // guards.
   assertNoConsoleErrors(log.filter((m) => !m.includes('status of 412')));
 });

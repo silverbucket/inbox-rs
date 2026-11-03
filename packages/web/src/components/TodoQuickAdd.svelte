@@ -184,8 +184,17 @@
     const pinWanted = isOutOfView(destination);
     const pinGeneration = $sessionPinGeneration;
     try {
+      // Stored already filed: a create-then-move writes the item twice in
+      // quick succession, which can 412 and lose the move (see
+      // moveItemToCollection). The move below then only updates itemIds.
+      // The local draft stays unfiled so the schedule fallback below cannot
+      // write a collection back that vanished during the store.
       const todo = makeUnfiledTodo(quickTitle);
-      await storeItem(todo);
+      await storeItem(
+        destination && collectionMap[destination]
+          ? { ...todo, collectionId: destination }
+          : todo,
+      );
       created = true;
       quickTitle = '';
       // Separate step keeps collection.itemIds in sync, matching AddEntryModal.

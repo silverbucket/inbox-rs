@@ -377,9 +377,14 @@ describe('TodoQuickAdd', () => {
       flushSync();
       expect(moveItemToCollection).toHaveBeenCalledOnce();
     });
-    const todoId = (storeItem.mock.calls[0][0] as { id: string }).id;
-    expect(moveItemToCollection).toHaveBeenCalledWith(todoId, collectionId);
-    return todoId;
+    const stored = storeItem.mock.calls[0][0] as {
+      id: string;
+      collectionId?: string;
+    };
+    // Written once, already filed: the move only registers it in itemIds.
+    expect(stored.collectionId).toBe(collectionId);
+    expect(moveItemToCollection).toHaveBeenCalledWith(stored.id, collectionId);
+    return stored.id;
   }
 
   // --- The default never points outside the current view ---

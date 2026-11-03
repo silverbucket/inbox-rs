@@ -247,8 +247,19 @@
       //   undefined + ref         → Inbox (default; no flag, no collectionId)
       //   undefined + todo        → unfiled todo (no collectionId, no fake
       //                              collection/group written)
-      //   real id                 → assign via moveItemToCollection after storage
-      await storeItem(item, fileData, thumbData);
+      //   real id                 → stored pre-filed; moveItemToCollection
+      //                              then only registers it in itemIds (a
+      //                              second item write would race the
+      //                              first and could 412 — see the helper)
+      // The local `item` stays unfiled so the schedule fallback below cannot
+      // write a collection back that vanished during the store.
+      await storeItem(
+        destination && !isEdit && $collections[destination]
+          ? { ...item, collectionId: destination }
+          : item,
+        fileData,
+        thumbData,
+      );
       // From here the item exists. A follow-up failure (filing, schedule)
       // must NOT bounce back into the outer catch: that leaves the modal
       // open, and pressing Save again re-runs the whole submit with a fresh

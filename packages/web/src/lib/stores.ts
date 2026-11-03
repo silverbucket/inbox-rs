@@ -915,12 +915,26 @@ export const collectionItems = derived(
   ([$items, $collections]) => {
     const result: Record<string, InboxItem[]> = {};
     const itemMap = new Map(Object.values($items).map((i) => [i.id, i]));
+    // Items filed into a collection that never made it into its itemIds —
+    // the item is stored pre-filed and the collection write failed or has
+    // not arrived by sync yet. Listed after the ordered ones so they show
+    // somewhere rather than in no view at all.
+    const stragglers: Record<string, InboxItem[]> = {};
+    for (const i of itemMap.values()) {
+      if (!i.collectionId) continue;
+      (stragglers[i.collectionId] ??= []).push(i);
+    }
     for (const [cid, col] of Object.entries($collections)) {
-      result[cid] = col.itemIds
+      const ordered = col.itemIds
         .map((id) => itemMap.get(id))
         .filter(
           (i): i is InboxItem => i !== undefined && i.collectionId === cid,
         );
+      const listed = new Set(ordered.map((i) => i.id));
+      result[cid] = [
+        ...ordered,
+        ...(stragglers[cid] ?? []).filter((i) => !listed.has(i.id)),
+      ];
     }
     return result;
   },
@@ -1302,6 +1316,15 @@ export async function moveItemToCollection(
       '[inbox] moveItemToCollection: target collection does not exist:',
       collectionId,
     );
+    // Creators store the item pre-filed and call this to register it in the
+    // collection. If the collection vanished while the item write was in
+    // flight (deleted by another client, say), the item now names a
+    // collection no view lists — unfile it so it lands in Inbox/Unfiled
+    // instead of disappearing.
+    const stored = Object.values(get(items)).find((i) => i.id === itemId);
+    if (stored?.collectionId === collectionId) {
+      await moveItemToCollection(itemId, undefined);
+    }
     return;
   }
 
@@ -1340,7 +1363,15 @@ export async function moveItemToCollection(
   const isSameCollection = oldCollectionId === collectionId;
 
   try {
-    await inbox.store(cleanForStorage(item));
+    // Skip the item write when it already carries the target: creators store
+    // the item pre-filed and call this only to register it in the
+    // collection's itemIds. A second PUT to the same path right after the
+    // first races remoteStorage.js's ETag bookkeeping — the server answers
+    // 412 and the conflict resolves remote-wins, silently dropping the
+    // filing (the todo reappears as Unfiled).
+    if (!isSameCollection) {
+      await inbox.store(cleanForStorage(item));
+    }
 
     // Update source collection's itemIds
     if (oldCollectionId && !isSameCollection) {
@@ -1588,10 +1619,17 @@ export async function moveCollectionToGroup(
   if (!col) return;
 
   try {
-    await inbox.storeCollection(cleanForStorage(col));
+    // Skip the collection write when it already carries the target group
+    // (createCollection stores it with its groupId and calls this only to
+    // register it in the group). A second PUT right after the first can 412
+    // and lose the write — see moveItemToCollection.
+    if (oldGroupId !== groupId) {
+      await inbox.storeCollection(cleanForStorage(col));
+    }
 
-    // Remove from old group
-    if (oldGroupId) {
+    // Remove from old group (nothing to remove when it stays put — a second
+    // write to the group right after the add below would race it, see above)
+    if (oldGroupId && oldGroupId !== groupId) {
       // Capture narrowed value so the closure below keeps it non-undefined.
       const grpId = oldGroupId;
       groups.update((current) => {

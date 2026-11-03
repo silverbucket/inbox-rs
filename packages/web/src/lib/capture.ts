@@ -82,7 +82,14 @@ export async function captureDetected(
       detected.kind === 'bookmark' ? detected.url : undefined;
   }
 
-  await storeItem(built.item, built.fileData, built.thumbData);
+  // Stored pre-filed so the item is written once; the move only registers
+  // it in the collection's itemIds (see moveItemToCollection). The returned
+  // draft stays as built, like before.
+  await storeItem(
+    collectionId ? { ...built.item, collectionId } : built.item,
+    built.fileData,
+    built.thumbData,
+  );
   if (collectionId) {
     await moveItemToCollection(built.item.id, collectionId);
   }
@@ -121,7 +128,14 @@ export async function captureFile(
   // The builders only return null without a file; we always pass one.
   if (!built) return null;
 
-  await storeItem(built.item, built.fileData, built.thumbData);
+  // Stored pre-filed so the item is written once; the move only registers
+  // it in the collection's itemIds (see moveItemToCollection). The returned
+  // draft stays as built, like before.
+  await storeItem(
+    collectionId ? { ...built.item, collectionId } : built.item,
+    built.fileData,
+    built.thumbData,
+  );
   if (collectionId) {
     await moveItemToCollection(built.item.id, collectionId);
   }
