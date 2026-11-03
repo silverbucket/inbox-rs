@@ -812,6 +812,39 @@ describe('moveItemToCollection', () => {
     expect(get(collections).target.itemIds).toEqual(['t1']);
     expect(get(items).t1.collectionId).toBe('target');
   });
+
+  it('unfiles an item whose pre-filed collection no longer exists', async () => {
+    // The collection was deleted while the pre-filed item write was in
+    // flight. A dangling collectionId would list the item in no view, so it
+    // falls back to unfiled rather than vanishing.
+    const item = makeTodo('t1', { collectionId: 'gone' });
+    items.set({ t1: item });
+    collections.set({});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await moveItemToCollection('t1', 'gone');
+
+    expect(get(items).t1.collectionId).toBeUndefined();
+    expect(mockInbox.store).toHaveBeenCalledOnce();
+    expect(
+      (mockInbox.store.mock.calls[0][0] as { collectionId?: string })
+        .collectionId,
+    ).toBeUndefined();
+  });
+
+  it('leaves an item alone when a missing target was never applied to it', async () => {
+    const item = makeTodo('t1', { collectionId: 'source' });
+    items.set({ t1: item });
+    collections.set({
+      source: { ...makeCollection('source'), itemIds: ['t1'] },
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await moveItemToCollection('t1', 'gone');
+
+    expect(get(items).t1.collectionId).toBe('source');
+    expect(mockInbox.store).not.toHaveBeenCalled();
+  });
 });
 
 describe('deleteGroup', () => {
@@ -2141,7 +2174,7 @@ describe('moveCollectionToGroup', () => {
     await moveCollectionToGroup('c1', 'g1');
 
     expect(mockInbox.storeCollection).not.toHaveBeenCalled();
-    expect(mockInbox.storeGroup).toHaveBeenCalled();
+    expect(mockInbox.storeGroup).toHaveBeenCalledTimes(1);
     expect(get(groups).g1.collectionIds).toContain('c1');
   });
 

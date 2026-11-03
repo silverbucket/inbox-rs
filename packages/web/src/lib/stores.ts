@@ -1302,6 +1302,15 @@ export async function moveItemToCollection(
       '[inbox] moveItemToCollection: target collection does not exist:',
       collectionId,
     );
+    // Creators store the item pre-filed and call this to register it in the
+    // collection. If the collection vanished while the item write was in
+    // flight (deleted by another client, say), the item now names a
+    // collection no view lists — unfile it so it lands in Inbox/Unfiled
+    // instead of disappearing.
+    const stored = Object.values(get(items)).find((i) => i.id === itemId);
+    if (stored?.collectionId === collectionId) {
+      await moveItemToCollection(itemId, undefined);
+    }
     return;
   }
 
@@ -1604,8 +1613,9 @@ export async function moveCollectionToGroup(
       await inbox.storeCollection(cleanForStorage(col));
     }
 
-    // Remove from old group
-    if (oldGroupId) {
+    // Remove from old group (nothing to remove when it stays put — a second
+    // write to the group right after the add below would race it, see above)
+    if (oldGroupId && oldGroupId !== groupId) {
       // Capture narrowed value so the closure below keeps it non-undefined.
       const grpId = oldGroupId;
       groups.update((current) => {
