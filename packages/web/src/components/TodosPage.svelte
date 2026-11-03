@@ -5,7 +5,7 @@
   import { slide, fade } from 'svelte/transition';
   import { createDndLeaveGuard } from '../lib/dnd-leave-guard';
   import { createReorderFade } from '../lib/reorder-fade';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import {
     visibleTodos, visibleOnCalendarTodos, reorderTodosGlobal,
     collections, sortedGroups, appConfig, updateConfig,
@@ -37,6 +37,9 @@
   const todos = $derived($visibleTodos);
   // Todos deliberately filed into a hidden collection stay listed while the
   // page is open; leaving it hands the list back to the filter.
+  // Session pins belong to one visit: start clean (a todo modal elsewhere
+  // may have pinned an id) and leave clean.
+  onMount(clearSessionVisibleTodos);
   onDestroy(clearSessionVisibleTodos);
   const openTodos = $derived(todos.filter(t => !t.completed));
   // The store pins due todos first (earliest due leading); the page renders

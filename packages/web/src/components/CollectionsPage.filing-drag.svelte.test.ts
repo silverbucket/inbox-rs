@@ -66,6 +66,7 @@ vi.mock('../lib/stores', async () => {
     groupCollections: w({ [group.id]: [collection] }),
     visibleGroupedCollections: w([{ group, collections: [collection] }]),
     hiddenCollectionIds: w(new Set()),
+    todoFilterKey: w(''),
     keepTodoVisible: vi.fn(),
     orphanCollections: w([]),
     archivedCollections: w([]),

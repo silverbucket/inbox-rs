@@ -33,6 +33,7 @@ vi.mock('../lib/stores', async () => {
     groupCollections: writable({}),
     visibleGroupedCollections: writable([]),
     hiddenCollectionIds: writable(new Set()),
+    todoFilterKey: writable(''),
     keepTodoVisible: vi.fn(),
     deleteCollection: vi.fn(),
     deleteItem: vi.fn(),

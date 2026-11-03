@@ -2255,6 +2255,19 @@ describe('visibleTodos', () => {
     });
     expect(get(sessionVisibleTodoIds).has('c2')).toBe(true);
 
+    // …archiving the collection still removes it: pins bypass the filter,
+    // not archiving.
+    collections.update((c) => ({
+      ...c,
+      'col-hidden': { ...c['col-hidden'], archived: true },
+    }));
+    expect(get(sessionVisibleTodoIds).has('c2')).toBe(true);
+    expect(get(visibleTodos).map((t) => t.id)).toEqual(['c1']);
+    collections.update((c) => ({
+      ...c,
+      'col-hidden': { ...c['col-hidden'], archived: undefined },
+    }));
+
     // …a filter change hands the list back to the filter.
     appConfig.set({ activeGroupFilters: ['g-hidden'] });
     expect(get(sessionVisibleTodoIds).size).toBe(0);

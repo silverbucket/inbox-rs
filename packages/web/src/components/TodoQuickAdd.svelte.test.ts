@@ -23,6 +23,7 @@ vi.mock('../lib/stores', async () => {
     sortedGroups: writable([]),
     visibleGroupedCollections: writable([]),
     hiddenCollectionIds: writable(new Set<string>()),
+    todoFilterKey: writable(''),
     groups: writable({}),
     items: writable({}),
     appConfig: writable({}),
@@ -41,6 +42,7 @@ import {
   groups,
   hiddenCollectionIds,
   sortedGroups,
+  todoFilterKey,
   visibleGroupedCollections,
 } from '../lib/stores';
 import {
@@ -115,6 +117,11 @@ function seed({
   for (const c of COLS)
     if (hiddenGroups.includes(c.groupId ?? '')) hidden.add(c.id);
   w<Set<string>>(hiddenCollectionIds).set(hidden);
+  w<string>(todoFilterKey).set(
+    `${GROUPS.map((g) => g.id)
+      .filter((id) => !hiddenGroups.includes(id))
+      .join(',')}|${hiddenCollections.join(',')}`,
+  );
   w<unknown[]>(visibleGroupedCollections).set(
     GROUPS.filter((g) => !hiddenGroups.includes(g.id)).map((group) => ({
       group,
@@ -466,6 +473,29 @@ describe('TodoQuickAdd', () => {
     seed({ hiddenGroups: ['g-work'] });
     flushSync();
     expect(chipText()).toBe('Garden');
+  });
+
+  it('forgets explicit picks on a filter change that hides no new collection', () => {
+    seed({ hiddenGroups: ['g-home'] });
+    render();
+    pickCollection('Unfiled');
+    expect(chipText()).toBe('Unfiled');
+    // e.g. toggling a group that has no collections yet
+    w<string>(todoFilterKey).set('g-work,g-empty|');
+    flushSync();
+    expect(chipText()).toBe('Roadmap');
+  });
+
+  it('pins a hidden pick before the move so the row never blinks out', async () => {
+    seed({ hiddenGroups: ['g-home'] });
+    render();
+    pickCollection('Garden');
+    type('water beds');
+    submitBtn().click();
+    await vi.waitFor(() => expect(moveItemToCollection).toHaveBeenCalled());
+    expect(keepTodoVisible.mock.invocationCallOrder[0]).toBeLessThan(
+      moveItemToCollection.mock.invocationCallOrder[0],
+    );
   });
 
   // --- Destination echo in the hint line ---

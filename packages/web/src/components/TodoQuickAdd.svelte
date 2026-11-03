@@ -33,6 +33,7 @@
     hiddenCollectionIds,
     keepTodoVisible,
     moveItemToCollection,
+    todoFilterKey,
     sortedGroups,
     storeItem,
   } from '../lib/stores';
@@ -85,10 +86,9 @@
   // dropped the moment the filters change — the new filter is the user's
   // newer, stronger statement of where they are working.
   let explicitPick = $state<string | null | undefined>(undefined);
-  const filterKey = $derived([...$hiddenCollectionIds].sort().join(','));
   let lastFilterKey: string | undefined;
   $effect(() => {
-    const key = filterKey;
+    const key = $todoFilterKey;
     if (lastFilterKey !== undefined && key !== lastFilterKey) {
       explicitPick = undefined;
     }
@@ -183,11 +183,13 @@
       quickTitle = '';
       // Separate step keeps collection.itemIds in sync, matching AddEntryModal.
       if (targetCollectionId) {
-        await moveItemToCollection(todo.id, targetCollectionId);
-        recordCollectionUse(targetCollectionId);
         // Filed somewhere the filter hides on purpose: the row stays in the
         // list, tagged with its collection, instead of vanishing on Enter.
+        // Pinned before the move so the row never blinks out between the
+        // write and the pin.
         if (isOutOfView(targetCollectionId)) keepTodoVisible(todo.id);
+        await moveItemToCollection(todo.id, targetCollectionId);
+        recordCollectionUse(targetCollectionId);
       }
       filed = true;
       if (pendingSchedule) {

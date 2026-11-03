@@ -15,7 +15,7 @@
     shouldUseRecentDestination,
   } from '../lib/add-entry-modal';
   import { get } from 'svelte/store';
-  import { hiddenCollectionIds } from '../lib/stores';
+  import { hiddenCollectionIds, keepTodoVisible } from '../lib/stores';
   import { todoDestinationDefault } from '../lib/todo-destination';
   import { enrichBookmark, needsEnrichment } from '../lib/enrich';
   import {
@@ -238,6 +238,15 @@
           for (const path of removePaths) await removeFile(path);
         }
         if (selectedCollectionId && !isEdit) {
+          // A todo filed on purpose into a collection the Todos filter
+          // hides stays listed there for the session (same as the quick-add
+          // composer) instead of vanishing on Save. Pinned before the move
+          // so the row never blinks out; the Todos page clears pins on
+          // mount, so one made from another page cannot leak into a later
+          // visit.
+          if (isTodoType && $hiddenCollectionIds.has(selectedCollectionId)) {
+            keepTodoVisible(item.id);
+          }
           await moveItemToCollection(item.id, selectedCollectionId);
           // Feed the recency signal so the next capture defaults here and
           // the picker's Suggested block stays honest.

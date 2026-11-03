@@ -1902,15 +1902,22 @@ export function clearSessionVisibleTodos(): void {
   sessionVisibleTodoIds.set(new Set());
 }
 
-// Any change to the effective filters resets the kept-visible set. Compared
-// by content: the derived sets are rebuilt on unrelated changes (a filed
-// todo bumps `groupCollections`), and that must not clear the pins.
-let lastFilterKey: string | undefined;
-derived(
+/**
+ * Content key of the effective todo filters (active groups + inactive
+ * collections). Changes only when the user actually changes a filter; the
+ * underlying sets are rebuilt on unrelated churn (a filed todo bumps
+ * `groupCollections`), and that must not count. Session-only state keyed
+ * on the filter — the pins below, the composer's explicit pick — resets
+ * when this changes.
+ */
+export const todoFilterKey = derived(
   [activeGroupIds, inactiveCollectionIds],
   ([$groups, $cols]) =>
     `${[...$groups].sort().join(',')}|${[...$cols].sort().join(',')}`,
-).subscribe((key) => {
+);
+
+let lastFilterKey: string | undefined;
+todoFilterKey.subscribe((key) => {
   if (lastFilterKey !== undefined && key !== lastFilterKey) {
     clearSessionVisibleTodos();
   }
@@ -2230,10 +2237,14 @@ export const visibleTodos = derived(
     $todayStart,
     $kept,
   ]) => {
+    // A pin bypasses the filter, not archiving: a kept todo whose
+    // collection gets archived mid-session leaves like any other.
+    const inArchivedCollection = (todo: InboxItem) =>
+      !!todo.collectionId && !!$collections[todo.collectionId]?.archived;
     const filtered = $allTodos.filter(
       (todo) =>
         !todo.archived &&
-        ($kept.has(todo.id) ||
+        (($kept.has(todo.id) && !inArchivedCollection(todo)) ||
           todoPassesGroupFilter(
             todo,
             $collections,
