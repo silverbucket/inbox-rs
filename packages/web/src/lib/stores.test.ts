@@ -794,6 +794,24 @@ describe('moveItemToCollection', () => {
     expect(get(collections).target.itemIds).toEqual(['t1']);
     expect(get(items).t1.collectionId).toBe('target');
   });
+
+  it('does not rewrite an item that already carries the target collection', async () => {
+    // Creators store the item pre-filed and call the helper only to register
+    // it in itemIds. A second PUT to the same path right after the first can
+    // 412 and lose the filing, so the item must be written once.
+    const item = makeTodo('t1', { collectionId: 'target' });
+    const target = { ...makeCollection('target'), itemIds: [] };
+
+    items.set({ t1: item });
+    collections.set({ target });
+
+    await moveItemToCollection('t1', 'target');
+
+    expect(mockInbox.store).not.toHaveBeenCalled();
+    expect(mockInbox.storeCollection).toHaveBeenCalledOnce();
+    expect(get(collections).target.itemIds).toEqual(['t1']);
+    expect(get(items).t1.collectionId).toBe('target');
+  });
 });
 
 describe('deleteGroup', () => {
@@ -2109,6 +2127,22 @@ describe('moveCollectionToGroup', () => {
     expect(updatedNewGroup.collectionIds).toContain('c1');
 
     expect(get(collections).c1.groupId).toBe('g2');
+  });
+
+  it('does not rewrite a collection that already carries the target group', async () => {
+    // createCollection stores the collection with its groupId first; a second
+    // PUT to the same path right after can 412, so only the group is written.
+    const col = makeCollection('c1', 'g1');
+    const group = makeGroup('g1', []);
+
+    collections.set({ c1: col });
+    groups.set({ g1: group });
+
+    await moveCollectionToGroup('c1', 'g1');
+
+    expect(mockInbox.storeCollection).not.toHaveBeenCalled();
+    expect(mockInbox.storeGroup).toHaveBeenCalled();
+    expect(get(groups).g1.collectionIds).toContain('c1');
   });
 
   it('throws without mutating when target group is missing', async () => {

@@ -247,7 +247,13 @@
       //   undefined + ref         → Inbox (default; no flag, no collectionId)
       //   undefined + todo        → unfiled todo (no collectionId, no fake
       //                              collection/group written)
-      //   real id                 → assign via moveItemToCollection after storage
+      //   real id                 → stored pre-filed; moveItemToCollection
+      //                              then only registers it in itemIds (a
+      //                              second item write would race the
+      //                              first and could 412 — see the helper)
+      if (destination && !isEdit && $collections[destination]) {
+        item.collectionId = destination;
+      }
       await storeItem(item, fileData, thumbData);
       // From here the item exists. A follow-up failure (filing, schedule)
       // must NOT bounce back into the outer catch: that leaves the modal

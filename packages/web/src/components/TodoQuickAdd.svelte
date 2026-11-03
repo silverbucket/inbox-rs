@@ -184,7 +184,13 @@
     const pinWanted = isOutOfView(destination);
     const pinGeneration = $sessionPinGeneration;
     try {
-      const todo = makeUnfiledTodo(quickTitle);
+      // Stored already filed: a create-then-move writes the item twice in
+      // quick succession, which can 412 and lose the move (see
+      // moveItemToCollection). The move below then only updates itemIds.
+      const todo =
+        destination && collectionMap[destination]
+          ? { ...makeUnfiledTodo(quickTitle), collectionId: destination }
+          : makeUnfiledTodo(quickTitle);
       await storeItem(todo);
       created = true;
       quickTitle = '';

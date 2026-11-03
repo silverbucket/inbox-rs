@@ -1340,7 +1340,15 @@ export async function moveItemToCollection(
   const isSameCollection = oldCollectionId === collectionId;
 
   try {
-    await inbox.store(cleanForStorage(item));
+    // Skip the item write when it already carries the target: creators store
+    // the item pre-filed and call this only to register it in the
+    // collection's itemIds. A second PUT to the same path right after the
+    // first races remoteStorage.js's ETag bookkeeping — the server answers
+    // 412 and the conflict resolves remote-wins, silently dropping the
+    // filing (the todo reappears as Unfiled).
+    if (!isSameCollection) {
+      await inbox.store(cleanForStorage(item));
+    }
 
     // Update source collection's itemIds
     if (oldCollectionId && !isSameCollection) {
@@ -1588,7 +1596,13 @@ export async function moveCollectionToGroup(
   if (!col) return;
 
   try {
-    await inbox.storeCollection(cleanForStorage(col));
+    // Skip the collection write when it already carries the target group
+    // (createCollection stores it with its groupId and calls this only to
+    // register it in the group). A second PUT right after the first can 412
+    // and lose the write — see moveItemToCollection.
+    if (oldGroupId !== groupId) {
+      await inbox.storeCollection(cleanForStorage(col));
+    }
 
     // Remove from old group
     if (oldGroupId) {
