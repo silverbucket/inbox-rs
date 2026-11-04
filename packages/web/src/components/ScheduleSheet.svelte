@@ -80,6 +80,7 @@
   let timeStr = $state(initialAllDay ? '' : toTimeInputValue(initialStart));
   let allDay = $state(initialAllDay);
   let durationMin = $state(initialDuration);
+  let location = $state(item?.location ?? initial?.location ?? '');
   let saving = $state(false);
 
   const DURATIONS = [
@@ -114,6 +115,7 @@
       start,
       durationMin,
       allDay: effectiveAllDay,
+      location,
     });
   }
 
@@ -143,7 +145,13 @@
   async function save() {
     if (pickMode) {
       if (!start) return;
-      onpick?.({ kind, start, durationMin, allDay: effectiveAllDay });
+      onpick?.({
+        kind,
+        start,
+        durationMin,
+        allDay: effectiveAllDay,
+        location,
+      });
       return;
     }
     const updated = scheduledItem();
@@ -283,6 +291,15 @@
         No specific time — due sometime that day
       </label>
     {/if}
+
+    <span class="flabel">Location</span>
+    <input
+      type="text"
+      class="input"
+      bind:value={location}
+      aria-label="Location"
+      placeholder="Venue, address or link (optional)"
+    />
 
     <button type="button" class="btn-primary" disabled={!canSave} onclick={save}>
       {pickMode ? 'Set time' : hasExisting ? 'Update time' : 'Set time'}

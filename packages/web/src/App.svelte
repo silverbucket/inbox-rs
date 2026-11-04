@@ -464,7 +464,14 @@
   async function handleFileCapture(file: File, caption = '') {
     const res = await captureFile(file, caption);
     if (!res) return;
-    const label = res.item.type === 'image' ? 'Saved image' : 'Saved file';
+    const label =
+      res.item.type === 'image'
+        ? 'Saved image'
+        : res.item.scheduleKind === 'task'
+          ? 'Saved task'
+          : res.item.startsAt
+            ? 'Saved event'
+            : 'Saved file';
     showToast(label, {
       label: 'Undo',
       run: () => {

@@ -1,6 +1,14 @@
 import type { InboxItem, NoteItem, TodoItem } from '@inbox-rs/rs-module';
 import { describe, expect, it } from 'vitest';
-import { buildIcs, escapeText, foldLine } from './ics';
+import {
+  buildIcs,
+  escapeText,
+  foldLine,
+  isCalendarFile,
+  parseIcs,
+  parseIcsDate,
+  unescapeText,
+} from './ics';
 
 const NOW = new Date('2026-07-30T12:00:00Z');
 
@@ -101,6 +109,11 @@ describe('buildIcs', () => {
     expect(ics.text).not.toContain('VEVENT');
   });
 
+  it('writes LOCATION, escaped', () => {
+    const ics = buildIcs(note({ location: 'HQ, 3rd floor' }), NOW);
+    expect(ics?.text).toContain('LOCATION:HQ\\, 3rd floor');
+  });
+
   it('includes DESCRIPTION and bookmark URL, escaped', () => {
     const ics = buildIcs(
       {
@@ -118,6 +131,29 @@ describe('buildIcs', () => {
     expect(ics.text).toContain('DESCRIPTION:line1\\nline2');
     // URL is a URI value type — emitted verbatim, no TEXT escaping.
     expect(ics.text).toContain('URL:https://example.org/a,b');
+  });
+
+  it('writes the URL a calendar import left as a note body', () => {
+    const ics = buildIcs({
+      id: 'n1',
+      type: 'note',
+      title: 'Talk',
+      body: 'https://www.meetup.com/x/',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      startsAt: '2026-07-31T07:00:00.000Z',
+      scheduleKind: 'event',
+    });
+    expect(ics?.text).toContain('URL:https://www.meetup.com/x/');
+    const prose = buildIcs({
+      id: 'n2',
+      type: 'note',
+      title: 'Talk',
+      body: 'see https://www.meetup.com/x/ later',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      startsAt: '2026-07-31T07:00:00.000Z',
+      scheduleKind: 'event',
+    });
+    expect(prose?.text).not.toContain('URL:');
   });
 
   it('drops a URL carrying control characters instead of injecting lines', () => {
@@ -139,5 +175,229 @@ describe('buildIcs', () => {
   it('derives a safe filename from the title', () => {
     const ics = buildIcs(note({ title: 'Héllo / World!!' }), NOW)!;
     expect(ics.filename).toBe('h-llo-world.ics');
+  });
+});
+
+// Trimmed from Meetup's real export: TZID form with an embedded VTIMEZONE,
+// folded + escaped DESCRIPTION, parameterised URL, no LOCATION at all.
+const MEETUP_ICS = [
+  'BEGIN:VCALENDAR',
+  'VERSION:2.0',
+  'PRODID:-//Meetup//Meetup Calendar 1.0//EN',
+  'METHOD:PUBLISH',
+  'BEGIN:VTIMEZONE',
+  'TZID:America/Chicago',
+  'BEGIN:DAYLIGHT',
+  'DTSTART:19700308T020000',
+  'END:DAYLIGHT',
+  'END:VTIMEZONE',
+  'BEGIN:VEVENT',
+  'UID:event_316315179@meetup.com',
+  'DTSTART;TZID=America/Chicago:20261109T180000',
+  'DTEND;TZID=America/Chicago:20261109T200000',
+  'SUMMARY:ACM/IEEE Austin Tech Talks & Community Showcase',
+  'DESCRIPTION:Join [ACM Austin + I',
+  ' EEE](https://local.acm.org/) for our meetup\\, an evening of talks.\\nSe',
+  ' e you there.',
+  'URL;VALUE=URI:https://www.meetup.com/acm-austin/events/316315179/',
+  'STATUS:CONFIRMED',
+  'BEGIN:VALARM',
+  'DESCRIPTION:Reminder',
+  'END:VALARM',
+  'END:VEVENT',
+  'END:VCALENDAR',
+].join('\r\n');
+
+describe('parseIcsDate', () => {
+  it('reads UTC, zoned, floating and date-only forms', () => {
+    expect(parseIcsDate('20261109T180000Z')?.date.toISOString()).toBe(
+      '2026-11-09T18:00:00.000Z',
+    );
+    expect(
+      parseIcsDate('20261109T180000', {
+        TZID: 'America/Chicago',
+      })?.date.toISOString(),
+    ).toBe('2026-11-10T00:00:00.000Z');
+    // DST: the same wall-clock time in July is CDT, one hour earlier in UTC.
+    expect(
+      parseIcsDate('20260709T180000', {
+        TZID: 'America/Chicago',
+      })?.date.toISOString(),
+    ).toBe('2026-07-09T23:00:00.000Z');
+    expect(parseIcsDate('20261109T180000')).toEqual({
+      date: new Date(2026, 10, 9, 18, 0, 0),
+      allDay: false,
+    });
+    expect(parseIcsDate('20261109', { VALUE: 'DATE' })).toEqual({
+      date: new Date(2026, 10, 9),
+      allDay: true,
+    });
+    expect(parseIcsDate('next tuesday')).toBeNull();
+  });
+
+  it('rejects dates and times that do not exist instead of rolling over', () => {
+    expect(parseIcsDate('20260230', { VALUE: 'DATE' })).toBeNull();
+    expect(parseIcsDate('20261109T250000Z')).toBeNull();
+    expect(parseIcsDate('20261301T100000')).toBeNull();
+  });
+
+  it('keeps a spring-forward gap time on the pre-transition offset', () => {
+    // 02:30 does not exist in Chicago on 2026-03-08; it reads as 03:30 CDT.
+    expect(
+      parseIcsDate('20260308T023000', {
+        TZID: 'America/Chicago',
+      })?.date.toISOString(),
+    ).toBe('2026-03-08T08:30:00.000Z');
+    // Same gap in a positive-offset zone: 02:30 Berlin reads as 03:30 CEST.
+    expect(
+      parseIcsDate('20260329T023000', {
+        TZID: 'Europe/Berlin',
+      })?.date.toISOString(),
+    ).toBe('2026-03-29T01:30:00.000Z');
+  });
+
+  it('resolves an ambiguous fall-back time to its first occurrence', () => {
+    expect(
+      parseIcsDate('20261025T023000', {
+        TZID: 'Europe/Berlin',
+      })?.date.toISOString(),
+    ).toBe('2026-10-25T00:30:00.000Z');
+    expect(
+      parseIcsDate('20261101T013000', {
+        TZID: 'America/Chicago',
+      })?.date.toISOString(),
+    ).toBe('2026-11-01T06:30:00.000Z');
+  });
+
+  it('falls back to floating local time for an unknown TZID', () => {
+    expect(
+      parseIcsDate('20261109T180000', { TZID: 'Central Standard Time' }),
+    ).toEqual({ date: new Date(2026, 10, 9, 18, 0, 0), allDay: false });
+  });
+});
+
+describe('parseIcs', () => {
+  it('reads a real-world zoned VEVENT, skipping VTIMEZONE and VALARM', () => {
+    const parsed = parseIcs(MEETUP_ICS);
+    expect(parsed).toMatchObject({
+      title: 'ACM/IEEE Austin Tech Talks & Community Showcase',
+      kind: 'event',
+      allDay: false,
+    });
+    expect(parsed?.start.toISOString()).toBe('2026-11-10T00:00:00.000Z');
+    expect(parsed?.end?.toISOString()).toBe('2026-11-10T02:00:00.000Z');
+    expect(parsed?.body).toBe(
+      'https://www.meetup.com/acm-austin/events/316315179/',
+    );
+    expect(parsed?.description).toBe(
+      'Join [ACM Austin + IEEE](https://local.acm.org/) for our meetup, an evening of talks.\nSee you there.',
+    );
+  });
+
+  it('decodes an escaped backslash without re-reading it as an escape', () => {
+    expect(unescapeText('C:\\\\temp\\\\n is a path\\, not a newline')).toBe(
+      'C:\\temp\\n is a path, not a newline',
+    );
+  });
+
+  it('reads an all-day event with a location and a cancelled status', () => {
+    const parsed = parseIcs(
+      [
+        'BEGIN:VCALENDAR',
+        'BEGIN:VEVENT',
+        'DTSTART;VALUE=DATE:20261225',
+        'DTEND;VALUE=DATE:20261226',
+        'SUMMARY:Office closed',
+        'LOCATION:HQ\\, 3rd floor',
+        'STATUS:CANCELLED',
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\n'),
+    );
+    expect(parsed).toEqual({
+      title: 'Cancelled: Office closed',
+      body: '',
+      description: undefined,
+      location: 'HQ, 3rd floor',
+      kind: 'event',
+      start: new Date(2026, 11, 25),
+      end: undefined,
+      allDay: true,
+      completed: false,
+    });
+  });
+
+  it('reads a VTODO with a DUE time as a task', () => {
+    const parsed = parseIcs(
+      'BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nSUMMARY:Send slides\r\nDUE:20261112T170000Z\r\nEND:VTODO\r\nEND:VCALENDAR\r\n',
+    );
+    expect(parsed).toMatchObject({
+      title: 'Send slides',
+      kind: 'task',
+      completed: false,
+    });
+    expect(parsed?.start.toISOString()).toBe('2026-11-12T17:00:00.000Z');
+  });
+
+  it('marks a completed VTODO and names an untitled one as a task', () => {
+    const parsed = parseIcs(
+      'BEGIN:VCALENDAR\nBEGIN:VTODO\nDUE:20261112T170000Z\nSTATUS:COMPLETED\nCOMPLETED:20261110T080000Z\nEND:VTODO\nEND:VCALENDAR',
+    );
+    expect(parsed).toMatchObject({
+      title: 'Untitled task',
+      completed: true,
+      completedAt: new Date('2026-11-10T08:00:00.000Z'),
+    });
+  });
+
+  it('skips an entry nested inside another component', () => {
+    const parsed = parseIcs(
+      [
+        'BEGIN:VCALENDAR',
+        'BEGIN:VTIMEZONE',
+        'BEGIN:VEVENT',
+        'SUMMARY:nested',
+        'DTSTART:20260101T000000Z',
+        'END:VEVENT',
+        'END:VTIMEZONE',
+        'BEGIN:VEVENT',
+        'SUMMARY:real',
+        'DTSTART:20261109T180000Z',
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\n'),
+    );
+    expect(parsed?.title).toBe('real');
+  });
+
+  it('returns null for non-calendar text or an entry without a start', () => {
+    expect(parseIcs('hello')).toBeNull();
+    expect(
+      parseIcs(
+        'BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:x\nEND:VEVENT\nEND:VCALENDAR',
+      ),
+    ).toBeNull();
+  });
+
+  it('ignores an entry that sits outside the VCALENDAR block', () => {
+    expect(
+      parseIcs(
+        'BEGIN:VEVENT\nSUMMARY:x\nDTSTART:20261109T180000Z\nEND:VEVENT\nBEGIN:VCALENDAR\nEND:VCALENDAR',
+      ),
+    ).toBeNull();
+  });
+});
+
+describe('isCalendarFile', () => {
+  it('matches by mime type or extension', () => {
+    expect(isCalendarFile(new File([''], 'invite.ics', { type: '' }))).toBe(
+      true,
+    );
+    expect(isCalendarFile(new File([''], 'x', { type: 'text/calendar' }))).toBe(
+      true,
+    );
+    expect(
+      isCalendarFile(new File([''], 'x.pdf', { type: 'application/pdf' })),
+    ).toBe(false);
   });
 });

@@ -10,7 +10,12 @@
  * button in the bookmark view, bulk action in the user menu).
  */
 
-import type { BookmarkItem, InboxItem, NoteItem } from '@inbox-rs/rs-module';
+import type {
+  BookmarkItem,
+  InboxItem,
+  LinkEvent,
+  NoteItem,
+} from '@inbox-rs/rs-module';
 import { get, writable } from 'svelte/store';
 import { bookmarkUrlFromNoteBody } from './capture-detect';
 import {
@@ -18,7 +23,9 @@ import {
   fetchLinkMetadata,
   type LinkMetadata,
 } from './link-metadata';
+import { applySchedule, type ScheduleInput } from './schedule';
 import { items, storeItem, userSettings } from './stores';
+import { showToast } from './toast';
 
 export const LOCAL_LINK_PREVIEWS_KEY = 'inbox-rs:link-previews';
 export const LOCAL_SOCKETHUB_URL_KEY = 'inbox-rs:sockethub-url';
@@ -128,14 +135,53 @@ export function noteToBookmark(note: NoteItem, url: string): BookmarkItem {
  * site name/favicon only fill empty fields. Returns the updated copy, or
  * null when nothing new was learned.
  */
+/**
+ * The page's declared event as a schedule. A date-only start is an all-day
+ * event on that local calendar date, never UTC midnight shifted into the
+ * previous evening.
+ */
+function eventSchedule(event: LinkEvent): ScheduleInput | null {
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(event.startDate);
+  const start = dateOnly
+    ? new Date(
+        Number(dateOnly[1]),
+        Number(dateOnly[2]) - 1,
+        Number(dateOnly[3]),
+      )
+    : new Date(event.startDate);
+  if (Number.isNaN(start.getTime())) return null;
+  const end = event.endDate ? new Date(event.endDate) : null;
+  // Exact, not rounded: any positive span is truthy and keeps its end.
+  const durationMin =
+    end && !dateOnly && end > start
+      ? (end.getTime() - start.getTime()) / 60_000
+      : undefined;
+  return {
+    kind: 'event',
+    start,
+    durationMin,
+    allDay: !!dateOnly,
+    location: event.location,
+  };
+}
+
 export function applyLinkMetadata(
   item: BookmarkItem,
   meta: LinkMetadata,
 ): BookmarkItem | null {
-  const updated: BookmarkItem = { ...item };
+  let updated: BookmarkItem = { ...item };
   let changed = false;
-  if (meta.title && (!item.title || item.title === item.url)) {
-    updated.title = meta.title;
+  // The page's event time fills an unscheduled card only — a time the user
+  // set by hand wins, like every other field here.
+  const schedule = meta.event && !item.startsAt && eventSchedule(meta.event);
+  if (schedule) {
+    updated = applySchedule(updated, schedule);
+    changed = true;
+  }
+  // An event-only page still names its event; better than a URL title.
+  const title = meta.title || meta.event?.name;
+  if (title && (!item.title || item.title === item.url)) {
+    updated.title = title;
     changed = true;
   }
   if (meta.description && !item.description) {
@@ -182,6 +228,11 @@ export async function enrichBookmark(
   const updated = applyLinkMetadata(current, meta);
   if (!updated) return 'none';
   await storeItem(updated);
+  // Background enrichment is otherwise silent; a date appearing on its own
+  // would read as a glitch.
+  if (updated.startsAt && !current.startsAt) {
+    showToast('Event time added from the page');
+  }
   return 'updated';
 }
 

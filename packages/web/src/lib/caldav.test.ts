@@ -51,16 +51,32 @@ describe('itemToCalendarObject', () => {
       endsAt: '2026-08-03T14:00:00.000Z',
       scheduleKind: 'event',
       description: 'notes',
+      location: 'Room 1',
     };
     expect(itemToCalendarObject(bookmark)).toEqual({
       type: 'event',
       uid: 'bm-1@inbox-rs',
       name: 'Read this',
       content: 'notes',
+      location: 'Room 1',
       url: 'https://example.org/post',
       startTime: '2026-08-03T13:00:00.000Z',
       endTime: '2026-08-03T14:00:00.000Z',
     });
+  });
+
+  it('sends the URL a calendar import left as a note body', () => {
+    expect(
+      itemToCalendarObject({
+        id: 'n-1',
+        type: 'note',
+        title: 'Talk',
+        body: 'https://www.meetup.com/x/',
+        createdAt: '2026-07-01T00:00:00Z',
+        startsAt: '2026-08-03T13:00:00.000Z',
+        scheduleKind: 'event',
+      }),
+    ).toMatchObject({ url: 'https://www.meetup.com/x/' });
   });
 
   it('maps all-day entries to local date-only strings without endTime', () => {

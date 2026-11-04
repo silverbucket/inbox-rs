@@ -27,6 +27,8 @@ import type {
 } from '@inbox-rs/rs-module';
 import { noteTitleFromBody } from '@inbox-rs/rs-module';
 import { type BuildItemResult, getFileExtension } from './add-entry-modal';
+import { isCalendarFile, parseIcs } from './ics';
+import { applySchedule } from './schedule';
 import { generateThumbnail, THUMB_MIME_TYPE } from './thumbnail';
 
 export interface BuildContext {
@@ -57,6 +59,7 @@ function preserveCollection<T extends InboxItem>(
       'endsAt',
       'allDay',
       'scheduleKind',
+      'location',
       'eventUrl',
       'eventEtag',
       'archived',
@@ -274,6 +277,42 @@ export async function buildDocumentItem(
   ctx: BuildContext,
   data: DocumentFormData,
 ): Promise<BuildItemResult | null> {
+  // A calendar file (mail invite, event-site export) is worth more as a
+  // scheduled note than as an opaque file: title, time and details land on
+  // the card and it can go straight to a calendar. Unparseable files still
+  // store as documents.
+  if (data.file && !ctx.editItem && isCalendarFile(data.file)) {
+    const parsed = parseIcs(await data.file.text());
+    if (parsed) {
+      const note = buildNoteItem(ctx, {
+        title: data.title || parsed.title,
+        body: parsed.body,
+        description: [data.description, parsed.description]
+          .filter(Boolean)
+          .join('\n\n'),
+      });
+      // Exact, not rounded: the end instant round-trips to exports as is.
+      const durationMin = parsed.end
+        ? (parsed.end.getTime() - parsed.start.getTime()) / 60_000
+        : undefined;
+      const scheduled = applySchedule(note.item, {
+        kind: parsed.kind,
+        start: parsed.start,
+        durationMin,
+        allDay: parsed.allDay,
+        location: parsed.location,
+      });
+      return {
+        item: parsed.completed
+          ? {
+              ...scheduled,
+              completed: true,
+              completedAt: parsed.completedAt?.toISOString() ?? ctx.createdAt,
+            }
+          : scheduled,
+      };
+    }
+  }
   if (data.file) {
     const existingPath =
       ctx.editItem?.type === 'document' ? ctx.editItem.filePath : undefined;

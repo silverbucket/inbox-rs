@@ -19,6 +19,7 @@ import {
   buildNoteItem,
   buildTodoItem,
 } from './build-item';
+import { buildIcs } from './ics';
 
 const FIXED_NOW = '2026-04-30T12:00:00.000Z';
 
@@ -638,6 +639,76 @@ describe('buildAudioItem', () => {
 });
 
 describe('buildDocumentItem', () => {
+  it('turns a calendar file into a scheduled note instead of a document', async () => {
+    const ics =
+      'BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:Standup\nDTSTART:20261110T090000Z\nDTEND:20261110T093000Z\nLOCATION:Room 1\nEND:VEVENT\nEND:VCALENDAR';
+    const result = await buildDocumentItem(ctx({ id: 'cal-1' }), {
+      title: '',
+      description: '',
+      file: new File([ics], 'invite.ics', { type: 'text/calendar' }),
+    });
+    expect(result?.fileData).toBeUndefined();
+    expect(result?.item).toMatchObject({
+      id: 'cal-1',
+      type: 'note',
+      title: 'Standup',
+      body: '',
+      location: 'Room 1',
+      scheduleKind: 'event',
+      startsAt: '2026-11-10T09:00:00.000Z',
+      endsAt: '2026-11-10T09:30:00.000Z',
+    });
+  });
+
+  it('keeps the invite description where the card and exports read it', async () => {
+    const ics =
+      'BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:Standup\nDTSTART:20261110T090000Z\nDTEND:20261110T090020Z\nDESCRIPTION:Bring notes\nURL:https://x.example/e\nEND:VEVENT\nEND:VCALENDAR';
+    const result = await buildDocumentItem(ctx({ id: 'cal-3' }), {
+      title: '',
+      description: 'From Nick',
+      file: new File([ics], 'invite.ics', { type: 'text/calendar' }),
+    });
+    expect(result?.item).toMatchObject({
+      body: 'https://x.example/e',
+      description: 'From Nick\n\nBring notes',
+      // a 20-second span keeps its exact end
+      endsAt: '2026-11-10T09:00:20.000Z',
+    });
+    expect(buildIcs(result!.item)?.text).toContain(
+      'DESCRIPTION:From Nick\\n\\nBring notes',
+    );
+    expect(buildIcs(result!.item)?.text).toContain('URL:https://x.example/e');
+  });
+
+  it('imports a completed VTODO as a done task', async () => {
+    const ics =
+      'BEGIN:VCALENDAR\nBEGIN:VTODO\nSUMMARY:Slides\nDUE:20261112T170000Z\nSTATUS:COMPLETED\nCOMPLETED:20261110T080000Z\nEND:VTODO\nEND:VCALENDAR';
+    const result = await buildDocumentItem(ctx({ id: 'cal-4' }), {
+      title: '',
+      description: '',
+      file: new File([ics], 'todo.ics', { type: 'text/calendar' }),
+    });
+    expect(result?.item).toMatchObject({
+      scheduleKind: 'task',
+      completed: true,
+      completedAt: '2026-11-10T08:00:00.000Z',
+    });
+  });
+
+  it('stores an unparseable .ics as a plain document', async () => {
+    const result = await buildDocumentItem(ctx({ id: 'cal-2' }), {
+      title: '',
+      description: '',
+      file: new File(['not a calendar'], 'broken.ics', {
+        type: 'text/calendar',
+      }),
+    });
+    expect(result?.item).toMatchObject({
+      type: 'document',
+      fileName: 'broken.ics',
+    });
+  });
+
   it('returns null without a file or edit target', async () => {
     expect(
       await buildDocumentItem(ctx(), {

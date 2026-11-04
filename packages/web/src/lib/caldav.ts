@@ -21,6 +21,7 @@
  * one-shot by design — no updates, no deletes (see note at end of file).
  */
 import type { InboxItem } from '@inbox-rs/rs-module';
+import { entryUrl } from './ics';
 import { toDateInputValue } from './schedule';
 
 export const CALDAV_CONTEXT = [
@@ -206,7 +207,8 @@ export function itemToCalendarObject(
     name: item.title || 'Untitled',
     ...(allDay ? { allDay: true } : {}),
     ...(item.description ? { content: item.description } : {}),
-    ...(item.type === 'bookmark' && item.url ? { url: item.url } : {}),
+    ...(item.location ? { location: item.location } : {}),
+    ...(entryUrl(item) ? { url: entryUrl(item) } : {}),
   };
   if (isTask) {
     base.due = when;

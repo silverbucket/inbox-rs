@@ -9,6 +9,7 @@
  * (sockethub/sockethub#1189).
  */
 import type { InboxItem } from '@inbox-rs/rs-module';
+import type { ScheduleKind } from './schedule';
 
 /** Rejecting the C0 control range is the point: a CR/LF inside a verbatim
  *  URI value would break out of its content line (property injection). */
@@ -50,6 +51,18 @@ export function foldLine(line: string): string {
   }
   out.push(current);
   return out.join('\r\n');
+}
+
+/**
+ * The link a calendar entry should carry: a bookmark's URL, or the URL line
+ * a calendar import left as a note's whole body.
+ */
+export function entryUrl(item: InboxItem): string | undefined {
+  if (item.type === 'bookmark') return item.url || undefined;
+  if (item.type === 'note' && /^https?:\/\/\S+$/.test(item.body)) {
+    return item.body;
+  }
+  return undefined;
 }
 
 /** 20260731T090000Z — the UTC instant form. */
@@ -130,12 +143,12 @@ export function buildIcs(
   if (item.description) {
     lines.push(`DESCRIPTION:${escapeText(item.description)}`);
   }
+  if (item.location) lines.push(`LOCATION:${escapeText(item.location)}`);
   // URL is a URI value type (RFC 5545 §3.3.13) — TEXT backslash-escaping
   // does not apply and would corrupt commas/semicolons in query strings.
   // Emit verbatim; CONTROL_CHARS guards against content-line breakout.
-  if (item.type === 'bookmark' && item.url && !CONTROL_CHARS.test(item.url)) {
-    lines.push(`URL:${item.url}`);
-  }
+  const url = entryUrl(item);
+  if (url && !CONTROL_CHARS.test(url)) lines.push(`URL:${url}`);
 
   lines.push(isTask ? 'END:VTODO' : 'END:VEVENT', 'END:VCALENDAR');
 
@@ -163,4 +176,248 @@ export function downloadIcs(item: InboxItem): void {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+// ---------------------------------------------------------------------------
+// Reading. A dropped or uploaded .ics (a mail invite, a Meetup/Luma export)
+// becomes a scheduled card. Only the first VEVENT/VTODO is read; recurrence,
+// alarms, attendees and the embedded VTIMEZONE are ignored — the IANA name
+// in a TZID parameter is enough to place a wall-clock time.
+
+export interface ParsedIcs {
+  title: string;
+  /** The URL line, when the entry carries one. */
+  body: string;
+  /** DESCRIPTION, unescaped: the card's preview text and what exports emit. */
+  description?: string;
+  location?: string;
+  kind: ScheduleKind;
+  start: Date;
+  /** Timed events only. */
+  end?: Date;
+  allDay: boolean;
+  /** VTODO with STATUS:COMPLETED. */
+  completed: boolean;
+  /** The COMPLETED instant, when the entry records one. */
+  completedAt?: Date;
+}
+
+/** True for files worth parsing as a calendar entry. */
+export function isCalendarFile(file: File): boolean {
+  return file.type === 'text/calendar' || /\.ics$/i.test(file.name);
+}
+
+/** RFC 5545 §3.1: a line break followed by a space or tab joins lines. */
+function unfoldLines(text: string): string[] {
+  return text.replace(/\r?\n[ \t]/g, '').split(/\r?\n/);
+}
+
+interface IcsProperty {
+  name: string;
+  params: Record<string, string>;
+  value: string;
+}
+
+/** `NAME;PARAM=v;OTHER="a:b":value` — the first `:` outside quotes splits. */
+function parseProperty(line: string): IcsProperty | null {
+  let i = 0;
+  let quoted = false;
+  for (; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') quoted = !quoted;
+    else if (c === ':' && !quoted) break;
+  }
+  if (i >= line.length) return null;
+  const [name, ...paramParts] = line.slice(0, i).split(';');
+  const params: Record<string, string> = {};
+  for (const part of paramParts) {
+    const eq = part.indexOf('=');
+    if (eq > 0) {
+      params[part.slice(0, eq).toUpperCase()] = part
+        .slice(eq + 1)
+        .replace(/^"|"$/g, '');
+    }
+  }
+  return { name: name.toUpperCase(), params, value: line.slice(i + 1) };
+}
+
+/** Inverse of escapeText. */
+export function unescapeText(value: string): string {
+  // One pass, so a decoded backslash is never re-read as an escape.
+  return value.replace(/\\([\\;,nN])/g, (_, c: string) =>
+    c === 'n' || c === 'N' ? '\n' : c,
+  );
+}
+
+/** True when the fields name a real calendar date and time (no rollover). */
+function fieldsExist(
+  y: number,
+  mo: number,
+  d: number,
+  h: number,
+  mi: number,
+  s: number,
+): boolean {
+  const probe = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
+  return (
+    probe.getUTCFullYear() === y &&
+    probe.getUTCMonth() === mo - 1 &&
+    probe.getUTCDate() === d &&
+    probe.getUTCHours() === h &&
+    probe.getUTCMinutes() === mi &&
+    probe.getUTCSeconds() === s
+  );
+}
+
+/**
+ * Wall-clock fields in an IANA zone → instant, using Intl alone. The
+ * candidate offsets are those in effect a day either side of the wall-clock
+ * reading; a candidate is valid when the zone really has that offset at the
+ * resulting instant. An ambiguous fall-back time takes its first occurrence;
+ * a time inside a spring-forward gap keeps the pre-transition offset, so
+ * 02:30 on the gap day lands at 03:30 DST rather than an hour early. Throws
+ * RangeError for a zone Intl doesn't know.
+ */
+function zonedToUtc(
+  y: number,
+  mo: number,
+  d: number,
+  h: number,
+  mi: number,
+  s: number,
+  timeZone: string,
+): Date {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+  const offsetAt = (t: number) => {
+    const parts = fmt.formatToParts(new Date(t));
+    const get = (type: string) =>
+      Number(parts.find((p) => p.type === type)?.value);
+    return (
+      Date.UTC(
+        get('year'),
+        get('month') - 1,
+        get('day'),
+        get('hour'),
+        get('minute'),
+        get('second'),
+      ) - t
+    );
+  };
+  const asUtc = Date.UTC(y, mo - 1, d, h, mi, s);
+  const DAY = 86_400_000;
+  const before = offsetAt(asUtc - DAY);
+  const offsets = new Set([before, offsetAt(asUtc), offsetAt(asUtc + DAY)]);
+  const valid = [...offsets]
+    .map((o) => asUtc - o)
+    .filter((t) => offsetAt(t) === asUtc - t);
+  return new Date(valid.length ? Math.min(...valid) : asUtc - before);
+}
+
+/**
+ * The three RFC 5545 DATE-TIME forms plus DATE: `20261109T180000Z` (UTC),
+ * `20261109T180000` with `TZID=` (zoned) or without (floating local), and
+ * `20261109` / `VALUE=DATE` (all-day, local calendar date).
+ */
+export function parseIcsDate(
+  value: string,
+  params: Record<string, string> = {},
+): { date: Date; allDay: boolean } | null {
+  const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?$/.exec(
+    value.trim(),
+  );
+  if (!m) return null;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const [h, mi, s] = [Number(m[4] ?? 0), Number(m[5] ?? 0), Number(m[6] ?? 0)];
+  // The Date constructors roll 20260230 over to March 2; a date that does
+  // not exist is a malformed file, not a schedule.
+  if (!fieldsExist(y, mo, d, h, mi, s)) return null;
+  if (params.VALUE === 'DATE' || !m[4]) {
+    return { date: new Date(y, mo - 1, d), allDay: true };
+  }
+  if (m[7])
+    return { date: new Date(Date.UTC(y, mo - 1, d, h, mi, s)), allDay: false };
+  if (params.TZID) {
+    try {
+      return {
+        date: zonedToUtc(y, mo, d, h, mi, s, params.TZID),
+        allDay: false,
+      };
+    } catch {
+      // shortcut: Outlook's Windows zone names ("Central Standard Time")
+      // aren't IANA and fall through to floating local time; add an alias
+      // table if invites from Outlook land hours off.
+    }
+  }
+  return { date: new Date(y, mo - 1, d, h, mi, s), allDay: false };
+}
+
+/** Parse the first VEVENT/VTODO of an iCalendar text; null when there is none. */
+export function parseIcs(text: string): ParsedIcs | null {
+  let kind: ScheduleKind | null = null;
+  const open: string[] = []; // components open before the entry starts
+  let depth = 0; // nested VALARM etc. inside the entry
+  const props: Record<string, IcsProperty> = {};
+  for (const line of unfoldLines(text)) {
+    const prop = parseProperty(line);
+    if (!prop) continue;
+    const component = prop.value.trim().toUpperCase();
+    if (kind === null) {
+      if (prop.name === 'END') {
+        open.pop();
+      } else if (prop.name === 'BEGIN') {
+        // Only an entry whose direct parent is VCALENDAR counts.
+        const direct = open.length === 1 && open[0] === 'VCALENDAR';
+        if (direct && component === 'VEVENT') kind = 'event';
+        else if (direct && component === 'VTODO') kind = 'task';
+        else open.push(component);
+      }
+      continue;
+    }
+    if (prop.name === 'BEGIN') {
+      depth++;
+    } else if (prop.name === 'END') {
+      if (depth === 0) break;
+      depth--;
+    } else if (depth === 0 && !(prop.name in props)) {
+      props[prop.name] = prop;
+    }
+  }
+  if (!kind) return null;
+  const startProp = (kind === 'task' && props.DUE) || props.DTSTART;
+  const start = startProp && parseIcsDate(startProp.value, startProp.params);
+  if (!start) return null;
+  const end =
+    kind === 'event' && !start.allDay && props.DTEND
+      ? parseIcsDate(props.DTEND.value, props.DTEND.params)
+      : null;
+  const field = (name: string) =>
+    props[name]
+      ? unescapeText(props[name].value).trim() || undefined
+      : undefined;
+  const summary = field('SUMMARY');
+  const status = props.STATUS?.value.trim().toUpperCase();
+  const untitled = kind === 'task' ? 'Untitled task' : 'Untitled event';
+  return {
+    title: `${status === 'CANCELLED' ? 'Cancelled: ' : ''}${summary ?? untitled}`,
+    body: props.URL?.value.trim() ?? '',
+    description: field('DESCRIPTION'),
+    location: field('LOCATION'),
+    kind,
+    start: start.date,
+    end: end && end.date > start.date ? end.date : undefined,
+    allDay: start.allDay,
+    completed: kind === 'task' && status === 'COMPLETED',
+    completedAt: props.COMPLETED
+      ? parseIcsDate(props.COMPLETED.value, props.COMPLETED.params)?.date
+      : undefined,
+  };
 }
