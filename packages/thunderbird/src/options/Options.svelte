@@ -3,13 +3,9 @@
   import { getConfig, saveConfig, clearConfig } from '../lib/storage';
   import {
     hasStorageOriginPermission,
-    requestOriginPermission,
+    requestAllUrlsPermission,
   } from '../lib/permissions';
-  import {
-    continueConnectWithStoragePermission,
-    startConnect,
-    type ConnectOutcome,
-  } from './connect-orchestrator';
+  import { runConnect } from './connect-orchestrator';
 
   let userAddress = $state('');
   let connected = $state(false);
@@ -18,10 +14,6 @@
   let savedAddress = $state('');
   /** Saved config exists but its storage permission was revoked outside the extension (e.g. via about:addons). */
   let permissionMissing = $state(false);
-  /** Set when startConnect paused for a storage origin that differs from the WebFinger host — see connect-orchestrator.ts. */
-  let pendingStorageOrigin = $state<string | null>(null);
-
-  const deps = { requestOriginPermission, connectViaOAuth };
 
   $effect(() => {
     init();
@@ -40,53 +32,30 @@
     }
   }
 
-  async function applyOutcome(result: ConnectOutcome) {
-    if (result.status === 'connected') {
-      try {
-        await saveConfig(result.config);
-        connected = true;
-        permissionMissing = false;
-        pendingStorageOrigin = null;
-        savedAddress = result.config.userAddress;
-      } catch (e) {
-        error =
-          e instanceof Error
-            ? e.message
-            : 'Could not save the connection. Please try again.';
-      }
-    } else if (result.status === 'needs-storage-permission') {
-      pendingStorageOrigin = result.origin;
-    } else {
-      error = result.error;
-    }
-  }
-
   async function connect() {
     if (!userAddress.trim()) return;
     connecting = true;
     error = '';
-    pendingStorageOrigin = null;
     try {
-      await applyOutcome(await startConnect(userAddress, deps));
-    } finally {
-      connecting = false;
-    }
-  }
-
-  /**
-   * Called from its own click handler — never from inside `connect()` —
-   * because Gecko only honours `browser.permissions.request()` when it runs
-   * synchronously in a user input handler. See connect-orchestrator.ts.
-   */
-  async function grantStorageAccess() {
-    const origin = pendingStorageOrigin;
-    if (!origin) return;
-    connecting = true;
-    error = '';
-    try {
-      await applyOutcome(
-        await continueConnectWithStoragePermission(userAddress, origin, deps),
-      );
+      const result = await runConnect(userAddress, {
+        requestAllUrlsPermission,
+        connectViaOAuth,
+      });
+      if (result.ok) {
+        try {
+          await saveConfig(result.config);
+          connected = true;
+          permissionMissing = false;
+          savedAddress = result.config.userAddress;
+        } catch (e) {
+          error =
+            e instanceof Error
+              ? e.message
+              : 'Could not save the connection. Please try again.';
+        }
+      } else {
+        error = result.error;
+      }
     } finally {
       connecting = false;
     }
@@ -96,7 +65,6 @@
     await clearConfig();
     connected = false;
     permissionMissing = false;
-    pendingStorageOrigin = null;
     savedAddress = '';
   }
 </script>
@@ -154,20 +122,10 @@
           bind:value={userAddress}
           placeholder="user@provider.example"
           disabled={connecting}
-          oninput={() => { pendingStorageOrigin = null; }}
         />
-        {#if pendingStorageOrigin}
-          <p class="step-detail">
-            Your data is stored at {pendingStorageOrigin}. Grant access to finish connecting.
-          </p>
-          <button type="button" class="btn-primary" disabled={connecting} onclick={grantStorageAccess}>
-            {connecting ? 'Requesting…' : 'Grant Access'}
-          </button>
-        {:else}
-          <button type="submit" class="btn-primary" disabled={connecting || !userAddress.trim()}>
-            {connecting ? 'Connecting...' : 'Connect & Authorize'}
-          </button>
-        {/if}
+        <button type="submit" class="btn-primary" disabled={connecting || !userAddress.trim()}>
+          {connecting ? 'Connecting...' : 'Connect & Authorize'}
+        </button>
         {#if error}
           <p class="error">{error}</p>
         {/if}

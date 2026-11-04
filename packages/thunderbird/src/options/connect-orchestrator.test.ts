@@ -1,232 +1,109 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { runConnect } from './connect-orchestrator';
 
 /**
  * `<all_urls>` became an optional permission (see `manifest.test.ts`), so
- * the Options connect flow has to request host access itself. Gecko only
- * honours `browser.permissions.request()` when it's called synchronously
- * from a user input handler, so the storage-origin request (only knowable
- * after a WebFinger fetch) can't happen inside the same async chain as the
- * WebFinger-host request — it has to wait for a fresh click. These tests
- * pin that two-phase contract down: `startConnect` must never call
- * `requestOriginPermission` for the storage origin itself; it reports
- * `needs-storage-permission` and leaves that request to
- * `continueConnectWithStoragePermission`, invoked from a later click.
+ * the Options connect flow has to request it itself. Gecko only honours
+ * `browser.permissions.request()` when it's called synchronously from a
+ * user input handler — a handler that has already awaited a promise no
+ * longer counts, and the request is silently refused. These tests pin
+ * down that `runConnect` requests `<all_urls>` exactly once, with no
+ * `await` ahead of that call, so it always runs inside the click that
+ * invoked `connect()`.
  */
-
-const { mockDiscoverStorage } = vi.hoisted(() => ({
-  mockDiscoverStorage: vi.fn(),
-}));
-
-vi.mock('@inbox-rs/rs-module/runtime', async () => {
-  const actual = await vi.importActual<
-    typeof import('@inbox-rs/rs-module/runtime')
-  >('@inbox-rs/rs-module/runtime');
-  return { ...actual, discoverStorage: mockDiscoverStorage };
-});
-
-import {
-  continueConnectWithStoragePermission,
-  startConnect,
-} from './connect-orchestrator';
 
 const sampleConfig = {
   userAddress: 'alice@example.com',
   token: 'tok-abc',
-  href: 'https://example.com/storage/alice',
+  href: 'https://storage.example.com/storage/alice',
 };
 
-describe('startConnect', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockDiscoverStorage.mockResolvedValue({
-      href: 'https://example.com/storage/alice',
-      authUrl: 'https://example.com/oauth',
-    });
-  });
-
-  it('requests permission for the WebFinger host before doing anything else', async () => {
-    const requestOriginPermission = vi.fn().mockResolvedValue(true);
+describe('runConnect', () => {
+  it('requests <all_urls> exactly once', async () => {
+    const requestAllUrlsPermission = vi.fn().mockResolvedValue(true);
     const connectViaOAuth = vi.fn().mockResolvedValue(sampleConfig);
 
-    await startConnect('alice@example.com', {
-      requestOriginPermission,
+    await runConnect('alice@example.com', {
+      requestAllUrlsPermission,
       connectViaOAuth,
     });
 
-    expect(requestOriginPermission).toHaveBeenCalledWith('https://example.com');
-  });
-
-  it('fails without running discovery when the WebFinger host permission is declined', async () => {
-    const requestOriginPermission = vi.fn().mockResolvedValue(false);
-    const connectViaOAuth = vi.fn();
-
-    const result = await startConnect('alice@example.com', {
-      requestOriginPermission,
-      connectViaOAuth,
-    });
-
-    expect(mockDiscoverStorage).not.toHaveBeenCalled();
-    expect(connectViaOAuth).not.toHaveBeenCalled();
-    expect(result.status).toBe('error');
-  });
-
-  it('completes OAuth directly when the storage origin matches the WebFinger host', async () => {
-    const requestOriginPermission = vi.fn().mockResolvedValue(true);
-    const connectViaOAuth = vi.fn().mockResolvedValue(sampleConfig);
-
-    const result = await startConnect('alice@example.com', {
-      requestOriginPermission,
-      connectViaOAuth,
-    });
-
-    expect(requestOriginPermission).toHaveBeenCalledTimes(1);
-    expect(connectViaOAuth).toHaveBeenCalledWith('alice@example.com');
-    expect(result).toEqual({ status: 'connected', config: sampleConfig });
+    expect(requestAllUrlsPermission).toHaveBeenCalledTimes(1);
+    expect(requestAllUrlsPermission).toHaveBeenCalledWith();
   });
 
   /**
-   * The core regression guard: when the storage origin differs, startConnect
-   * must NOT call requestOriginPermission for it — that call only happens
-   * from a fresh click (continueConnectWithStoragePermission), never as part
-   * of the async chain that already awaited the WebFinger fetch.
+   * The core regression guard: the permission request must happen
+   * synchronously, with no `await` ahead of it, or Gecko refuses it as not
+   * coming from a user input handler. Checking the mock call count in the
+   * same tick — before awaiting the `runConnect` promise at all — proves
+   * the call happened inside `runConnect`'s synchronous prologue.
    */
-  it('pauses with needs-storage-permission instead of requesting the storage origin itself', async () => {
-    mockDiscoverStorage.mockResolvedValue({
-      href: 'https://storage.example.com/storage/alice',
-      authUrl: 'https://storage.example.com/oauth',
-    });
-    const requestOriginPermission = vi.fn().mockResolvedValue(true);
-    const connectViaOAuth = vi.fn();
+  it('requests <all_urls> before any await', () => {
+    const requestAllUrlsPermission = vi.fn().mockResolvedValue(true);
+    const connectViaOAuth = vi.fn().mockResolvedValue(sampleConfig);
 
-    const result = await startConnect('alice@example.com', {
-      requestOriginPermission,
+    const promise = runConnect('alice@example.com', {
+      requestAllUrlsPermission,
       connectViaOAuth,
     });
 
-    expect(requestOriginPermission).toHaveBeenCalledTimes(1); // WebFinger host only
-    expect(connectViaOAuth).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      status: 'needs-storage-permission',
-      origin: 'https://storage.example.com',
-    });
+    expect(requestAllUrlsPermission).toHaveBeenCalledTimes(1);
+    return promise;
   });
 
-  it('surfaces a discovery error as a clear message', async () => {
-    mockDiscoverStorage.mockRejectedValue(new Error('WebFinger failed: 404'));
-    const requestOriginPermission = vi.fn().mockResolvedValue(true);
-    const connectViaOAuth = vi.fn();
+  it('connects when the permission is granted', async () => {
+    const requestAllUrlsPermission = vi.fn().mockResolvedValue(true);
+    const connectViaOAuth = vi.fn().mockResolvedValue(sampleConfig);
 
-    const result = await startConnect('alice@example.com', {
-      requestOriginPermission,
+    const result = await runConnect('alice@example.com', {
+      requestAllUrlsPermission,
       connectViaOAuth,
     });
 
-    expect(result).toEqual({
-      status: 'error',
-      error: 'WebFinger failed: 404',
+    expect(connectViaOAuth).toHaveBeenCalledWith('alice@example.com');
+    expect(result).toEqual({ ok: true, config: sampleConfig });
+  });
+
+  it('fails without calling connectViaOAuth when the permission is declined, and keeps the message', async () => {
+    const requestAllUrlsPermission = vi.fn().mockResolvedValue(false);
+    const connectViaOAuth = vi.fn();
+
+    const result = await runConnect('alice@example.com', {
+      requestAllUrlsPermission,
+      connectViaOAuth,
     });
+
+    expect(connectViaOAuth).not.toHaveBeenCalled();
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toMatch(/permission/i);
+    }
   });
 
   it('surfaces a connectViaOAuth error as a clear message', async () => {
-    const requestOriginPermission = vi.fn().mockResolvedValue(true);
+    const requestAllUrlsPermission = vi.fn().mockResolvedValue(true);
     const connectViaOAuth = vi
       .fn()
-      .mockRejectedValue(new Error('OAuth error: access_denied'));
+      .mockRejectedValue(new Error('WebFinger failed: 404'));
 
-    const result = await startConnect('alice@example.com', {
-      requestOriginPermission,
+    const result = await runConnect('alice@example.com', {
+      requestAllUrlsPermission,
       connectViaOAuth,
     });
 
-    expect(result).toEqual({
-      status: 'error',
-      error: 'OAuth error: access_denied',
-    });
+    expect(result).toEqual({ ok: false, error: 'WebFinger failed: 404' });
   });
 
-  it('trims the user address before deriving the WebFinger host and calling connectViaOAuth', async () => {
-    const requestOriginPermission = vi.fn().mockResolvedValue(true);
+  it('trims the user address before calling connectViaOAuth', async () => {
+    const requestAllUrlsPermission = vi.fn().mockResolvedValue(true);
     const connectViaOAuth = vi.fn().mockResolvedValue(sampleConfig);
 
-    await startConnect('  alice@example.com  ', {
-      requestOriginPermission,
+    await runConnect('  alice@example.com  ', {
+      requestAllUrlsPermission,
       connectViaOAuth,
     });
 
-    expect(requestOriginPermission).toHaveBeenCalledWith('https://example.com');
     expect(connectViaOAuth).toHaveBeenCalledWith('alice@example.com');
-  });
-
-  it('uses http for a localhost WebFinger host', async () => {
-    const requestOriginPermission = vi.fn().mockResolvedValue(true);
-    const connectViaOAuth = vi.fn().mockResolvedValue(sampleConfig);
-    mockDiscoverStorage.mockResolvedValue({
-      href: 'http://localhost:8000/storage/alice',
-      authUrl: 'http://localhost:8000/oauth',
-    });
-
-    await startConnect('alice@localhost:8000', {
-      requestOriginPermission,
-      connectViaOAuth,
-    });
-
-    expect(requestOriginPermission).toHaveBeenCalledWith(
-      'http://localhost:8000',
-    );
-  });
-});
-
-describe('continueConnectWithStoragePermission', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('requests permission for the given origin from this call (the fresh click)', async () => {
-    const requestOriginPermission = vi.fn().mockResolvedValue(true);
-    const connectViaOAuth = vi.fn().mockResolvedValue(sampleConfig);
-
-    const result = await continueConnectWithStoragePermission(
-      'alice@example.com',
-      'https://storage.example.com',
-      { requestOriginPermission, connectViaOAuth },
-    );
-
-    expect(requestOriginPermission).toHaveBeenCalledWith(
-      'https://storage.example.com',
-    );
-    expect(connectViaOAuth).toHaveBeenCalledWith('alice@example.com');
-    expect(result).toEqual({ status: 'connected', config: sampleConfig });
-  });
-
-  it('fails without calling connectViaOAuth when the storage origin permission is declined', async () => {
-    const requestOriginPermission = vi.fn().mockResolvedValue(false);
-    const connectViaOAuth = vi.fn();
-
-    const result = await continueConnectWithStoragePermission(
-      'alice@example.com',
-      'https://storage.example.com',
-      { requestOriginPermission, connectViaOAuth },
-    );
-
-    expect(connectViaOAuth).not.toHaveBeenCalled();
-    expect(result.status).toBe('error');
-  });
-
-  it('surfaces a connectViaOAuth error as a clear message', async () => {
-    const requestOriginPermission = vi.fn().mockResolvedValue(true);
-    const connectViaOAuth = vi
-      .fn()
-      .mockRejectedValue(new Error('OAuth error: invalid_client'));
-
-    const result = await continueConnectWithStoragePermission(
-      'alice@example.com',
-      'https://storage.example.com',
-      { requestOriginPermission, connectViaOAuth },
-    );
-
-    expect(result).toEqual({
-      status: 'error',
-      error: 'OAuth error: invalid_client',
-    });
   });
 });

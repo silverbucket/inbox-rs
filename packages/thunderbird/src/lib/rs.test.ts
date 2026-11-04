@@ -166,6 +166,19 @@ describe('connectViaOAuth (thunderbird)', () => {
     expect(mockFetch).not.toHaveBeenCalled();
     expect(mockLaunchWebAuthFlow).not.toHaveBeenCalled();
   });
+
+  /**
+   * `<all_urls>` is requested exactly once, synchronously, by
+   * `connect-orchestrator.ts`'s `runConnect` — not here. `browser` is
+   * stubbed above with no `permissions` key at all, so any accidental call
+   * to `browser.permissions.request`/`.contains` from this wrapper would
+   * throw and fail every test in this suite; this test makes that
+   * assertion explicit rather than incidental.
+   */
+  it('does not request or check any permissions itself', async () => {
+    await connectViaOAuth('alice@example.com');
+    expect('permissions' in (browser as object)).toBe(false);
+  });
 });
 
 describe('DirectRS export (thunderbird)', () => {

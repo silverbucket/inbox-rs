@@ -2,45 +2,26 @@
  * Connect-flow orchestrator for the Thunderbird options page.
  *
  * `<all_urls>` is now an optional permission (see `manifest.json`) rather
- * than a required one, so the extension has to request host access itself
- * before any cross-origin fetch. Two origins are involved: the WebFinger
- * host derived from the user's address, and the storage server's origin
- * returned by discovery — these differ whenever a provider hosts storage on
- * a separate domain from the one in the user's address.
+ * than a required one, so the extension has to request it itself before any
+ * cross-origin fetch — the WebFinger discovery inside `connectViaOAuth`, and
+ * every later `DirectRS` request, need it to reach the user's provider.
  *
- * Gecko only allows `browser.permissions.request()` to be called
+ * Gecko only honours `browser.permissions.request()` when it's called
  * synchronously from a user input handler — a handler that has already
  * awaited a promise (e.g. a `fetch()`) no longer counts, and the request is
- * refused. The WebFinger-host request below runs first, with no prior
- * `await`, so it stays inside the click that started `startConnect`. But the
- * storage origin isn't known until *after* the WebFinger fetch completes, so
- * it can't be requested from that same click — `startConnect` instead pauses
- * and returns `needs-storage-permission`; the Options page must get a fresh
- * click (e.g. a "Grant access" button) and call
- * `continueConnectWithStoragePermission` from that click's handler.
- *
- * Known limitation: if the WebFinger or storage origin redirects
- * cross-origin, the permission requested here won't cover the redirect
- * target and the fetch will fail. Supporting that would mean fetching with
- * `redirect: 'manual'` and re-requesting permission for each hop — providers
- * that redirect WebFinger or storage to a different origin aren't supported.
+ * silently refused. `runConnect` requests `<all_urls>` as the very first
+ * thing it does, with no `await` ahead of it, so the call stays inside the
+ * click that invoked `connect()` in `Options.svelte`.
  */
-import {
-  discoverStorage,
-  parseUserAddress,
-  type RSConfig,
-  type RSDiscovery,
-  schemeForHost,
-} from '@inbox-rs/rs-module/runtime';
+import type { RSConfig } from '@inbox-rs/rs-module/runtime';
 
-export type ConnectOutcome =
-  | { status: 'connected'; config: RSConfig }
-  | { status: 'error'; error: string }
-  | { status: 'needs-storage-permission'; origin: string };
+export type ConnectResult =
+  | { ok: true; config: RSConfig }
+  | { ok: false; error: string };
 
 export interface ConnectOrchestratorDeps {
-  /** Requests host permission for an origin (e.g. `https://example.com`); resolves to whether it was granted. Must be called from a user gesture. */
-  requestOriginPermission: (origin: string) => Promise<boolean>;
+  /** Requests the `<all_urls>` host permission; resolves to whether it was granted. Must be called synchronously from a user gesture. */
+  requestAllUrlsPermission: () => Promise<boolean>;
   connectViaOAuth: (userAddress: string) => Promise<RSConfig>;
 }
 
@@ -48,70 +29,26 @@ const PERMISSION_DECLINED_MESSAGE =
   'Inbox RS needs permission to access your remoteStorage provider to connect. Please allow access and try again.';
 
 /**
- * Start the connect flow: request permission for the WebFinger host (from
- * the same click that invoked this), then run discovery. If the discovered
- * storage origin differs from the WebFinger host, pause and report it
- * instead of requesting it here — see the module docstring. Otherwise,
- * complete OAuth immediately. Never throws — any failure or declined
- * permission becomes `{ status: 'error' }`.
+ * Run the connect flow: request `<all_urls>` (synchronously, before any
+ * await — see the module docstring), then delegate to `connectViaOAuth`.
+ * Never throws — any failure or declined permission becomes
+ * `{ ok: false }`.
  */
-export async function startConnect(
+export async function runConnect(
   userAddress: string,
   deps: ConnectOrchestratorDeps,
-): Promise<ConnectOutcome> {
-  const trimmedAddress = userAddress.trim();
-
+): Promise<ConnectResult> {
   try {
-    const { host } = parseUserAddress(trimmedAddress);
-    const webfingerOrigin = `${schemeForHost(host)}://${host}`;
-
-    const grantedWebfinger =
-      await deps.requestOriginPermission(webfingerOrigin);
-    if (!grantedWebfinger) {
-      return { status: 'error', error: PERMISSION_DECLINED_MESSAGE };
-    }
-
-    const discovery = await discoverStorage(trimmedAddress);
-    const storageOrigin = originOf(discovery);
-    if (storageOrigin !== webfingerOrigin) {
-      return { status: 'needs-storage-permission', origin: storageOrigin };
-    }
-
-    const config = await deps.connectViaOAuth(trimmedAddress);
-    return { status: 'connected', config };
-  } catch (e: unknown) {
-    return { status: 'error', error: errorMessage(e) };
-  }
-}
-
-/**
- * Resume a paused connect after the user grants the storage origin
- * permission from a fresh click. Re-runs discovery (cheap, idempotent) so
- * the OAuth endpoint reflects the current server state, then completes
- * OAuth. Never throws.
- */
-export async function continueConnectWithStoragePermission(
-  userAddress: string,
-  origin: string,
-  deps: ConnectOrchestratorDeps,
-): Promise<ConnectOutcome> {
-  const trimmedAddress = userAddress.trim();
-
-  try {
-    const granted = await deps.requestOriginPermission(origin);
+    const granted = await deps.requestAllUrlsPermission();
     if (!granted) {
-      return { status: 'error', error: PERMISSION_DECLINED_MESSAGE };
+      return { ok: false, error: PERMISSION_DECLINED_MESSAGE };
     }
 
-    const config = await deps.connectViaOAuth(trimmedAddress);
-    return { status: 'connected', config };
+    const config = await deps.connectViaOAuth(userAddress.trim());
+    return { ok: true, config };
   } catch (e: unknown) {
-    return { status: 'error', error: errorMessage(e) };
+    return { ok: false, error: errorMessage(e) };
   }
-}
-
-function originOf(discovery: RSDiscovery): string {
-  return new URL(discovery.href).origin;
 }
 
 function errorMessage(e: unknown): string {

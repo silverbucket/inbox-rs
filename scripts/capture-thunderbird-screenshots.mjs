@@ -91,6 +91,10 @@ try {
       identity: {
         getRedirectURL: () => 'https://example.org/fictional-redirect',
       },
+      permissions: {
+        contains: async () => true,
+        request: async () => true,
+      },
     };
     globalThis.browser = api;
     globalThis.messenger = api;
