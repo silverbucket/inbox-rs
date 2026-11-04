@@ -7,6 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../lib/stores', async () => {
   const { writable } = await import('svelte/store');
   return {
+    favoriteCollections: (await import('svelte/store')).writable([]),
+    favoriteCollectionIds: (await import('svelte/store')).writable([]),
+    toggleFavoriteCollection: vi.fn().mockResolvedValue(undefined),
+    setItemPlan: vi.fn().mockResolvedValue(undefined),
     appConfig: writable({}),
     createCollection: vi.fn().mockResolvedValue(undefined),
     groupCollections: writable({}),

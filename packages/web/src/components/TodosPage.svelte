@@ -9,10 +9,15 @@
   import {
     visibleTodos, visibleOnCalendarTodos, reorderTodosGlobal,
     collections, sortedGroups, appConfig, updateConfig,
-    clearSessionVisibleTodos,
+    clearSessionVisibleTodos, setItemPlan,
   } from '../lib/stores';
   import { isDueTodayOrOverdue } from '../lib/schedule';
   import { todayStart } from '../lib/now';
+  import {
+    DEFAULT_COLLAPSED, HORIZON_ORDER, type HorizonSection, type PlanChoice,
+    placeTodo, planFor, sectionInfo,
+  } from '../lib/plan';
+  import { showToast } from '../lib/toast';
   import AlertsPermissionBanner from './AlertsPermissionBanner.svelte';
   import TodoRow from './TodoRow.svelte';
   import TodoQuickAdd from './TodoQuickAdd.svelte';
@@ -85,12 +90,76 @@
     return () => mql.removeEventListener('change', handler);
   });
 
-  // Local mutable copy for the dnd zone. Kept in sync with the derived list
-  // whenever the upstream order changes — except while the user is mid-drag,
-  // where `handleDndConsider` is authoritative.
-  let dndOpen = $state<Array<InboxItem & { id: string }>>([]);
+  // ── Horizon sections ────────────────────────────────────────────────────
+  // Everything below the due band is grouped by plan (lib/plan.ts). Order
+  // within a section still follows the global manual order from the store.
+  const today = $derived(new Date($todayStart));
+  const placements = $derived(
+    new Map(restOpenTodos.map(t => [t.id, placeTodo(t, today)])),
+  );
+  const sectionItems = $derived.by(() => {
+    const out = Object.fromEntries(
+      HORIZON_ORDER.map(s => [s, [] as InboxItem[]]),
+    ) as Record<HorizonSection, InboxItem[]>;
+    for (const t of restOpenTodos) {
+      out[placements.get(t.id)?.section ?? 'unplanned'].push(t);
+    }
+    return out;
+  });
+  /** Up next always shows (it is the default drop target); others only when non-empty. */
+  const shownSections = $derived(
+    HORIZON_ORDER.filter(s => s === 'next' || sectionItems[s].length > 0),
+  );
+  const collapsed = $derived(
+    new Set<string>($appConfig.collapsedPlanSections ?? DEFAULT_COLLAPSED),
+  );
+  const rolledCount = $derived(
+    sectionItems.next.filter(t => placements.get(t.id)?.rolledFrom).length,
+  );
+
+  async function toggleSection(section: HorizonSection) {
+    const next = new Set(collapsed);
+    if (next.has(section)) next.delete(section);
+    else next.add(section);
+    try {
+      await updateConfig({ collapsedPlanSections: [...next] });
+    } catch (error) {
+      console.error('Failed to toggle plan section', error);
+    }
+  }
+
+  /** Collection names peeking out of a folded section, most frequent first. */
+  function peek(list: InboxItem[]): string {
+    const counts = new Map<string, number>();
+    for (const t of list) {
+      const name = lookupCollection(t.collectionId)?.name ?? 'Unfiled';
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    const names = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]);
+    return names.length > 3
+      ? `${names.slice(0, 3).join(', ')} +${names.length - 3}`
+      : names.join(', ');
+  }
+
+  /** Where dropping into a section re-plans a todo. `undefined` = not a drop target. */
+  const DROP_PLAN: Partial<Record<HorizonSection, PlanChoice | null>> = {
+    next: 'next',
+    week: 'week',
+    nextWeek: 'nextWeek',
+    month: 'month',
+    nextMonth: 'nextMonth',
+    someday: 'someday',
+    unplanned: null,
+  };
+
+  // Local mutable copies for the dnd zones, one per section. Kept in sync
+  // with the derived lists whenever upstream changes — except mid-drag, where
+  // `handleDndConsider` is authoritative.
+  let dndSections = $state<Record<string, Array<InboxItem & { id: string }>>>({});
   $effect(() => {
-    dndOpen = restOpenTodos.map(t => ({ ...t }));
+    dndSections = Object.fromEntries(
+      HORIZON_ORDER.map(s => [s, sectionItems[s].map(t => ({ ...t }))]),
+    );
   });
 
   // Rows fade when added or removed, but not while being reordered — a
@@ -102,30 +171,96 @@
   // would revert the order and the drop would snap back.
   const leaveGuard = createDndLeaveGuard();
 
-  function handleDndConsider(e: CustomEvent<DndEvent<InboxItem & { id: string }>>) {
+  function handleDndConsider(
+    section: HorizonSection,
+    e: CustomEvent<DndEvent<InboxItem & { id: string }>>,
+  ) {
     if (leaveGuard.ignores(e.detail.info)) return;
     reorderFade.start();
-    dndOpen = e.detail.items;
+    dndSections = { ...dndSections, [section]: e.detail.items };
   }
 
-  async function handleDndFinalize(e: CustomEvent<DndEvent<InboxItem & { id: string }>>) {
-    leaveGuard.reset();
-    const previous = restOpenTodos.map(t => ({ ...t }));
-    dndOpen = e.detail.items;
-    await reorderFade.end();
+  // A cross-section drag finalizes both zones (and, for keyboard drags, the
+  // library is still tidying up afterwards). Collect the arrivals and do the
+  // writes once, on the next task, so no store update lands mid-drag.
+  const pendingArrivals = new Map<string, HorizonSection>();
+  let settleQueued = false;
+  function queueSettle() {
+    if (settleQueued) return;
+    settleQueued = true;
+    setTimeout(() => {
+      settleQueued = false;
+      void settle();
+    }, 0);
+  }
+
+  async function settle() {
+    const order = HORIZON_ORDER.flatMap(s => (dndSections[s] ?? []).map(t => t.id));
+    const arrivals = [...pendingArrivals.entries()];
+    pendingArrivals.clear();
     try {
-      // Persist just the open ids — completed todos fall back to completedAt
-      // ordering on re-render, so we don't need to thread them through config.
-      // Due-band todos lead the persisted order so they resume a sane manual
-      // slot once their due date passes out of the band.
-      await reorderTodosGlobal([
-        ...dueTodos.map(t => t.id),
-        ...dndOpen.map(t => t.id),
-      ]);
+      // Due-band todos lead the persisted order so they resume a sane
+      // manual slot once their due date passes out of the band.
+      await reorderTodosGlobal([...dueTodos.map(t => t.id), ...order]);
     } catch (error) {
       console.error('Failed to reorder todos', error);
-      dndOpen = previous;
     }
+    for (const [id, section] of arrivals) {
+      const original = restOpenTodos.find(t => t.id === id);
+      const choice = DROP_PLAN[section];
+      if (!original || choice === undefined) continue;
+      try {
+        const plan = choice === null ? null : planFor(choice, new Date());
+        // Dropping into "not planned" also lets go of a legacy pin, which
+        // would otherwise keep it in Up next.
+        await setItemPlan(
+          choice === null && original.pinned ? { ...original, pinned: false } : original,
+          plan,
+        );
+      } catch (error) {
+        console.error('Failed to re-plan todo', error);
+        showToast('Couldn’t move that todo');
+      }
+    }
+    // Only now let rows fade again: a cross-section drop finalizes two zones
+    // and re-renders after the writes, and the library finds rows by child
+    // index, so a lingering outro copy would desync it (see reorder-fade).
+    await reorderFade.end();
+  }
+
+  function resetSections() {
+    dndSections = Object.fromEntries(
+      HORIZON_ORDER.map(s => [s, sectionItems[s].map(t => ({ ...t }))]),
+    );
+  }
+
+  async function handleDndFinalize(
+    section: HorizonSection,
+    e: CustomEvent<DndEvent<InboxItem & { id: string }>>,
+  ) {
+    leaveGuard.reset();
+    dndSections = { ...dndSections, [section]: e.detail.items };
+    // Rows that arrived from another section get that section's plan.
+    for (const moved of e.detail.items) {
+      if ((placements.get(moved.id)?.section ?? 'unplanned') === section) continue;
+      const original = restOpenTodos.find(t => t.id === moved.id);
+      if (!original) continue;
+      if (DROP_PLAN[section] === undefined || original.startsAt) {
+        showToast(
+          original.startsAt
+            ? 'This todo has a date — change it from its card'
+            : 'Only dated todos live in Later',
+        );
+        pendingArrivals.clear();
+        setTimeout(() => {
+          resetSections();
+          void reorderFade.end();
+        }, 0);
+        return;
+      }
+      pendingArrivals.set(moved.id, section);
+    }
+    queueSettle();
   }
 
   async function toggleCompletedSection() {
@@ -187,8 +322,10 @@
     {@render todoToolbar()}
 
     {#if dueTodos.length > 0}
-      <div class="due-band">
-        <div class="due-header">Due</div>
+      <section class="due-band" aria-labelledby="due-heading">
+        <h2 class="due-header" id="due-heading">
+          Due &amp; overdue <span class="count">{dueTodos.length}</span>
+        </h2>
         <!-- TodoRow renders its own <li>, so rows sit directly in the list —
              no transition wrapper (a div between ul and li breaks list
              semantics for assistive tech). -->
@@ -203,45 +340,94 @@
             />
           {/each}
         </ul>
-      </div>
+      </section>
     {/if}
 
-    <ul
-      class="todo-list" role="list"
-      use:dragHandleZone={{
-        items: dndOpen,
-        flipDurationMs: 200,
-        // The grip is at the left edge of a wide row. Follow the pointer so
-        // a diagonal drag inside the list isn't rejected when the row's
-        // centre extends beyond the zone.
-        useCursorForDetection: true,
-        dropTargetStyle: {},
-        // No `dragDisabled` — see the note in SidebarShell. Every
-        // `dragHandleZone` shares one module-global copy of that flag, so
-        // setting it here disabled every grip on the page. Reorder is gated on
-        // the handle anyway.
-        type: 'todos-global',
-      }}
-      onconsider={handleDndConsider}
-      onfinalize={handleDndFinalize}
-    >
-      {#each dndOpen as todo (todo.id)}
-        <div
-          animate:flip={{ duration: 200 }}
-          in:reorderFade.fade={{ duration: 180 }}
-          out:reorderFade.fade={{ duration: 120 }}
-        >
-          <TodoRow
-            {todo}
-            collection={lookupCollection(todo.collectionId)}
-            group={lookupGroup(todo.collectionId)}
-            reorderable
-            {onselect}
-            onaddincollection={onaddtodoincollection}
-          />
+    {#each shownSections as section (section)}
+      {@const info = sectionInfo(section, today)}
+      {@const list = dndSections[section] ?? []}
+      {@const isCollapsed = collapsed.has(section)}
+      <section
+        class="horizon"
+        class:unplanned={section === 'unplanned'}
+        style="--h: var(--horizon-{section})"
+        aria-labelledby="horizon-{section}"
+      >
+        <div class="horizon-head">
+          <button
+            type="button"
+            class="horizon-toggle"
+            aria-expanded={!isCollapsed}
+            aria-controls="horizon-list-{section}"
+            onclick={() => toggleSection(section)}
+          >
+            <svg aria-hidden="true" class="chevron" class:open={!isCollapsed} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+            <h2 class="horizon-label" id="horizon-{section}">
+              <span class="swatch" aria-hidden="true"></span>{info.label}
+            </h2>
+            {#if info.range}<span class="horizon-range">{info.range}</span>{/if}
+            {#if isCollapsed && list.length > 0}
+              <span class="horizon-peek">{peek(list)}</span>
+            {/if}
+          </button>
+          {#if section === 'next' && rolledCount > 0}
+            <span class="rolled-chip">{rolledCount} rolled over</span>
+          {/if}
+          <span class="horizon-count" aria-label="{list.length} todos">{list.length}</span>
         </div>
-      {/each}
-    </ul>
+
+        {#if !isCollapsed}
+          <ul
+            id="horizon-list-{section}"
+            class="todo-list horizon-list"
+            class:empty={list.length === 0}
+            role="list"
+            use:dragHandleZone={{
+              items: list,
+              flipDurationMs: 200,
+              // The grip is at the left edge of a wide row. Follow the pointer so
+              // a diagonal drag inside the list isn't rejected when the row's
+              // centre extends beyond the zone.
+              useCursorForDetection: true,
+              dropTargetStyle: {},
+              // No `dragDisabled` — see the note in SidebarShell. Every
+              // `dragHandleZone` shares one module-global copy of that flag, so
+              // setting it here disabled every grip on the page. Reorder is gated on
+              // the handle anyway. Sections share a type so rows can be dragged
+              // between them, which re-plans the todo.
+              type: 'todos-global',
+            }}
+            onconsider={(e) => handleDndConsider(section, e)}
+            onfinalize={(e) => handleDndFinalize(section, e)}
+          >
+            {#each list as todo (todo.id)}
+              <div
+                animate:flip={{ duration: 200 }}
+                in:reorderFade.fade={{ duration: 180 }}
+                out:reorderFade.fade={{ duration: 120 }}
+              >
+                <TodoRow
+                  {todo}
+                  collection={lookupCollection(todo.collectionId)}
+                  group={lookupGroup(todo.collectionId)}
+                  reorderable
+                  planTag={placements.get(todo.id)?.rolledFrom}
+                  {onselect}
+                  onaddincollection={onaddtodoincollection}
+                />
+              </div>
+            {/each}
+          </ul>
+          {#if section === 'next' && list.length === 0}
+            <p class="horizon-hint">Nothing lined up. Drag a todo here, or pick “Up next” from When?.</p>
+          {:else if section === 'unplanned'}
+            <p class="horizon-hint">Drag these into a section above, or open one and choose When?.</p>
+          {/if}
+        {/if}
+      </section>
+    {/each}
 
     {#if completedTodos.length > 0}
       <div class="completed-section">
@@ -354,12 +540,134 @@
   }
 
   .due-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
     font-size: 0.7rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--danger-text);
     padding: 0 0.25rem;
+  }
+
+  .due-header .count {
+    font-variant-numeric: tabular-nums;
+    opacity: 0.85;
+  }
+
+  /* ── Horizon sections ── */
+  .horizon {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .horizon + .horizon {
+    margin-top: 0.4rem;
+  }
+
+  .horizon.unplanned {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed var(--border);
+  }
+
+  .horizon-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.25rem;
+  }
+
+  .horizon-toggle {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: none;
+    border: none;
+    padding: 0.25rem 0.35rem;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+  }
+
+  .horizon-toggle:hover {
+    background: var(--surface-tint);
+  }
+
+  .horizon-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0.15rem 0.55rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    color: color-mix(in srgb, var(--h) 55%, var(--text));
+    background: color-mix(in srgb, var(--h) 16%, transparent);
+  }
+
+  .swatch {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 2px;
+    background: var(--h);
+    flex-shrink: 0;
+  }
+
+  .horizon-range {
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
+  .horizon-peek {
+    font-size: 0.8rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-left: auto;
+  }
+
+  .horizon-count {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    min-width: 1.5rem;
+    text-align: right;
+    padding-right: 0.35rem;
+  }
+
+  .rolled-chip {
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+    color: var(--warn-text);
+    background: color-mix(in srgb, var(--warn) 16%, transparent);
+    border-radius: 999px;
+    padding: 0.1rem 0.55rem;
+  }
+
+  /* An empty Up next stays a real drop zone. */
+  .horizon-list.empty {
+    min-height: 2.75rem;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+  }
+
+  .horizon-hint {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: 0;
+    padding: 0 0.5rem;
   }
 
   .completed-section {

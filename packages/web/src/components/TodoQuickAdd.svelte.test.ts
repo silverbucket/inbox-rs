@@ -15,6 +15,10 @@ const { storeItem, moveItemToCollection, keepTodoVisible } = vi.hoisted(() => ({
 vi.mock('../lib/stores', async () => {
   const { writable } = await import('svelte/store');
   return {
+    favoriteCollections: (await import('svelte/store')).writable([]),
+    favoriteCollectionIds: (await import('svelte/store')).writable([]),
+    toggleFavoriteCollection: vi.fn().mockResolvedValue(undefined),
+    setItemPlan: vi.fn().mockResolvedValue(undefined),
     storeItem,
     moveItemToCollection,
     keepTodoVisible,

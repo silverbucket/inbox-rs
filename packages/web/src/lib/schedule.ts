@@ -141,7 +141,8 @@ export interface ScheduleInput {
 export type PendingSchedule = ScheduleInput;
 
 /**
- * Return a copy of the item carrying the given schedule. Any previously
+ * Return a copy of the item carrying the given schedule, dropping any soft
+ * plan (a date supersedes "roughly when"). Any previously
  * posted calendar entry's href/etag is preserved — the caller (future CalDAV
  * sync) uses it to update the projection.
  */
@@ -161,6 +162,9 @@ export function applySchedule<T extends InboxItem>(
     endsAt,
     allDay: input.allDay || undefined,
     scheduleKind: input.kind,
+    // A real date replaces any soft plan ("next week") — see plan.ts.
+    planKind: undefined,
+    planStart: undefined,
     ...(input.location !== undefined
       ? { location: input.location.trim() || undefined }
       : {}),

@@ -8,6 +8,9 @@ export type InboxItemType =
   | 'todo'
   | 'email';
 
+/** Soft-plan horizon kinds. See `InboxItemBase.planKind`. */
+export type PlanKind = 'next' | 'week' | 'month' | 'someday';
+
 export interface InboxItemBase {
   id: string;
   type: InboxItemType;
@@ -34,6 +37,16 @@ export interface InboxItemBase {
   scheduleKind?: 'event' | 'task';
   /** Where it happens: venue, address or meeting link. */
   location?: string;
+  /**
+   * Soft plan — "roughly when", with no deadline. Only meaningful on open
+   * todos, and only while `startsAt` is unset (a real date always wins).
+   * `planKind` picks the horizon; `planStart` (YYYY-MM-DD, local) anchors
+   * week and month plans to the Monday / first day of the planned period.
+   * Periods are never rewritten as time passes: a plan whose period has
+   * ended reads as "rolled over" into Up next, computed at render time.
+   */
+  planKind?: PlanKind;
+  planStart?: string;
   /** CalDAV object href + etag once posted to a calendar; absent until then. */
   eventUrl?: string;
   eventEtag?: string;
@@ -184,6 +197,16 @@ export interface AppConfig {
    * before using it, because groups can be deleted between sessions.
    */
   lastSelectedGroupId?: string;
+  /**
+   * Favourite collections, in the user's order. Shown first in the sidebar
+   * and in every collection picker. Ids that no longer exist are ignored.
+   */
+  favoriteCollectionIds?: string[];
+  /**
+   * Todos-page plan sections the user has folded (or unfolded). Undefined
+   * means the defaults: later horizons folded, near ones open.
+   */
+  collapsedPlanSections?: string[];
 }
 
 export interface Collection {

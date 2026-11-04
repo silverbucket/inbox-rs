@@ -32,6 +32,7 @@
   import { showToast } from '../lib/toast';
   import CollectionPicker from './CollectionPicker.svelte';
   import ScheduleSheet from './ScheduleSheet.svelte';
+  import { applyPlan, type Plan, planLabel } from '../lib/plan';
   import BookmarkForm from './add-entry/BookmarkForm.svelte';
   import NoteForm from './add-entry/NoteForm.svelte';
   import ImageForm from './add-entry/ImageForm.svelte';
@@ -183,6 +184,8 @@
   // mode). New items only: editing a schedule lives in the card view's
   // sheet, and edits preserve existing schedule fields via build-item.
   let pendingSchedule = $state<PendingSchedule | null>(null);
+  // …or, for todos, a soft plan ("next week"). Mutually exclusive.
+  let pendingPlan = $state<Plan | null>(null);
   let scheduleSheetOpen = $state(false);
 
   const whenLabel = $derived(
@@ -191,11 +194,20 @@
           startsAt: pendingSchedule.start.toISOString(),
           allDay: pendingSchedule.allDay,
         })
-      : 'When?',
+      : pendingPlan && isTodoType
+        ? planLabel(pendingPlan)
+        : 'When?',
   );
 
   function handleSchedulePick(schedule: PendingSchedule | null) {
     pendingSchedule = schedule;
+    if (schedule) pendingPlan = null;
+    scheduleSheetOpen = false;
+  }
+
+  function handlePlanPick(plan: Plan | null) {
+    pendingPlan = plan;
+    if (plan) pendingSchedule = null;
     scheduleSheetOpen = false;
   }
 
@@ -253,10 +265,13 @@
       //                              first and could 412 — see the helper)
       // The local `item` stays unfiled so the schedule fallback below cannot
       // write a collection back that vanished during the store.
+      // A soft plan rides along on the first write (todos, new items only).
+      const planned =
+        pendingPlan && !isEdit && isTodoType ? applyPlan(item, pendingPlan) : item;
       await storeItem(
         destination && !isEdit && $collections[destination]
-          ? { ...item, collectionId: destination }
-          : item,
+          ? { ...planned, collectionId: destination }
+          : planned,
         fileData,
         thumbData,
       );
@@ -502,10 +517,12 @@
           <button
             type="button"
             class="btn-when"
-            class:has-time={!!pendingSchedule}
+            class:has-time={!!pendingSchedule || (!!pendingPlan && isTodoType)}
             aria-label={pendingSchedule
               ? `Scheduled ${whenLabel} — change time`
-              : 'Set a time'}
+              : pendingPlan && isTodoType
+                ? `Planned for ${whenLabel} — change`
+                : 'Set a time'}
             aria-haspopup="dialog"
             aria-expanded={scheduleSheetOpen}
             onclick={() => (scheduleSheetOpen = true)}
@@ -528,12 +545,15 @@
             </svg>
             {whenLabel}
           </button>
-          {#if pendingSchedule}
+          {#if pendingSchedule || (pendingPlan && isTodoType)}
             <button
               type="button"
               class="btn-when-clear"
-              aria-label="Clear time"
-              onclick={() => (pendingSchedule = null)}
+              aria-label={pendingSchedule ? 'Clear time' : 'Clear plan'}
+              onclick={() => {
+                pendingSchedule = null;
+                pendingPlan = null;
+              }}
             >
               <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -601,7 +621,9 @@
       <ScheduleSheet
         subject={{ title: draftTitle, isTodo: isTodoType }}
         initial={pendingSchedule}
+        initialPlan={pendingPlan}
         onpick={handleSchedulePick}
+        onplanpick={handlePlanPick}
         onclose={() => (scheduleSheetOpen = false)}
       />
     {/if}

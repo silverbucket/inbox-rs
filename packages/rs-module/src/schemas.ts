@@ -30,6 +30,12 @@ const scheduleFields = {
   archiveReason: { type: 'string', enum: ['manual', 'calendar'] },
 };
 
+// Shared soft-plan fields — "roughly when" for todos. See InboxItemBase.
+const planFields = {
+  planKind: { type: 'string', enum: ['next', 'week', 'month', 'someday'] },
+  planStart: { type: 'string' },
+};
+
 // rs-migrate version stamp — must be in every item schema so remoteStorage persists it
 const migrateFields = {
   _migrateVersion: { type: 'number' },
@@ -53,6 +59,7 @@ export const bookmarkSchema = {
     ...todoFields,
     ...priorityFields,
     ...scheduleFields,
+    ...planFields,
     ...collectionFields,
     ...migrateFields,
   },
@@ -71,6 +78,7 @@ export const noteSchema = {
     ...todoFields,
     ...priorityFields,
     ...scheduleFields,
+    ...planFields,
     ...collectionFields,
     ...migrateFields,
   },
@@ -94,6 +102,7 @@ export const imageMetaSchema = {
     ...todoFields,
     ...priorityFields,
     ...scheduleFields,
+    ...planFields,
     ...collectionFields,
     ...migrateFields,
   },
@@ -117,6 +126,7 @@ export const audioMetaSchema = {
     ...todoFields,
     ...priorityFields,
     ...scheduleFields,
+    ...planFields,
     ...collectionFields,
     ...migrateFields,
   },
@@ -138,6 +148,7 @@ export const videoMetaSchema = {
     ...todoFields,
     ...priorityFields,
     ...scheduleFields,
+    ...planFields,
     ...collectionFields,
     ...migrateFields,
   },
@@ -159,6 +170,7 @@ export const documentMetaSchema = {
     ...todoFields,
     ...priorityFields,
     ...scheduleFields,
+    ...planFields,
     ...collectionFields,
     ...migrateFields,
   },
@@ -180,6 +192,7 @@ export const emailSchema = {
     ...todoFields,
     ...priorityFields,
     ...scheduleFields,
+    ...planFields,
     ...collectionFields,
     ...migrateFields,
   },
@@ -208,6 +221,8 @@ export const appConfigSchema = {
     activeGroupFilters: { type: 'array', items: { type: 'string' } },
     todosGlobalOrder: { type: 'array', items: { type: 'string' } },
     completedTodosExpanded: { type: 'boolean' },
+    favoriteCollectionIds: { type: 'array', items: { type: 'string' } },
+    collapsedPlanSections: { type: 'array', items: { type: 'string' } },
   },
 };
 
@@ -224,6 +239,7 @@ export const todoSchema = {
     ...priorityFields,
     createdAt: { type: 'string' },
     ...scheduleFields,
+    ...planFields,
     ...collectionFields,
     ...migrateFields,
   },

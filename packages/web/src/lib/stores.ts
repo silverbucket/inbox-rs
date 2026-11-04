@@ -12,8 +12,13 @@ import { replayCardDrafts } from './card-draft-recovery';
 import { cleanForStorage } from './clean-for-storage';
 import { pinItemsFirst } from './collection-todos';
 import { todayStart } from './now';
+import { applyPlan, clearPlan, type Plan } from './plan';
 import rs, { fetchFileBlobUrl } from './rs';
-import { compareByDueTime, isDueTodayOrOverdue } from './schedule';
+import {
+  clearSchedule,
+  compareByDueTime,
+  isDueTodayOrOverdue,
+} from './schedule';
 
 function getInbox() {
   return rs.inbox;
@@ -1144,6 +1149,43 @@ export async function storeItem(
 /** Toggle an item's top-of-list priority while preserving every other field. */
 export async function setItemPinned(item: InboxItem, pinned: boolean) {
   await storeItem({ ...item, pinned });
+}
+
+/**
+ * Give an item a soft plan ("roughly when"), or clear it with `null`.
+ * A soft plan and a real date are mutually exclusive: planning drops the
+ * date (and, like "Remove time", the local calendar receipt — the calendar
+ * keeps its entry). Pins are left alone; a plan simply outranks them when
+ * the Todos page decides where the todo sits.
+ */
+export async function setItemPlan(item: InboxItem, plan: Plan | null) {
+  const base = plan && item.startsAt ? clearSchedule(item) : item;
+  await storeItem(plan ? applyPlan(base, plan) : clearPlan(base));
+}
+
+/** Favourite collection ids that still exist, in the user's order. */
+export const favoriteCollectionIds = derived(
+  [appConfig, collections],
+  ([$config, $collections]) =>
+    ($config.favoriteCollectionIds ?? []).filter(
+      (id) => !!$collections[id] && !$collections[id].archived,
+    ),
+);
+
+/** Favourite collections themselves, in the user's order. */
+export const favoriteCollections = derived(
+  [favoriteCollectionIds, collections],
+  ([$ids, $collections]) => $ids.map((id) => $collections[id]),
+);
+
+/** Add or remove a collection from favourites. New favourites go last. */
+export async function toggleFavoriteCollection(id: string) {
+  const current = get(appConfig).favoriteCollectionIds ?? [];
+  await updateConfig({
+    favoriteCollectionIds: current.includes(id)
+      ? current.filter((x) => x !== id)
+      : [...current, id],
+  });
 }
 
 /**
