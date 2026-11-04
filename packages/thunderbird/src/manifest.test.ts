@@ -12,6 +12,12 @@ import { describe, expect, it } from 'vitest';
  * standard CORS — which the local Armadietto dev server and many providers
  * fail. The user could never get past the "Connect" step. These tests pin
  * the manifest contract so the regression cannot recur silently.
+ *
+ * `<all_urls>` later moved from `permissions` to `optional_permissions` —
+ * requesting blanket host access upfront is excessive; the extension now
+ * requests only the origins it actually needs (the WebFinger host and the
+ * discovered storage origin) via `browser.permissions.request` in the
+ * Options connect flow. See `options/connect-orchestrator.ts`.
  */
 
 const manifestPath = resolve(__dirname, '..', 'manifest.json');
@@ -46,15 +52,31 @@ describe('thunderbird manifest', () => {
     });
 
     /**
-     * REGRESSION: without a host match pattern, both
+     * `<all_urls>` is requested on demand (via `browser.permissions.request`
+     * in the Options connect flow) rather than declared upfront, so it must
+     * NOT be a required permission.
+     */
+    it('does not declare <all_urls> (or any host pattern) as a required permission', () => {
+      const perms: string[] = manifest.permissions;
+      const hasAllUrls = perms.includes('<all_urls>');
+      const hasWildcardHttps = perms.some(
+        (p) => p.startsWith('https://') || p.startsWith('http://'),
+      );
+      expect(hasAllUrls || hasWildcardHttps).toBe(false);
+    });
+  });
+
+  describe('optional_permissions', () => {
+    /**
+     * REGRESSION: without a host match pattern available to request, both
      *   1. the WebFinger fetch in connectViaOAuth, and
      *   2. every PUT made by DirectRS during save,
      * are blocked by CORS for any RS provider that doesn't ship permissive
      * headers (notably the local Armadietto dev server). The user reports
      * "I can't even log in" because step 1 fails.
      */
-    it('declares <all_urls> (or equivalent host patterns) so fetch can reach any RS host', () => {
-      const perms: string[] = manifest.permissions;
+    it('declares <all_urls> (or equivalent host patterns) so fetch can reach any RS host once granted', () => {
+      const perms: string[] = manifest.optional_permissions ?? [];
       const hasAllUrls = perms.includes('<all_urls>');
       const hasWildcardHttps = perms.some(
         (p) => p.startsWith('https://') || p.startsWith('http://'),

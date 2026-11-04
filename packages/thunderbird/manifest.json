@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Inbox RS",
-  "version": "2.6.5",
+  "version": "2.6.10",
   "description": "Save emails to your remoteStorage inbox.",
   "browser_specific_settings": {
     "gecko": {
@@ -9,7 +9,8 @@
       "strict_min_version": "128.0"
     }
   },
-  "permissions": ["messagesRead", "storage", "identity", "<all_urls>"],
+  "permissions": ["messagesRead", "storage", "identity"],
+  "optional_permissions": ["<all_urls>"],
   "message_display_action": {
     "default_popup": "src/popup/index.html",
     "default_title": "Save to Inbox RS",

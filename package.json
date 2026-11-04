@@ -31,5 +31,16 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.13"
+  },
+  "overrides": {
+    "onnx-proto": {
+      "protobufjs": "^8.8.1"
+    },
+    "@xenova/transformers": {
+      "sharp": "^0.35.5"
+    },
+    "fx-runner": {
+      "shell-quote": "^1.12.0"
+    }
   }
 }

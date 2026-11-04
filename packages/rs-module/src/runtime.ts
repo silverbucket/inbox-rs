@@ -170,6 +170,14 @@ export interface ConnectViaOAuthOptions {
   launchAuthFlow: (authUrl: string) => Promise<string>;
   /** Override `fetch` for testing or for environments without a global. */
   fetchImpl?: FetchLike;
+  /**
+   * Called with the WebFinger discovery result once it resolves, before the
+   * OAuth flow is launched. Callers use this to request host permission for
+   * the discovered storage origin (which may differ from the WebFinger
+   * host) ahead of time. Throwing aborts the connect before any auth UI
+   * appears.
+   */
+  onDiscovered?: (discovery: RSDiscovery) => Promise<void> | void;
 }
 
 const DEFAULT_OAUTH_SCOPE = 'inbox:rw';
@@ -185,6 +193,9 @@ export async function connectViaOAuth(
   options: ConnectViaOAuthOptions,
 ): Promise<RSConfig> {
   const discovery = await discoverStorage(userAddress, options.fetchImpl);
+  if (options.onDiscovered) {
+    await options.onDiscovered(discovery);
+  }
 
   const oauthParams = new URLSearchParams({
     client_id: options.clientId,

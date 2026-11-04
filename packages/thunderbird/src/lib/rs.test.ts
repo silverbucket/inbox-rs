@@ -166,6 +166,36 @@ describe('connectViaOAuth (thunderbird)', () => {
     expect(mockFetch).not.toHaveBeenCalled();
     expect(mockLaunchWebAuthFlow).not.toHaveBeenCalled();
   });
+
+  describe('onStorageOriginDiscovered', () => {
+    it('is called with the storage origin from the WebFinger response', async () => {
+      const onStorageOriginDiscovered = vi.fn();
+
+      await connectViaOAuth('alice@example.com', onStorageOriginDiscovered);
+
+      expect(onStorageOriginDiscovered).toHaveBeenCalledWith(
+        'https://storage.example.com',
+      );
+      expect(mockLaunchWebAuthFlow).toHaveBeenCalled();
+    });
+
+    it('aborts the connect when the callback rejects (e.g. permission declined)', async () => {
+      const onStorageOriginDiscovered = vi
+        .fn()
+        .mockRejectedValue(new Error('permission declined'));
+
+      await expect(
+        connectViaOAuth('alice@example.com', onStorageOriginDiscovered),
+      ).rejects.toThrow('permission declined');
+      expect(mockLaunchWebAuthFlow).not.toHaveBeenCalled();
+    });
+
+    it('is optional — connect still works without it', async () => {
+      await expect(connectViaOAuth('alice@example.com')).resolves.toMatchObject(
+        { token: 'tok-xyz' },
+      );
+    });
+  });
 });
 
 describe('DirectRS export (thunderbird)', () => {

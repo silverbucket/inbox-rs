@@ -2,9 +2,11 @@
   import { DirectRS } from '../lib/rs';
   import { getConfig } from '../lib/storage';
   import { extractTextBody } from '../lib/mime';
+  import { hasStorageOriginPermission } from '../lib/permissions';
   import { runSaveEmail } from './save-orchestrator';
 
   let connected = $state(false);
+  let permissionMissing = $state(false);
   let saving = $state(false);
   let saved = $state(false);
   let saveError = $state('');
@@ -23,6 +25,11 @@
   async function init() {
     const config = await getConfig();
     if (config?.token && config?.href) {
+      if (!(await hasStorageOriginPermission(config))) {
+        permissionMissing = true;
+        return;
+      }
+
       rs = new DirectRS(config);
       connected = true;
 
@@ -82,7 +89,12 @@
     {/if}
   </header>
 
-  {#if !connected}
+  {#if permissionMissing}
+    <div class="not-connected">
+      <p>Inbox RS lost access to your storage server. Reconnect from Options.</p>
+      <button type="button" class="btn-primary" onclick={openSetup}>Open Options</button>
+    </div>
+  {:else if !connected}
     <div class="not-connected">
       <p>Connect your remoteStorage to get started.</p>
       <button type="button" class="btn-primary" onclick={openSetup}>Set Up</button>

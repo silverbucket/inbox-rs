@@ -1,6 +1,7 @@
 <script lang="ts">
   import { connectViaOAuth } from '../lib/rs';
   import { getConfig, saveConfig, clearConfig } from '../lib/storage';
+  import { runConnect } from './connect-orchestrator';
 
   let userAddress = $state('');
   let connected = $state(false);
@@ -26,12 +27,19 @@
     connecting = true;
     error = '';
     try {
-      const config = await connectViaOAuth(userAddress.trim());
-      await saveConfig(config);
-      connected = true;
-      savedAddress = config.userAddress;
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Connection failed';
+      const result = await runConnect({
+        userAddress: userAddress.trim(),
+        requestOriginPermission: (origin) =>
+          browser.permissions.request({ origins: [`${origin}/*`] }),
+        connectViaOAuth,
+      });
+      if (result.ok) {
+        await saveConfig(result.config);
+        connected = true;
+        savedAddress = result.config.userAddress;
+      } else {
+        error = result.error;
+      }
     } finally {
       connecting = false;
     }
