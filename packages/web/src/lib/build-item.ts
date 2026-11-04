@@ -287,19 +287,25 @@ export async function buildDocumentItem(
       const note = buildNoteItem(ctx, {
         title: data.title || parsed.title,
         body: parsed.body,
-        description: data.description,
+        description: [data.description, parsed.description]
+          .filter(Boolean)
+          .join('\n\n'),
       });
+      // ceil, not round: a sub-minute span must not collapse to "no end".
       const durationMin = parsed.end
-        ? Math.round((parsed.end.getTime() - parsed.start.getTime()) / 60_000)
+        ? Math.ceil((parsed.end.getTime() - parsed.start.getTime()) / 60_000)
         : undefined;
+      const scheduled = applySchedule(note.item, {
+        kind: parsed.kind,
+        start: parsed.start,
+        durationMin,
+        allDay: parsed.allDay,
+        location: parsed.location,
+      });
       return {
-        item: applySchedule(note.item, {
-          kind: parsed.kind,
-          start: parsed.start,
-          durationMin,
-          allDay: parsed.allDay,
-          location: parsed.location,
-        }),
+        item: parsed.completed
+          ? { ...scheduled, completed: true, completedAt: ctx.createdAt }
+          : scheduled,
       };
     }
   }

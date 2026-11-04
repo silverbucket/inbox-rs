@@ -33,6 +33,15 @@ describe('normalizeMetadata event', () => {
     expect(
       normalizeMetadata({ event: { name: 'X', startDate: 'soon' } }),
     ).toBeNull();
+    // Date.parse would roll this over to March 2.
+    expect(
+      normalizeMetadata({ event: { name: 'X', startDate: '2026-02-30' } }),
+    ).toBeNull();
+    expect(
+      normalizeMetadata({
+        event: { name: 'X', startDate: '2026-02-30T10:00:00-06:00' },
+      }),
+    ).toBeNull();
     expect(
       normalizeMetadata({ title: 'T', event: { name: 'X' } })?.event,
     ).toBeUndefined();

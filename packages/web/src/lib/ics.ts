@@ -175,14 +175,18 @@ export function downloadIcs(item: InboxItem): void {
 
 export interface ParsedIcs {
   title: string;
-  /** DESCRIPTION, with the URL prepended when present. */
+  /** The URL line, when the entry carries one. */
   body: string;
+  /** DESCRIPTION, unescaped: the card's preview text and what exports emit. */
+  description?: string;
   location?: string;
   kind: ScheduleKind;
   start: Date;
   /** Timed events only. */
   end?: Date;
   allDay: boolean;
+  /** VTODO with STATUS:COMPLETED. */
+  completed: boolean;
 }
 
 /** True for files worth parsing as a calendar entry. */
@@ -226,15 +230,38 @@ function parseProperty(line: string): IcsProperty | null {
 
 /** Inverse of escapeText. */
 export function unescapeText(value: string): string {
-  return value.replace(/\\([;,nN])/g, (_, c: string) =>
+  // One pass, so a decoded backslash is never re-read as an escape.
+  return value.replace(/\\([\\;,nN])/g, (_, c: string) =>
     c === 'n' || c === 'N' ? '\n' : c,
+  );
+}
+
+/** True when the fields name a real calendar date and time (no rollover). */
+function fieldsExist(
+  y: number,
+  mo: number,
+  d: number,
+  h: number,
+  mi: number,
+  s: number,
+): boolean {
+  const probe = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
+  return (
+    probe.getUTCFullYear() === y &&
+    probe.getUTCMonth() === mo - 1 &&
+    probe.getUTCDate() === d &&
+    probe.getUTCHours() === h &&
+    probe.getUTCMinutes() === mi &&
+    probe.getUTCSeconds() === s
   );
 }
 
 /**
  * Wall-clock fields in an IANA zone → instant, using Intl alone: guess the
  * offset at the UTC reading of the fields, then re-check at the result so
- * DST transitions resolve. Throws RangeError for a zone Intl doesn't know.
+ * DST transitions resolve. A time inside a spring-forward gap keeps the
+ * pre-transition offset, so 02:30 on the gap day lands at 03:30 DST rather
+ * than an hour early. Throws RangeError for a zone Intl doesn't know.
  */
 function zonedToUtc(
   y: number,
@@ -272,7 +299,8 @@ function zonedToUtc(
   };
   const asUtc = Date.UTC(y, mo - 1, d, h, mi, s);
   const first = asUtc - offsetAt(asUtc);
-  return new Date(asUtc - offsetAt(first));
+  const second = asUtc - offsetAt(first);
+  return new Date(offsetAt(second) === offsetAt(first) ? second : first);
 }
 
 /**
@@ -289,10 +317,13 @@ export function parseIcsDate(
   );
   if (!m) return null;
   const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const [h, mi, s] = [Number(m[4] ?? 0), Number(m[5] ?? 0), Number(m[6] ?? 0)];
+  // The Date constructors roll 20260230 over to March 2; a date that does
+  // not exist is a malformed file, not a schedule.
+  if (!fieldsExist(y, mo, d, h, mi, s)) return null;
   if (params.VALUE === 'DATE' || !m[4]) {
     return { date: new Date(y, mo - 1, d), allDay: true };
   }
-  const [h, mi, s] = [Number(m[4]), Number(m[5]), Number(m[6] ?? 0)];
   if (m[7])
     return { date: new Date(Date.UTC(y, mo - 1, d, h, mi, s)), allDay: false };
   if (params.TZID) {
@@ -312,8 +343,8 @@ export function parseIcsDate(
 
 /** Parse the first VEVENT/VTODO of an iCalendar text; null when there is none. */
 export function parseIcs(text: string): ParsedIcs | null {
-  if (!/BEGIN:VCALENDAR/i.test(text)) return null;
   let kind: ScheduleKind | null = null;
+  let inCalendar = false; // only an entry inside VCALENDAR counts
   let depth = 0; // nested VALARM etc. inside the entry
   const props: Record<string, IcsProperty> = {};
   for (const line of unfoldLines(text)) {
@@ -321,8 +352,11 @@ export function parseIcs(text: string): ParsedIcs | null {
     if (!prop) continue;
     const component = prop.value.trim().toUpperCase();
     if (kind === null) {
-      if (prop.name !== 'BEGIN') continue;
-      if (component === 'VEVENT') kind = 'event';
+      const isBegin = prop.name === 'BEGIN';
+      if (!isBegin && prop.name !== 'END') continue;
+      if (component === 'VCALENDAR') inCalendar = isBegin;
+      else if (!isBegin || !inCalendar) continue;
+      else if (component === 'VEVENT') kind = 'event';
       else if (component === 'VTODO') kind = 'task';
       continue;
     }
@@ -343,23 +377,22 @@ export function parseIcs(text: string): ParsedIcs | null {
     kind === 'event' && !start.allDay && props.DTEND
       ? parseIcsDate(props.DTEND.value, props.DTEND.params)
       : null;
-  const summary = props.SUMMARY ? unescapeText(props.SUMMARY.value).trim() : '';
-  const cancelled = props.STATUS?.value.trim().toUpperCase() === 'CANCELLED';
-  const body = [
-    props.URL?.value.trim(),
-    props.DESCRIPTION && unescapeText(props.DESCRIPTION.value).trim(),
-  ]
-    .filter(Boolean)
-    .join('\n\n');
+  const field = (name: string) =>
+    props[name]
+      ? unescapeText(props[name].value).trim() || undefined
+      : undefined;
+  const summary = field('SUMMARY');
+  const status = props.STATUS?.value.trim().toUpperCase();
+  const untitled = kind === 'task' ? 'Untitled task' : 'Untitled event';
   return {
-    title: `${cancelled ? 'Cancelled: ' : ''}${summary || 'Untitled event'}`,
-    body,
-    location: props.LOCATION
-      ? unescapeText(props.LOCATION.value).trim() || undefined
-      : undefined,
+    title: `${status === 'CANCELLED' ? 'Cancelled: ' : ''}${summary ?? untitled}`,
+    body: props.URL?.value.trim() ?? '',
+    description: field('DESCRIPTION'),
+    location: field('LOCATION'),
     kind,
     start: start.date,
     end: end && end.date > start.date ? end.date : undefined,
     allDay: start.allDay,
+    completed: kind === 'task' && status === 'COMPLETED',
   };
 }

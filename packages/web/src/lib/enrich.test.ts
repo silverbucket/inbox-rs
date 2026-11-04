@@ -243,6 +243,19 @@ describe('applyLinkMetadata', () => {
     expect(updated?.allDay).toBeUndefined();
   });
 
+  it('titles a URL-titled bookmark from the event name when the page has none', () => {
+    const updated = applyLinkMetadata(bookmark(), {
+      event: { name: 'Tech Talks', startDate: '2026-11-09T18:00:00Z' },
+    });
+    expect(updated?.title).toBe('Tech Talks');
+    expect(
+      applyLinkMetadata(bookmark(), {
+        title: 'Page',
+        event: { name: 'Tech Talks', startDate: '2026-11-09T18:00:00Z' },
+      })?.title,
+    ).toBe('Page');
+  });
+
   it('treats a date-only event start as all-day on that local date', () => {
     const updated = applyLinkMetadata(bookmark(), {
       event: { name: 'Conf', startDate: '2026-11-09' },

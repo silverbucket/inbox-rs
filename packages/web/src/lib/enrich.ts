@@ -151,9 +151,10 @@ function eventSchedule(event: LinkEvent): ScheduleInput | null {
     : new Date(event.startDate);
   if (Number.isNaN(start.getTime())) return null;
   const end = event.endDate ? new Date(event.endDate) : null;
+  // ceil, not round: a sub-minute span must not collapse to "no end".
   const durationMin =
     end && !dateOnly && end > start
-      ? Math.round((end.getTime() - start.getTime()) / 60_000)
+      ? Math.ceil((end.getTime() - start.getTime()) / 60_000)
       : undefined;
   return {
     kind: 'event',
@@ -177,8 +178,10 @@ export function applyLinkMetadata(
     updated = applySchedule(updated, schedule);
     changed = true;
   }
-  if (meta.title && (!item.title || item.title === item.url)) {
-    updated.title = meta.title;
+  // An event-only page still names its event; better than a URL title.
+  const title = meta.title || meta.event?.name;
+  if (title && (!item.title || item.title === item.url)) {
+    updated.title = title;
     changed = true;
   }
   if (meta.description && !item.description) {

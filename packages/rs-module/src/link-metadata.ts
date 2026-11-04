@@ -105,7 +105,19 @@ function asHttpUrl(
 
 function asIsoDate(value: unknown): string | undefined {
   const text = asNonEmptyString(value);
-  return text && !Number.isNaN(Date.parse(text)) ? text : undefined;
+  if (!text || Number.isNaN(Date.parse(text))) return undefined;
+  // Date.parse rolls 2026-02-30 over to March 2; a calendar date that does
+  // not round-trip is bad data, not a schedule.
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
+  if (
+    ymd &&
+    new Date(Date.UTC(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3])))
+      .toISOString()
+      .slice(0, 10) !== ymd[0]
+  ) {
+    return undefined;
+  }
+  return text;
 }
 
 function asEvent(value: unknown): LinkEvent | undefined {

@@ -7,6 +7,7 @@ import {
   isCalendarFile,
   parseIcs,
   parseIcsDate,
+  unescapeText,
 } from './ics';
 
 const NOW = new Date('2026-07-30T12:00:00Z');
@@ -211,6 +212,21 @@ describe('parseIcsDate', () => {
     expect(parseIcsDate('next tuesday')).toBeNull();
   });
 
+  it('rejects dates and times that do not exist instead of rolling over', () => {
+    expect(parseIcsDate('20260230', { VALUE: 'DATE' })).toBeNull();
+    expect(parseIcsDate('20261109T250000Z')).toBeNull();
+    expect(parseIcsDate('20261301T100000')).toBeNull();
+  });
+
+  it('keeps a spring-forward gap time on the pre-transition offset', () => {
+    // 02:30 does not exist in Chicago on 2026-03-08; it reads as 03:30 CDT.
+    expect(
+      parseIcsDate('20260308T023000', {
+        TZID: 'America/Chicago',
+      })?.date.toISOString(),
+    ).toBe('2026-03-08T08:30:00.000Z');
+  });
+
   it('falls back to floating local time for an unknown TZID', () => {
     expect(
       parseIcsDate('20261109T180000', { TZID: 'Central Standard Time' }),
@@ -229,8 +245,16 @@ describe('parseIcs', () => {
     expect(parsed?.start.toISOString()).toBe('2026-11-10T00:00:00.000Z');
     expect(parsed?.end?.toISOString()).toBe('2026-11-10T02:00:00.000Z');
     expect(parsed?.body).toBe(
-      'https://www.meetup.com/acm-austin/events/316315179/\n\n' +
-        'Join [ACM Austin + IEEE](https://local.acm.org/) for our meetup, an evening of talks.\nSee you there.',
+      'https://www.meetup.com/acm-austin/events/316315179/',
+    );
+    expect(parsed?.description).toBe(
+      'Join [ACM Austin + IEEE](https://local.acm.org/) for our meetup, an evening of talks.\nSee you there.',
+    );
+  });
+
+  it('decodes an escaped backslash without re-reading it as an escape', () => {
+    expect(unescapeText('C:\\\\temp\\\\n is a path\\, not a newline')).toBe(
+      'C:\\temp\\n is a path, not a newline',
     );
   });
 
@@ -251,11 +275,13 @@ describe('parseIcs', () => {
     expect(parsed).toEqual({
       title: 'Cancelled: Office closed',
       body: '',
+      description: undefined,
       location: 'HQ, 3rd floor',
       kind: 'event',
       start: new Date(2026, 11, 25),
       end: undefined,
       allDay: true,
+      completed: false,
     });
   });
 
@@ -263,8 +289,19 @@ describe('parseIcs', () => {
     const parsed = parseIcs(
       'BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nSUMMARY:Send slides\r\nDUE:20261112T170000Z\r\nEND:VTODO\r\nEND:VCALENDAR\r\n',
     );
-    expect(parsed).toMatchObject({ title: 'Send slides', kind: 'task' });
+    expect(parsed).toMatchObject({
+      title: 'Send slides',
+      kind: 'task',
+      completed: false,
+    });
     expect(parsed?.start.toISOString()).toBe('2026-11-12T17:00:00.000Z');
+  });
+
+  it('marks a completed VTODO and names an untitled one as a task', () => {
+    const parsed = parseIcs(
+      'BEGIN:VCALENDAR\nBEGIN:VTODO\nDUE:20261112T170000Z\nSTATUS:COMPLETED\nEND:VTODO\nEND:VCALENDAR',
+    );
+    expect(parsed).toMatchObject({ title: 'Untitled task', completed: true });
   });
 
   it('returns null for non-calendar text or an entry without a start', () => {
@@ -272,6 +309,14 @@ describe('parseIcs', () => {
     expect(
       parseIcs(
         'BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:x\nEND:VEVENT\nEND:VCALENDAR',
+      ),
+    ).toBeNull();
+  });
+
+  it('ignores an entry that sits outside the VCALENDAR block', () => {
+    expect(
+      parseIcs(
+        'BEGIN:VEVENT\nSUMMARY:x\nDTSTART:20261109T180000Z\nEND:VEVENT\nBEGIN:VCALENDAR\nEND:VCALENDAR',
       ),
     ).toBeNull();
   });

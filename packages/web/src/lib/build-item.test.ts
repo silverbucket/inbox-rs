@@ -19,6 +19,7 @@ import {
   buildNoteItem,
   buildTodoItem,
 } from './build-item';
+import { buildIcs } from './ics';
 
 const FIXED_NOW = '2026-04-30T12:00:00.000Z';
 
@@ -656,6 +657,40 @@ describe('buildDocumentItem', () => {
       scheduleKind: 'event',
       startsAt: '2026-11-10T09:00:00.000Z',
       endsAt: '2026-11-10T09:30:00.000Z',
+    });
+  });
+
+  it('keeps the invite description where the card and exports read it', async () => {
+    const ics =
+      'BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:Standup\nDTSTART:20261110T090000Z\nDTEND:20261110T090020Z\nDESCRIPTION:Bring notes\nURL:https://x.example/e\nEND:VEVENT\nEND:VCALENDAR';
+    const result = await buildDocumentItem(ctx({ id: 'cal-3' }), {
+      title: '',
+      description: 'From Nick',
+      file: new File([ics], 'invite.ics', { type: 'text/calendar' }),
+    });
+    expect(result?.item).toMatchObject({
+      body: 'https://x.example/e',
+      description: 'From Nick\n\nBring notes',
+      // a 20-second span still keeps its end
+      endsAt: '2026-11-10T09:01:00.000Z',
+    });
+    expect(buildIcs(result!.item)?.text).toContain(
+      'DESCRIPTION:From Nick\\n\\nBring notes',
+    );
+  });
+
+  it('imports a completed VTODO as a done task', async () => {
+    const ics =
+      'BEGIN:VCALENDAR\nBEGIN:VTODO\nSUMMARY:Slides\nDUE:20261112T170000Z\nSTATUS:COMPLETED\nEND:VTODO\nEND:VCALENDAR';
+    const result = await buildDocumentItem(ctx({ id: 'cal-4' }), {
+      title: '',
+      description: '',
+      file: new File([ics], 'todo.ics', { type: 'text/calendar' }),
+    });
+    expect(result?.item).toMatchObject({
+      scheduleKind: 'task',
+      completed: true,
+      completedAt: result?.item.createdAt,
     });
   });
 
