@@ -7,7 +7,7 @@
   import { createReorderFade } from '../lib/reorder-fade';
   import { onDestroy, onMount } from 'svelte';
   import {
-    visibleTodos, visibleOnCalendarTodos, reorderTodosGlobal,
+    allTodos, visibleTodos, visibleOnCalendarTodos, reorderTodosGlobal,
     collections, sortedGroups, appConfig, updateConfig,
     clearSessionVisibleTodos, setItemPlan,
   } from '../lib/stores';
@@ -156,10 +156,16 @@
   // with the derived lists whenever upstream changes — except mid-drag, where
   // `handleDndConsider` is authoritative.
   let dndSections = $state<Record<string, Array<InboxItem & { id: string }>>>({});
+  // Drops still being written. While any are outstanding, the lists keep
+  // showing what the user dropped instead of snapping back to the stored
+  // order between writes; the last one to finish resyncs.
+  let settling = 0;
   $effect(() => {
-    dndSections = Object.fromEntries(
+    const next = Object.fromEntries(
       HORIZON_ORDER.map(s => [s, sectionItems[s].map(t => ({ ...t }))]),
     );
+    if (settling > 0) return;
+    dndSections = next;
   });
 
   // Rows fade when added or removed, but not while being reordered — a
@@ -189,49 +195,77 @@
   const pendingArrivals = new Map<string, HorizonSection>();
   let settleQueued = false;
   let settleChain: Promise<void> = Promise.resolve();
+
+  /** One completed drop: its order and arrivals, captured when it landed. */
+  interface SettleJob {
+    order: string[];
+    arrivals: Array<[string, HorizonSection]>;
+  }
+
   function queueSettle() {
     if (settleQueued) return;
     settleQueued = true;
+    // Next task: a cross-section drop finalizes both zones first, so the
+    // snapshot below sees the whole drop.
     setTimeout(() => {
       settleQueued = false;
-      settleChain = settleChain.then(settle);
+      const job: SettleJob = {
+        order: [
+          ...dueTodos.map(t => t.id),
+          ...HORIZON_ORDER.flatMap(s => (dndSections[s] ?? []).map(t => t.id)),
+        ],
+        arrivals: [...pendingArrivals.entries()],
+      };
+      pendingArrivals.clear();
+      settling++;
+      settleChain = settleChain.then(() => settle(job));
     }, 0);
   }
 
-  async function settle() {
-    // Reads happen here, after any earlier settle finished, so the order and
-    // the items being re-planned are current.
-    const order = HORIZON_ORDER.flatMap(s => (dndSections[s] ?? []).map(t => t.id));
-    const arrivals = [...pendingArrivals.entries()];
-    pendingArrivals.clear();
+  async function settle(job: SettleJob) {
     try {
-      // Due-band todos lead the persisted order so they resume a sane
-      // manual slot once their due date passes out of the band.
-      await reorderTodosGlobal([...dueTodos.map(t => t.id), ...order]);
-    } catch (error) {
-      console.error('Failed to reorder todos', error);
-    }
-    for (const [id, section] of arrivals) {
-      const original = restOpenTodos.find(t => t.id === id);
-      const choice = DROP_PLAN[section];
-      if (!original || choice === undefined) continue;
       try {
-        const plan = choice === null ? null : planFor(choice, new Date());
-        // Dropping into "not planned" also lets go of a legacy pin, which
-        // would otherwise keep it in Up next.
-        await setItemPlan(
-          choice === null && original.pinned ? { ...original, pinned: false } : original,
-          plan,
-        );
+        // Due-band todos lead the persisted order so they resume a sane
+        // manual slot once their due date passes out of the band.
+        await reorderTodosGlobal(job.order);
       } catch (error) {
-        console.error('Failed to re-plan todo', error);
-        showToast('Couldn’t move that todo');
+        console.error('Failed to reorder todos', error);
+      }
+      for (const [id, section] of job.arrivals) {
+        // Read the todo now, not at drop time: an earlier settle, a card
+        // edit or a sync may have changed it while this one waited.
+        const current = $allTodos.find(t => t.id === id);
+        const choice = DROP_PLAN[section];
+        if (!current || current.completed || choice === undefined) continue;
+        if (current.startsAt) {
+          // It gained a date meanwhile — a date outranks the drop.
+          showToast('This todo has a date now — it stays where its date puts it');
+          continue;
+        }
+        try {
+          const plan = choice === null ? null : planFor(choice, new Date());
+          // Dropping into "not planned" also lets go of a legacy pin, which
+          // would otherwise keep it in Up next.
+          await setItemPlan(
+            choice === null && current.pinned ? { ...current, pinned: false } : current,
+            plan,
+          );
+        } catch (error) {
+          console.error('Failed to re-plan todo', error);
+          showToast('Couldn’t move that todo');
+        }
+      }
+    } finally {
+      settling--;
+      if (settling === 0) {
+        resetSections();
+        // Only now let rows fade again: a cross-section drop finalizes two
+        // zones and re-renders after the writes, and the library finds rows
+        // by child index, so a lingering outro copy would desync it (see
+        // reorder-fade).
+        await reorderFade.end();
       }
     }
-    // Only now let rows fade again: a cross-section drop finalizes two zones
-    // and re-renders after the writes, and the library finds rows by child
-    // index, so a lingering outro copy would desync it (see reorder-fade).
-    await reorderFade.end();
   }
 
   function resetSections() {

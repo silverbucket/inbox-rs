@@ -18,6 +18,7 @@
   import DeleteConfirm from './DeleteConfirm.svelte';
   import ScheduleSheet from './ScheduleSheet.svelte';
   import { planLabel } from '../lib/plan';
+  import { todayStart } from '../lib/now';
   import AddToCalendarSheet from './AddToCalendarSheet.svelte';
   import { formatScheduled, isOverdue } from '../lib/schedule';
   import BookmarkView from './view-card/BookmarkView.svelte';
@@ -344,7 +345,9 @@
   const scheduledLabel = $derived(item.startsAt ? formatScheduled(item) : '');
   /** Soft plan ("Next week") on an open todo — see lib/plan.ts. */
   const plannedLabel = $derived(
-    (item.isTodo || item.type === 'todo') && !item.completed ? planLabel(item) : '',
+    (item.isTodo || item.type === 'todo') && !item.completed
+      ? planLabel(item, new Date($todayStart))
+      : '',
   );
   const scheduleOverdue = $derived(isOverdue(item));
 

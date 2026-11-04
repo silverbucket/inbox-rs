@@ -76,6 +76,7 @@ import {
   deleteItem,
   enableCollectionFilter,
   explicitTodoPick,
+  favoriteCollectionIds,
   groupCollections,
   groups,
   hiddenCollectionIds,
@@ -100,6 +101,7 @@ import {
   setCollectionArchived,
   setGroupArchived,
   setItemArchived,
+  setItemPlan,
   soleVisibleCollectionId,
   soloCollectionFilter,
   soloGroupFilter,
@@ -501,6 +503,110 @@ describe('archive operations', () => {
 
     await setGroupArchived('g1', false);
     expect(get(visibleGroupedCollections)[0]?.collections[0]?.id).toBe('c1');
+  });
+});
+
+describe('setItemPlan', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    items.set({});
+  });
+
+  it('planning a dated, posted todo drops the schedule and calendar receipt', async () => {
+    const dated = makeTodo('t1', {
+      title: 'Renew passport',
+      pinned: true,
+      collectionId: 'c1',
+      startsAt: '2026-11-20T09:00:00.000Z',
+      endsAt: '2026-11-20T10:00:00.000Z',
+      allDay: false,
+      scheduleKind: 'task',
+      eventUrl: 'https://cal.example.org/t1.ics',
+      eventEtag: '"e1"',
+      archived: true,
+      archivedAt: '2026-11-01T00:00:00.000Z',
+      archiveReason: 'calendar',
+    });
+    items.set({ t1: dated });
+
+    await setItemPlan(dated, { planKind: 'week', planStart: '2026-11-09' });
+
+    const saved = get(items).t1;
+    expect(saved).toMatchObject({
+      title: 'Renew passport',
+      pinned: true,
+      collectionId: 'c1',
+      planKind: 'week',
+      planStart: '2026-11-09',
+    });
+    for (const key of [
+      'startsAt',
+      'endsAt',
+      'allDay',
+      'scheduleKind',
+      'eventUrl',
+      'eventEtag',
+      'archived',
+      'archivedAt',
+      'archiveReason',
+    ] as const) {
+      expect(saved[key]).toBeUndefined();
+    }
+  });
+
+  it('clearing a plan leaves every other field alone', async () => {
+    const planned = makeTodo('t1', {
+      title: 'Learn sourdough',
+      pinned: true,
+      collectionId: 'c1',
+      location: 'Kitchen',
+      planKind: 'someday',
+    });
+    items.set({ t1: planned });
+
+    await setItemPlan(planned, null);
+
+    const saved = get(items).t1;
+    expect(saved.planKind).toBeUndefined();
+    expect(saved.planStart).toBeUndefined();
+    expect(saved).toMatchObject({
+      title: 'Learn sourdough',
+      pinned: true,
+      collectionId: 'c1',
+      location: 'Kitchen',
+    });
+  });
+});
+
+describe('favoriteCollectionIds', () => {
+  beforeEach(() => {
+    collections.set({});
+    groups.set({});
+    appConfig.set({});
+  });
+
+  it('skips missing, archived and archived-group collections but keeps their ids', () => {
+    groups.set({
+      g1: makeGroup('g1', ['c1']),
+      g2: { ...makeGroup('g2', ['c2']), archived: true },
+    });
+    collections.set({
+      c1: makeCollection('c1', 'g1'),
+      c2: makeCollection('c2', 'g2'),
+      c3: { ...makeCollection('c3', 'g1'), archived: true },
+    });
+    appConfig.set({ favoriteCollectionIds: ['c2', 'gone', 'c3', 'c1'] });
+
+    expect(get(favoriteCollectionIds)).toEqual(['c1']);
+    expect(get(appConfig).favoriteCollectionIds).toEqual([
+      'c2',
+      'gone',
+      'c3',
+      'c1',
+    ]);
+
+    groups.update((g) => ({ ...g, g2: { ...g.g2, archived: false } }));
+    expect(get(favoriteCollectionIds)).toEqual(['c2', 'c1']);
   });
 });
 

@@ -30,6 +30,7 @@
   import CollectionPicker from './CollectionPicker.svelte';
   import ScheduleSheet from './ScheduleSheet.svelte';
   import { applyPlan, type Plan, planLabel } from '../lib/plan';
+  import { todayStart } from '../lib/now';
   import {
     collections,
     explicitTodoPick,
@@ -111,7 +112,7 @@
           allDay: pendingSchedule.allDay,
         })
       : pendingPlan
-        ? planLabel(pendingPlan)
+        ? planLabel(pendingPlan, new Date($todayStart))
         : 'When?',
   );
 
