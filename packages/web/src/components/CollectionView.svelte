@@ -333,12 +333,15 @@
       <polyline points="6 9 12 15 18 9"></polyline>
     </svg>
     <div class="header-info">
-      <h3>
-        {collection.name}
+      <!-- The heading holds the name alone: anything else inside it (even
+           whitespace before a sibling block) changes its text, which is how
+           tests and assistive tech identify the collection. -->
+      <div class="title-line">
+        <h3>{collection.name}</h3>
         {#if isFavorite}
           <svg class="fav-mark" role="img" aria-label="Favourite" width="13" height="13" viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6L3.2 9.4l6.1-.8z"></path></svg>
         {/if}
-      </h3>
+      </div>
       {#if collection.description && !expanded}
         <span class="col-description">{collection.description}</span>
       {/if}
@@ -806,10 +809,15 @@
     color: var(--favorite);
   }
 
+  .title-line {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+
   .fav-mark {
-    display: inline-block;
-    vertical-align: -1px;
-    margin-left: 0.3rem;
+    flex-shrink: 0;
     fill: var(--favorite);
   }
 

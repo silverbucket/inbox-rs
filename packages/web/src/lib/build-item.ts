@@ -39,7 +39,7 @@ export interface BuildContext {
 
 /**
  * Carry the edit target's type-agnostic fields onto a freshly-rebuilt item.
- * Collection membership and scheduling are placement/metadata the per-type
+ * Collection membership, scheduling and soft plans are placement/metadata the per-type
  * forms never surface, so without this every edit would silently move the
  * item back to the Inbox and strip its calendar schedule (losing the
  * eventUrl/eventEtag pointer to an already-posted entry). Applied
@@ -65,6 +65,9 @@ function preserveCollection<T extends InboxItem>(
       'archived',
       'archivedAt',
       'archiveReason',
+      // Soft plan ("next week") — a content edit must not unplan the todo.
+      'planKind',
+      'planStart',
     ] as const) {
       if (ctx.editItem[key] !== undefined) {
         (schedule as Record<string, unknown>)[key] = ctx.editItem[key];

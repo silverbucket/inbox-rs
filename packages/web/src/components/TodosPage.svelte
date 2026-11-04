@@ -183,18 +183,24 @@
   // A cross-section drag finalizes both zones (and, for keyboard drags, the
   // library is still tidying up afterwards). Collect the arrivals and do the
   // writes once, on the next task, so no store update lands mid-drag.
+  // Settles run strictly one after another: a quick second drop must not
+  // start writing while the first is still awaiting storage, or the older
+  // write could land last and undo the newer plan.
   const pendingArrivals = new Map<string, HorizonSection>();
   let settleQueued = false;
+  let settleChain: Promise<void> = Promise.resolve();
   function queueSettle() {
     if (settleQueued) return;
     settleQueued = true;
     setTimeout(() => {
       settleQueued = false;
-      void settle();
+      settleChain = settleChain.then(settle);
     }, 0);
   }
 
   async function settle() {
+    // Reads happen here, after any earlier settle finished, so the order and
+    // the items being re-planned are current.
     const order = HORIZON_ORDER.flatMap(s => (dndSections[s] ?? []).map(t => t.id));
     const arrivals = [...pendingArrivals.entries()];
     pendingArrivals.clear();

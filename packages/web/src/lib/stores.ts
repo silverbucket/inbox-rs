@@ -1163,13 +1163,20 @@ export async function setItemPlan(item: InboxItem, plan: Plan | null) {
   await storeItem(plan ? applyPlan(base, plan) : clearPlan(base));
 }
 
-/** Favourite collection ids that still exist, in the user's order. */
+/** Favourite collection ids that still exist and aren't archived, in the user's order. */
 export const favoriteCollectionIds = derived(
-  [appConfig, collections],
-  ([$config, $collections]) =>
-    ($config.favoriteCollectionIds ?? []).filter(
-      (id) => !!$collections[id] && !$collections[id].archived,
-    ),
+  [appConfig, collections, groups],
+  ([$config, $collections, $groups]) =>
+    ($config.favoriteCollectionIds ?? []).filter((id) => {
+      const col = $collections[id];
+      // Archiving a group doesn't flag its collections, so check the group
+      // too. The saved id stays, so un-archiving brings the favourite back.
+      return (
+        !!col &&
+        !col.archived &&
+        !(col.groupId && $groups[col.groupId]?.archived)
+      );
+    }),
 );
 
 /** Favourite collections themselves, in the user's order. */
