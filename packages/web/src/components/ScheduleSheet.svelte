@@ -15,6 +15,7 @@
   } from '../lib/schedule';
   import { showToast } from '../lib/toast';
   import { setItemPlan, storeItem } from '../lib/stores';
+  import { todayStart } from '../lib/now';
   import {
     choiceInfo,
     choiceOf,
@@ -115,17 +116,21 @@
 
   // ── Soft plan ("roughly when") — todos only. A plan and a date are
   // mutually exclusive: choosing one replaces the other.
-  const planNow = new Date();
+  // One anchor for the labels, the highlighted choice and the saved plan,
+  // following the app's day clock so they stay in step across midnight.
+  const planNow = $derived(new Date($todayStart));
   const showPlans = $derived(isTodoish && (!pickMode || !!onplanpick));
-  const currentChoice: PlanChoice | null = item
-    ? choiceOf(item, planNow)
-    : initialPlan
-      ? choiceOf(initialPlan, planNow)
-      : null;
+  const currentChoice: PlanChoice | null = $derived(
+    item
+      ? choiceOf(item, planNow)
+      : initialPlan
+        ? choiceOf(initialPlan, planNow)
+        : null,
+  );
   const hasPlan = item ? !!item.planKind && !item.startsAt : !!initialPlan;
 
   async function pickPlan(choice: PlanChoice | null) {
-    const plan = choice ? planFor(choice, new Date()) : null;
+    const plan = choice ? planFor(choice, planNow) : null;
     if (pickMode) {
       onplanpick?.(plan);
       return;

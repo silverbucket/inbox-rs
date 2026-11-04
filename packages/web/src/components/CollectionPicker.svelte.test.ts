@@ -25,6 +25,7 @@ vi.mock('../lib/stores', async () => {
 
 import {
   createCollection,
+  favoriteCollections,
   groupCollections,
   groups,
   sortedGroups,
@@ -43,6 +44,7 @@ describe('CollectionPicker', () => {
     writableStore<Record<string, CollectionGroup>>(groups).set({});
     writableStore<CollectionGroup[]>(sortedGroups).set([]);
     writableStore<Record<string, Collection[]>>(groupCollections).set({});
+    writableStore<Collection[]>(favoriteCollections).set([]);
     localStorage.clear();
     host = document.createElement('div');
     document.body.appendChild(host);
@@ -114,6 +116,62 @@ describe('CollectionPicker', () => {
     expect(
       suggestedRows[1]?.querySelector('.suggestion-group')?.textContent.trim(),
     ).toBe('Personal');
+  });
+
+  it('lists favourites after suggestions, minus hidden and already-suggested ones', () => {
+    const music: CollectionGroup = {
+      id: 'group-music',
+      name: 'Music',
+      collectionIds: ['project', 'fiddle', 'hidden'],
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    const col = (id: string, name: string): Collection => ({
+      id,
+      name,
+      groupId: music.id,
+      itemIds: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+    });
+    const project = col('project', 'Project');
+    const fiddle = col('fiddle', 'Fiddle');
+    const hidden = col('hidden', 'Hidden band');
+
+    writableStore<Record<string, CollectionGroup>>(groups).set({
+      [music.id]: music,
+    });
+    writableStore<CollectionGroup[]>(sortedGroups).set([music]);
+    writableStore<Record<string, Collection[]>>(groupCollections).set({
+      [music.id]: [project, fiddle, hidden],
+    });
+    writableStore<Collection[]>(favoriteCollections).set([
+      project,
+      fiddle,
+      hidden,
+    ]);
+
+    component = mount(CollectionPicker, {
+      target: host,
+      props: {
+        item: { title: 'Project notes' },
+        hiddenCollectionIds: new Set(['hidden']),
+        onpick: vi.fn(),
+        onclose: vi.fn(),
+      },
+    });
+    flushSync();
+
+    const label = host.querySelector('.favorites-label');
+    expect(label?.textContent).toContain('Favorites');
+    const favouriteRows: string[] = [];
+    for (
+      let el = label?.nextElementSibling;
+      el?.classList.contains('option');
+      el = el.nextElementSibling
+    ) {
+      favouriteRows.push(el.querySelector('.col-name')?.textContent ?? '');
+    }
+    // Project is already suggested (name match); Hidden band is filtered out.
+    expect(favouriteRows).toEqual(['Fiddle']);
   });
 
   it('creates a group and collection together when filing without groups', async () => {

@@ -47,6 +47,7 @@
     editItem = undefined,
     collectionId = undefined,
     prefillTitle = '',
+    prefillPlan = null,
     prefillFile = undefined,
     onclose,
     ondelete,
@@ -58,6 +59,8 @@
         See `initialDestination`. */
     collectionId?: string | null;
     prefillTitle?: string;
+    /** Soft plan picked before opening (Todos quick-add), applied on save. */
+    prefillPlan?: Plan | null;
     prefillFile?: File;
     onclose: () => void;
     ondelete?: (item: InboxItem) => void;
@@ -186,7 +189,8 @@
   // sheet, and edits preserve existing schedule fields via build-item.
   let pendingSchedule = $state<PendingSchedule | null>(null);
   // …or, for todos, a soft plan ("next week"). Mutually exclusive.
-  let pendingPlan = $state<Plan | null>(null);
+  // svelte-ignore state_referenced_locally
+  let pendingPlan = $state<Plan | null>(prefillPlan);
   let scheduleSheetOpen = $state(false);
 
   const whenLabel = $derived(

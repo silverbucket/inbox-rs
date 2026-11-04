@@ -554,6 +554,26 @@ describe('setItemPlan', () => {
     }
   });
 
+  it('keeps a manual archive when planning a dated todo', async () => {
+    const dated = makeTodo('t1', {
+      startsAt: '2026-11-20T09:00:00.000Z',
+      scheduleKind: 'task',
+      archived: true,
+      archivedAt: '2026-11-01T00:00:00.000Z',
+      archiveReason: 'manual',
+    });
+    items.set({ t1: dated });
+
+    await setItemPlan(dated, { planKind: 'next' });
+
+    expect(get(items).t1).toMatchObject({
+      planKind: 'next',
+      archived: true,
+      archiveReason: 'manual',
+    });
+    expect(get(items).t1.startsAt).toBeUndefined();
+  });
+
   it('clearing a plan leaves every other field alone', async () => {
     const planned = makeTodo('t1', {
       title: 'Learn sourdough',

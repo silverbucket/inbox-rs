@@ -15,7 +15,7 @@
   import { todayStart } from '../lib/now';
   import {
     DEFAULT_COLLAPSED, HORIZON_ORDER, type HorizonSection, type PlanChoice,
-    placeTodo, planFor, sectionInfo,
+    type Plan, placeTodo, planFor, sectionInfo,
   } from '../lib/plan';
   import { showToast } from '../lib/toast';
   import AlertsPermissionBanner from './AlertsPermissionBanner.svelte';
@@ -29,7 +29,11 @@
         Callers may pass a collection explicitly; the quick-key path passes
         `null` to start Unfiled, while `undefined` leaves destination selection
         to the modal (as with the bare Fab). */
-    onaddtodo: (prefillTitle?: string, collectionId?: string | null) => void;
+    onaddtodo: (
+      prefillTitle?: string,
+      collectionId?: string | null,
+      plan?: Plan | null,
+    ) => void;
     /** Opens the add-todo modal with a specific collection pre-selected.
         Used by the per-row quick-add affordance. Pass `null` to target an
         unfiled todo. */
@@ -194,6 +198,8 @@
   // write could land last and undo the newer plan.
   const pendingArrivals = new Map<string, HorizonSection>();
   let settleQueued = false;
+  /** Set when a drop is refused, so the origin zone's queued settle skips it. */
+  let dropRejected = false;
   let settleChain: Promise<void> = Promise.resolve();
 
   /** One completed drop: its order and arrivals, captured when it landed. */
@@ -209,6 +215,13 @@
     // snapshot below sees the whole drop.
     setTimeout(() => {
       settleQueued = false;
+      if (dropRejected) {
+        // The other half of this drop refused it: nothing to persist, the
+        // lists are being reset instead.
+        dropRejected = false;
+        pendingArrivals.clear();
+        return;
+      }
       const job: SettleJob = {
         order: [
           ...dueTodos.map(t => t.id),
@@ -247,8 +260,9 @@
           // Dropping into "not planned" also lets go of a legacy pin, which
           // would otherwise keep it in Up next.
           await setItemPlan(
-            choice === null && current.pinned ? { ...current, pinned: false } : current,
+            current,
             plan,
+            choice === null && current.pinned ? { pinned: false } : {},
           );
         } catch (error) {
           console.error('Failed to re-plan todo', error);
@@ -292,6 +306,7 @@
             : 'Only dated todos live in Later',
         );
         pendingArrivals.clear();
+        if (settleQueued) dropRejected = true;
         setTimeout(() => {
           resetSections();
           void reorderFade.end();
@@ -348,7 +363,7 @@
     <!-- Lead with the composer so its input lines up with the inbox capture
          bar. The toolbar's Fab is hidden on desktop (the input + ⌘⇧↵ handle
          capture) and a floating + circle on mobile. -->
-    <TodoQuickAdd hideOnMobile focusOnMount bind:quickTitle={quickDraft} onopenmodal={(t, c) => onaddtodo(t, c)} />
+    <TodoQuickAdd hideOnMobile focusOnMount bind:quickTitle={quickDraft} onopenmodal={(t, c, p) => onaddtodo(t, c, p)} />
     {@render todoToolbar()}
     <div class="empty-state" in:fade={{ duration: 180 }}>
       <p class="empty-title">Jot a todo</p>
@@ -358,7 +373,7 @@
       <p class="empty-hint empty-hint--mobile">Tap + to capture one. Organize it later.</p>
     </div>
   {:else}
-    <TodoQuickAdd hideOnMobile compact focusOnMount bind:quickTitle={quickDraft} onopenmodal={(t, c) => onaddtodo(t, c)} />
+    <TodoQuickAdd hideOnMobile compact focusOnMount bind:quickTitle={quickDraft} onopenmodal={(t, c, p) => onaddtodo(t, c, p)} />
     {@render todoToolbar()}
 
     {#if dueTodos.length > 0}

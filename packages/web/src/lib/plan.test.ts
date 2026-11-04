@@ -43,6 +43,8 @@ describe('date helpers', () => {
   it('round-trips date keys and rejects junk', () => {
     expect(toDateKey(fromDateKey('2026-12-01') as Date)).toBe('2026-12-01');
     expect(fromDateKey('12/01/2026')).toBeNull();
+    expect(fromDateKey('2026-02-31')).toBeNull();
+    expect(fromDateKey('2026-13-01')).toBeNull();
     expect(fromDateKey(undefined)).toBeNull();
   });
 });

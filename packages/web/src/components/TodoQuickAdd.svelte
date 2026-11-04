@@ -64,7 +64,11 @@
     /** ⌘/Ctrl-Shift-Enter — open the full todo modal pre-filled with the title.
         Shortcut-created todos pass `null` so the modal starts Unfiled rather
         than inheriting the selected, fixed, or remembered collection. */
-    onopenmodal: (prefillTitle: string, collectionId: string | null) => void;
+    onopenmodal: (
+      prefillTitle: string,
+      collectionId: string | null,
+      plan?: Plan | null,
+    ) => void;
   } = $props();
 
   let quickSaving = $state(false);
@@ -308,8 +312,10 @@
       if (e.shiftKey) {
         // Shortcut-created todos always start unfiled. The selected/fixed
         // collection still applies to plain-Enter quick saves.
-        onopenmodal(quickTitle, null);
+        // The soft plan picked here travels with the title into the editor.
+        onopenmodal(quickTitle, null, pendingPlan);
         quickTitle = '';
+        pendingPlan = null;
       } else {
         // ⌘/Ctrl-Enter on a typed title saves it like plain Enter. Claiming
         // the event keeps it from the global handler, which would otherwise

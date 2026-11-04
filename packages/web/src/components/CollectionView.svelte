@@ -361,6 +361,7 @@
       {/if}
     </div>
     <div class="header-actions">
+      {#if !collection.archived && !group?.archived}
       <button
         type="button"
         class="btn-header btn-favorite"
@@ -374,6 +375,7 @@
           <path d="M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6L3.2 9.4l6.1-.8z"></path>
         </svg>
       </button>
+      {/if}
       {#if onfocus}
         <button type="button" class="btn-header" onclick={(e) => { e.stopPropagation(); onfocus(); }} aria-label="Focus on {collection.name}" title="Focus">
           <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -776,7 +778,9 @@
     transition: opacity 150ms;
   }
 
-  .collection-header:hover .header-actions {
+  /* Keyboard users tabbing into the header see its actions too. */
+  .collection-header:hover .header-actions,
+  .collection-header:focus-within .header-actions {
     opacity: 1;
   }
 

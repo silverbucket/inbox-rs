@@ -541,6 +541,15 @@
   /** Favourite collections, pinned above the groups (see stores). */
   const favorites = $derived($favoriteCollections);
 
+  /** ⌘/Ctrl-click on a favourite solos it, like the collection rows below. */
+  async function soloFavorite(col: Collection) {
+    try {
+      await soloCollectionFilter(col.id);
+    } catch (error) {
+      console.error('Failed to toggle collection filter', error);
+    }
+  }
+
   async function unfavorite(col: Collection) {
     try {
       await toggleFavoriteCollection(col.id);
@@ -672,8 +681,11 @@
                   <button
                     type="button"
                     class="entity collection-entity"
-                    title="Open {col.name}"
-                    onclick={() => navToCollection(col.id)}
+                    title={soloing ? `Show only ${col.name}` : `Open ${col.name}`}
+                    onclick={(e) => {
+                      if (isSoloModifier(e)) void soloFavorite(col);
+                      else navToCollection(col.id);
+                    }}
                   >
                     <span class="fav-dot" aria-hidden="true"></span>
                     <span class="entity-name">{col.name}</span>

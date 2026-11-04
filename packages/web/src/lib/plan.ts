@@ -131,8 +131,14 @@ export function fromDateKey(key: string | undefined): Date | null {
   if (!key) return null;
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
   if (!m) return null;
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  return Number.isNaN(d.getTime()) ? null : d;
+  const [y, mo, day] = [Number(m[1]), Number(m[2]) - 1, Number(m[3])];
+  const d = new Date(y, mo, day);
+  if (Number.isNaN(d.getTime())) return null;
+  // Reject dates JS silently rolls over ("2026-02-31" → March 3).
+  if (d.getFullYear() !== y || d.getMonth() !== mo || d.getDate() !== day) {
+    return null;
+  }
+  return d;
 }
 
 const monthName = (d: Date, now: Date) =>

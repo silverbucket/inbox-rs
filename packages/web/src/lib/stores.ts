@@ -661,6 +661,12 @@ export async function updateUserSettings(patch: Partial<UserSettings>) {
 //
 // See: https://remotestorage.io/rs.js/docs/api/baseclient/classes/BaseClient.html#change-events
 const inboxRef = getInbox();
+/**
+ * Applies remote item changes still waiting in the change buffer. A no-op
+ * until storage is connected (the buffer lives in the connection block).
+ */
+let flushPendingItemChanges: () => void = () => {};
+
 if (inboxRef) {
   // The change event payload is documented in remotestoragejs but typed as
   // `unknown` on the public API. Narrow to the fields we actually read.
@@ -718,6 +724,11 @@ if (inboxRef) {
       return next;
     });
   }
+
+  flushPendingItemChanges = () => {
+    if (itemFlushTimer !== null) clearTimeout(itemFlushTimer);
+    flushItemChanges();
+  };
 
   function queueItemChange(
     key: string,
@@ -1153,13 +1164,35 @@ export async function setItemPinned(item: InboxItem, pinned: boolean) {
 
 /**
  * Give an item a soft plan ("roughly when"), or clear it with `null`.
+ * `changes` are applied on top of the latest stored copy in the same write.
  * A soft plan and a real date are mutually exclusive: planning drops the
  * date (and, like "Remove time", the local calendar receipt — the calendar
  * keeps its entry). Pins are left alone; a plan simply outranks them when
  * the Todos page decides where the todo sits.
  */
-export async function setItemPlan(item: InboxItem, plan: Plan | null) {
-  const base = plan && item.startsAt ? clearSchedule(item) : item;
+export async function setItemPlan(
+  target: InboxItem,
+  plan: Plan | null,
+  changes: Partial<InboxItem> = {},
+) {
+  // Apply any remote edits still sitting in the 50 ms change buffer, then
+  // build on the freshest copy, so this write can't roll them back.
+  flushPendingItemChanges();
+  const item = {
+    ...(get(items)[target.id] ?? target),
+    ...changes,
+  } as InboxItem;
+  let base = plan && item.startsAt ? clearSchedule(item) : item;
+  // clearSchedule also lifts calendar-owned archiving; a card the user
+  // archived by hand stays archived.
+  if (base !== item && item.archived && item.archiveReason === 'manual') {
+    base = {
+      ...base,
+      archived: item.archived,
+      archivedAt: item.archivedAt,
+      archiveReason: item.archiveReason,
+    };
+  }
   await storeItem(plan ? applyPlan(base, plan) : clearPlan(base));
 }
 
