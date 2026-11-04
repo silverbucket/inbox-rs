@@ -238,7 +238,7 @@ describe('applyLinkMetadata', () => {
       scheduleKind: 'event',
       startsAt: '2026-11-10T00:00:00.000Z',
       endsAt: '2026-11-10T02:00:00.000Z',
-      body: '📍 Austin, TX',
+      location: 'Austin, TX',
     });
     expect(updated?.allDay).toBeUndefined();
   });
@@ -258,7 +258,7 @@ describe('applyLinkMetadata', () => {
       ogImage: 'i',
       siteName: 'S',
       favicon: 'f',
-      body: 'notes',
+      location: 'Here',
       startsAt: '2026-01-01T10:00:00.000Z',
       scheduleKind: 'task',
     });

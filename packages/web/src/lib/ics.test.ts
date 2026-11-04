@@ -108,6 +108,11 @@ describe('buildIcs', () => {
     expect(ics.text).not.toContain('VEVENT');
   });
 
+  it('writes LOCATION, escaped', () => {
+    const ics = buildIcs(note({ location: 'HQ, 3rd floor' }), NOW);
+    expect(ics?.text).toContain('LOCATION:HQ\\, 3rd floor');
+  });
+
   it('includes DESCRIPTION and bookmark URL, escaped', () => {
     const ics = buildIcs(
       {
@@ -245,7 +250,8 @@ describe('parseIcs', () => {
     );
     expect(parsed).toEqual({
       title: 'Cancelled: Office closed',
-      body: '📍 HQ, 3rd floor',
+      body: '',
+      location: 'HQ, 3rd floor',
       kind: 'event',
       start: new Date(2026, 11, 25),
       end: undefined,

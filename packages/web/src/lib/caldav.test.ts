@@ -51,12 +51,14 @@ describe('itemToCalendarObject', () => {
       endsAt: '2026-08-03T14:00:00.000Z',
       scheduleKind: 'event',
       description: 'notes',
+      location: 'Room 1',
     };
     expect(itemToCalendarObject(bookmark)).toEqual({
       type: 'event',
       uid: 'bm-1@inbox-rs',
       name: 'Read this',
       content: 'notes',
+      location: 'Room 1',
       url: 'https://example.org/post',
       startTime: '2026-08-03T13:00:00.000Z',
       endTime: '2026-08-03T14:00:00.000Z',

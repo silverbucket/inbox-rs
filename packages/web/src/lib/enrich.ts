@@ -155,7 +155,13 @@ function eventSchedule(event: LinkEvent): ScheduleInput | null {
     end && !dateOnly && end > start
       ? Math.round((end.getTime() - start.getTime()) / 60_000)
       : undefined;
-  return { kind: 'event', start, durationMin, allDay: !!dateOnly };
+  return {
+    kind: 'event',
+    start,
+    durationMin,
+    allDay: !!dateOnly,
+    location: event.location,
+  };
 }
 
 export function applyLinkMetadata(
@@ -169,10 +175,6 @@ export function applyLinkMetadata(
   const schedule = meta.event && !item.startsAt && eventSchedule(meta.event);
   if (schedule) {
     updated = applySchedule(updated, schedule);
-    changed = true;
-  }
-  if (meta.event?.location && !item.body) {
-    updated.body = `📍 ${meta.event.location}`;
     changed = true;
   }
   if (meta.title && (!item.title || item.title === item.url)) {

@@ -128,6 +128,8 @@ export interface ScheduleInput {
   /** Minutes; only meaningful for timed events. */
   durationMin?: number;
   allDay?: boolean;
+  /** Omit to keep the item's current location; empty string clears it. */
+  location?: string;
 }
 
 /**
@@ -159,6 +161,9 @@ export function applySchedule<T extends InboxItem>(
     endsAt,
     allDay: input.allDay || undefined,
     scheduleKind: input.kind,
+    ...(input.location !== undefined
+      ? { location: input.location.trim() || undefined }
+      : {}),
   };
 }
 

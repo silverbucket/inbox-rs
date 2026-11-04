@@ -131,6 +131,7 @@ export function buildIcs(
   if (item.description) {
     lines.push(`DESCRIPTION:${escapeText(item.description)}`);
   }
+  if (item.location) lines.push(`LOCATION:${escapeText(item.location)}`);
   // URL is a URI value type (RFC 5545 §3.3.13) — TEXT backslash-escaping
   // does not apply and would corrupt commas/semicolons in query strings.
   // Emit verbatim; CONTROL_CHARS guards against content-line breakout.
@@ -174,8 +175,9 @@ export function downloadIcs(item: InboxItem): void {
 
 export interface ParsedIcs {
   title: string;
-  /** DESCRIPTION, with LOCATION and URL prepended when present. */
+  /** DESCRIPTION, with the URL prepended when present. */
   body: string;
+  location?: string;
   kind: ScheduleKind;
   start: Date;
   /** Timed events only. */
@@ -344,7 +346,6 @@ export function parseIcs(text: string): ParsedIcs | null {
   const summary = props.SUMMARY ? unescapeText(props.SUMMARY.value).trim() : '';
   const cancelled = props.STATUS?.value.trim().toUpperCase() === 'CANCELLED';
   const body = [
-    props.LOCATION && `📍 ${unescapeText(props.LOCATION.value).trim()}`,
     props.URL?.value.trim(),
     props.DESCRIPTION && unescapeText(props.DESCRIPTION.value).trim(),
   ]
@@ -353,6 +354,9 @@ export function parseIcs(text: string): ParsedIcs | null {
   return {
     title: `${cancelled ? 'Cancelled: ' : ''}${summary || 'Untitled event'}`,
     body,
+    location: props.LOCATION
+      ? unescapeText(props.LOCATION.value).trim() || undefined
+      : undefined,
     kind,
     start: start.date,
     end: end && end.date > start.date ? end.date : undefined,

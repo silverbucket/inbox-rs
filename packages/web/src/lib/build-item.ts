@@ -59,6 +59,7 @@ function preserveCollection<T extends InboxItem>(
       'endsAt',
       'allDay',
       'scheduleKind',
+      'location',
       'eventUrl',
       'eventEtag',
       'archived',
@@ -297,6 +298,7 @@ export async function buildDocumentItem(
           start: parsed.start,
           durationMin,
           allDay: parsed.allDay,
+          location: parsed.location,
         }),
       };
     }

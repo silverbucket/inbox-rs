@@ -255,3 +255,31 @@ describe('input value round-trip', () => {
     expect(fromInputValues('2026-07-31', '23:59')).not.toBeNull();
   });
 });
+
+describe('applySchedule location', () => {
+  const base = {
+    id: 'n1',
+    type: 'note',
+    title: 'T',
+    body: '',
+    createdAt: '2026-01-01T00:00:00Z',
+    location: 'Old venue',
+  } as NoteItem;
+  const start = new Date(2026, 10, 9, 18, 0);
+
+  it('keeps the current location when the input omits it', () => {
+    expect(applySchedule(base, { kind: 'event', start }).location).toBe(
+      'Old venue',
+    );
+  });
+
+  it('sets, trims, and clears the location when given', () => {
+    expect(
+      applySchedule(base, { kind: 'event', start, location: '  Room 1 ' })
+        .location,
+    ).toBe('Room 1');
+    expect(
+      applySchedule(base, { kind: 'event', start, location: ' ' }).location,
+    ).toBeUndefined();
+  });
+});

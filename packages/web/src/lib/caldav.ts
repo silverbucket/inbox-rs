@@ -206,6 +206,7 @@ export function itemToCalendarObject(
     name: item.title || 'Untitled',
     ...(allDay ? { allDay: true } : {}),
     ...(item.description ? { content: item.description } : {}),
+    ...(item.location ? { location: item.location } : {}),
     ...(item.type === 'bookmark' && item.url ? { url: item.url } : {}),
   };
   if (isTask) {

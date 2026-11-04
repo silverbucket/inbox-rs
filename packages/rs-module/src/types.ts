@@ -32,6 +32,8 @@ export interface InboxItemBase {
   endsAt?: string;
   allDay?: boolean;
   scheduleKind?: 'event' | 'task';
+  /** Where it happens: venue, address or meeting link. */
+  location?: string;
   /** CalDAV object href + etag once posted to a calendar; absent until then. */
   eventUrl?: string;
   eventEtag?: string;
