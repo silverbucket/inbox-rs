@@ -14,7 +14,16 @@
     toTimeInputValue,
   } from '../lib/schedule';
   import { showToast } from '../lib/toast';
-  import { storeItem } from '../lib/stores';
+  import { setItemPlan, storeItem } from '../lib/stores';
+  import { todayStart } from '../lib/now';
+  import {
+    choiceInfo,
+    choiceOf,
+    PLAN_CHOICES,
+    type Plan,
+    type PlanChoice,
+    planFor,
+  } from '../lib/plan';
 
   /**
    * The time sheet — deliberately calendar-free. Setting a time is card
@@ -27,7 +36,9 @@
     item,
     subject,
     initial = null,
+    initialPlan = null,
     onpick,
+    onplanpick,
     onclose,
   }: {
     /** Persist mode: edit the time on an existing item. */
@@ -41,6 +52,13 @@
      * applies it once the item exists (null = clear the pending schedule).
      */
     onpick?: (schedule: PendingSchedule | null) => void;
+    /** Pick mode: the previously chosen soft plan, for re-editing. */
+    initialPlan?: Plan | null;
+    /**
+     * Pick mode: return a soft plan ("next week") instead of a time. The
+     * caller applies it once the item exists (null = clear it). Todos only.
+     */
+    onplanpick?: (plan: Plan | null) => void;
     /** Called after any successful action, and on plain dismissal. */
     onclose: () => void;
   } = $props();
@@ -95,6 +113,43 @@
   // Tasks may be date-only ("sometime that day") — that's all-day semantics.
   const effectiveAllDay = $derived(allDay || (kind === 'task' && !timeStr));
   const canSave = $derived(!!start && !saving);
+
+  // ── Soft plan ("roughly when") — todos only. A plan and a date are
+  // mutually exclusive: choosing one replaces the other.
+  // One anchor for the labels, the highlighted choice and the saved plan,
+  // following the app's day clock so they stay in step across midnight.
+  const planNow = $derived(new Date($todayStart));
+  const showPlans = $derived(isTodoish && (!pickMode || !!onplanpick));
+  const currentChoice: PlanChoice | null = $derived(
+    item
+      ? choiceOf(item, planNow)
+      : initialPlan
+        ? choiceOf(initialPlan, planNow)
+        : null,
+  );
+  const hasPlan = item ? !!item.planKind && !item.startsAt : !!initialPlan;
+
+  async function pickPlan(choice: PlanChoice | null) {
+    const plan = choice ? planFor(choice, planNow) : null;
+    if (pickMode) {
+      onplanpick?.(plan);
+      return;
+    }
+    if (!item) return;
+    const hadDate = !!item.startsAt;
+    saving = true;
+    try {
+      await setItemPlan(item, plan);
+    } catch (err) {
+      console.error('Failed to save plan', err);
+      showToast('Failed to save plan');
+      return;
+    } finally {
+      saving = false;
+    }
+    if (plan && hadDate) showToast('Planned — the date was removed');
+    onclose();
+  }
 
   /** Quick chips highlight when they match the current selection exactly. */
   function isQuickSelected(optStart: Date): boolean {
@@ -198,9 +253,36 @@
 <div class="overlay" role="dialog" aria-modal="true" aria-label="Schedule" onclick={() => { if (!saving) onclose(); }}>
   <div class="sheet" use:trapFocus onclick={(e) => e.stopPropagation()}>
     <h3 class="title">
-      {pickMode ? 'When?' : hasExisting ? 'Edit time' : 'Set time'}
+      {pickMode || isTodoish ? 'When?' : hasExisting ? 'Edit time' : 'Set time'}
     </h3>
     <p class="ctx">{displayTitle || 'Untitled'}</p>
+
+    {#if showPlans}
+      <span class="flabel">Plan it — no deadline</span>
+      <div class="plan-grid" role="group" aria-label="Plan without a date">
+        {#each PLAN_CHOICES as choice (choice)}
+          {@const info = choiceInfo(choice, planNow)}
+          <button
+            type="button"
+            class="plan-btn"
+            class:sel={currentChoice === choice}
+            aria-pressed={currentChoice === choice}
+            style="--h: var(--horizon-{choice})"
+            disabled={saving}
+            onclick={() => pickPlan(choice)}
+          >
+            <span class="plan-name"><span class="plan-swatch" aria-hidden="true"></span>{info.label}</span>
+            <span class="plan-hint">{info.range}</span>
+          </button>
+        {/each}
+      </div>
+      {#if hasPlan}
+        <button type="button" class="btn-link" disabled={saving} onclick={() => pickPlan(null)}>
+          Clear plan
+        </button>
+      {/if}
+      <span class="flabel or">Or pin a date</span>
+    {/if}
 
     <div class="seg" role="radiogroup" aria-label="Entry kind">
       <button
@@ -514,5 +596,79 @@
   .btn-remove:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+
+  /* Soft-plan buttons (lib/plan.ts) — three per row, horizon-tinted. */
+  .plan-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.35rem;
+  }
+
+  .plan-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+    min-height: 2.9rem;
+    padding: 0.4rem 0.55rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+  }
+
+  .plan-btn:hover {
+    background: var(--surface-hover);
+  }
+
+  .plan-btn.sel {
+    border: 2px solid var(--h);
+    background: color-mix(in srgb, var(--h) 16%, var(--surface));
+  }
+
+  .plan-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  .plan-swatch {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 2px;
+    background: var(--h);
+  }
+
+  .plan-hint {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+
+  .btn-link {
+    align-self: flex-start;
+    background: none;
+    border: none;
+    padding: 0.2rem 0;
+    color: var(--danger-text);
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+
+  .flabel.or {
+    margin-top: 0.35rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--border);
+  }
+
+  @media (max-width: 420px) {
+    .plan-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 </style>

@@ -35,6 +35,8 @@
     items,
     reorderGroups,
     reorderGroupCollections,
+    favoriteCollections,
+    toggleFavoriteCollection,
   } from '../lib/stores';
   import { isSoloModifier, soloHint, soloModifierHeld } from '../lib/solo-modifier';
   import {
@@ -535,6 +537,27 @@
     const destination = groups.find(({ id }) => id === request.groupId);
     if (destination) void moveCollection(request.collectionId, destination);
   });
+
+  /** Favourite collections, pinned above the groups (see stores). */
+  const favorites = $derived($favoriteCollections);
+
+  /** ⌘/Ctrl-click on a favourite solos it, like the collection rows below. */
+  async function soloFavorite(col: Collection) {
+    try {
+      await soloCollectionFilter(col.id);
+    } catch (error) {
+      console.error('Failed to toggle collection filter', error);
+    }
+  }
+
+  async function unfavorite(col: Collection) {
+    try {
+      await toggleFavoriteCollection(col.id);
+    } catch (error) {
+      console.error('Failed to update favourites', error);
+      showToast('Couldn’t update favourites');
+    }
+  }
 </script>
 
 <header>
@@ -629,6 +652,50 @@
           {/each}
         </div>
       {:else}
+        {#if favorites.length > 0}
+          <section class="favorites" aria-labelledby="favorites-title">
+            <div class="sidebar-head">
+              <span class="sidebar-title" id="favorites-title">Favorites</span>
+            </div>
+            <ul class="favorites-list" role="list">
+              {#each favorites as col (col.id)}
+                <li
+                  class="favorite-row"
+                  class:filing={dragging}
+                  class:drop-over={dragOverColId === col.id}
+                  style="--entity-color: {col.color || 'var(--accent)'}"
+                  use:collectionDropTarget={{
+                    ondrop: (itemId) => void fileItemInto(itemId, col),
+                    onhover: (isOver) => setColHover(col, isOver),
+                  }}
+                >
+                  <button
+                    type="button"
+                    class="fav-star"
+                    aria-label="Remove {col.name} from favourites"
+                    title="Remove from favourites"
+                    onclick={() => unfavorite(col)}
+                  >
+                    <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6L3.2 9.4l6.1-.8z"></path></svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="entity collection-entity"
+                    title={soloing ? `Show only ${col.name}` : `Open ${col.name}`}
+                    onclick={(e) => {
+                      if (isSoloModifier(e)) void soloFavorite(col);
+                      else navToCollection(col.id);
+                    }}
+                  >
+                    <span class="fav-dot" aria-hidden="true"></span>
+                    <span class="entity-name">{col.name}</span>
+                    <span class="count">{col.itemIds.length}</span>
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          </section>
+        {/if}
         <div class="sidebar-head">
           <!-- The hint takes the header's slot rather than adding a line, so
                holding the modifier doesn't shove the group list down. -->
@@ -1208,6 +1275,63 @@
     justify-content: space-between;
     padding: 0 0.25rem;
     margin-bottom: 0.5rem;
+  }
+
+  .favorites {
+    margin-bottom: 0.9rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .favorites-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
+  .favorite-row {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    border-radius: 0.5rem;
+  }
+
+  .favorite-row.drop-over {
+    background: color-mix(in srgb, var(--entity-color) 18%, transparent);
+  }
+
+  .fav-star {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6rem;
+    height: 1.9rem;
+    border: none;
+    background: none;
+    border-radius: 0.4rem;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .fav-star svg {
+    fill: var(--favorite);
+    stroke: var(--favorite);
+    stroke-width: 1.5;
+  }
+
+  .fav-star:hover {
+    background: var(--surface-hover);
+  }
+
+  .fav-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: var(--entity-color);
+    flex-shrink: 0;
   }
 
   .sidebar-title {

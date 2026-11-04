@@ -17,6 +17,8 @@
   import CollectionPicker from './CollectionPicker.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
   import ScheduleSheet from './ScheduleSheet.svelte';
+  import { planLabel } from '../lib/plan';
+  import { todayStart } from '../lib/now';
   import AddToCalendarSheet from './AddToCalendarSheet.svelte';
   import { formatScheduled, isOverdue } from '../lib/schedule';
   import BookmarkView from './view-card/BookmarkView.svelte';
@@ -341,6 +343,12 @@
   });
 
   const scheduledLabel = $derived(item.startsAt ? formatScheduled(item) : '');
+  /** Soft plan ("Next week") on an open todo — see lib/plan.ts. */
+  const plannedLabel = $derived(
+    (item.isTodo || item.type === 'todo') && !item.completed
+      ? planLabel(item, new Date($todayStart))
+      : '',
+  );
   const scheduleOverdue = $derived(isOverdue(item));
 
   const wordCount = $derived.by(() => {
@@ -680,6 +688,9 @@
           {scheduledLabel}
         </span>
       {/if}
+      {#if plannedLabel}
+        <span class="meta-item">Planned: {plannedLabel}</span>
+      {/if}
       {#if item.location}
         <span class="meta-item">
           <svg
@@ -799,7 +810,13 @@
           <circle cx="12" cy="12" r="10"></circle>
           <polyline points="12 6 12 12 16 14"></polyline>
         </svg>
-        {scheduledLabel ? `${scheduledLabel} — change…` : 'Set time…'}
+        {scheduledLabel
+          ? `${scheduledLabel} — change…`
+          : plannedLabel
+            ? `Planned: ${plannedLabel} — change…`
+            : item.isTodo || item.type === 'todo'
+              ? 'When…'
+              : 'Set time…'}
       </button>
       {#if item.startsAt}
         <button

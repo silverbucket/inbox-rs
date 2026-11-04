@@ -15,6 +15,10 @@ const { storeItem, moveItemToCollection, keepTodoVisible } = vi.hoisted(() => ({
 vi.mock('../lib/stores', async () => {
   const { writable } = await import('svelte/store');
   return {
+    favoriteCollections: (await import('svelte/store')).writable([]),
+    favoriteCollectionIds: (await import('svelte/store')).writable([]),
+    toggleFavoriteCollection: vi.fn().mockResolvedValue(undefined),
+    setItemPlan: vi.fn().mockResolvedValue(undefined),
     storeItem,
     moveItemToCollection,
     keepTodoVisible,
@@ -37,6 +41,7 @@ vi.mock('../lib/stores', async () => {
 
 import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
 import type { Writable } from 'svelte/store';
+import { planFor } from '../lib/plan';
 import {
   collections,
   explicitTodoPick,
@@ -245,6 +250,49 @@ describe('TodoQuickAdd', () => {
     expect(input().value).toBe('');
   });
 
+  // Open the "When?" sheet and pick a soft plan ("Next week") by its label.
+  function pickPlan(label: string) {
+    (host.querySelector('button.quick-add__when') as HTMLButtonElement).click();
+    flushSync();
+    const group = document.querySelector(
+      '[role="group"][aria-label="Plan without a date"]',
+    );
+    const btn = [...(group?.querySelectorAll('button') ?? [])].find((b) =>
+      b.textContent?.trim().startsWith(label),
+    );
+    if (!btn) throw new Error(`plan "${label}" not found`);
+    btn.click();
+    flushSync();
+  }
+
+  it('stores the picked soft plan on the new todo', async () => {
+    render();
+    type('post song to spotify');
+    pickPlan('Next week');
+    expect(
+      (host.querySelector('button.quick-add__when') as HTMLButtonElement)
+        .textContent,
+    ).toContain('Next week');
+    submit();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(storeItem).toHaveBeenCalledOnce();
+    });
+    expect(storeItem.mock.calls[0][0]).toMatchObject(
+      planFor('nextWeek', new Date()),
+    );
+  });
+
+  it('hands the picked plan to the editor on ⌘/Ctrl-Shift-Enter', () => {
+    render();
+    type('a richer todo');
+    pickPlan('Someday');
+    cmdEnter();
+    expect(onopenmodal).toHaveBeenCalledWith('a richer todo', null, {
+      planKind: 'someday',
+    });
+  });
+
   it('defaults to the sole visible collection', async () => {
     seed({ hiddenGroups: ['g-home'], hiddenCollections: ['col-hiring'] });
     render();
@@ -272,7 +320,7 @@ describe('TodoQuickAdd', () => {
     render({ fixedCollectionId: 'col-9' });
     type('a richer todo');
     cmdEnter();
-    expect(onopenmodal).toHaveBeenCalledWith('a richer todo', null);
+    expect(onopenmodal).toHaveBeenCalledWith('a richer todo', null, null);
     expect(storeItem).not.toHaveBeenCalled();
     flushSync();
     expect(input().value).toBe('');

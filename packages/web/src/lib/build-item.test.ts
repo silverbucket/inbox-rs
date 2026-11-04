@@ -210,6 +210,29 @@ describe('edit preservation of type-agnostic fields', () => {
     });
   });
 
+  it('editing keeps a soft plan', () => {
+    const editItem: NoteItem = {
+      id: 'item-1',
+      type: 'note',
+      title: 'Old',
+      body: 'old',
+      createdAt: '2026-04-01T00:00:00Z',
+      isTodo: true,
+      planKind: 'week',
+      planStart: '2026-11-09',
+    };
+    const result = buildNoteItem(ctx({ editItem }), {
+      title: 'New title',
+      body: 'new body',
+      description: '',
+    });
+    expect(result.item).toMatchObject({
+      title: 'New title',
+      planKind: 'week',
+      planStart: '2026-11-09',
+    });
+  });
+
   it('unscheduled edits stay unscheduled', () => {
     const editItem: NoteItem = {
       id: 'item-1',

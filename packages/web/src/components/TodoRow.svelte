@@ -17,6 +17,7 @@
     onaddincollection,
     readonly = false,
     reorderable = false,
+    planTag,
   }: {
     todo: InboxItem;
     /** The collection this todo belongs to, or null when unfiled. */
@@ -37,6 +38,8 @@
     /** When true, show a grip handle for svelte-dnd-action reorder inside a
         dragHandleZone. Row-body drags file onto sidebar collections instead. */
     reorderable?: boolean;
+    /** Short plan note, e.g. "from last week" for a todo that rolled over. */
+    planTag?: string;
   } = $props();
 
   // Show the underlying item type as an icon for items that are "todos by flag"
@@ -295,6 +298,9 @@
         </svg>
         {scheduledLabel}
       </span>
+    {/if}
+    {#if planTag && !todo.completed}
+      <span class="plan-tag" title="Its planned week or month has passed, so it moved up">{planTag}</span>
     {/if}
     <span
       class="collection-pill"
@@ -557,6 +563,18 @@
     color: var(--accent-text);
     background: var(--accent-subtler);
     border: 1px solid var(--accent-subtle-strong);
+    border-radius: 999px;
+    padding: 0.08rem 0.45rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* Rolled-over note — warm, quieter than the overdue chip. */
+  .plan-tag {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--warn-text);
+    background: color-mix(in srgb, var(--warn) 14%, transparent);
     border-radius: 999px;
     padding: 0.08rem 0.45rem;
     white-space: nowrap;

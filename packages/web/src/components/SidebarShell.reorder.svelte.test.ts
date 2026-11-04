@@ -61,6 +61,10 @@ vi.mock('../lib/stores', async () => {
   const { writable: w } = await import('svelte/store');
   const { g1, g2, c1, c2, c3 } = fixtures;
   return {
+    favoriteCollections: (await import('svelte/store')).writable([]),
+    favoriteCollectionIds: (await import('svelte/store')).writable([]),
+    toggleFavoriteCollection: vi.fn().mockResolvedValue(undefined),
+    setItemPlan: vi.fn().mockResolvedValue(undefined),
     sortedGroups: w([g1, g2]),
     groupCollections: w({
       g1: [c1, c2],

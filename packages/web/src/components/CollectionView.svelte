@@ -28,7 +28,11 @@
   import { captureDetected, captureFile } from '../lib/capture';
   import { collectionDropTarget, startNativeDrag } from '../lib/collection-drop';
   import { COLLECTION_DRAG_MIME, draggingCollectionId, draggingItemId } from '../lib/drag';
-  import { moveItemToCollection } from '../lib/stores';
+  import {
+    favoriteCollectionIds,
+    moveItemToCollection,
+    toggleFavoriteCollection,
+  } from '../lib/stores';
   import { showToast } from '../lib/toast';
   import InboxCard from './InboxCard.svelte';
   import CaptureBar from './CaptureBar.svelte';
@@ -283,6 +287,18 @@
       console.error('Failed to toggle completed todos', error);
     }
   }
+
+  const isFavorite = $derived($favoriteCollectionIds.includes(collection.id));
+
+  async function toggleFavorite(e: MouseEvent) {
+    e.stopPropagation();
+    try {
+      await toggleFavoriteCollection(collection.id);
+    } catch (error) {
+      console.error('Failed to update favourites', error);
+      showToast('Couldn’t update favourites');
+    }
+  }
 </script>
 
 <div class="collection" class:reorderable class:being-moved={beingMoved} style="--col-color: {collection.color || '#6366f1'}" class:expanded>
@@ -317,7 +333,15 @@
       <polyline points="6 9 12 15 18 9"></polyline>
     </svg>
     <div class="header-info">
-      <h3>{collection.name}</h3>
+      <!-- The heading holds the name alone: anything else inside it (even
+           whitespace before a sibling block) changes its text, which is how
+           tests and assistive tech identify the collection. -->
+      <div class="title-line">
+        <h3>{collection.name}</h3>
+        {#if isFavorite}
+          <svg class="fav-mark" role="img" aria-label="Favourite" width="13" height="13" viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6L3.2 9.4l6.1-.8z"></path></svg>
+        {/if}
+      </div>
       {#if collection.description && !expanded}
         <span class="col-description">{collection.description}</span>
       {/if}
@@ -337,6 +361,21 @@
       {/if}
     </div>
     <div class="header-actions">
+      {#if !collection.archived && !group?.archived}
+      <button
+        type="button"
+        class="btn-header btn-favorite"
+        class:on={isFavorite}
+        aria-pressed={isFavorite}
+        onclick={toggleFavorite}
+        aria-label={isFavorite ? `Remove ${collection.name} from favourites` : `Add ${collection.name} to favourites`}
+        title={isFavorite ? 'Remove from favourites' : 'Add to favourites'}
+      >
+        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+          <path d="M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6L3.2 9.4l6.1-.8z"></path>
+        </svg>
+      </button>
+      {/if}
       {#if onfocus}
         <button type="button" class="btn-header" onclick={(e) => { e.stopPropagation(); onfocus(); }} aria-label="Focus on {collection.name}" title="Focus">
           <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -739,7 +778,9 @@
     transition: opacity 150ms;
   }
 
-  .collection-header:hover .header-actions {
+  /* Keyboard users tabbing into the header see its actions too. */
+  .collection-header:hover .header-actions,
+  .collection-header:focus-within .header-actions {
     opacity: 1;
   }
 
@@ -766,6 +807,22 @@
     .header-actions {
       opacity: 1;
     }
+  }
+
+  .btn-favorite.on {
+    color: var(--favorite);
+  }
+
+  .title-line {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+
+  .fav-mark {
+    flex-shrink: 0;
+    fill: var(--favorite);
   }
 
   .btn-header {

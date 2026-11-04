@@ -84,6 +84,7 @@ export type {
   InboxItemBase,
   InboxItemType,
   NoteItem,
+  PlanKind,
   TodoItem,
   UserSettings,
   VideoItem,

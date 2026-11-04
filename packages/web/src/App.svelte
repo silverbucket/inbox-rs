@@ -26,6 +26,7 @@
   import KeyboardShortcutsModal from './components/KeyboardShortcutsModal.svelte';
   import CommandPalette from './components/CommandPalette.svelte';
   import { modLabel } from './lib/platform';
+  import type { Plan } from './lib/plan';
 
   type LazyComponent = Component<Record<string, unknown>>;
   // Svelte 5 components are functions, not classes — InstanceType<> doesn't
@@ -59,6 +60,8 @@
   let commandPaletteOpen = $state(false);
   let settingsInitialSection = $state<SectionId | undefined>(undefined);
   let notePrefillTitle = $state('');
+  /** Soft plan carried from the Todos quick-add into the full editor. */
+  let todoPrefillPlan = $state<Plan | null>(null);
   let inboxQuickDraft = $state('');
   let todoQuickDraft = $state('');
   let prefillFile = $state<File | undefined>(undefined);
@@ -548,8 +551,10 @@
   function openAddTodo(
     prefillTitle = '',
     collectionId: string | null | undefined = undefined,
+    plan: Plan | null = null,
   ) {
     editingItem = undefined;
+    todoPrefillPlan = plan;
     preselectedCollectionId = collectionId;
     prefillFile = undefined;
     captureSheetOpen = false;
@@ -784,6 +789,7 @@
       editItem={editingItem}
       collectionId={preselectedCollectionId}
       prefillTitle={notePrefillTitle}
+      prefillPlan={activeModal === 'todo' ? todoPrefillPlan : null}
       {prefillFile}
       onclose={closeModal}
       ondelete={async (item: InboxItem) => { await deleteItem(item.id, item); closeModal(); }}

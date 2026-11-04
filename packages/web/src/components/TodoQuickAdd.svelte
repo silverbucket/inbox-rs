@@ -29,6 +29,8 @@
   } from '../lib/todo-destination';
   import CollectionPicker from './CollectionPicker.svelte';
   import ScheduleSheet from './ScheduleSheet.svelte';
+  import { applyPlan, type Plan, planLabel } from '../lib/plan';
+  import { todayStart } from '../lib/now';
   import {
     collections,
     explicitTodoPick,
@@ -62,7 +64,11 @@
     /** ⌘/Ctrl-Shift-Enter — open the full todo modal pre-filled with the title.
         Shortcut-created todos pass `null` so the modal starts Unfiled rather
         than inheriting the selected, fixed, or remembered collection. */
-    onopenmodal: (prefillTitle: string, collectionId: string | null) => void;
+    onopenmodal: (
+      prefillTitle: string,
+      collectionId: string | null,
+      plan?: Plan | null,
+    ) => void;
   } = $props();
 
   let quickSaving = $state(false);
@@ -99,6 +105,8 @@
 
   // ── Optional capture-time schedule ("When?" chip → ScheduleSheet) ──────
   let pendingSchedule = $state<PendingSchedule | null>(null);
+  // …or a soft plan ("next week"). The two are mutually exclusive.
+  let pendingPlan = $state<Plan | null>(null);
   let scheduleOpen = $state(false);
 
   const whenLabel = $derived(
@@ -107,11 +115,21 @@
           startsAt: pendingSchedule.start.toISOString(),
           allDay: pendingSchedule.allDay,
         })
-      : 'When?',
+      : pendingPlan
+        ? planLabel(pendingPlan, new Date($todayStart))
+        : 'When?',
   );
 
   function handleSchedulePick(schedule: PendingSchedule | null) {
     pendingSchedule = schedule;
+    if (schedule) pendingPlan = null;
+    scheduleOpen = false;
+    quickInputEl?.focus();
+  }
+
+  function handlePlanPick(plan: Plan | null) {
+    pendingPlan = plan;
+    if (plan) pendingSchedule = null;
     scheduleOpen = false;
     quickInputEl?.focus();
   }
@@ -189,7 +207,8 @@
       // moveItemToCollection). The move below then only updates itemIds.
       // The local draft stays unfiled so the schedule fallback below cannot
       // write a collection back that vanished during the store.
-      const todo = makeUnfiledTodo(quickTitle);
+      const unplanned = makeUnfiledTodo(quickTitle);
+      const todo = pendingPlan ? applyPlan(unplanned, pendingPlan) : unplanned;
       await storeItem(
         destination && collectionMap[destination]
           ? { ...todo, collectionId: destination }
@@ -237,7 +256,10 @@
     } finally {
       // The pending time belongs to the todo just created (even when a
       // follow-up step failed) — never let it leak onto the next capture.
-      if (created) pendingSchedule = null;
+      if (created) {
+        pendingSchedule = null;
+        pendingPlan = null;
+      }
       quickSaving = false;
       // Return focus so the user can keep capturing; tick() lets a hero→compact
       // remount settle before refocusing the (new) element.
@@ -290,8 +312,10 @@
       if (e.shiftKey) {
         // Shortcut-created todos always start unfiled. The selected/fixed
         // collection still applies to plain-Enter quick saves.
-        onopenmodal(quickTitle, null);
+        // The soft plan picked here travels with the title into the editor.
+        onopenmodal(quickTitle, null, pendingPlan);
         quickTitle = '';
+        pendingPlan = null;
       } else {
         // ⌘/Ctrl-Enter on a typed title saves it like plain Enter. Claiming
         // the event keeps it from the global handler, which would otherwise
@@ -358,10 +382,12 @@
   <button
     type="button"
     class="quick-add__when"
-    class:has-time={!!pendingSchedule}
+    class:has-time={!!pendingSchedule || !!pendingPlan}
     aria-label={pendingSchedule
       ? `Scheduled ${whenLabel} — change time`
-      : 'Set a time'}
+      : pendingPlan
+        ? `Planned for ${whenLabel} — change`
+        : 'Set a time or plan'}
     aria-haspopup="dialog"
     aria-expanded={scheduleOpen}
     disabled={quickSaving}
@@ -413,7 +439,9 @@
   <ScheduleSheet
     subject={{ title: quickTitle, isTodo: true }}
     initial={pendingSchedule}
+    initialPlan={pendingPlan}
     onpick={handleSchedulePick}
+    onplanpick={handlePlanPick}
     onclose={() => (scheduleOpen = false)}
   />
 {/if}

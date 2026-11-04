@@ -17,6 +17,21 @@
   --accent-text-dark: #b4bffe;
   --accent-text-light: #412dce;
 
+  /* Todos-page plan horizons (see lib/plan.ts). Mid-tone hues that work as
+     dots and borders in both modes; labels mix them with --text for
+     readable ink, and tints mix them with transparent. */
+  --horizon-due: var(--warn);
+  --horizon-next: var(--accent);
+  --horizon-week: #0d9488;
+  --horizon-nextWeek: #0891b2;
+  --horizon-month: #8b5cf6;
+  --horizon-nextMonth: #3b82f6;
+  --horizon-later: #64748b;
+  --horizon-someday: #a8a29e;
+  --horizon-unplanned: #a8a29e;
+  /* Favourite star. */
+  --favorite: #d97706;
+
   /* Paper-style neutrals: warm off-white with near-black ink; dark mode is
      warm charcoal rather than blue-black. The sidebar gets its own (darker)
      background so it reads as a separate zone from the content area. */

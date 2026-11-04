@@ -4,6 +4,7 @@
   import {
     appConfig,
     createCollection,
+    favoriteCollections,
     groupCollections,
     groups,
     items,
@@ -94,6 +95,18 @@
           $items,
           getRecentCollectionIds(),
         ),
+  );
+
+  /** Favourites lead the list (after suggestions) until the user types. */
+  const favorites = $derived(
+    query.trim()
+      ? []
+      : $favoriteCollections.filter(
+            (c) =>
+              c.id !== item.collectionId &&
+              !isHidden(c) &&
+              !suggestions.some((s) => s.collection.id === c.id),
+          ),
   );
 
   const REASON_LABEL: Record<SuggestionReason, string> = {
@@ -418,9 +431,28 @@
               <span class="reason">{REASON_LABEL[sugg.reason]}</span>
             </button>
           {/each}
-          {#if filteredGroups.length > 0}
-            <div class="group-label">All collections</div>
-          {/if}
+        {/if}
+
+        {#if favorites.length > 0}
+          <div class="group-label favorites-label">
+            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24">
+              <path d="M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6L3.2 9.4l6.1-.8z"></path>
+            </svg>
+            Favorites
+          </div>
+          {#each favorites as col (col.id)}
+            <button type="button" class="option" onclick={() => onpick(col.id)}>
+              <span class="dot" style="background: {col.color || '#6366f1'}"></span>
+              <span class="col-name">{col.name}</span>
+              <span class="suggestion-group">
+                {$groups[col.groupId ?? '']?.name ?? 'Other'}
+              </span>
+            </button>
+          {/each}
+        {/if}
+
+        {#if (suggestions.length > 0 || favorites.length > 0) && filteredGroups.length > 0}
+          <div class="group-label">All collections</div>
         {/if}
 
         {#each filteredGroups as { group, cols } (group.id)}
@@ -846,5 +878,15 @@
   .btn-create:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+
+  .favorites-label {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+
+  .favorites-label svg {
+    fill: var(--favorite);
   }
 </style>
