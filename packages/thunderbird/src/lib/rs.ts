@@ -22,10 +22,7 @@ export { DirectRS };
  * spec-compliant server. The Chrome/Firefox extension (lib/rs.ts) uses the
  * same redirect-origin trick — keep these two wrappers in lockstep.
  */
-export async function connectViaOAuth(
-  userAddress: string,
-  onStorageOriginDiscovered?: (origin: string) => Promise<void> | void,
-): Promise<RSConfig> {
+export async function connectViaOAuth(userAddress: string): Promise<RSConfig> {
   const redirectUrl = browser.identity.getRedirectURL();
   return sharedConnectViaOAuth(userAddress, {
     clientId: new URL(redirectUrl).origin,
@@ -35,8 +32,5 @@ export async function connectViaOAuth(
         url,
         interactive: true,
       }) as Promise<string>,
-    onDiscovered: onStorageOriginDiscovered
-      ? (discovery) => onStorageOriginDiscovered(new URL(discovery.href).origin)
-      : undefined,
   });
 }

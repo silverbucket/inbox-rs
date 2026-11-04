@@ -1,13 +1,27 @@
 <script lang="ts">
   import { connectViaOAuth } from '../lib/rs';
   import { getConfig, saveConfig, clearConfig } from '../lib/storage';
-  import { runConnect } from './connect-orchestrator';
+  import {
+    hasStorageOriginPermission,
+    requestOriginPermission,
+  } from '../lib/permissions';
+  import {
+    continueConnectWithStoragePermission,
+    startConnect,
+    type ConnectOutcome,
+  } from './connect-orchestrator';
 
   let userAddress = $state('');
   let connected = $state(false);
   let connecting = $state(false);
   let error = $state('');
   let savedAddress = $state('');
+  /** Saved config exists but its storage permission was revoked outside the extension (e.g. via about:addons). */
+  let permissionMissing = $state(false);
+  /** Set when startConnect paused for a storage origin that differs from the WebFinger host — see connect-orchestrator.ts. */
+  let pendingStorageOrigin = $state<string | null>(null);
+
+  const deps = { requestOriginPermission, connectViaOAuth };
 
   $effect(() => {
     init();
@@ -16,9 +30,34 @@
   async function init() {
     const config = await getConfig();
     if (config?.token && config?.href) {
+      userAddress = config.userAddress;
+      if (!(await hasStorageOriginPermission(config))) {
+        permissionMissing = true;
+        return;
+      }
       connected = true;
       savedAddress = config.userAddress;
-      userAddress = config.userAddress;
+    }
+  }
+
+  async function applyOutcome(result: ConnectOutcome) {
+    if (result.status === 'connected') {
+      try {
+        await saveConfig(result.config);
+        connected = true;
+        permissionMissing = false;
+        pendingStorageOrigin = null;
+        savedAddress = result.config.userAddress;
+      } catch (e) {
+        error =
+          e instanceof Error
+            ? e.message
+            : 'Could not save the connection. Please try again.';
+      }
+    } else if (result.status === 'needs-storage-permission') {
+      pendingStorageOrigin = result.origin;
+    } else {
+      error = result.error;
     }
   }
 
@@ -26,20 +65,28 @@
     if (!userAddress.trim()) return;
     connecting = true;
     error = '';
+    pendingStorageOrigin = null;
     try {
-      const result = await runConnect({
-        userAddress: userAddress.trim(),
-        requestOriginPermission: (origin) =>
-          browser.permissions.request({ origins: [`${origin}/*`] }),
-        connectViaOAuth,
-      });
-      if (result.ok) {
-        await saveConfig(result.config);
-        connected = true;
-        savedAddress = result.config.userAddress;
-      } else {
-        error = result.error;
-      }
+      await applyOutcome(await startConnect(userAddress, deps));
+    } finally {
+      connecting = false;
+    }
+  }
+
+  /**
+   * Called from its own click handler — never from inside `connect()` —
+   * because Gecko only honours `browser.permissions.request()` when it runs
+   * synchronously in a user input handler. See connect-orchestrator.ts.
+   */
+  async function grantStorageAccess() {
+    const origin = pendingStorageOrigin;
+    if (!origin) return;
+    connecting = true;
+    error = '';
+    try {
+      await applyOutcome(
+        await continueConnectWithStoragePermission(userAddress, origin, deps),
+      );
     } finally {
       connecting = false;
     }
@@ -48,6 +95,8 @@
   async function disconnect() {
     await clearConfig();
     connected = false;
+    permissionMissing = false;
+    pendingStorageOrigin = null;
     savedAddress = '';
   }
 </script>
@@ -72,6 +121,11 @@
       </p>
       <button type="button" class="btn-disconnect" onclick={disconnect}>Disconnect</button>
     {:else}
+      {#if permissionMissing}
+        <p class="help-text">
+          Inbox RS lost access to your storage server. Reconnect below to restore it.
+        </p>
+      {/if}
       <div class="steps">
         <div class="step">
           <span class="step-num">1</span>
@@ -100,10 +154,20 @@
           bind:value={userAddress}
           placeholder="user@provider.example"
           disabled={connecting}
+          oninput={() => { pendingStorageOrigin = null; }}
         />
-        <button type="submit" class="btn-primary" disabled={connecting || !userAddress.trim()}>
-          {connecting ? 'Connecting...' : 'Connect & Authorize'}
-        </button>
+        {#if pendingStorageOrigin}
+          <p class="step-detail">
+            Your data is stored at {pendingStorageOrigin}. Grant access to finish connecting.
+          </p>
+          <button type="button" class="btn-primary" disabled={connecting} onclick={grantStorageAccess}>
+            {connecting ? 'Requesting…' : 'Grant Access'}
+          </button>
+        {:else}
+          <button type="submit" class="btn-primary" disabled={connecting || !userAddress.trim()}>
+            {connecting ? 'Connecting...' : 'Connect & Authorize'}
+          </button>
+        {/if}
         {#if error}
           <p class="error">{error}</p>
         {/if}
