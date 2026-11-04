@@ -1,12 +1,19 @@
 <script lang="ts">
   import { connectViaOAuth } from '../lib/rs';
   import { getConfig, saveConfig, clearConfig } from '../lib/storage';
+  import {
+    hasStorageOriginPermission,
+    requestAllUrlsPermission,
+  } from '../lib/permissions';
+  import { runConnect } from './connect-orchestrator';
 
   let userAddress = $state('');
   let connected = $state(false);
   let connecting = $state(false);
   let error = $state('');
   let savedAddress = $state('');
+  /** Saved config exists but its storage permission was revoked outside the extension (e.g. via about:addons). */
+  let permissionMissing = $state(false);
 
   $effect(() => {
     init();
@@ -15,9 +22,13 @@
   async function init() {
     const config = await getConfig();
     if (config?.token && config?.href) {
+      userAddress = config.userAddress;
+      if (!(await hasStorageOriginPermission(config))) {
+        permissionMissing = true;
+        return;
+      }
       connected = true;
       savedAddress = config.userAddress;
-      userAddress = config.userAddress;
     }
   }
 
@@ -26,12 +37,25 @@
     connecting = true;
     error = '';
     try {
-      const config = await connectViaOAuth(userAddress.trim());
-      await saveConfig(config);
-      connected = true;
-      savedAddress = config.userAddress;
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Connection failed';
+      const result = await runConnect(userAddress, {
+        requestAllUrlsPermission,
+        connectViaOAuth,
+      });
+      if (result.ok) {
+        try {
+          await saveConfig(result.config);
+          connected = true;
+          permissionMissing = false;
+          savedAddress = result.config.userAddress;
+        } catch (e) {
+          error =
+            e instanceof Error
+              ? e.message
+              : 'Could not save the connection. Please try again.';
+        }
+      } else {
+        error = result.error;
+      }
     } finally {
       connecting = false;
     }
@@ -40,6 +64,7 @@
   async function disconnect() {
     await clearConfig();
     connected = false;
+    permissionMissing = false;
     savedAddress = '';
   }
 </script>
@@ -64,6 +89,11 @@
       </p>
       <button type="button" class="btn-disconnect" onclick={disconnect}>Disconnect</button>
     {:else}
+      {#if permissionMissing}
+        <p class="help-text">
+          Inbox RS lost access to your storage server. Reconnect below to restore it.
+        </p>
+      {/if}
       <div class="steps">
         <div class="step">
           <span class="step-num">1</span>

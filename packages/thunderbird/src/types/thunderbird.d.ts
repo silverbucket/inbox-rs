@@ -53,4 +53,12 @@ declare namespace browser {
   namespace runtime {
     function openOptionsPage(): Promise<void>;
   }
+  namespace permissions {
+    interface Permissions {
+      origins?: string[];
+      permissions?: string[];
+    }
+    function request(permissions: Permissions): Promise<boolean>;
+    function contains(permissions: Permissions): Promise<boolean>;
+  }
 }
