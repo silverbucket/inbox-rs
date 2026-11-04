@@ -151,10 +151,10 @@ function eventSchedule(event: LinkEvent): ScheduleInput | null {
     : new Date(event.startDate);
   if (Number.isNaN(start.getTime())) return null;
   const end = event.endDate ? new Date(event.endDate) : null;
-  // ceil, not round: a sub-minute span must not collapse to "no end".
+  // Exact, not rounded: any positive span is truthy and keeps its end.
   const durationMin =
     end && !dateOnly && end > start
-      ? Math.ceil((end.getTime() - start.getTime()) / 60_000)
+      ? (end.getTime() - start.getTime()) / 60_000
       : undefined;
   return {
     kind: 'event',

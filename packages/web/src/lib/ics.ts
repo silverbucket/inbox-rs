@@ -53,6 +53,18 @@ export function foldLine(line: string): string {
   return out.join('\r\n');
 }
 
+/**
+ * The link a calendar entry should carry: a bookmark's URL, or the URL line
+ * a calendar import left as a note's whole body.
+ */
+export function entryUrl(item: InboxItem): string | undefined {
+  if (item.type === 'bookmark') return item.url || undefined;
+  if (item.type === 'note' && /^https?:\/\/\S+$/.test(item.body)) {
+    return item.body;
+  }
+  return undefined;
+}
+
 /** 20260731T090000Z — the UTC instant form. */
 function toUtcStamp(iso: string): string {
   const d = new Date(iso);
@@ -135,9 +147,8 @@ export function buildIcs(
   // URL is a URI value type (RFC 5545 §3.3.13) — TEXT backslash-escaping
   // does not apply and would corrupt commas/semicolons in query strings.
   // Emit verbatim; CONTROL_CHARS guards against content-line breakout.
-  if (item.type === 'bookmark' && item.url && !CONTROL_CHARS.test(item.url)) {
-    lines.push(`URL:${item.url}`);
-  }
+  const url = entryUrl(item);
+  if (url && !CONTROL_CHARS.test(url)) lines.push(`URL:${url}`);
 
   lines.push(isTask ? 'END:VTODO' : 'END:VEVENT', 'END:VCALENDAR');
 
@@ -187,6 +198,8 @@ export interface ParsedIcs {
   allDay: boolean;
   /** VTODO with STATUS:COMPLETED. */
   completed: boolean;
+  /** The COMPLETED instant, when the entry records one. */
+  completedAt?: Date;
 }
 
 /** True for files worth parsing as a calendar entry. */
@@ -257,11 +270,13 @@ function fieldsExist(
 }
 
 /**
- * Wall-clock fields in an IANA zone → instant, using Intl alone: guess the
- * offset at the UTC reading of the fields, then re-check at the result so
- * DST transitions resolve. A time inside a spring-forward gap keeps the
- * pre-transition offset, so 02:30 on the gap day lands at 03:30 DST rather
- * than an hour early. Throws RangeError for a zone Intl doesn't know.
+ * Wall-clock fields in an IANA zone → instant, using Intl alone. The
+ * candidate offsets are those in effect a day either side of the wall-clock
+ * reading; a candidate is valid when the zone really has that offset at the
+ * resulting instant. An ambiguous fall-back time takes its first occurrence;
+ * a time inside a spring-forward gap keeps the pre-transition offset, so
+ * 02:30 on the gap day lands at 03:30 DST rather than an hour early. Throws
+ * RangeError for a zone Intl doesn't know.
  */
 function zonedToUtc(
   y: number,
@@ -298,9 +313,13 @@ function zonedToUtc(
     );
   };
   const asUtc = Date.UTC(y, mo - 1, d, h, mi, s);
-  const first = asUtc - offsetAt(asUtc);
-  const second = asUtc - offsetAt(first);
-  return new Date(offsetAt(second) === offsetAt(first) ? second : first);
+  const DAY = 86_400_000;
+  const before = offsetAt(asUtc - DAY);
+  const offsets = new Set([before, offsetAt(asUtc), offsetAt(asUtc + DAY)]);
+  const valid = [...offsets]
+    .map((o) => asUtc - o)
+    .filter((t) => offsetAt(t) === asUtc - t);
+  return new Date(valid.length ? Math.min(...valid) : asUtc - before);
 }
 
 /**
@@ -344,7 +363,7 @@ export function parseIcsDate(
 /** Parse the first VEVENT/VTODO of an iCalendar text; null when there is none. */
 export function parseIcs(text: string): ParsedIcs | null {
   let kind: ScheduleKind | null = null;
-  let inCalendar = false; // only an entry inside VCALENDAR counts
+  const open: string[] = []; // components open before the entry starts
   let depth = 0; // nested VALARM etc. inside the entry
   const props: Record<string, IcsProperty> = {};
   for (const line of unfoldLines(text)) {
@@ -352,12 +371,15 @@ export function parseIcs(text: string): ParsedIcs | null {
     if (!prop) continue;
     const component = prop.value.trim().toUpperCase();
     if (kind === null) {
-      const isBegin = prop.name === 'BEGIN';
-      if (!isBegin && prop.name !== 'END') continue;
-      if (component === 'VCALENDAR') inCalendar = isBegin;
-      else if (!isBegin || !inCalendar) continue;
-      else if (component === 'VEVENT') kind = 'event';
-      else if (component === 'VTODO') kind = 'task';
+      if (prop.name === 'END') {
+        open.pop();
+      } else if (prop.name === 'BEGIN') {
+        // Only an entry whose direct parent is VCALENDAR counts.
+        const direct = open.length === 1 && open[0] === 'VCALENDAR';
+        if (direct && component === 'VEVENT') kind = 'event';
+        else if (direct && component === 'VTODO') kind = 'task';
+        else open.push(component);
+      }
       continue;
     }
     if (prop.name === 'BEGIN') {
@@ -394,5 +416,8 @@ export function parseIcs(text: string): ParsedIcs | null {
     end: end && end.date > start.date ? end.date : undefined,
     allDay: start.allDay,
     completed: kind === 'task' && status === 'COMPLETED',
+    completedAt: props.COMPLETED
+      ? parseIcsDate(props.COMPLETED.value, props.COMPLETED.params)?.date
+      : undefined,
   };
 }

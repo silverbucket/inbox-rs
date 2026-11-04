@@ -671,17 +671,18 @@ describe('buildDocumentItem', () => {
     expect(result?.item).toMatchObject({
       body: 'https://x.example/e',
       description: 'From Nick\n\nBring notes',
-      // a 20-second span still keeps its end
-      endsAt: '2026-11-10T09:01:00.000Z',
+      // a 20-second span keeps its exact end
+      endsAt: '2026-11-10T09:00:20.000Z',
     });
     expect(buildIcs(result!.item)?.text).toContain(
       'DESCRIPTION:From Nick\\n\\nBring notes',
     );
+    expect(buildIcs(result!.item)?.text).toContain('URL:https://x.example/e');
   });
 
   it('imports a completed VTODO as a done task', async () => {
     const ics =
-      'BEGIN:VCALENDAR\nBEGIN:VTODO\nSUMMARY:Slides\nDUE:20261112T170000Z\nSTATUS:COMPLETED\nEND:VTODO\nEND:VCALENDAR';
+      'BEGIN:VCALENDAR\nBEGIN:VTODO\nSUMMARY:Slides\nDUE:20261112T170000Z\nSTATUS:COMPLETED\nCOMPLETED:20261110T080000Z\nEND:VTODO\nEND:VCALENDAR';
     const result = await buildDocumentItem(ctx({ id: 'cal-4' }), {
       title: '',
       description: '',
@@ -690,7 +691,7 @@ describe('buildDocumentItem', () => {
     expect(result?.item).toMatchObject({
       scheduleKind: 'task',
       completed: true,
-      completedAt: result?.item.createdAt,
+      completedAt: '2026-11-10T08:00:00.000Z',
     });
   });
 

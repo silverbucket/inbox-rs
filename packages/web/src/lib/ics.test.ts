@@ -133,6 +133,29 @@ describe('buildIcs', () => {
     expect(ics.text).toContain('URL:https://example.org/a,b');
   });
 
+  it('writes the URL a calendar import left as a note body', () => {
+    const ics = buildIcs({
+      id: 'n1',
+      type: 'note',
+      title: 'Talk',
+      body: 'https://www.meetup.com/x/',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      startsAt: '2026-07-31T07:00:00.000Z',
+      scheduleKind: 'event',
+    });
+    expect(ics?.text).toContain('URL:https://www.meetup.com/x/');
+    const prose = buildIcs({
+      id: 'n2',
+      type: 'note',
+      title: 'Talk',
+      body: 'see https://www.meetup.com/x/ later',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      startsAt: '2026-07-31T07:00:00.000Z',
+      scheduleKind: 'event',
+    });
+    expect(prose?.text).not.toContain('URL:');
+  });
+
   it('drops a URL carrying control characters instead of injecting lines', () => {
     const ics = buildIcs(
       {
@@ -225,6 +248,25 @@ describe('parseIcsDate', () => {
         TZID: 'America/Chicago',
       })?.date.toISOString(),
     ).toBe('2026-03-08T08:30:00.000Z');
+    // Same gap in a positive-offset zone: 02:30 Berlin reads as 03:30 CEST.
+    expect(
+      parseIcsDate('20260329T023000', {
+        TZID: 'Europe/Berlin',
+      })?.date.toISOString(),
+    ).toBe('2026-03-29T01:30:00.000Z');
+  });
+
+  it('resolves an ambiguous fall-back time to its first occurrence', () => {
+    expect(
+      parseIcsDate('20261025T023000', {
+        TZID: 'Europe/Berlin',
+      })?.date.toISOString(),
+    ).toBe('2026-10-25T00:30:00.000Z');
+    expect(
+      parseIcsDate('20261101T013000', {
+        TZID: 'America/Chicago',
+      })?.date.toISOString(),
+    ).toBe('2026-11-01T06:30:00.000Z');
   });
 
   it('falls back to floating local time for an unknown TZID', () => {
@@ -299,9 +341,33 @@ describe('parseIcs', () => {
 
   it('marks a completed VTODO and names an untitled one as a task', () => {
     const parsed = parseIcs(
-      'BEGIN:VCALENDAR\nBEGIN:VTODO\nDUE:20261112T170000Z\nSTATUS:COMPLETED\nEND:VTODO\nEND:VCALENDAR',
+      'BEGIN:VCALENDAR\nBEGIN:VTODO\nDUE:20261112T170000Z\nSTATUS:COMPLETED\nCOMPLETED:20261110T080000Z\nEND:VTODO\nEND:VCALENDAR',
     );
-    expect(parsed).toMatchObject({ title: 'Untitled task', completed: true });
+    expect(parsed).toMatchObject({
+      title: 'Untitled task',
+      completed: true,
+      completedAt: new Date('2026-11-10T08:00:00.000Z'),
+    });
+  });
+
+  it('skips an entry nested inside another component', () => {
+    const parsed = parseIcs(
+      [
+        'BEGIN:VCALENDAR',
+        'BEGIN:VTIMEZONE',
+        'BEGIN:VEVENT',
+        'SUMMARY:nested',
+        'DTSTART:20260101T000000Z',
+        'END:VEVENT',
+        'END:VTIMEZONE',
+        'BEGIN:VEVENT',
+        'SUMMARY:real',
+        'DTSTART:20261109T180000Z',
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\n'),
+    );
+    expect(parsed?.title).toBe('real');
   });
 
   it('returns null for non-calendar text or an entry without a start', () => {

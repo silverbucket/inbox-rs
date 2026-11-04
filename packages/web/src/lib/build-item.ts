@@ -291,9 +291,9 @@ export async function buildDocumentItem(
           .filter(Boolean)
           .join('\n\n'),
       });
-      // ceil, not round: a sub-minute span must not collapse to "no end".
+      // Exact, not rounded: the end instant round-trips to exports as is.
       const durationMin = parsed.end
-        ? Math.ceil((parsed.end.getTime() - parsed.start.getTime()) / 60_000)
+        ? (parsed.end.getTime() - parsed.start.getTime()) / 60_000
         : undefined;
       const scheduled = applySchedule(note.item, {
         kind: parsed.kind,
@@ -304,7 +304,11 @@ export async function buildDocumentItem(
       });
       return {
         item: parsed.completed
-          ? { ...scheduled, completed: true, completedAt: ctx.createdAt }
+          ? {
+              ...scheduled,
+              completed: true,
+              completedAt: parsed.completedAt?.toISOString() ?? ctx.createdAt,
+            }
           : scheduled,
       };
     }
