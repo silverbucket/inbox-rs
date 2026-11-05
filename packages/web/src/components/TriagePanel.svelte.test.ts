@@ -160,6 +160,42 @@ describe('TriagePanel', () => {
     expect(title()).toBe('First card');
   });
 
+  it('keeps the user’s place when they move on before a failed write settles', async () => {
+    let fail: (ok: boolean) => void = () => {};
+    actions.archiveFromInbox.mockImplementationOnce(
+      () => new Promise<boolean>((resolve) => (fail = resolve)),
+    );
+    press('a');
+    expect(title()).toBe('Second card');
+    press('ArrowRight');
+    expect(title()).toBe('Third card');
+    fail(false);
+    await vi.waitFor(() => {
+      flushSync();
+      expect(document.querySelector('.chip:disabled')).toBeNull();
+    });
+    expect(title()).toBe('Third card');
+  });
+
+  it('says Inbox zero only when the whole inbox is empty', async () => {
+    // A card that synced in after the panel opened isn't in its queue.
+    const late = note('late', 'Arrived later');
+    (sortedItems as unknown as Writable<InboxItem[]>).update((l) => [
+      ...l,
+      late,
+    ]);
+    for (let i = 0; i < 3; i++) {
+      press('a');
+      await settle();
+    }
+    await vi.waitFor(() => {
+      flushSync();
+      expect(document.querySelector('.finished-title')?.textContent).toBe(
+        'That’s the lot',
+      );
+    });
+  });
+
   it('stays on the card when the action fails', async () => {
     actions.archiveFromInbox.mockResolvedValueOnce(false);
     press('a');

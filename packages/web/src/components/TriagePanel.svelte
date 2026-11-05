@@ -97,6 +97,7 @@
       .slice(0, 220);
   });
 
+  /** "Thu, Nov 26". */
   function dayLabel(d: Date): string {
     return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   }
@@ -115,7 +116,8 @@
     };
     try {
       if (await run(item, onundo)) done += 1;
-      else pos = at;
+      // Back to the card that failed — unless the user has moved on meanwhile.
+      else if (pos === at + 1) pos = at;
     } finally {
       busy = false;
     }
@@ -139,25 +141,30 @@
   const file = (c: Collection) => act((item, onundo) => fileFromInbox(item, c, onundo));
   const archive = () => act(archiveFromInbox);
 
+  /** Leave this card in the inbox and show the next. */
   function skip() {
     if (index >= 0) pos = index + 1;
   }
 
+  /** Show the previous card still in the inbox. */
   function back() {
     const prev = previousInQueue(queue, index >= 0 ? index : queue.length, (id) => inInbox.has(id));
     if (prev >= 0) pos = prev;
   }
 
+  /** Go through the skipped cards again. */
   function startOver() {
     pos = 0;
   }
 
+  /** The collection picker's choice; closing it without one does nothing. */
   function onpick(collectionId: string | undefined) {
     picking = false;
     const target = collectionId ? $collections[collectionId] : undefined;
     if (target) void file(target);
   }
 
+  /** Whether a key press is text going into a field. */
   function typing(target: EventTarget | null): boolean {
     const el = target as HTMLElement | null;
     if (!el) return false;
@@ -169,6 +176,7 @@
     );
   }
 
+  /** Single-key shortcuts while the panel is open and nothing sits on top. */
   function handleKey(e: KeyboardEvent) {
     if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
     if (picking || typing(e.target)) return;
@@ -274,7 +282,7 @@
     </footer>
   {:else}
     <div class="finished">
-      <p class="finished-title">{remaining === 0 ? 'Inbox zero' : 'That’s the lot'}</p>
+      <p class="finished-title">{$sortedItems.length === 0 ? 'Inbox zero' : 'That’s the lot'}</p>
       <p class="finished-sub">
         {done === 0 ? 'Nothing changed.' : `${done} ${done === 1 ? 'card' : 'cards'} sorted.`}
         {remaining > 0 ? ` ${remaining} skipped ${remaining === 1 ? 'card is' : 'cards are'} still waiting.` : ''}

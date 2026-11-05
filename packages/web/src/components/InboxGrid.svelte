@@ -72,10 +72,12 @@
   const siteIndex = $derived(buildSiteIndex(liveCollections, $items));
   const duplicates = $derived(findDuplicates(inboxItems));
 
+  /** Shorten a title for a one-line hint. */
   function clip(text: string, n = 40): string {
     return text.length > n ? `${text.slice(0, n - 1).trimEnd()}…` : text;
   }
 
+  /** The flag, filing suggestion and emphasis a card shows in the Inbox. */
   function hintsFor(item: InboxItem): CardHints {
     const dup = duplicates.get(item.id);
     const flag = dup
@@ -92,6 +94,7 @@
     };
   }
 
+  /** A card's "File to …?" button. */
   function fileCard(item: InboxItem, collection: Collection) {
     void fileFromInbox(item, collection);
   }
@@ -101,10 +104,12 @@
   let triageCurrent = $state<string | null>(null);
   let layoutEl = $state<HTMLElement | null>(null);
 
+  /** Start Process inbox on the inbox as it stands, in display order. */
   function openTriage() {
     triageQueue = ordered.map((i) => i.id);
   }
 
+  /** Close Process inbox and clear the highlight. */
   function closeTriage() {
     triageQueue = null;
     triageCurrent = null;
@@ -124,7 +129,9 @@
   });
 </script>
 
-{#if inboxItems.length === 0}
+<!-- While Process inbox is open it stays mounted even once the last card
+     is handled, so its summary and Close button still show. -->
+{#if inboxItems.length === 0 && !triageQueue}
   <div class="inbox-zero">
     <div class="zero-glow"></div>
     <div class="zero-icon">
@@ -143,12 +150,14 @@
     {/if}
   </div>
 {:else}
+  {#if inboxItems.length > 0}
   <div class="status-bar">
     <span>You've got <span class="status-count">{inboxItems.length}</span> {inboxItems.length === 1 ? 'thing' : 'things'} waiting</span>
     {#if !triageQueue}
       <button type="button" class="process" onclick={openTriage}>Process inbox</button>
     {/if}
   </div>
+  {/if}
   <div class="inbox-layout" class:triaging={!!triageQueue} bind:this={layoutEl}>
     {#if triageQueue}
       <div class="triage-slot">

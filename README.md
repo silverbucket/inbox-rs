@@ -42,7 +42,8 @@ storage server like any other file, and nowhere else.
 and anything sitting for over two months) and flags likely duplicates, links
 that arrived without a title, and the collection a card probably belongs in.
 **Process inbox** walks it one card at a time: make it a todo for a horizon,
-file it, archive it or skip it, each with a one-key shortcut and an undo.
+file it or archive it, each with a one-key shortcut and an undo, or skip to
+the next card.
 File cards into collections, group related collections together,
 and filter the view down to what you're working on. Any card can become a todo,
 and todos get their own page with drag-to-order and a collapsed completed

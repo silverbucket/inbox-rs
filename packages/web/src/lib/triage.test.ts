@@ -58,6 +58,31 @@ describe('age groups', () => {
     expect(ageBucket({ createdAt: 'junk' }, NOW)).toBe('earlier');
   });
 
+  it('counts yesterday by the calendar across a clock change', () => {
+    const tz = process.env.TZ;
+    // Central Europe falls back on Sunday, October 25 2026: a 25-hour day.
+    process.env.TZ = 'Europe/Prague';
+    try {
+      const monday = new Date(2026, 9, 26, 10);
+      // Sunday 00:30 is yesterday, even though it's more than 24 hours
+      // before Monday's midnight.
+      expect(
+        ageBucket(
+          { createdAt: new Date(2026, 9, 25, 0, 30).toISOString() },
+          monday,
+        ),
+      ).toBe('new');
+      expect(
+        ageBucket(
+          { createdAt: new Date(2026, 9, 24, 23, 30).toISOString() },
+          monday,
+        ),
+      ).toBe('earlier');
+    } finally {
+      process.env.TZ = tz;
+    }
+  });
+
   it('keeps display order inside each group and skips empty ones', () => {
     const items = [
       note('a', 'A'),
@@ -88,6 +113,13 @@ describe('relativeAge', () => {
     );
     expect(relativeAge(at(2025, 9, 15), NOW)).toContain('2025');
     expect(relativeAge('junk', NOW)).toBe('');
+    // A card from a device whose clock ran ahead shows its date.
+    expect(relativeAge(at(2026, 10, 9), NOW)).toBe(
+      new Date(2026, 10, 9).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+      }),
+    );
   });
 });
 
@@ -128,6 +160,16 @@ describe('findDuplicates', () => {
     ]);
     expect(dups.get('a')?.id).toBe('b');
     expect(dups.has('c')).toBe(false);
+  });
+
+  it('tells apart the same path on different ports', () => {
+    const dups = findDuplicates([
+      bookmark('a', 'http://localhost:3000/page'),
+      bookmark('b', 'http://localhost:4000/page'),
+      bookmark('c', 'http://localhost:3000/page/'),
+    ]);
+    expect(dups.get('a')?.id).toBe('c');
+    expect(dups.has('b')).toBe(false);
   });
 
   it('ignores short notes that match by accident', () => {
@@ -196,6 +238,12 @@ describe('suggestedDate', () => {
     ).toBeNull();
   });
 
+  it('finds the next Feb 29 for a yearless date', () => {
+    expect(
+      key(suggestedDate(note('a', 'Leap party Feb 29'), new Date(2026, 2, 1))),
+    ).toEqual([2028, 2, 29]);
+  });
+
   it('takes the first date written', () => {
     expect(key(suggestedDate(note('a', 'Dec 1 or Nov 20'), NOW))).toEqual([
       2026, 12, 1,
@@ -222,6 +270,13 @@ describe('quickSuggestion', () => {
       quickSuggestion(note('x', 'Politics this week'), index, cols)?.id,
     ).toBe('pol');
     expect(quickSuggestion(note('x', 'Geopolitics'), index, cols)).toBeNull();
+    expect(
+      quickSuggestion(
+        note('x', 'Geopolitics and Politics this week'),
+        index,
+        cols,
+      )?.id,
+    ).toBe('pol');
   });
 });
 

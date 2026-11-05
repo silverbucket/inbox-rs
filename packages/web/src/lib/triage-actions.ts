@@ -3,10 +3,12 @@ import { get } from 'svelte/store';
 import { recordCollectionUse } from './collection-suggest';
 import type { Plan } from './plan';
 import {
+  flushItemChanges,
   items,
   moveItemToCollection,
   restoreItem,
   setItemArchived,
+  type TriageChange,
   triageToTodo,
 } from './stores';
 import { showToast } from './toast';
@@ -18,28 +20,43 @@ import { showToast } from './toast';
  * the returned success flag. `onundo` runs once an undo has landed.
  */
 
-function undoTo(before: InboxItem, onundo?: () => void) {
+/** The toast's Undo: revert the change, then let the caller catch up. */
+function undoTo(change: TriageChange, onundo?: () => void) {
   return {
     label: 'Undo',
     run: () => {
-      restoreItem(before).then(onundo, (error) => {
-        console.error('Failed to undo triage action', error);
-        showToast('Couldn’t undo that');
-      });
+      restoreItem(change).then(
+        (restored) => {
+          if (restored) onundo?.();
+          else showToast('That card is gone, so there’s nothing to undo');
+        },
+        (error) => {
+          console.error('Failed to undo triage action', error);
+          showToast('Couldn’t undo that');
+        },
+      );
     },
   };
 }
 
+/** The card as stored right now, buffered remote edits included. */
+function fresh(item: InboxItem): InboxItem {
+  flushItemChanges();
+  return get(items)[item.id] ?? item;
+}
+
+/** File an inbox card into a collection. */
 export async function fileFromInbox(
   item: InboxItem,
   collection: Collection,
   onundo?: () => void,
 ): Promise<boolean> {
-  const before = get(items)[item.id] ?? item;
+  const before = fresh(item);
   try {
     await moveItemToCollection(item.id, collection.id);
     recordCollectionUse(collection.id);
-    showToast(`Filed to ${collection.name}`, undoTo(before, onundo));
+    const after = get(items)[item.id] ?? before;
+    showToast(`Filed to ${collection.name}`, undoTo({ before, after }, onundo));
     return true;
   } catch (error) {
     console.error('Failed to file inbox item', error);
@@ -48,14 +65,16 @@ export async function fileFromInbox(
   }
 }
 
+/** Archive an inbox card. */
 export async function archiveFromInbox(
   item: InboxItem,
   onundo?: () => void,
 ): Promise<boolean> {
-  const before = get(items)[item.id] ?? item;
+  const before = fresh(item);
   try {
     await setItemArchived(item.id, true);
-    showToast('Archived', undoTo(before, onundo));
+    const after = get(items)[item.id] ?? before;
+    showToast('Archived', undoTo({ before, after }, onundo));
     return true;
   } catch (error) {
     console.error('Failed to archive inbox item', error);
@@ -64,7 +83,10 @@ export async function archiveFromInbox(
   }
 }
 
-/** `label` names the horizon or day for the toast ("This week"). */
+/**
+ * Make an inbox card a todo for a horizon or a day. `label` names it in
+ * the toast ("This week").
+ */
 export async function todoFromInbox(
   item: InboxItem,
   when: { plan: Plan } | { day: Date },
@@ -72,8 +94,8 @@ export async function todoFromInbox(
   onundo?: () => void,
 ): Promise<boolean> {
   try {
-    const before = await triageToTodo(item, when);
-    showToast(`Moved to Todos · ${label}`, undoTo(before, onundo));
+    const change = await triageToTodo(item, when);
+    showToast(`Moved to Todos · ${label}`, undoTo(change, onundo));
     return true;
   } catch (error) {
     console.error('Failed to make inbox item a todo', error);

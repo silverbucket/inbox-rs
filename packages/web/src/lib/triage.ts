@@ -14,6 +14,7 @@ const DAY_MS = 86_400_000;
 /** Cards older than this are "sitting": still useful, or archive them? */
 export const STALE_DAYS = 60;
 
+/** Local midnight at the start of `d`'s day. */
 function startOfDay(d: Date): Date {
   const t = new Date(d);
   t.setHours(0, 0, 0, 0);
@@ -29,8 +30,11 @@ export function ageBucket(
 ): AgeBucket {
   const created = new Date(item.createdAt).getTime();
   if (Number.isNaN(created)) return 'earlier';
-  const yesterday = startOfDay(now).getTime() - DAY_MS;
-  if (created >= yesterday) return 'new';
+  // Calendar arithmetic, not 24 hours: the day after a clock change is
+  // 23 or 25 hours long.
+  const yesterday = startOfDay(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (created >= yesterday.getTime()) return 'new';
   if (created < now.getTime() - STALE_DAYS * DAY_MS) return 'stale';
   return 'earlier';
 }
@@ -43,6 +47,7 @@ export interface InboxGroup {
   items: InboxItem[];
 }
 
+/** "Oct 30", with the year only when it isn't this one. */
 function shortDate(d: Date, now: Date): string {
   return d.toLocaleDateString(undefined, {
     month: 'short',
@@ -108,7 +113,8 @@ export function relativeAge(iso: string, now: Date): string {
   const days = Math.round(
     (startOfDay(now).getTime() - startOfDay(d).getTime()) / DAY_MS,
   );
-  if (days <= 0) return 'today';
+  if (days < 0) return shortDate(d, now); // a clock that ran ahead
+  if (days === 0) return 'today';
   if (days === 1) return 'yesterday';
   if (days < 7) return `${days} days ago`;
   return shortDate(d, now);
@@ -130,6 +136,7 @@ export interface CardHints {
 
 // ── Duplicates ──────────────────────────────────────────────────────────
 
+/** A card's own text: note body, notes or description. */
 function bodyOf(item: InboxItem): string {
   const r = item as unknown as Record<string, unknown>;
   return (
@@ -140,16 +147,19 @@ function bodyOf(item: InboxItem): string {
   );
 }
 
+/** Title and body together, for date detection. */
 function textOf(item: InboxItem): string {
   return `${item.title ?? ''} ${bodyOf(item)}`;
 }
 
+/** A link's identity: host, path and query, without scheme, www or fragment. */
 function urlKey(raw: unknown): string | null {
   if (typeof raw !== 'string' || !raw) return null;
   try {
     const u = new URL(raw);
     const path = u.pathname.replace(/\/+$/, '');
-    return `url:${u.hostname.replace(/^www\./, '')}${path}${u.search}`;
+    // `host` keeps a non-default port: localhost:3000 and :4000 differ.
+    return `url:${u.host.replace(/^www\./, '')}${path}${u.search}`;
   } catch {
     return null;
   }
@@ -167,9 +177,12 @@ function textKey(item: InboxItem): string | null {
     .trim();
   // Short texts ("todo", "idea") collide by accident; only flag real content.
   if (words.length < 24) return null;
+  // The opening, not the whole text: a re-saved copy often grows footnotes
+  // or links at the end, and this only suggests a look, it merges nothing.
   return `text:${words.slice(0, 120)}`;
 }
 
+/** The fingerprint two copies of a card share, or null when it has none. */
 function dupKey(item: InboxItem): string | null {
   if (item.type === 'bookmark') {
     return urlKey((item as unknown as { url?: unknown }).url);
@@ -179,8 +192,8 @@ function dupKey(item: InboxItem): string | null {
 }
 
 /**
- * For each card that repeats another (same link, or the same words), the
- * card it repeats. Each card points at the first other copy in `items`.
+ * For each card that likely repeats another (same link, or text that opens
+ * with the same words), the card it repeats. Each card points at the first other copy in `items`.
  */
 export function findDuplicates(items: InboxItem[]): Map<string, InboxItem> {
   const groups = new Map<string, InboxItem[]>();
@@ -245,6 +258,7 @@ const DAY_FIRST = new RegExp(
 );
 const ISO = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
 
+/** The local date, or null when the day doesn't exist (Feb 31). */
 function makeDate(y: number, m: number, d: number): Date | null {
   const date = new Date(y, m, d);
   return date.getFullYear() === y &&
@@ -262,9 +276,17 @@ function resolve(
   today: Date,
 ): Date | null {
   if (y !== null) return makeDate(y, m, d);
-  const thisYear = makeDate(today.getFullYear(), m, d);
-  if (thisYear && thisYear >= today) return thisYear;
-  return makeDate(today.getFullYear() + 1, m, d);
+  // The next year the day exists from today on; Feb 29 can be years away,
+  // and the caller drops anything past its window.
+  for (
+    let year = today.getFullYear();
+    year <= today.getFullYear() + 4;
+    year++
+  ) {
+    const date = makeDate(year, m, d);
+    if (date && date >= today) return date;
+  }
+  return null;
 }
 
 /**
@@ -304,6 +326,7 @@ export function suggestedDate(item: InboxItem, now: Date): Date | null {
 
 // ── Quick filing suggestion ─────────────────────────────────────────────
 
+/** A URL's site, without www. */
 function domainOf(url: unknown): string | null {
   if (typeof url !== 'string') return null;
   try {
@@ -333,15 +356,22 @@ export function buildSiteIndex(
   return index;
 }
 
+/** Whether `name` appears in `text` as whole words. */
 function nameIn(name: string, text: string): boolean {
   const needle = name.trim().toLowerCase();
   if (needle.length < 3) return false;
   const hay = text.toLowerCase();
-  const at = hay.indexOf(needle);
-  if (at === -1) return false;
   const edge = (ch: string | undefined) =>
     ch === undefined || !/[\p{L}\p{N}]/u.test(ch);
-  return edge(hay[at - 1]) && edge(hay[at + needle.length]);
+  // Every occurrence: "Geopolitics and Politics" still names "Politics".
+  for (
+    let at = hay.indexOf(needle);
+    at !== -1;
+    at = hay.indexOf(needle, at + 1)
+  ) {
+    if (edge(hay[at - 1]) && edge(hay[at + needle.length])) return true;
+  }
+  return false;
 }
 
 /**

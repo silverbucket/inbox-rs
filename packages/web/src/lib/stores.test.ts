@@ -646,7 +646,7 @@ describe('triageToTodo / restoreItem', () => {
   it('makes an inbox card a planned todo, keeping its content', async () => {
     const before = card();
     items.set({ n1: before });
-    const returned = await triageToTodo(before, {
+    const change = await triageToTodo(before, {
       plan: { planKind: 'week', planStart: '2026-11-02' },
     });
     const saved = get(items).n1;
@@ -657,7 +657,8 @@ describe('triageToTodo / restoreItem', () => {
       planKind: 'week',
       planStart: '2026-11-02',
     });
-    expect(returned).toEqual(before);
+    expect(change.before).toEqual(before);
+    expect(change.after).toEqual(saved);
   });
 
   it('dates a todo for a day and drops a calendar receipt', async () => {
@@ -682,12 +683,62 @@ describe('triageToTodo / restoreItem', () => {
   it('undo puts the card back as it was', async () => {
     const before = card();
     items.set({ n1: before });
-    const prev = await triageToTodo(before, { plan: { planKind: 'someday' } });
-    await restoreItem(prev);
+    const change = await triageToTodo(before, {
+      plan: { planKind: 'someday' },
+    });
+    await expect(restoreItem(change)).resolves.toBe(true);
     const saved = get(items).n1;
     expect(saved.isTodo).toBeFalsy();
     expect(saved.planKind).toBeUndefined();
     expect(saved.title).toBe('Plan the gig');
+  });
+
+  it('undo keeps an edit that synced in after the action', async () => {
+    const before = card();
+    items.set({ n1: before });
+    const change = await triageToTodo(before, {
+      plan: { planKind: 'someday' },
+    });
+    // Another device renames the card before Undo is pressed.
+    items.update((all) => ({
+      ...all,
+      n1: { ...all.n1, title: 'Plan the tour' },
+    }));
+    vi.mocked(mockInbox.store).mockClear();
+    await restoreItem(change);
+    const saved = get(items).n1;
+    expect(saved.title).toBe('Plan the tour');
+    expect(saved.isTodo).toBeFalsy();
+    expect(saved.planKind).toBeUndefined();
+    expect(mockInbox.store).toHaveBeenCalledOnce();
+  });
+
+  it('undoing a filing writes the card once and empties the collection', async () => {
+    const before = card();
+    items.set({ n1: before });
+    collections.set({ c1: makeCollection('c1') });
+    await moveItemToCollection('n1', 'c1');
+    expect(get(collections).c1.itemIds).toEqual(['n1']);
+    const change = { before, after: get(items).n1 };
+    vi.mocked(mockInbox.store).mockClear();
+    await restoreItem(change);
+    expect(get(items).n1.collectionId).toBeUndefined();
+    expect(get(collections).c1.itemIds).toEqual([]);
+    expect(mockInbox.store).toHaveBeenCalledOnce();
+    expect(mockInbox.storeCollection).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 'c1', itemIds: [] }),
+    );
+  });
+
+  it('undo does nothing once the card is gone', async () => {
+    const before = card();
+    items.set({ n1: before });
+    const change = await triageToTodo(before, {
+      plan: { planKind: 'someday' },
+    });
+    items.set({});
+    await expect(restoreItem(change)).resolves.toBe(false);
+    expect(get(items).n1).toBeUndefined();
   });
 });
 
