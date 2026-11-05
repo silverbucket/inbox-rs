@@ -1137,9 +1137,12 @@ export function storeItem(
 ): Promise<void> {
   // Chain on a promise that swallows the previous error, so one failed
   // save rejects only to its own caller.
-  const save = awaitPendingSave(item.id)
-    .catch(() => {})
-    .then(() => writeItem(item, fileData, thumbData));
+  // Start at once when nothing is queued: a pagehide flush must begin its
+  // write before the page unloads, so it can't wait a microtask.
+  const pending = pendingSaves.get(item.id);
+  const save = pending
+    ? pending.then(() => writeItem(item, fileData, thumbData))
+    : writeItem(item, fileData, thumbData);
   const settled = save.catch(() => {});
   pendingSaves.set(item.id, settled);
   settled.then(() => {

@@ -3581,6 +3581,14 @@ describe('storeItem write ordering', () => {
     });
   });
 
+  it('starts the write synchronously when nothing is queued for the item', () => {
+    // A pagehide flush calls storeItem as the page unloads; a deferred
+    // write would never reach storage.
+    const p = storeItem(makeTodo('sync', { title: 'A' }));
+    expect(mockInbox.store).toHaveBeenCalledTimes(1);
+    return p;
+  });
+
   it('a failed save rejects to its caller without blocking the next write', async () => {
     const todo = makeTodo('fail', { title: 'A' });
     mockInbox.store.mockRejectedValueOnce(new Error('boom'));
