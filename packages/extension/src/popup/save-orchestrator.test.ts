@@ -236,6 +236,28 @@ describe('runSavePage', () => {
     expect(stored.description).toContain('My note');
     expect(stored.description).toContain('OG description');
   });
+
+  it("schedules the bookmark from the page's event metadata", async () => {
+    mockFetch.mockResolvedValue({ ok: true });
+    const rs = makeRS();
+
+    await runSavePage({
+      ...basePageParams,
+      rs,
+      event: {
+        name: 'Gig',
+        startDate: '2026-11-20T19:00:00Z',
+        endDate: '2026-11-20T21:30:00Z',
+        location: 'Town Hall',
+      },
+    });
+
+    const stored = JSON.parse(mockFetch.mock.calls[0]?.[1].body);
+    expect(stored.startsAt).toBe('2026-11-20T19:00:00.000Z');
+    expect(stored.endsAt).toBe('2026-11-20T21:30:00.000Z');
+    expect(stored.scheduleKind).toBe('event');
+    expect(stored.location).toBe('Town Hall');
+  });
 });
 
 describe('runSaveNote', () => {

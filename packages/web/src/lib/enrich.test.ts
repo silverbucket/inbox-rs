@@ -264,6 +264,14 @@ describe('applyLinkMetadata', () => {
     expect(updated?.startsAt).toBe(new Date(2026, 10, 9).toISOString());
   });
 
+  it('keeps a date-only span, its endDate taken as the inclusive last day', () => {
+    const updated = applyLinkMetadata(bookmark(), {
+      event: { name: 'Conf', startDate: '2026-11-09', endDate: '2026-11-11' },
+    });
+    expect(updated?.allDay).toBe(true);
+    expect(updated?.endsAt).toBe(new Date(2026, 10, 11).toISOString());
+  });
+
   it('never overrides a time the user already set', () => {
     const item = bookmark({
       title: 'T',

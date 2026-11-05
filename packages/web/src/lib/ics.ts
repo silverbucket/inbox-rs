@@ -195,7 +195,7 @@ export interface ParsedIcs {
   location?: string;
   kind: ScheduleKind;
   start: Date;
-  /** Timed events only. */
+  /** Timed events: the end instant. All-day events: the inclusive last day. */
   end?: Date;
   allDay: boolean;
   /** VTODO with STATUS:COMPLETED. */
@@ -400,10 +400,15 @@ export function parseIcs(text: string): ParsedIcs | null {
   const startProp = (kind === 'task' && props.DUE) || props.DTSTART;
   const start = startProp && parseIcsDate(startProp.value, startProp.params);
   if (!start) return null;
-  const parsedEnd =
-    kind === 'event' && !start.allDay && props.DTEND
+  let parsedEnd =
+    kind === 'event' && props.DTEND
       ? parseIcsDate(props.DTEND.value, props.DTEND.params)
       : null;
+  // RFC 5545 requires DTEND's value type to match DTSTART's; mixed bounds
+  // are ambiguous, so keep the start alone rather than guess the span.
+  if (parsedEnd && parsedEnd.allDay !== start.allDay) parsedEnd = null;
+  // An all-day DTEND is exclusive; store the inclusive last day.
+  if (parsedEnd?.allDay) parsedEnd.date.setDate(parsedEnd.date.getDate() - 1);
   // An end that doesn't follow the start is dropped.
   const end = parsedEnd && parsedEnd.date > start.date ? parsedEnd : null;
   const field = (name: string) =>

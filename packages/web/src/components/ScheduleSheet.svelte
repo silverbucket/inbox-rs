@@ -1,9 +1,8 @@
 <script lang="ts">
-  import type { InboxItem } from '@inbox-rs/rs-module';
+  import { applySchedule, type InboxItem } from '@inbox-rs/rs-module';
   import { trapFocus } from '../lib/actions';
   import { cleanForStorage } from '../lib/clean-for-storage';
   import {
-    applySchedule,
     clearSchedule,
     fromInputValues,
     nextRoundHour,
@@ -77,7 +76,7 @@
     ? new Date(item.startsAt)
     : (initial?.start ?? nextRoundHour());
   const initialDuration =
-    item?.startsAt && item.endsAt
+    item?.startsAt && item.endsAt && !item.allDay
       ? Math.max(
           1,
           Math.round(
@@ -97,6 +96,10 @@
   let dateStr = $state(toDateInputValue(initialStart));
   let timeStr = $state(initialAllDay ? '' : toTimeInputValue(initialStart));
   let allDay = $state(initialAllDay);
+  // All-day events: the inclusive last day. Empty = same as the start, so an
+  // untouched end follows the start date around.
+  const storedEnd = item ? (item.allDay && item.endsAt ? new Date(item.endsAt) : null) : initial?.end;
+  let endStr = $state(storedEnd ? toDateInputValue(storedEnd) : '');
   let durationMin = $state(initialDuration);
   let location = $state(item?.location ?? initial?.location ?? '');
   let saving = $state(false);
@@ -112,7 +115,14 @@
   const start = $derived(fromInputValues(dateStr, allDay ? '' : timeStr));
   // Tasks may be date-only ("sometime that day") — that's all-day semantics.
   const effectiveAllDay = $derived(allDay || (kind === 'task' && !timeStr));
-  const canSave = $derived(!!start && !saving);
+  // Date inputs are ISO strings, so lexical order is date order.
+  const endInvalid = $derived(
+    kind === 'event' && allDay && !!endStr && endStr < dateStr,
+  );
+  const canSave = $derived(!!start && !saving && !endInvalid);
+  const end = $derived(
+    kind === 'event' && allDay && endStr ? fromInputValues(endStr, '') : null,
+  );
 
   // ── Soft plan ("roughly when") — todos only. A plan and a date are
   // mutually exclusive: choosing one replaces the other.
@@ -168,6 +178,7 @@
     return applySchedule(item, {
       kind,
       start,
+      end: end ?? undefined,
       durationMin,
       allDay: effectiveAllDay,
       location,
@@ -203,6 +214,7 @@
       onpick?.({
         kind,
         start,
+        end: end ?? undefined,
         durationMin,
         allDay: effectiveAllDay,
         location,
@@ -340,6 +352,23 @@
         />
       {/if}
     </div>
+
+    {#if kind === 'event' && allDay}
+      <label class="flabel" for="schedule-ends">Ends</label>
+      <input
+        id="schedule-ends"
+        type="date"
+        class="input"
+        min={dateStr}
+        value={endStr || dateStr}
+        aria-invalid={endInvalid}
+        aria-describedby={endInvalid ? 'schedule-ends-error' : undefined}
+        oninput={(e) => (endStr = e.currentTarget.value)}
+      />
+      {#if endInvalid}
+        <span id="schedule-ends-error" class="fhint" role="alert">Ends before it starts</span>
+      {/if}
+    {/if}
 
     {#if kind === 'event'}
       <span class="flabel">Duration</span>
@@ -495,6 +524,11 @@
   .chip:disabled {
     opacity: 0.45;
     cursor: default;
+  }
+
+  .fhint {
+    font-size: 0.8rem;
+    color: var(--danger-text);
   }
 
   .flabel {
