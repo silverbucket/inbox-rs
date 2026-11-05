@@ -79,7 +79,9 @@ describe('age groups', () => {
         ),
       ).toBe('earlier');
     } finally {
-      process.env.TZ = tz;
+      // Assigning undefined would store the string "undefined".
+      if (tz === undefined) delete process.env.TZ;
+      else process.env.TZ = tz;
     }
   });
 

@@ -291,7 +291,9 @@ describe('calendar helpers', () => {
         end.getMinutes(),
       ]).toEqual([10, 2, 0, 0]);
     } finally {
-      process.env.TZ = tz;
+      // Assigning undefined would store the string "undefined".
+      if (tz === undefined) delete process.env.TZ;
+      else process.env.TZ = tz;
     }
   });
 });
