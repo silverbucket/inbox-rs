@@ -1,4 +1,10 @@
-import type { BookmarkItem, ImageItem } from '@inbox-rs/rs-module';
+import {
+  applySchedule,
+  type BookmarkItem,
+  eventSchedule,
+  type ImageItem,
+  type LinkEvent,
+} from '@inbox-rs/rs-module';
 import browser from 'webextension-polyfill';
 import type { DirectRS } from '../lib/rs';
 
@@ -89,6 +95,8 @@ export interface SavePageParams {
   ogImage: string;
   favicon: string;
   siteName: string;
+  /** The page's declared event, from the fetched link metadata. */
+  event?: LinkEvent;
   createdAt: string;
 }
 
@@ -108,6 +116,7 @@ export async function saveAsBookmark(
     ogImage,
     favicon,
     siteName,
+    event,
     createdAt,
   } = params;
 
@@ -156,7 +165,7 @@ export async function saveAsBookmark(
     !ogImage.includes('/default/') &&
     !ogImage.includes('placeholder');
 
-  const item: BookmarkItem = {
+  let item: BookmarkItem = {
     id,
     type: 'bookmark',
     title: pageTitle || pageUrl,
@@ -169,6 +178,10 @@ export async function saveAsBookmark(
     ...(favicon ? { favicon } : {}),
     ...(siteName ? { siteName } : {}),
   };
+  // Same as the web app's applyLinkMetadata: the page's event time (and
+  // venue, as `location`) schedules the new bookmark.
+  const schedule = event && eventSchedule(event);
+  if (schedule) item = applySchedule(item, schedule);
   await rs.store(item);
   return item;
 }

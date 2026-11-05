@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { LinkMetadata } from '@inbox-rs/rs-module';
+  import type { LinkEvent, LinkMetadata } from '@inbox-rs/rs-module';
   import browser from 'webextension-polyfill';
   import { DirectRS } from '../lib/rs';
   import { getConfig } from '../lib/storage';
@@ -28,6 +28,7 @@
   let tweetImages = $state<string[]>([]);
   let isDirectImage = $state(false);
   let pageNote = $state('');
+  let pageEvent: LinkEvent | undefined;
 
   // Note mode fields
   let noteTitle = $state('');
@@ -77,11 +78,14 @@
 
   function applyFetchedMetadata(meta: LinkMetadata | null) {
     if (!meta) return;
-    if (meta.title && (!pageTitle || pageTitle === pageUrl)) pageTitle = meta.title;
+    // An event-only page still names its event, as in the web app.
+    const title = meta.title || meta.event?.name;
+    if (title && (!pageTitle || pageTitle === pageUrl)) pageTitle = title;
     if (meta.description && !pageDescription) pageDescription = meta.description;
     if (meta.image && !ogImage) ogImage = meta.image;
     if (meta.favicon && !favicon) favicon = meta.favicon;
     if (meta.siteName && !siteName) siteName = meta.siteName;
+    pageEvent = meta.event;
   }
 
   function openSetup() {
@@ -98,6 +102,7 @@
       const result = await runSavePage({
         rs, pageUrl, pageTitle, pageNote, pageDescription,
         embeddedContent, tweetImages, ogImage, favicon, siteName, isDirectImage,
+        event: pageEvent,
       });
       if (result.ok) {
         saved = true;
