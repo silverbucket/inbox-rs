@@ -641,6 +641,7 @@ describe('triageToTodo / restoreItem', () => {
       body: 'Book the room',
       isTodo: undefined,
       completed: undefined,
+      cancelled: true,
     }) as unknown as InboxItem;
 
   it('makes an inbox card a planned todo, keeping its content', async () => {
@@ -657,6 +658,7 @@ describe('triageToTodo / restoreItem', () => {
       planKind: 'week',
       planStart: '2026-11-02',
     });
+    expect(saved).not.toHaveProperty('cancelled');
     expect(change.before).toEqual(before);
     expect(change.after).toEqual(saved);
   });

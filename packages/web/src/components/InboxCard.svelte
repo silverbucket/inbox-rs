@@ -280,6 +280,9 @@
         </svg>
         {scheduledLabel}
       </span>
+      {#if item.cancelled}
+        <span class="sched-chip overdue cancelled">Cancelled</span>
+      {/if}
     {/if}
   </footer>
 </article>
@@ -527,6 +530,10 @@
     color: var(--danger-text);
     background: color-mix(in srgb, var(--danger) 8%, transparent);
     border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+  }
+
+  .sched-chip.cancelled {
+    margin-left: 0;
   }
 
   .sched-chip.past {

@@ -240,6 +240,7 @@ describe('makeTodo', () => {
       completedAt: '2026-04-01T00:00:00.000Z',
       isTodo: true,
       createdAt: '2026-04-01T00:00:00.000Z',
+      cancelled: true,
     };
 
     await makeTodo(item);
@@ -248,6 +249,7 @@ describe('makeTodo', () => {
     const stored = storeItem.mock.calls[0][0] as Record<string, unknown>;
     expect(stored.isTodo).toBe(true);
     expect(stored.completed).toBe(false);
+    expect(stored).not.toHaveProperty('cancelled');
   });
 
   it('drops completedAt from the stored item', async () => {

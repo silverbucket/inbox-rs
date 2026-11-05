@@ -50,6 +50,8 @@ export function applySchedule<T extends InboxItem>(
     endsAt,
     allDay: input.allDay || undefined,
     scheduleKind: input.kind,
+    // Cancellation is event-only; a task made from a cancelled event is live.
+    ...(input.kind === 'task' ? { cancelled: undefined } : {}),
     // A real date replaces any soft plan ("next week") — see plan.ts.
     planKind: undefined,
     planStart: undefined,

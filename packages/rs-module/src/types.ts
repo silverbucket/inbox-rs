@@ -35,6 +35,8 @@ export interface InboxItemBase {
   endsAt?: string;
   allDay?: boolean;
   scheduleKind?: 'event' | 'task';
+  /** The event was called off (iCal STATUS:CANCELLED). */
+  cancelled?: boolean;
   /** Where it happens: venue, address or meeting link. */
   location?: string;
   /**

@@ -123,6 +123,12 @@ describe('itemToCalendarObject', () => {
     });
   });
 
+  it('posts a cancelled event without a status (sockethub#1364)', () => {
+    expect(
+      itemToCalendarObject(note({ scheduleKind: 'event', cancelled: true })),
+    ).not.toHaveProperty('status');
+  });
+
   it('returns null for unscheduled items', () => {
     expect(itemToCalendarObject(note({ startsAt: undefined }))).toBeNull();
   });

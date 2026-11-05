@@ -133,6 +133,16 @@ describe('buildIcs', () => {
     expect(ics.text).not.toContain('VEVENT');
   });
 
+  it('round-trips a cancelled event as STATUS:CANCELLED with a clean title', () => {
+    const ics = buildIcs(note({ cancelled: true }), NOW)!;
+    expect(ics.text).toContain('STATUS:CANCELLED');
+    expect(parseIcs(ics.text)).toMatchObject({
+      title: 'Test note',
+      cancelled: true,
+    });
+    expect(buildIcs(note(), NOW)!.text).not.toContain('STATUS');
+  });
+
   it('writes LOCATION, escaped', () => {
     const ics = buildIcs(note({ location: 'HQ, 3rd floor' }), NOW);
     expect(ics?.text).toContain('LOCATION:HQ\\, 3rd floor');
@@ -355,7 +365,8 @@ describe('parseIcs', () => {
       ].join('\n'),
     );
     expect(parsed).toEqual({
-      title: 'Cancelled: Office closed',
+      title: 'Office closed',
+      cancelled: true,
       body: '',
       description: undefined,
       location: 'HQ, 3rd floor',
