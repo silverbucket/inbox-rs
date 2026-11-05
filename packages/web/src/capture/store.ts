@@ -342,7 +342,9 @@ export async function flushQueue(
   const pending = records.filter(isPending).reverse(); // oldest first
 
   for (const entry of pending) {
-    records = patch(records, entry.id, {
+    // Re-read before each patch: a capture queued while this flush awaits
+    // the network must not be overwritten by our earlier snapshot.
+    records = patch(getHistory(), entry.id, {
       status: 'sending',
       lastError: undefined,
     });
@@ -353,14 +355,14 @@ export async function flushQueue(
         ? await getBlobBytes(thumbKey(entry.id))
         : undefined;
       await rs.store(entry.item, fileData, thumbData);
-      records = patch(records, entry.id, {
+      records = patch(getHistory(), entry.id, {
         status: 'synced',
         lastError: undefined,
       });
       if (entry.hasBlob) await deleteBlob(entry.id);
       if (entry.hasThumb) await deleteBlob(thumbKey(entry.id));
     } catch (error) {
-      records = patch(records, entry.id, {
+      records = patch(getHistory(), entry.id, {
         status: 'failed',
         lastError: errorMessage(error),
       });

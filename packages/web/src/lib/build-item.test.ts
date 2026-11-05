@@ -682,6 +682,18 @@ describe('buildAudioItem', () => {
 });
 
 describe('buildDocumentItem', () => {
+  it('gives a typeless file an octet-stream mimeType so its bytes upload', async () => {
+    const result = await buildDocumentItem(ctx({ id: 'doc-x' }), {
+      title: '',
+      description: '',
+      file: new File(['bytes'], 'notes.bin', { type: '' }),
+    });
+    expect(result?.item).toMatchObject({
+      type: 'document',
+      mimeType: 'application/octet-stream',
+    });
+  });
+
   it('turns a calendar file into a scheduled note instead of a document', async () => {
     const ics =
       'BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:Standup\nDTSTART:20261110T090000Z\nDTEND:20261110T093000Z\nLOCATION:Room 1\nEND:VEVENT\nEND:VCALENDAR';

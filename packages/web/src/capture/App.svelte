@@ -53,6 +53,11 @@
   let history = $state<CaptureRecord[]>([]);
   let status = $state('');
   let syncing = $state(false);
+  let syncAgain = false;
+  // Files a POST share stashed. The worker can't tell an OS share from a
+  // cross-origin form post (Sec-Fetch-* never reaches it), so these wait
+  // for a tap, like shared text does — nothing is saved on a stranger's say-so.
+  let sharedFiles = $state<File[]>([]);
 
   let connectedAddress = $state('');
   let userAddress = $state('');
@@ -99,9 +104,13 @@
     history = getHistory();
     isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
     status = idleStatus();
-    // Files from a POST share (stashed by the service worker) are queued
-    // before the first sync so they go out with it.
-    void receiveSharedFiles().then(syncNow);
+    // Files from a POST share (stashed by the service worker) are offered
+    // for saving; existing captures sync regardless, and a pickup failure
+    // must outlive that sync's status line.
+    void receiveSharedFiles().then(async (ok) => {
+      await syncNow();
+      if (!ok) status = 'Could not read the shared file';
+    });
     const launchQueue = (window as Window & { launchQueue?: LaunchQueue })
       .launchQueue;
     launchQueue?.setConsumer(({ files }) => {
@@ -179,14 +188,30 @@
     };
   });
 
-  async function receiveSharedFiles() {
+  async function receiveSharedFiles(): Promise<boolean> {
     try {
-      if (!('caches' in window) || !(await caches.has(SHARE_CACHE))) return;
-      const count = await consumeSharedFiles(
-        await caches.open(SHARE_CACHE),
-        captureSharedFile,
-      );
-      if (count > 0) afterFilesCaptured();
+      if (!('caches' in window) || !(await caches.has(SHARE_CACHE))) {
+        return true;
+      }
+      const files: File[] = [];
+      await consumeSharedFiles(await caches.open(SHARE_CACHE), async (file) => {
+        files.push(file);
+      });
+      sharedFiles = [...sharedFiles, ...files];
+      return true;
+    } catch (error) {
+      console.error('Could not read the shared file', error);
+      return false;
+    }
+  }
+
+  async function saveSharedFiles() {
+    const files = sharedFiles;
+    sharedFiles = [];
+    try {
+      for (const file of files) await captureSharedFile(file);
+      afterFilesCaptured();
+      await syncNow();
     } catch (error) {
       reportFileError(error);
     }
@@ -230,7 +255,11 @@
   }
 
   async function syncNow() {
-    if (syncing) return;
+    if (syncing) {
+      // A capture queued mid-flush isn't in that batch; go again after it.
+      syncAgain = true;
+      return;
+    }
     const config = getConfig();
     if (!config?.href || !config.token) {
       history = getHistory();
@@ -248,6 +277,10 @@
       status = error instanceof Error ? error.message : 'Sync failed';
     } finally {
       syncing = false;
+    }
+    if (syncAgain) {
+      syncAgain = false;
+      await syncNow();
     }
   }
 
@@ -438,6 +471,18 @@
       </button>
     </div>
   </header>
+
+  {#if sharedFiles.length > 0}
+    <div class="share-banner" role="status">
+      <span>
+        {sharedFiles.length === 1
+          ? sharedFiles[0].name
+          : `${sharedFiles.length} shared files`}
+      </span>
+      <button class="ghost small" type="button" onclick={saveSharedFiles}>Save to inbox</button>
+      <button class="ghost small" type="button" onclick={() => (sharedFiles = [])}>Discard</button>
+    </div>
+  {/if}
 
   <div class="modes" role="group" aria-label="Capture mode">
     <button class="seg" type="button" aria-pressed={mode === 'note'} onclick={() => (mode = 'note')}>
@@ -723,6 +768,23 @@
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  .share-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.6rem 0.9rem;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface);
+  }
+  .share-banner span {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .modes {

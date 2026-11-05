@@ -123,8 +123,16 @@ test.describe('PWA release transitions', () => {
       });
 
       // Redirected to the capture shell with the text carried over (then
-      // scrubbed), and the file queued as a scheduled note.
+      // scrubbed). The file waits for a tap — the worker can't tell an OS
+      // share from a cross-origin form post — then queues as a scheduled note.
       await expect(page.getByPlaceholder('Jot it down…')).toHaveValue('Invite');
+      await expect(page.getByRole('status')).toContainText('invite.ics');
+      expect(
+        await page.evaluate(
+          () => localStorage.getItem('inbox-rs-capture:history') ?? '[]',
+        ),
+      ).toBe('[]');
+      await page.getByRole('button', { name: 'Save to inbox' }).click();
       await expect
         .poll(() =>
           page.evaluate(() =>

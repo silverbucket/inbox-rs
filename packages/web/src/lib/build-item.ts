@@ -329,7 +329,9 @@ export async function buildDocumentItem(
       type: 'document',
       title: data.title || data.file.name,
       filePath,
-      mimeType: data.file.type,
+      // An 'Open with' file can carry no type; storage skips the upload
+      // when mimeType is empty.
+      mimeType: data.file.type || 'application/octet-stream',
       fileSize: data.file.size,
       fileName: data.file.name,
       description: data.description || undefined,

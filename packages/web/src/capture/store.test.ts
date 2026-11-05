@@ -334,6 +334,30 @@ describe('capture history + delivery', () => {
     expect(firstBody.body).toBe('first');
   });
 
+  it('keeps a capture queued while a flush is awaiting the network', async () => {
+    storage.setItem(CONFIG_KEY, SYNCED_CONFIG);
+    let resolveFetch!: (value: unknown) => void;
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFetch = resolve;
+          }),
+      )
+      .mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+
+    captureNote('first');
+    const flushing = flushQueue();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    captureNote('second');
+    resolveFetch({ ok: true });
+    const history = await flushing;
+
+    expect(history.map((r) => r.status)).toEqual(['queued', 'synced']);
+  });
+
   it('marks a capture failed (and keeps it pending) when delivery errors', async () => {
     storage.setItem(CONFIG_KEY, SYNCED_CONFIG);
     vi.stubGlobal(

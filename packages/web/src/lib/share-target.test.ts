@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { consumeSharedFiles, stashShare } from './share-target';
 
 /** In-memory stand-in for a Cache API cache (insertion-ordered, like the real one). */
@@ -91,6 +91,25 @@ describe('consumeSharedFiles', () => {
     ]);
     expect(await received[0].text()).toBe('BEGIN:VCALENDAR');
     expect(cache.entries.size).toBe(0);
+  });
+
+  it('takes an origin-wide Web Lock while consuming, when the browser has one', async () => {
+    const request = vi.fn((_name: string, cb: () => Promise<number>) => cb());
+    vi.stubGlobal('navigator', { locks: { request } });
+    try {
+      const cache = fakeCache();
+      await stashShare(
+        form({ files: new File(['x'], 'a.ics', { type: 'text/calendar' }) }),
+        cache,
+      );
+      await expect(consumeSharedFiles(cache, async () => {})).resolves.toBe(1);
+      expect(request).toHaveBeenCalledWith(
+        'share-target',
+        expect.any(Function),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('keeps a file whose handling failed for the next start', async () => {

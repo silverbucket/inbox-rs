@@ -53,17 +53,25 @@ export async function consumeSharedFiles(
   cache: ShareCache,
   handle: (file: File) => Promise<unknown>,
 ): Promise<number> {
-  let count = 0;
-  for (const request of await cache.keys()) {
-    const response = await cache.match(request);
-    if (response) {
-      const blob = await response.blob();
-      const name = decodeURIComponent(response.headers.get(NAME_HEADER) ?? '');
-      const type = response.headers.get('content-type') ?? blob.type;
-      await handle(new File([blob], name || 'shared-file', { type }));
-      count++;
+  const run = async () => {
+    let count = 0;
+    for (const request of await cache.keys()) {
+      const response = await cache.match(request);
+      if (response) {
+        const blob = await response.blob();
+        const name = decodeURIComponent(
+          response.headers.get(NAME_HEADER) ?? '',
+        );
+        const type = response.headers.get('content-type') ?? blob.type;
+        await handle(new File([blob], name || 'shared-file', { type }));
+        count++;
+      }
+      await cache.delete(request);
     }
-    await cache.delete(request);
-  }
-  return count;
+    return count;
+  };
+  // Two shells (a second share while one is open) must not both take the
+  // same entry; the lock is origin-wide. Older browsers just run unlocked.
+  const locks = globalThis.navigator?.locks;
+  return locks ? locks.request(SHARE_CACHE, run) : run();
 }
