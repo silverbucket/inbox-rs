@@ -211,7 +211,7 @@ export async function putInboxFile(
   token: string,
   options: {
     path: string;
-    body: ArrayBuffer | Uint8Array;
+    body: ArrayBuffer | Uint8Array<ArrayBuffer>;
     contentType: string;
   },
 ): Promise<void> {

@@ -7,13 +7,13 @@
  * enough to dominate the total, and the row has to land on it.
  */
 
-import { putInboxFile, putInboxItem } from '../helpers/armadietto';
+import { putInboxFile, putInboxItem, type RsUser } from '../helpers/armadietto';
 import { expect, test } from '../helpers/fixtures';
 import { seedRsSession } from '../helpers/pwa';
 
 /** Seed a document item backed by `mib` MiB of file bytes. */
 async function seedDocument(
-  user: string,
+  user: RsUser,
   token: string,
   id: string,
   mib: number,
@@ -32,7 +32,6 @@ async function seedDocument(
       filePath: `files/${id}.bin`,
       mimeType: 'application/octet-stream',
       createdAt: now,
-      updatedAt: now,
     },
   });
 }

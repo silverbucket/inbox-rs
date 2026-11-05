@@ -89,7 +89,7 @@ function hiddenZoneChildren(zone: Locator): Promise<number> {
 
 async function dragDownAndCheck(
   zone: Locator,
-  titles: readonly string[],
+  titles: readonly [string, string, string, ...string[]],
 ): Promise<void> {
   // Let the rows' intro fades finish; a row still fading in is not the bug.
   await page.waitForTimeout(400);
@@ -163,13 +163,13 @@ test('a todo dragged down a collection shows up where it is dropped', async ({
   ]);
 });
 
-for (const targetIndex of [0, 1]) {
+for (const targetIndex of [0, 1] as const) {
   for (const aimFraction of [undefined, 0.75]) {
     for (const surface of ['Todos', 'collection'] as const) {
       test(`a todo dragged upward ${aimFraction ? 'diagonally' : 'vertically'} in ${surface} to slot ${targetIndex + 1} stays after reload`, async ({
         webOrigin,
       }) => {
-        let titles: string[];
+        let titles: [string, string, string, string];
         if (surface === 'Todos') {
           await page.goto(webOrigin);
           await page.waitForLoadState('networkidle');
