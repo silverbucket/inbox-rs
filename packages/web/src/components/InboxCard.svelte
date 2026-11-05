@@ -10,6 +10,7 @@
   import { now } from '../lib/now';
   import { animatePriorityChange } from '../lib/priority-motion';
   import { formatScheduled, isOverdue, isPast } from '../lib/schedule';
+  import { kindOf } from '../lib/kinds';
   import { setItemPinned } from '../lib/stores';
   import { type CardHints, relativeAge } from '../lib/triage';
 
@@ -70,19 +71,7 @@
     draggingItemId.set(null);
   }
 
-  // Stable per-type identity colours (independent of the theme accent so types
-  // stay distinguishable under any accent / light or dark mode).
-  const KIND: Record<string, { label: string; color: string }> = {
-    note: { label: 'Note', color: '#c08a2e' },
-    bookmark: { label: 'Bookmark', color: '#3b82f6' },
-    image: { label: 'Image', color: '#3f9d6b' },
-    audio: { label: 'Voice memo', color: '#7c6cf0' },
-    document: { label: 'Document', color: '#c0573a' },
-    email: { label: 'Email', color: '#2f8079' },
-  };
-  const kind = $derived(
-    KIND[item.type] ?? { label: item.type, color: 'var(--text-muted)' },
-  );
+  const kind = $derived(kindOf(item.type));
 
   // Bookmarks identify by their source domain rather than the generic label.
   const bookmarkDomain = $derived.by(() => {

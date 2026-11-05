@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Collection, InboxItem } from '@inbox-rs/rs-module';
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { inview } from '../lib/actions';
   import { now } from '../lib/now';
   import { archivedItems, collections, connected, items, sortedItems } from '../lib/stores';
@@ -116,11 +116,16 @@
   }
 
   // Keep the card being processed rendered and in view beside the panel.
+  // Only a change of card should scroll: `ordered` rebuilds on every clock
+  // tick and item change, and tracking it would yank the grid back to the
+  // card whenever the user scrolls away.
   $effect(() => {
     const id = triageCurrent;
     if (!id) return;
-    const at = ordered.findIndex((i) => i.id === id);
-    if (at >= visibleCount) visibleCount = Math.min(inboxItems.length, at + PAGE);
+    untrack(() => {
+      const at = ordered.findIndex((i) => i.id === id);
+      if (at >= visibleCount) visibleCount = Math.min(inboxItems.length, at + PAGE);
+    });
     void tick().then(() => {
       layoutEl
         ?.querySelector(`[data-item-id="${CSS.escape(id)}"]`)

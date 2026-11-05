@@ -221,6 +221,15 @@ describe('TriagePanel', () => {
     expect(onclose).not.toHaveBeenCalled();
   });
 
+  it('leaves shifted keys alone', () => {
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'T', shiftKey: true }),
+    );
+    flushSync();
+    expect(actions.todoFromInbox).not.toHaveBeenCalled();
+    expect(title()).toBe('First card');
+  });
+
   it('opens the card and closes on Escape', () => {
     press('o');
     expect(onopen).toHaveBeenCalledWith(cards[0]);

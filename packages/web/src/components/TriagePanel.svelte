@@ -11,6 +11,7 @@
    */
   import type { Collection, InboxItem } from '@inbox-rs/rs-module';
   import { getRecentCollectionIds, suggestCollections } from '../lib/collection-suggest';
+  import { kindOf } from '../lib/kinds';
   import { now } from '../lib/now';
   import { planFor } from '../lib/plan';
   import { collections, items, sortedItems } from '../lib/stores';
@@ -71,15 +72,6 @@
   );
   const dateHint = $derived(current ? suggestedDate(current, $now) : null);
   const flag = $derived(current ? hintsFor(current).flag : undefined);
-
-  const KIND: Record<string, string> = {
-    note: 'Note',
-    bookmark: 'Link',
-    image: 'Image',
-    audio: 'Voice memo',
-    document: 'Document',
-    email: 'Email',
-  };
 
   const preview = $derived.by(() => {
     if (!current) return '';
@@ -178,7 +170,7 @@
 
   /** Single-key shortcuts while the panel is open and nothing sits on top. */
   function handleKey(e: KeyboardEvent) {
-    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
     if (picking || typing(e.target)) return;
     // A card or another dialog is open on top: its keys win.
     if (document.querySelector('[aria-modal="true"]')) return;
@@ -230,7 +222,7 @@
 
   {#if current}
     <article class="subject" aria-live="polite">
-      <div class="meta">{KIND[current.type] ?? current.type} · {relativeAge(current.createdAt, $now)}</div>
+      <div class="meta">{kindOf(current.type).label} · {relativeAge(current.createdAt, $now)}</div>
       <h3 class="title">{current.title || 'Untitled'}</h3>
       {#if preview}
         <p class="preview">{preview}</p>

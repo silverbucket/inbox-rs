@@ -252,6 +252,8 @@ const MONTH =
 const DAY = '(\\d{1,2})(?:st|nd|rd|th)?';
 const YEAR = '(?:,?\\s+(\\d{4}))?';
 const MONTH_FIRST = new RegExp(`\\b${MONTH}\\.?\\s+${DAY}\\b${YEAR}`, 'gi');
+// Known limit: day-first matching also reads prose like "Version 2 may
+// break" as May 2. Acceptable for a suggestion the user has to accept.
 const DAY_FIRST = new RegExp(
   `\\b${DAY}\\s+(?:of\\s+)?${MONTH}\\.?\\b${YEAR}`,
   'gi',
