@@ -1,7 +1,6 @@
-import type { NoteItem } from '@inbox-rs/rs-module';
+import { applySchedule, type NoteItem } from '@inbox-rs/rs-module';
 import { describe, expect, it } from 'vitest';
 import {
-  applySchedule,
   clearSchedule,
   compareByDueTime,
   formatScheduled,
@@ -71,24 +70,6 @@ describe('quickOptions', () => {
 });
 
 describe('formatScheduled', () => {
-  it('renders date and time, dropping the current year', () => {
-    const item = note({ startsAt: new Date(2026, 6, 31, 9, 0).toISOString() });
-    const label = formatScheduled(item, WED_1423);
-    expect(label).toContain('Jul 31');
-    expect(label).not.toContain('2026');
-    expect(label).toContain('·');
-  });
-
-  it('renders date-only for all-day, with year when it differs', () => {
-    const item = note({
-      startsAt: new Date(2027, 0, 5).toISOString(),
-      allDay: true,
-    });
-    const label = formatScheduled(item, WED_1423);
-    expect(label).toContain('2027');
-    expect(label).not.toContain('·');
-  });
-
   it('renders a multi-day all-day span compactly', () => {
     const span = (s: Date, e: Date) =>
       formatScheduled(
@@ -105,6 +86,24 @@ describe('formatScheduled', () => {
     expect(span(new Date(2026, 10, 30), new Date(2026, 11, 2))).toMatch(
       /^Nov 30\s?–\s?Dec 2$/,
     );
+  });
+
+  it('renders date and time, dropping the current year', () => {
+    const item = note({ startsAt: new Date(2026, 6, 31, 9, 0).toISOString() });
+    const label = formatScheduled(item, WED_1423);
+    expect(label).toContain('Jul 31');
+    expect(label).not.toContain('2026');
+    expect(label).toContain('·');
+  });
+
+  it('renders date-only for all-day, with year when it differs', () => {
+    const item = note({
+      startsAt: new Date(2027, 0, 5).toISOString(),
+      allDay: true,
+    });
+    const label = formatScheduled(item, WED_1423);
+    expect(label).toContain('2027');
+    expect(label).not.toContain('·');
   });
 
   it('is empty for unscheduled or malformed values', () => {
@@ -139,15 +138,6 @@ describe('isOverdue / isPast', () => {
     expect(isOverdue(todayAllDay, WED_1423)).toBe(false);
   });
 
-  it('isPast keys off the end for events with a duration', () => {
-    const running = note({
-      startsAt: new Date(2026, 6, 29, 14, 0).toISOString(),
-      endsAt: new Date(2026, 6, 29, 15, 0).toISOString(),
-    });
-    expect(isPast(running, WED_1423)).toBe(false);
-    expect(isPast(note({ startsAt: past }), WED_1423)).toBe(true);
-  });
-
   it('a multi-day all-day event stays current until its last day passes', () => {
     const span = note({
       startsAt: new Date(2026, 6, 27).toISOString(),
@@ -157,6 +147,15 @@ describe('isOverdue / isPast', () => {
     });
     expect(isPast(span, WED_1423)).toBe(false);
     expect(isPast(span, new Date(2026, 6, 30, 0, 1))).toBe(true);
+  });
+
+  it('isPast keys off the end for events with a duration', () => {
+    const running = note({
+      startsAt: new Date(2026, 6, 29, 14, 0).toISOString(),
+      endsAt: new Date(2026, 6, 29, 15, 0).toISOString(),
+    });
+    expect(isPast(running, WED_1423)).toBe(false);
+    expect(isPast(note({ startsAt: past }), WED_1423)).toBe(true);
   });
 });
 
@@ -205,68 +204,7 @@ describe('isDueTodayOrOverdue / compareByDueTime', () => {
   });
 });
 
-describe('applySchedule / clearSchedule', () => {
-  it('computes endsAt from duration for timed events', () => {
-    const start = new Date(2026, 6, 31, 9, 0);
-    const item = applySchedule(note(), {
-      kind: 'event',
-      start,
-      durationMin: 90,
-    });
-    expect(item.startsAt).toBe(start.toISOString());
-    expect(new Date(item.endsAt!).getTime() - start.getTime()).toBe(
-      90 * 60_000,
-    );
-    expect(item.scheduleKind).toBe('event');
-    expect(item.allDay).toBeUndefined();
-  });
-
-  it('normalizes all-day starts to local midnight and drops endsAt/duration', () => {
-    const item = applySchedule(note(), {
-      kind: 'event',
-      start: new Date(2026, 6, 31, 9, 30),
-      durationMin: 60,
-      allDay: true,
-    });
-    const d = new Date(item.startsAt!);
-    expect([d.getHours(), d.getMinutes()]).toEqual([0, 0]);
-    expect(item.endsAt).toBeUndefined();
-    expect(item.allDay).toBe(true);
-  });
-
-  it('stores an all-day end as its local midnight, only when after the start', () => {
-    const span = applySchedule(note(), {
-      kind: 'event',
-      start: new Date(2026, 10, 9),
-      end: new Date(2026, 10, 11, 15, 0),
-      allDay: true,
-    });
-    expect(span.endsAt).toBe(new Date(2026, 10, 11).toISOString());
-    const sameDay = applySchedule(note(), {
-      kind: 'event',
-      start: new Date(2026, 10, 9),
-      end: new Date(2026, 10, 9),
-      allDay: true,
-    });
-    expect(sameDay.endsAt).toBeUndefined();
-    const timed = applySchedule(note(), {
-      kind: 'event',
-      start: new Date(2026, 10, 9, 9, 0),
-      end: new Date(2026, 10, 11),
-    });
-    expect(timed.endsAt).toBeUndefined();
-  });
-
-  it('tasks never get endsAt; rescheduling preserves the posted event ref', () => {
-    const scheduled = applySchedule(
-      note({ eventUrl: 'https://cal/x.ics', eventEtag: '"1"' }),
-      { kind: 'task', start: new Date(2026, 6, 31, 14, 0), durationMin: 60 },
-    );
-    expect(scheduled.endsAt).toBeUndefined();
-    expect(scheduled.eventUrl).toBe('https://cal/x.ics');
-    expect(scheduled.eventEtag).toBe('"1"');
-  });
-
+describe('clearSchedule', () => {
   it('clearSchedule strips every scheduling field including the event ref', () => {
     const scheduled = applySchedule(
       note({ eventUrl: 'https://cal/x.ics', eventEtag: '"1"' }),
@@ -305,33 +243,5 @@ describe('input value round-trip', () => {
     expect(fromInputValues('2026-07-31', '12:60')).toBeNull();
     expect(fromInputValues('2026-07-31', '24:00')).toBeNull();
     expect(fromInputValues('2026-07-31', '23:59')).not.toBeNull();
-  });
-});
-
-describe('applySchedule location', () => {
-  const base = {
-    id: 'n1',
-    type: 'note',
-    title: 'T',
-    body: '',
-    createdAt: '2026-01-01T00:00:00Z',
-    location: 'Old venue',
-  } as NoteItem;
-  const start = new Date(2026, 10, 9, 18, 0);
-
-  it('keeps the current location when the input omits it', () => {
-    expect(applySchedule(base, { kind: 'event', start }).location).toBe(
-      'Old venue',
-    );
-  });
-
-  it('sets, trims, and clears the location when given', () => {
-    expect(
-      applySchedule(base, { kind: 'event', start, location: '  Room 1 ' })
-        .location,
-    ).toBe('Room 1');
-    expect(
-      applySchedule(base, { kind: 'event', start, location: ' ' }).location,
-    ).toBeUndefined();
   });
 });

@@ -1,9 +1,8 @@
 <script lang="ts">
-  import type { InboxItem } from '@inbox-rs/rs-module';
+  import { applySchedule, type InboxItem } from '@inbox-rs/rs-module';
   import { trapFocus } from '../lib/actions';
   import { cleanForStorage } from '../lib/clean-for-storage';
   import {
-    applySchedule,
     clearSchedule,
     fromInputValues,
     nextRoundHour,
