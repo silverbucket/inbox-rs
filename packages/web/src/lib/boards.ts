@@ -168,6 +168,23 @@ export function groupByColumn(
  * The item placed in `columnId` of `setId`. Moving a todo into the done
  * column completes it; moving a completed todo out reopens it.
  */
+/**
+ * Record an item's column in a set without touching its completion. For
+ * bulk moves (deleting a column, switching a collection's set): those
+ * rearrange the board, they don't tick or untick anyone's todos. The board
+ * still shows completed todos in the done column via columnOf.
+ */
+export function withColumn<T extends InboxItem>(
+  item: T,
+  set: ColumnSet,
+  columnId: string,
+): T {
+  return {
+    ...item,
+    boardColumns: { ...(item.boardColumns ?? {}), [set.id]: columnId },
+  };
+}
+
 export function placeItem<T extends InboxItem>(
   item: T,
   set: ColumnSet,

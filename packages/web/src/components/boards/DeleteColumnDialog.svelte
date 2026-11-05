@@ -54,9 +54,13 @@
     return out;
   });
 
+  const isOpenTodo = (i: (typeof affected)[number]) => (i.isTodo || i.type === 'todo') && !i.completed;
   // svelte-ignore state_referenced_locally
   let target = $state(options.find((o) => o.hint === 'the column after')?.id ?? options[0]?.id ?? BOARD_UNSORTED);
   let busy = $state(false);
+  const openTodosToDone = $derived(
+    target === doneColumn(set)?.id ? affected.filter(isOpenTodo).length : 0,
+  );
 
   async function confirm() {
     if (busy) return;
@@ -80,9 +84,14 @@
     {#if affected.length === 0}
       It's empty, so nothing else changes.
     {:else}
-      Its {affected.length} {affected.length === 1 ? 'item' : 'items'}{holders.length ? ` — in ${holders.join(', ')} —` : ''} need a new home. Nothing is deleted except the column.
+      Its {affected.length} {affected.length === 1 ? 'item' : 'items'}{holders.length ? ` — in ${holders.join(', ')} —` : ''} need a new home. Nothing is deleted except the column, and no todo is checked or unchecked.
     {/if}
   </p>
+  {#if openTodosToDone > 0}
+    <p class="bx-note">
+      {openTodosToDone} open {openTodosToDone === 1 ? 'todo stays' : 'todos stay'} open, so {openTodosToDone === 1 ? 'it shows' : 'they show'} in Unsorted rather than {set.columns.find((c) => c.id === target)?.name}.
+    </p>
+  {/if}
   {#if affected.length > 0}
     <div>
       <span class="bx-label">Move its items to</span>

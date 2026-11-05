@@ -68,6 +68,10 @@
     run(async () => {
       await setCollectionsBoard([collectionId], undefined);
       await setCollectionView(collectionId, 'grid');
+      // Still a list without its board: say so, since its todos stay hidden.
+      if (collection?.offPlan) {
+        showToast(`Board off. ${collection.name} is still a list, so its todos stay off the plan; untick “It's a list” to bring them back.`);
+      }
       onclose();
     }, 'Couldn’t turn the board off');
 
@@ -99,6 +103,18 @@
     }}
   />
 {:else}
+  <!-- Shown with or without a board: a list keeps its todos off the plan
+       either way, so turning the board off mustn't hide the way back. -->
+  {#snippet listToggle(col: NonNullable<typeof collection>)}
+    <label class="toggle">
+      <input
+        type="checkbox"
+        checked={!!col.offPlan}
+        onchange={(e) => void run(() => setOffPlan(collectionId, (e.currentTarget as HTMLInputElement).checked, col.planColumnId), 'Couldn’t save that')}
+      />
+      It's a list — keep its todos off the Todos plan
+    </label>
+  {/snippet}
   <Sheet title="Board · {collection?.name ?? ''}" {onclose} width="32rem">
     {#if !collection}
       <p class="bx-note">This collection no longer exists.</p>
@@ -118,6 +134,7 @@
         </ul>
       {/if}
       <button type="button" class="bx-btn" onclick={() => (creating = true)}>New column set…</button>
+      {@render listToggle(collection)}
     {:else}
       <div>
         <span class="bx-label">Column set</span>
@@ -149,14 +166,7 @@
         Open this collection as a board
       </label>
 
-      <label class="toggle">
-        <input
-          type="checkbox"
-          checked={!!collection.offPlan}
-          onchange={(e) => void run(() => setOffPlan(collectionId, (e.currentTarget as HTMLInputElement).checked, collection.planColumnId), 'Couldn’t save that')}
-        />
-        It's a list — keep its todos off the Todos plan
-      </label>
+      {@render listToggle(collection)}
       {#if collection.offPlan}
         <label class="toggle sub">
           <input

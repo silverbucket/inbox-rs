@@ -121,7 +121,7 @@ describe('board actions', () => {
     expect(get(stores.collections).b.planColumnId).toBeUndefined();
   });
 
-  it('reopens a completed todo when its done column is deleted', async () => {
+  it('keeps completed todos completed when their done column is deleted', async () => {
     stores.items.set({
       ...get(stores.items),
       t: note('t', {
@@ -129,16 +129,31 @@ describe('board actions', () => {
         isTodo: true,
         completed: true,
         completedAt: '2026-01-01T00:00:00.000Z',
-        boardColumns: { pipe: 'ship' },
+        boardColumns: { pipe: 'idea' },
       }),
     });
-    await deleteColumn('pipe', 'ship', 'idea');
-    expect(item('t').boardColumns?.pipe).toBe('idea');
-    expect(item('t').completed).toBe(false);
-    expect(item('t').completedAt).toBeUndefined();
+    await deleteColumn('pipe', 'ship', 'build');
+    expect(item('t').completed).toBe(true);
+    expect(item('t').completedAt).toBe('2026-01-01T00:00:00.000Z');
+    expect(item('t').boardColumns?.pipe).toBe('build');
   });
 
-  it('completes an open todo moved into the destination done column', async () => {
+  it('never completes open todos moved into the done column', async () => {
+    await deleteColumn('pipe', 'build', 'ship');
+    expect(item('x').completed).toBeUndefined();
+    stores.items.set({
+      t: note('t', {
+        collectionId: 'a',
+        isTodo: true,
+        completed: false,
+        boardColumns: { pipe: 'idea' },
+      }),
+    });
+    await deleteColumn('pipe', 'idea', 'ship');
+    expect(item('t').completed).toBe(false);
+  });
+
+  it('switching sets never ticks or unticks todos', async () => {
     const shipped: ColumnSet = {
       ...reading,
       id: 'shipset',
@@ -147,18 +162,35 @@ describe('board actions', () => {
         { id: 'done', name: 'Done', color: '#000', done: true },
       ],
     };
-    stores.appConfig.set({ columnSets: [pipeline, shipped] });
+    stores.appConfig.set({ columnSets: [reading, shipped] });
+    stores.collections.set({ a: col('a', { boardSetId: 'read' }) });
     stores.items.set({
-      t: note('t', {
+      open: note('open', {
         collectionId: 'a',
         isTodo: true,
         completed: false,
-        boardColumns: { pipe: 'build' },
+        boardColumns: { read: 'next' },
+      }),
+      doneOne: note('doneOne', {
+        collectionId: 'a',
+        isTodo: true,
+        completed: true,
+        completedAt: '2026-01-01T00:00:00.000Z',
+        boardColumns: { read: 'next' },
       }),
     });
-    await moveCollectionToSet('a', 'shipset', { build: 'done' });
-    expect(item('t').completed).toBe(true);
-    expect(columnOf(item('t'), shipped)).toBe('done');
+    // "Read" has no done column; Next -> Done in the new set.
+    await moveCollectionToSet(
+      'a',
+      'shipset',
+      { next: 'done' },
+      new Set(['next']),
+    );
+    expect(item('open').completed).toBe(false);
+    expect(columnOf(item('open'), shipped)).toBe(BOARD_UNSORTED);
+    expect(item('doneOne').completed).toBe(true);
+    expect(item('doneOne').completedAt).toBe('2026-01-01T00:00:00.000Z');
+    expect(columnOf(item('doneOne'), shipped)).toBe('done');
   });
 
   it('honours an explicit Unsorted over a remembered column', async () => {

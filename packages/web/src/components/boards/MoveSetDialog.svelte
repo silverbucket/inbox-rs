@@ -11,7 +11,7 @@
     makePrivateCopy,
     moveCollectionToSet,
   } from '../../lib/board-actions';
-  import { columnOf, isAutoMatch, matchColumns, moveTarget } from '../../lib/boards';
+  import { columnOf, isAutoMatch, matchColumns, moveTarget, withColumn } from '../../lib/boards';
   import { collections, items } from '../../lib/stores';
   import { showToast } from '../../lib/toast';
   import Sheet from './Sheet.svelte';
@@ -72,8 +72,10 @@
     if (!to) return '';
     const totals = new Map<string, number>();
     for (const item of own) {
-      const target = moveTarget(item, from, to, mapping, explicit);
-      totals.set(target, (totals.get(target) ?? 0) + 1);
+      // Where the board will actually show it: completion doesn't change,
+      // so an open todo sent to the done column shows in Unsorted.
+      const shown = columnOf(withColumn(item, to, moveTarget(item, from, to, mapping, explicit)), to);
+      totals.set(shown, (totals.get(shown) ?? 0) + 1);
     }
     const parts = [...totals].map(([id, n]) => {
       const name = to.columns.find((c) => c.id === id)?.name ?? 'Unsorted';

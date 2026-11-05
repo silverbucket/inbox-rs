@@ -13,6 +13,7 @@ import {
   moveTarget,
   normalizeColumns,
   placeItem,
+  withColumn,
 } from './boards';
 import { recordCollectionUse } from './collection-suggest';
 import {
@@ -167,7 +168,9 @@ export async function deleteColumn(
     .map((c) => c.id);
   for (const item of itemsOf(users)) {
     if (columnOf(item, set) !== columnId) continue;
-    await storeItem(placeItem(item, set, moveTo));
+    // Only the column changes: deleting the done column must not reopen
+    // its completed todos, nor moving into it complete open ones.
+    await storeItem(withColumn(item, set, moveTo));
   }
   await saveSet({
     ...set,
@@ -216,15 +219,9 @@ export async function moveCollectionToSet(
   flushItemChanges();
   for (const item of itemsOf([collectionId])) {
     const target = moveTarget(item, from, to, mapping, explicit);
-    // Same placement rules as a drag: into the done column completes a
-    // todo, out of it reopens one.
-    const placed = placeItem(item, to, target);
-    if (
-      placed.boardColumns?.[to.id] === item.boardColumns?.[to.id] &&
-      placed.completed === item.completed
-    )
-      continue;
-    await storeItem(placed);
+    // Switching sets rearranges the board; it never ticks or unticks todos.
+    if (item.boardColumns?.[to.id] === target) continue;
+    await storeItem(withColumn(item, to, target));
   }
   await setCollectionsBoard([collectionId], toSetId);
 }
