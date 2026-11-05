@@ -92,6 +92,30 @@ describe('buildIcs', () => {
     expect(ics.text).toContain('DTEND;VALUE=DATE:20260801');
   });
 
+  it('round-trips a multi-day all-day event through parseIcs', () => {
+    const text = [
+      'BEGIN:VCALENDAR',
+      'BEGIN:VEVENT',
+      'DTSTART;VALUE=DATE:20261109',
+      'DTEND;VALUE=DATE:20261112',
+      'SUMMARY:Conf',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\n');
+    const parsed = parseIcs(text)!;
+    expect(parsed.end).toEqual(new Date(2026, 10, 11));
+    const ics = buildIcs(
+      note({
+        startsAt: parsed.start.toISOString(),
+        endsAt: parsed.end!.toISOString(),
+        allDay: true,
+      }),
+      NOW,
+    )!;
+    expect(ics.text).toContain('DTSTART;VALUE=DATE:20261109');
+    expect(ics.text).toContain('DTEND;VALUE=DATE:20261112');
+  });
+
   it('builds a VTODO with DUE for tasks, STATUS when completed', () => {
     const todo: TodoItem = {
       id: 'todo-1',
@@ -298,6 +322,22 @@ describe('parseIcs', () => {
     expect(unescapeText('C:\\\\temp\\\\n is a path\\, not a newline')).toBe(
       'C:\\temp\\n is a path, not a newline',
     );
+  });
+
+  it('ignores a timed DTEND on an all-day start (mixed bounds are invalid)', () => {
+    const parsed = parseIcs(
+      [
+        'BEGIN:VCALENDAR',
+        'BEGIN:VEVENT',
+        'DTSTART;VALUE=DATE:20261109',
+        'DTEND:20261112T000000',
+        'SUMMARY:Offsite',
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\n'),
+    );
+    expect(parsed).toMatchObject({ title: 'Offsite', allDay: true });
+    expect(parsed?.end).toBeUndefined();
   });
 
   it('reads an all-day event with a location and a cancelled status', () => {

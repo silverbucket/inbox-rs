@@ -12,6 +12,8 @@ export type ScheduleKind = 'event' | 'task';
 export interface ScheduleInput {
   kind: ScheduleKind;
   start: Date;
+  /** Inclusive last local day of an all-day event; kept only when after start. */
+  end?: Date;
   /** Minutes; only meaningful for timed events. */
   durationMin?: number;
   allDay?: boolean;
@@ -31,10 +33,17 @@ export function applySchedule<T extends InboxItem>(
 ): T {
   const start = new Date(input.start);
   if (input.allDay) start.setHours(0, 0, 0, 0);
-  const endsAt =
-    input.kind === 'event' && !input.allDay && input.durationMin
-      ? new Date(start.getTime() + input.durationMin * 60_000).toISOString()
-      : undefined;
+  let endsAt: string | undefined;
+  if (input.kind === 'event' && input.allDay && input.end) {
+    // Calendar days, never minutes: DST makes a day 23 or 25 hours.
+    const end = new Date(input.end);
+    end.setHours(0, 0, 0, 0);
+    if (end > start) endsAt = end.toISOString();
+  } else if (input.kind === 'event' && !input.allDay && input.durationMin) {
+    endsAt = new Date(
+      start.getTime() + input.durationMin * 60_000,
+    ).toISOString();
+  }
   return {
     ...item,
     startsAt: start.toISOString(),
@@ -71,9 +80,15 @@ export function eventSchedule(event: LinkEvent): ScheduleInput | null {
     end && !dateOnly && end > start
       ? (end.getTime() - start.getTime()) / 60_000
       : undefined;
+  // schema.org's endDate is inclusive, so a date-only end is the last day.
+  const endDay =
+    dateOnly && event.endDate && /^\d{4}-\d{2}-\d{2}$/.test(event.endDate)
+      ? new Date(`${event.endDate}T00:00`)
+      : undefined;
   return {
     kind: 'event',
     start,
+    end: endDay,
     durationMin,
     allDay: !!dateOnly,
     location: event.location,

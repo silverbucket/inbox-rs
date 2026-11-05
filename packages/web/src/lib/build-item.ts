@@ -302,6 +302,7 @@ export async function buildDocumentItem(
       const scheduled = applySchedule(note.item, {
         kind: parsed.kind,
         start: parsed.start,
+        end: parsed.end,
         durationMin,
         allDay: parsed.allDay,
         location: parsed.location,

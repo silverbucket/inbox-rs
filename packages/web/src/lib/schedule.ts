@@ -47,15 +47,24 @@ export function quickOptions(now: Date = new Date()): QuickOption[] {
 
 /**
  * Chip/row label for a scheduled item: "Fri, Jul 31 · 09:00", date-only when
- * all-day, and with the year appended once it differs from the current one.
+ * all-day, "Nov 9 – 11" for a multi-day all-day span, and with the year
+ * appended once it differs from the current one.
  */
 export function formatScheduled(
-  item: Pick<InboxItem, 'startsAt' | 'allDay'>,
+  item: Pick<InboxItem, 'startsAt' | 'endsAt' | 'allDay'>,
   now: Date = new Date(),
 ): string {
   if (!item.startsAt) return '';
   const d = new Date(item.startsAt);
   if (Number.isNaN(d.getTime())) return '';
+  const end = item.allDay && item.endsAt ? new Date(item.endsAt) : null;
+  if (end && end > d) {
+    return new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+      ...(end.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}),
+    }).formatRange(d, end);
+  }
   const date = d.toLocaleDateString(undefined, {
     weekday: 'short',
     month: 'short',
