@@ -1118,7 +1118,37 @@ export function loadFileBlobUrl(filePath: string, mimeType?: string): void {
 
 // ---- Item operations ----
 
-export async function storeItem(
+/**
+ * In-flight saves by item id. Writes to one item run in order, so a reader
+ * (e.g. enrichment) can wait for a pending save before merging against
+ * `items` — which only reflects a save once it resolves.
+ */
+const pendingSaves = new Map<string, Promise<unknown>>();
+
+/** Resolves once every save queued so far for `id` has settled. */
+export function awaitPendingSave(id: string): Promise<unknown> {
+  return pendingSaves.get(id) ?? Promise.resolve();
+}
+
+export function storeItem(
+  item: InboxItem,
+  fileData?: ArrayBuffer,
+  thumbData?: ArrayBuffer,
+): Promise<void> {
+  // Chain on a promise that swallows the previous error, so one failed
+  // save rejects only to its own caller.
+  const save = awaitPendingSave(item.id)
+    .catch(() => {})
+    .then(() => writeItem(item, fileData, thumbData));
+  const settled = save.catch(() => {});
+  pendingSaves.set(item.id, settled);
+  settled.then(() => {
+    if (pendingSaves.get(item.id) === settled) pendingSaves.delete(item.id);
+  });
+  return save;
+}
+
+async function writeItem(
   item: InboxItem,
   fileData?: ArrayBuffer,
   thumbData?: ArrayBuffer,

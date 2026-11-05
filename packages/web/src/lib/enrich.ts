@@ -24,7 +24,7 @@ import {
   type LinkMetadata,
 } from './link-metadata';
 import { applySchedule, type ScheduleInput } from './schedule';
-import { items, storeItem, userSettings } from './stores';
+import { awaitPendingSave, items, storeItem, userSettings } from './stores';
 import { showToast } from './toast';
 
 export const LOCAL_LINK_PREVIEWS_KEY = 'inbox-rs:link-previews';
@@ -221,6 +221,9 @@ export async function enrichBookmark(
   // and merging into the *current* fields keeps their changes protected.
   // If it's gone (deleted or the capture was undone), storing again would
   // resurrect it — bail instead.
+  // Wait out a save still in flight first: `items` only reflects it once
+  // it resolves.
+  await awaitPendingSave(item.id);
   const current = get(items)[item.id];
   if (!current || current.type !== 'bookmark' || current.url !== item.url) {
     return 'none';

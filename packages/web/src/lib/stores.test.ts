@@ -47,16 +47,26 @@ vi.mock('./rs', () => {
   };
 });
 
+const { mockFetchLinkMetadata } = vi.hoisted(() => ({
+  mockFetchLinkMetadata: vi.fn(),
+}));
+vi.mock('./link-metadata', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./link-metadata')>()),
+  fetchLinkMetadata: mockFetchLinkMetadata,
+}));
+
 // Mock clean-for-storage
 vi.mock('./clean-for-storage', () => ({
   cleanForStorage: (x: any) => x,
 }));
 
 import type {
+  BookmarkItem,
   Collection,
   CollectionGroup,
   InboxItem,
 } from '@inbox-rs/rs-module';
+import { enrichBookmark } from './enrich';
 import {
   activeGroupIds,
   allTodos,
@@ -3516,5 +3526,68 @@ describe('connection status during network outages', () => {
     emitRsEvent('disconnected');
     expect(get(syncing)).toBe(false);
     expect(get(connectionStatus)).toBe('Not connected');
+  });
+});
+
+describe('storeItem write ordering', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    items.set({});
+  });
+
+  it('enrichment merges against a user edit whose save is still in flight', async () => {
+    const bookmark: BookmarkItem = {
+      id: 'race',
+      type: 'bookmark',
+      title: 'https://example.com',
+      url: 'https://example.com',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    items.set({ race: bookmark });
+
+    let resolveFetch!: (meta: unknown) => void;
+    mockFetchLinkMetadata.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveFetch = resolve;
+      }),
+    );
+    const enrichment = enrichBookmark(bookmark);
+
+    let resolveUserSave!: () => void;
+    mockInbox.store.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveUserSave = resolve;
+      }),
+    );
+    const userSave = storeItem({
+      ...bookmark,
+      startsAt: '2026-02-01T10:00:00.000Z',
+    } as BookmarkItem);
+
+    resolveFetch({ description: 'From the page' });
+    await Promise.resolve();
+    resolveUserSave();
+    await userSave;
+    await enrichment;
+
+    expect(get(items).race).toMatchObject({
+      startsAt: '2026-02-01T10:00:00.000Z',
+      description: 'From the page',
+    });
+    const lastWrite = mockInbox.store.mock.calls.at(-1)?.[0];
+    expect(lastWrite).toMatchObject({
+      startsAt: '2026-02-01T10:00:00.000Z',
+      description: 'From the page',
+    });
+  });
+
+  it('a failed save rejects to its caller without blocking the next write', async () => {
+    const todo = makeTodo('fail', { title: 'A' });
+    mockInbox.store.mockRejectedValueOnce(new Error('boom'));
+    const first = storeItem(todo);
+    const second = storeItem({ ...todo, title: 'B' } as InboxItem);
+    await expect(first).rejects.toThrow('boom');
+    await expect(second).resolves.toBeUndefined();
+    expect(get(items).fail).toMatchObject({ title: 'B' });
   });
 });
