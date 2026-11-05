@@ -557,7 +557,8 @@
         </button>
       {/each}
     </div>
-    <p class="swipe-hint">Swipe right to complete · left to re-plan</p>
+    <!-- Hidden while the On-calendar receipts are open: those rows ignore swipes. -->
+    {#if !onCalendarExpanded}<p class="swipe-hint">Swipe right to complete · left to re-plan</p>{/if}
 
     {#if view === 'today'}
       <TodosToday
