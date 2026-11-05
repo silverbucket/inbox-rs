@@ -36,6 +36,8 @@ export async function makeTodo(item: InboxItem): Promise<void> {
     completed: false,
   };
   delete updated.completedAt;
+  // Event-only; the task is live.
+  delete updated.cancelled;
   await storeItem(updated as unknown as InboxItem);
 }
 

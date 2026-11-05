@@ -1250,6 +1250,8 @@ export async function triageToTodo(
     'archived',
     'archivedAt',
     'archiveReason',
+    // Event-only; the task is live.
+    'cancelled',
   ]) {
     delete todo[key];
   }
