@@ -86,6 +86,7 @@ import {
   loadFileBlobUrl,
   moveCollectionToGroup,
   moveItemToCollection,
+  moveStoredItemToDay,
   openTodos,
   orphanCollections,
   pendingMigrationCount,
@@ -595,6 +596,33 @@ describe('setItemPlan', () => {
       collectionId: 'c1',
       location: 'Kitchen',
     });
+  });
+});
+
+describe('moveStoredItemToDay', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    items.set({});
+  });
+
+  it('builds on the stored copy and keeps the time and length', async () => {
+    const stale = makeTodo('t1', {
+      title: 'Old title',
+      startsAt: new Date(2026, 10, 6, 14, 0).toISOString(),
+      endsAt: new Date(2026, 10, 6, 15, 30).toISOString(),
+      scheduleKind: 'event',
+    });
+    items.set({ t1: { ...stale, title: 'Edited elsewhere' } });
+
+    await moveStoredItemToDay(stale, new Date(2026, 10, 12));
+
+    const saved = get(items).t1;
+    const start = new Date(saved.startsAt as string);
+    const end = new Date(saved.endsAt as string);
+    expect(saved.title).toBe('Edited elsewhere');
+    expect(saved.scheduleKind).toBe('event');
+    expect([start.getDate(), start.getHours()]).toEqual([12, 14]);
+    expect((end.getTime() - start.getTime()) / 60_000).toBe(90);
   });
 });
 

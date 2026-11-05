@@ -16,6 +16,7 @@
  * schedule.ts. All math is local wall-clock time.
  */
 import type { InboxItem, PlanKind } from '@inbox-rs/rs-module';
+import { applySchedule } from './schedule';
 
 export type { PlanKind };
 
@@ -364,4 +365,96 @@ export function planLabel(
 /** Stable CSS colour token per section (defined in global.css). */
 export function sectionColorVar(section: HorizonSection): string {
   return `var(--horizon-${section})`;
+}
+
+// ── Calendar helpers ───────────────────────────────────────────────────────
+
+/**
+ * The weeks (Monday-first) covering a month, each as seven local-midnight
+ * dates. Leading and trailing days from neighbouring months fill the first
+ * and last rows.
+ */
+export function monthGrid(month: Date): Date[][] {
+  const first = monthStart(month);
+  const next = addMonths(first, 1);
+  const weeks: Date[][] = [];
+  for (
+    let start = weekStart(first);
+    start.getTime() < next.getTime();
+    start = addDays(start, 7)
+  ) {
+    weeks.push(Array.from({ length: 7 }, (_, i) => addDays(start, i)));
+  }
+  return weeks;
+}
+
+/** Shift a month anchor by n months (first of the month). */
+export function shiftMonth(month: Date, n: number): Date {
+  return addMonths(monthStart(month), n);
+}
+
+/** Local date key of an item's scheduled day, or null. */
+export function scheduledDayKey(
+  item: Pick<InboxItem, 'startsAt'>,
+): string | null {
+  if (!item.startsAt) return null;
+  const d = new Date(item.startsAt);
+  return Number.isNaN(d.getTime()) ? null : toDateKey(d);
+}
+
+/**
+ * The schedule for moving an item to `day`: an all-day task when it had no
+ * time (or no date), otherwise the same clock time on the new day. A timed
+ * item with an end keeps its duration.
+ */
+export function moveToDay(
+  item: Pick<InboxItem, 'startsAt' | 'endsAt' | 'allDay' | 'scheduleKind'>,
+  day: Date,
+): {
+  kind: 'event' | 'task';
+  start: Date;
+  allDay: boolean;
+  durationMin?: number;
+} {
+  const start = new Date(day);
+  start.setHours(0, 0, 0, 0);
+  const old = item.startsAt ? new Date(item.startsAt) : null;
+  const timed = !!old && !Number.isNaN(old.getTime()) && !item.allDay;
+  if (timed && old) start.setHours(old.getHours(), old.getMinutes(), 0, 0);
+  const end = item.endsAt ? new Date(item.endsAt) : null;
+  const durationMin =
+    timed && old && end && !Number.isNaN(end.getTime())
+      ? Math.max(1, Math.round((end.getTime() - old.getTime()) / 60_000))
+      : undefined;
+  return {
+    kind: item.scheduleKind ?? 'task',
+    start,
+    allDay: !timed,
+    ...(durationMin !== undefined ? { durationMin } : {}),
+  };
+}
+
+/**
+ * Return a copy of the item rescheduled onto `day`, keeping what the move
+ * shouldn't change: a timed event's duration, and a multi-day all-day
+ * event's length (its end shifts by the same number of days).
+ */
+export function moveItemToDay<T extends InboxItem>(item: T, day: Date): T {
+  const moved = applySchedule(item, moveToDay(item, day));
+  if (item.allDay && item.startsAt && item.endsAt) {
+    const oldStart = new Date(item.startsAt);
+    const oldEnd = new Date(item.endsAt);
+    if (!Number.isNaN(oldStart.getTime()) && !Number.isNaN(oldEnd.getTime())) {
+      // Shift by calendar days, not elapsed time: across a daylight-saving
+      // change a day is 23 or 25 hours, and adding milliseconds would land
+      // the end at 23:00 or 01:00 instead of local midnight.
+      const from = startOfDay(oldStart);
+      const to = startOfDay(day);
+      const days = Math.round((to.getTime() - from.getTime()) / 86_400_000);
+      const end = new Date(oldEnd);
+      end.setDate(end.getDate() + days);
+      moved.endsAt = end.toISOString();
+    }
+  }
+  return moved;
 }

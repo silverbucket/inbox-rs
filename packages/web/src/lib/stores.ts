@@ -12,7 +12,7 @@ import { replayCardDrafts } from './card-draft-recovery';
 import { cleanForStorage } from './clean-for-storage';
 import { pinItemsFirst } from './collection-todos';
 import { todayStart } from './now';
-import { applyPlan, clearPlan, type Plan } from './plan';
+import { applyPlan, clearPlan, moveItemToDay, type Plan } from './plan';
 import rs, { fetchFileBlobUrl } from './rs';
 import {
   clearSchedule,
@@ -1194,6 +1194,16 @@ export async function setItemPlan(
     };
   }
   await storeItem(plan ? applyPlan(base, plan) : clearPlan(base));
+}
+
+/**
+ * Move an item to another day, keeping its kind, time and length. Like
+ * setItemPlan, it builds on the freshest copy so buffered remote edits
+ * aren't rolled back by the write.
+ */
+export async function moveStoredItemToDay(target: InboxItem, day: Date) {
+  flushPendingItemChanges();
+  await storeItem(moveItemToDay(get(items)[target.id] ?? target, day));
 }
 
 /** Favourite collection ids that still exist and aren't archived, in the user's order. */

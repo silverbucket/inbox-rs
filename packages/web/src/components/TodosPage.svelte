@@ -15,12 +15,15 @@
   import { todayStart } from '../lib/now';
   import {
     DEFAULT_COLLAPSED, HORIZON_ORDER, type HorizonSection, type PlanChoice,
-    type Plan, placeTodo, planFor, sectionInfo,
+    type Plan, placeTodo, planFor, scheduledDayKey, sectionInfo, toDateKey,
   } from '../lib/plan';
   import { showToast } from '../lib/toast';
   import AlertsPermissionBanner from './AlertsPermissionBanner.svelte';
   import TodoRow from './TodoRow.svelte';
   import TodoQuickAdd from './TodoQuickAdd.svelte';
+  import TodosToday from './TodosToday.svelte';
+  import TodosCalendar from './TodosCalendar.svelte';
+  import SlippedReview from './SlippedReview.svelte';
   import Fab from './Fab.svelte';
 
   let { onselect, onaddtodo, onaddtodoincollection, quickDraft = $bindable('') }: {
@@ -326,6 +329,59 @@
     }
   }
 
+  // ── Views ─────────────────────────────────────────────────────────────
+  // One plan, four layouts. Horizon and Board share the section zones and
+  // drop logic above; Today and Calendar are read-mostly views of the same
+  // placements. The choice syncs via appConfig; unset means Today on
+  // phones and Horizon elsewhere.
+  type TodosView = 'today' | 'horizon' | 'board' | 'calendar';
+  const VIEWS: Array<{ id: TodosView; label: string }> = [
+    { id: 'today', label: 'Today' },
+    { id: 'horizon', label: 'Horizon' },
+    { id: 'board', label: 'Board' },
+    { id: 'calendar', label: 'Calendar' },
+  ];
+  let narrow = $state(false);
+  $effect(() => {
+    const mql = window.matchMedia('(max-width: 600px)');
+    narrow = mql.matches;
+    const handler = (e: MediaQueryListEvent) => { narrow = e.matches; };
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  });
+  const view = $derived<TodosView>($appConfig.todosView ?? (narrow ? 'today' : 'horizon'));
+
+  async function setView(next: TodosView) {
+    try {
+      await updateConfig({ todosView: next });
+    } catch (error) {
+      console.error('Failed to switch Todos view', error);
+    }
+  }
+
+  /** Board columns; Later, Someday and Not planned sit in the side tray. */
+  const BOARD_COLUMNS: HorizonSection[] = ['next', 'week', 'nextWeek', 'month', 'nextMonth'];
+  const TRAY_SECTIONS: HorizonSection[] = ['later', 'someday', 'unplanned'];
+  let openTrays = $state<Set<HorizonSection>>(new Set());
+  function toggleTray(section: HorizonSection) {
+    const next = new Set(openTrays);
+    if (next.has(section)) next.delete(section);
+    else next.add(section);
+    openTrays = next;
+  }
+
+  // ── Slipped review ────────────────────────────────────────────────────
+  const todayKey = $derived(toDateKey(today));
+  const overdueTodos = $derived(
+    dueTodos.filter(t => (scheduledDayKey(t) ?? todayKey) < todayKey),
+  );
+  const rolledTodos = $derived(
+    restOpenTodos
+      .filter(t => placements.get(t.id)?.rolledFrom)
+      .map(t => ({ todo: t, from: placements.get(t.id)?.rolledFrom ?? '' })),
+  );
+  let reviewOpen = $state(false);
+
   function lookupCollection(id: string | undefined) {
     if (!id) return null;
     return collectionMap[id] ?? null;
@@ -359,6 +415,123 @@
     </div>
   {/snippet}
 
+  {#snippet zone(section: HorizonSection, stacked: boolean)}
+      <ul
+        id="{stacked ? 'board' : 'horizon'}-list-{section}"
+        class="todo-list horizon-list"
+        class:empty={(dndSections[section] ?? []).length === 0}
+        role="list"
+        use:dragHandleZone={{
+          items: dndSections[section] ?? [],
+          flipDurationMs: 200,
+          // The grip is at the left edge of a wide row. Follow the pointer so
+          // a diagonal drag inside the list isn't rejected when the row's
+          // centre extends beyond the zone.
+          useCursorForDetection: true,
+          dropTargetStyle: {},
+          // No `dragDisabled` — see the note in SidebarShell. Every
+          // `dragHandleZone` shares one module-global copy of that flag, so
+          // setting it here disabled every grip on the page. Reorder is gated on
+          // the handle anyway. Sections share a type so rows can be dragged
+          // between them, which re-plans the todo.
+          type: 'todos-global',
+        }}
+        onconsider={(e) => handleDndConsider(section, e)}
+        onfinalize={(e) => handleDndFinalize(section, e)}
+      >
+        {#each dndSections[section] ?? [] as todo (todo.id)}
+          <div
+            animate:flip={{ duration: 200 }}
+            in:reorderFade.fade={{ duration: 180 }}
+            out:reorderFade.fade={{ duration: 120 }}
+          >
+            <TodoRow
+              {todo}
+              collection={lookupCollection(todo.collectionId)}
+              group={lookupGroup(todo.collectionId)}
+              reorderable
+              {stacked}
+              planTag={placements.get(todo.id)?.rolledFrom}
+              {onselect}
+              onaddincollection={onaddtodoincollection}
+            />
+          </div>
+        {/each}
+      </ul>
+  {/snippet}
+
+  {#snippet board()}
+    <div class="board">
+      {#if dueTodos.length > 0}
+        <section class="col" style="--h: var(--horizon-due)" aria-labelledby="board-due">
+          <div class="col-head">
+            <span class="swatch" aria-hidden="true"></span>
+            <h2 class="col-label" id="board-due">Due &amp; overdue</h2>
+            <span class="col-count">{dueTodos.length}</span>
+          </div>
+          {#if overdueTodos.length > 0}
+            <button type="button" class="review-btn" onclick={() => (reviewOpen = true)}>Review {overdueTodos.length} overdue</button>
+          {/if}
+          <ul class="todo-list" role="list">
+            {#each dueTodos as todo (todo.id)}
+              <TodoRow
+                {todo}
+                stacked
+                collection={lookupCollection(todo.collectionId)}
+                group={lookupGroup(todo.collectionId)}
+                {onselect}
+                onaddincollection={onaddtodoincollection}
+              />
+            {/each}
+          </ul>
+        </section>
+      {/if}
+      {#each BOARD_COLUMNS as section (section)}
+        {@const info = sectionInfo(section, today)}
+        <section class="col" style="--h: var(--horizon-{section})" aria-labelledby="board-{section}">
+          <div class="col-head">
+            <span class="swatch" aria-hidden="true"></span>
+            <h2 class="col-label" id="board-{section}">{info.label}</h2>
+            <span class="col-count">{(dndSections[section] ?? []).length}</span>
+          </div>
+          <div class="col-sub">
+            {#if section === 'next' && rolledCount > 0}
+              <button type="button" class="rolled-chip" onclick={() => (reviewOpen = true)}>{rolledCount} rolled over · Review</button>
+            {:else}
+              {info.range}
+            {/if}
+          </div>
+          {@render zone(section, true)}
+        </section>
+      {/each}
+      <aside class="tray" aria-label="Off the board">
+        <h2 class="tray-title">Off the board</h2>
+        {#each TRAY_SECTIONS as section (section)}
+          {@const info = sectionInfo(section, today)}
+          {@const count = (dndSections[section] ?? []).length}
+          <section class="tray-group" style="--h: var(--horizon-{section})">
+            <button
+              type="button"
+              class="tray-toggle"
+              aria-expanded={openTrays.has(section)}
+              onclick={() => toggleTray(section)}
+            >
+              <span class="swatch" aria-hidden="true"></span>
+              <span class="tray-label">{info.label}</span>
+              <span class="col-count">{count}</span>
+            </button>
+            {#if openTrays.has(section)}
+              {@render zone(section, true)}
+            {:else if count > 0}
+              <p class="tray-peek">{peek(dndSections[section] ?? [])}</p>
+            {/if}
+          </section>
+        {/each}
+        <p class="tray-hint">Drop a card on an open Someday or Not planned list to move it there.</p>
+      </aside>
+    </div>
+  {/snippet}
+
   {#if openTodos.length === 0 && completedTodos.length === 0 && onCalendarTodos.length === 0}
     <!-- Lead with the composer so its input lines up with the inbox capture
          bar. The toolbar's Fab is hidden on desktop (the input + ⌘⇧↵ handle
@@ -376,11 +549,50 @@
     <TodoQuickAdd hideOnMobile compact focusOnMount bind:quickTitle={quickDraft} onopenmodal={(t, c, p) => onaddtodo(t, c, p)} />
     {@render todoToolbar()}
 
+    <div class="view-switch" role="group" aria-label="Todos view">
+      {#each VIEWS as v (v.id)}
+        <button type="button" class="view-btn" aria-pressed={view === v.id} onclick={() => setView(v.id)}>
+          {v.label}
+        </button>
+      {/each}
+    </div>
+
+    {#if view === 'today'}
+      <TodosToday
+        todos={openTodos}
+        {placements}
+        overdueCount={overdueTodos.length}
+        rolledCount={rolledTodos.length}
+        {lookupCollection}
+        {lookupGroup}
+        {onselect}
+        onaddincollection={onaddtodoincollection}
+        onreview={() => (reviewOpen = true)}
+        onshowplan={() => setView('horizon')}
+      />
+    {:else if view === 'calendar'}
+      <TodosCalendar
+        todos={openTodos}
+        {placements}
+        overdueCount={overdueTodos.length}
+        {lookupCollection}
+        {onselect}
+        onreview={() => (reviewOpen = true)}
+      />
+    {:else if view === 'board'}
+      {@render board()}
+    {:else}
+
     {#if dueTodos.length > 0}
       <section class="due-band" aria-labelledby="due-heading">
-        <h2 class="due-header" id="due-heading">
-          Due &amp; overdue <span class="count">{dueTodos.length}</span>
-        </h2>
+        <div class="due-head">
+          <h2 class="due-header" id="due-heading">
+            Due &amp; overdue <span class="count">{dueTodos.length}</span>
+          </h2>
+          {#if overdueTodos.length > 0}
+            <button type="button" class="review-btn" onclick={() => (reviewOpen = true)}>Review {overdueTodos.length} overdue</button>
+          {/if}
+        </div>
         <!-- TodoRow renders its own <li>, so rows sit directly in the list —
              no transition wrapper (a div between ul and li breaks list
              semantics for assistive tech). -->
@@ -428,53 +640,15 @@
             {/if}
           </button>
           {#if section === 'next' && rolledCount > 0}
-            <span class="rolled-chip">{rolledCount} rolled over</span>
+            <button type="button" class="rolled-chip" onclick={() => (reviewOpen = true)}>
+              {rolledCount} rolled over · Review
+            </button>
           {/if}
           <span class="horizon-count" aria-label="{list.length} todos">{list.length}</span>
         </div>
 
         {#if !isCollapsed}
-          <ul
-            id="horizon-list-{section}"
-            class="todo-list horizon-list"
-            class:empty={list.length === 0}
-            role="list"
-            use:dragHandleZone={{
-              items: list,
-              flipDurationMs: 200,
-              // The grip is at the left edge of a wide row. Follow the pointer so
-              // a diagonal drag inside the list isn't rejected when the row's
-              // centre extends beyond the zone.
-              useCursorForDetection: true,
-              dropTargetStyle: {},
-              // No `dragDisabled` — see the note in SidebarShell. Every
-              // `dragHandleZone` shares one module-global copy of that flag, so
-              // setting it here disabled every grip on the page. Reorder is gated on
-              // the handle anyway. Sections share a type so rows can be dragged
-              // between them, which re-plans the todo.
-              type: 'todos-global',
-            }}
-            onconsider={(e) => handleDndConsider(section, e)}
-            onfinalize={(e) => handleDndFinalize(section, e)}
-          >
-            {#each list as todo (todo.id)}
-              <div
-                animate:flip={{ duration: 200 }}
-                in:reorderFade.fade={{ duration: 180 }}
-                out:reorderFade.fade={{ duration: 120 }}
-              >
-                <TodoRow
-                  {todo}
-                  collection={lookupCollection(todo.collectionId)}
-                  group={lookupGroup(todo.collectionId)}
-                  reorderable
-                  planTag={placements.get(todo.id)?.rolledFrom}
-                  {onselect}
-                  onaddincollection={onaddtodoincollection}
-                />
-              </div>
-            {/each}
-          </ul>
+          {@render zone(section, false)}
           {#if section === 'next' && list.length === 0}
             <p class="horizon-hint">Nothing lined up. Drag a todo here, or pick “Up next” from When?.</p>
           {:else if section === 'unplanned'}
@@ -484,7 +658,9 @@
       </section>
     {/each}
 
-    {#if completedTodos.length > 0}
+    {/if}
+
+    {#if (view === 'horizon' || view === 'board') && completedTodos.length > 0}
       <div class="completed-section">
         <button type="button"
           class="btn-completed-toggle"
@@ -519,7 +695,7 @@
       </div>
     {/if}
 
-    {#if onCalendarTodos.length > 0}
+    {#if (view === 'horizon' || view === 'board') && onCalendarTodos.length > 0}
       <div class="completed-section">
         <button type="button"
           class="btn-completed-toggle"
@@ -551,6 +727,15 @@
         {/if}
       </div>
     {/if}
+  {/if}
+
+  {#if reviewOpen}
+    <SlippedReview
+      overdue={overdueTodos}
+      rolled={rolledTodos}
+      {lookupCollection}
+      onclose={() => (reviewOpen = false)}
+    />
   {/if}
 </div>
 
@@ -820,6 +1005,186 @@
   @media (max-width: 600px) {
     .todos-page {
       padding-bottom: 4.5rem;
+    }
+  }
+
+  /* ── View switch ── */
+  .view-switch {
+    display: inline-flex;
+    align-self: flex-start;
+    padding: 3px;
+    gap: 2px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-tint);
+  }
+
+  .view-btn {
+    min-height: 2rem;
+    padding: 0 0.8rem;
+    border: none;
+    border-radius: calc(var(--radius-sm) - 2px);
+    background: transparent;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .view-btn[aria-pressed='true'] {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 1px 2px var(--shadow);
+  }
+
+  .due-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .review-btn {
+    margin-left: auto;
+    min-height: 1.9rem;
+    padding: 0 0.65rem;
+    border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--border));
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--warn-text);
+    font: inherit;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  button.rolled-chip {
+    border: none;
+    font: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  /* ── Board ── */
+  .board {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+  }
+
+  .col {
+    flex: 1 0 220px;
+    min-width: 220px;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.55rem;
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--h) 12%, var(--bg));
+  }
+
+  .col :global(.todo-list) {
+    max-height: 62vh;
+    overflow-y: auto;
+  }
+
+  .col-head {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0 0.2rem;
+  }
+
+  .col-label {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: color-mix(in srgb, var(--h) 55%, var(--text));
+  }
+
+  .col-count {
+    margin-left: auto;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .col-sub {
+    min-height: 1.4rem;
+    padding: 0 0.2rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .tray {
+    flex: 0 0 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.55rem;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+  }
+
+  .tray-title {
+    margin: 0 0 0.15rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .tray-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.45rem;
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+
+  .tray-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 2rem;
+    border: none;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: left;
+    padding: 0;
+  }
+
+  .tray-peek,
+  .tray-hint {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 600px) {
+    .view-switch {
+      align-self: stretch;
+    }
+
+    .view-btn {
+      flex: 1;
+      padding: 0 0.4rem;
+    }
+
+    .tray {
+      flex-basis: 200px;
     }
   }
 </style>
