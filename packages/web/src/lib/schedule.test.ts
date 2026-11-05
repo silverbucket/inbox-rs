@@ -70,6 +70,24 @@ describe('quickOptions', () => {
 });
 
 describe('formatScheduled', () => {
+  it('renders a multi-day all-day span compactly', () => {
+    const span = (s: Date, e: Date) =>
+      formatScheduled(
+        note({
+          startsAt: s.toISOString(),
+          endsAt: e.toISOString(),
+          allDay: true,
+        }),
+        WED_1423,
+      );
+    expect(span(new Date(2026, 10, 9), new Date(2026, 10, 11))).toMatch(
+      /^Nov 9\s?–\s?11$/,
+    );
+    expect(span(new Date(2026, 10, 30), new Date(2026, 11, 2))).toMatch(
+      /^Nov 30\s?–\s?Dec 2$/,
+    );
+  });
+
   it('renders date and time, dropping the current year', () => {
     const item = note({ startsAt: new Date(2026, 6, 31, 9, 0).toISOString() });
     const label = formatScheduled(item, WED_1423);
@@ -124,6 +142,17 @@ describe('isOverdue / isPast', () => {
       scheduleKind: 'task',
     });
     expect(isOverdue(todayAllDay, WED_1423)).toBe(false);
+  });
+
+  it('a multi-day all-day event stays current until its last day passes', () => {
+    const span = note({
+      startsAt: new Date(2026, 6, 27).toISOString(),
+      endsAt: new Date(2026, 6, 29).toISOString(),
+      allDay: true,
+      scheduleKind: 'event',
+    });
+    expect(isPast(span, WED_1423)).toBe(false);
+    expect(isPast(span, new Date(2026, 6, 30, 0, 1))).toBe(true);
   });
 
   it('isPast keys off the end for events with a duration', () => {

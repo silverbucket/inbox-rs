@@ -222,6 +222,12 @@ export function itemToCalendarObject(
   // (sockethub/sockethub#1364).
   base.startTime = when;
   if (!allDay && item.endsAt) base.endTime = item.endsAt;
+  if (allDay && item.endsAt) {
+    // platform-caldav takes an all-day end as the exclusive next date.
+    const end = new Date(item.endsAt);
+    end.setDate(end.getDate() + 1);
+    base.endTime = toDateInputValue(end);
+  }
   return base;
 }
 

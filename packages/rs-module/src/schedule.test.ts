@@ -53,6 +53,40 @@ describe('applySchedule', () => {
   });
 });
 
+describe('applySchedule all-day end', () => {
+  const note = () =>
+    ({
+      id: 'n1',
+      type: 'note',
+      title: 'T',
+      body: '',
+      createdAt: '2026-01-01T00:00:00Z',
+    }) as NoteItem;
+
+  it('stores an all-day end as its local midnight, only when after the start', () => {
+    const span = applySchedule(note(), {
+      kind: 'event',
+      start: new Date(2026, 10, 9),
+      end: new Date(2026, 10, 11, 15, 0),
+      allDay: true,
+    });
+    expect(span.endsAt).toBe(new Date(2026, 10, 11).toISOString());
+    const sameDay = applySchedule(note(), {
+      kind: 'event',
+      start: new Date(2026, 10, 9),
+      end: new Date(2026, 10, 9),
+      allDay: true,
+    });
+    expect(sameDay.endsAt).toBeUndefined();
+    const timed = applySchedule(note(), {
+      kind: 'event',
+      start: new Date(2026, 10, 9, 9, 0),
+      end: new Date(2026, 10, 11),
+    });
+    expect(timed.endsAt).toBeUndefined();
+  });
+});
+
 describe('applySchedule cancelled', () => {
   const start = new Date(2026, 10, 9, 18, 0);
   it('clears cancelled when an event becomes a task, keeps it for events', () => {

@@ -90,6 +90,18 @@ describe('itemToCalendarObject', () => {
     expect(obj.endTime).toBeUndefined();
   });
 
+  it('sends a multi-day all-day end as the exclusive next date', () => {
+    const obj = itemToCalendarObject(
+      note({
+        startsAt: new Date(2026, 10, 9).toISOString(),
+        endsAt: new Date(2026, 10, 11).toISOString(),
+        allDay: true,
+      }),
+    )!;
+    expect(obj.startTime).toBe('2026-11-09');
+    expect(obj.endTime).toBe('2026-11-12');
+  });
+
   it('maps tasks to due, with completed status + completedTime', () => {
     const todo: TodoItem = {
       id: 'todo-1',
