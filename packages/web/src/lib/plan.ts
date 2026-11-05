@@ -15,8 +15,11 @@
  * Weeks start on Monday, matching the "Next week" quick option in
  * schedule.ts. All math is local wall-clock time.
  */
-import type { InboxItem, PlanKind } from '@inbox-rs/rs-module';
-import { applySchedule } from './schedule';
+import {
+  applySchedule,
+  type InboxItem,
+  type PlanKind,
+} from '@inbox-rs/rs-module';
 
 export type { PlanKind };
 
