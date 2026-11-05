@@ -18,6 +18,7 @@
     readonly = false,
     reorderable = false,
     planTag,
+    stacked = false,
   }: {
     todo: InboxItem;
     /** The collection this todo belongs to, or null when unfiled. */
@@ -40,6 +41,9 @@
     reorderable?: boolean;
     /** Short plan note, e.g. "from last week" for a todo that rolled over. */
     planTag?: string;
+    /** Two-line card layout (title, then meta) for narrow containers such
+        as board columns, regardless of viewport width. */
+    stacked?: boolean;
   } = $props();
 
   // Show the underlying item type as an icon for items that are "todos by flag"
@@ -211,6 +215,7 @@
   class:completed={todo.completed}
   class:unfiled={isUnfiled}
   class:reorderable
+  class:stacked
   data-priority-item
   role="button"
   tabindex="0"
@@ -718,6 +723,9 @@
       padding: 0.1rem 0.45rem;
     }
 
+
+
+
     .date {
       font-size: 0.68rem;
     }
@@ -728,5 +736,90 @@
     .btn-quick-add {
       display: none;
     }
+  }
+
+  /* Same two-line layout as narrow screens, for board columns. */
+  .todo-row.stacked {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      grid-template-rows: auto auto;
+      column-gap: 0.6rem;
+      row-gap: 0.25rem;
+      align-items: start;
+      padding: 0.55rem 0.65rem;
+  }
+
+  .todo-row.stacked.reorderable {
+      grid-template-columns: auto auto 1fr auto;
+  }
+
+  .todo-row.stacked .reorder-handle {
+      grid-column: 1;
+      grid-row: 1 / span 2;
+      align-self: center;
+  }
+
+  .todo-row.stacked.reorderable .checkbox {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      align-self: center;
+  }
+
+  .todo-row.stacked:not(.reorderable) .checkbox {
+      grid-column: 1;
+      grid-row: 1 / span 2;
+      align-self: center;
+  }
+
+  .todo-row.stacked .title {
+      grid-column: 2;
+      grid-row: 1;
+      font-size: 0.9rem;
+  }
+
+  .todo-row.stacked.reorderable .title {
+      grid-column: 3;
+  }
+
+  .todo-row.stacked .pin-button {
+      grid-column: 3;
+      grid-row: 1 / span 2;
+      align-self: center;
+  }
+
+  .todo-row.stacked.reorderable .pin-button {
+      grid-column: 4;
+  }
+
+  .todo-row.stacked .meta {
+      grid-column: 2;
+      grid-row: 2;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+  }
+
+  .todo-row.stacked.reorderable .meta {
+      grid-column: 3;
+  }
+
+  .todo-row.stacked .collection-pill {
+    max-width: 10rem;
+    font-size: 0.72rem;
+    padding: 0.1rem 0.45rem;
+  }
+
+  .todo-row.stacked .btn-quick-add {
+    display: none;
+  }
+
+  /* Board cards are narrow: let the title wrap rather than truncate, and
+     keep the flag only when it is set (it toggles from the card itself). */
+  .todo-row.stacked .title {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .todo-row.stacked .pin-button:not(.active) {
+    display: none;
   }
 </style>

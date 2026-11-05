@@ -5,10 +5,14 @@ import {
   choiceOf,
   clearPlan,
   fromDateKey,
+  monthGrid,
   monthStart,
+  moveToDay,
   placeTodo,
   planFor,
   planLabel,
+  scheduledDayKey,
+  shiftMonth,
   toDateKey,
   weekStart,
 } from './plan';
@@ -180,5 +184,52 @@ describe('applyPlan / clearPlan / planLabel', () => {
       planLabel(todo(planFor('nextWeek', NOW)), new Date(2026, 10, 10)),
     ).toBe('This week');
     expect(planLabel(todo(), NOW)).toBe('');
+  });
+});
+
+describe('calendar helpers', () => {
+  it('covers a month in Monday-first weeks', () => {
+    const weeks = monthGrid(new Date(2026, 10, 15));
+    // November 2026 starts on a Sunday and ends on a Monday.
+    expect(weeks).toHaveLength(6);
+    expect(toDateKey(weeks[0][0])).toBe('2026-10-26');
+    expect(toDateKey(weeks[0][6])).toBe('2026-11-01');
+    expect(toDateKey(weeks[5][0])).toBe('2026-11-30');
+    expect(weeks.every((w) => w.length === 7)).toBe(true);
+  });
+
+  it('shifts months across years', () => {
+    expect(toDateKey(shiftMonth(new Date(2026, 11, 20), 1))).toBe('2027-01-01');
+    expect(toDateKey(shiftMonth(new Date(2026, 0, 31), -1))).toBe('2025-12-01');
+  });
+
+  it('keys items by their local scheduled day', () => {
+    expect(
+      scheduledDayKey({ startsAt: new Date(2026, 10, 6, 9).toISOString() }),
+    ).toBe('2026-11-06');
+    expect(scheduledDayKey({})).toBeNull();
+  });
+
+  it('moves undated or all-day items as all-day tasks, timed ones keep their time', () => {
+    const day = new Date(2026, 10, 12);
+    expect(moveToDay({}, day)).toEqual({
+      kind: 'task',
+      start: day,
+      allDay: true,
+    });
+    const timed = moveToDay(
+      {
+        startsAt: new Date(2026, 10, 6, 14, 30).toISOString(),
+        scheduleKind: 'event',
+      },
+      day,
+    );
+    expect(timed.allDay).toBe(false);
+    expect(timed.kind).toBe('event');
+    expect([
+      timed.start.getDate(),
+      timed.start.getHours(),
+      timed.start.getMinutes(),
+    ]).toEqual([12, 14, 30]);
   });
 });

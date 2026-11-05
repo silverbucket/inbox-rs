@@ -44,7 +44,10 @@ and todos get their own page with drag-to-order and a collapsed completed
 section. Todos don't need a deadline to be planned: mark one *Up next*, *This
 week*, *Next week*, *This month*, *Next month* or *Someday*, and the Todos page
 groups it under that horizon. When a week or month ends, anything left in it
-rolls forward into Up next, tagged with where it came from. Star your most-used
+rolls forward into Up next, tagged with where it came from. Switch the Todos page between
+**Today** (the phone default), **Horizon**, **Board** and **Calendar** views;
+anything that slipped can be re-planned, parked or finished in one pass from
+the review sheet. Star your most-used
 collections to keep them at the top of the sidebar and the filing picker. Search (`/`, or `⌘K` on a Mac and `Ctrl+K` elsewhere) runs across
 everything at once — titles, notes, links, transcripts, and collection names —
 and never leaves the browser.

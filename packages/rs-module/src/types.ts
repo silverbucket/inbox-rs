@@ -207,6 +207,11 @@ export interface AppConfig {
    * means the defaults: later horizons folded, near ones open.
    */
   collapsedPlanSections?: string[];
+  /**
+   * How the Todos page lays out the plan. Undefined means the default:
+   * 'today' on narrow screens, 'horizon' otherwise.
+   */
+  todosView?: 'today' | 'horizon' | 'board' | 'calendar';
 }
 
 export interface Collection {

@@ -223,6 +223,10 @@ export const appConfigSchema = {
     completedTodosExpanded: { type: 'boolean' },
     favoriteCollectionIds: { type: 'array', items: { type: 'string' } },
     collapsedPlanSections: { type: 'array', items: { type: 'string' } },
+    todosView: {
+      type: 'string',
+      enum: ['today', 'horizon', 'board', 'calendar'],
+    },
   },
 };
 

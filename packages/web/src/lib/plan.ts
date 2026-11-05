@@ -365,3 +365,58 @@ export function planLabel(
 export function sectionColorVar(section: HorizonSection): string {
   return `var(--horizon-${section})`;
 }
+
+// ── Calendar helpers ───────────────────────────────────────────────────────
+
+/**
+ * The weeks (Monday-first) covering a month, each as seven local-midnight
+ * dates. Leading and trailing days from neighbouring months fill the first
+ * and last rows.
+ */
+export function monthGrid(month: Date): Date[][] {
+  const first = monthStart(month);
+  const next = addMonths(first, 1);
+  const weeks: Date[][] = [];
+  for (
+    let start = weekStart(first);
+    start.getTime() < next.getTime();
+    start = addDays(start, 7)
+  ) {
+    weeks.push(Array.from({ length: 7 }, (_, i) => addDays(start, i)));
+  }
+  return weeks;
+}
+
+/** Shift a month anchor by n months (first of the month). */
+export function shiftMonth(month: Date, n: number): Date {
+  return addMonths(monthStart(month), n);
+}
+
+/** Local date key of an item's scheduled day, or null. */
+export function scheduledDayKey(
+  item: Pick<InboxItem, 'startsAt'>,
+): string | null {
+  if (!item.startsAt) return null;
+  const d = new Date(item.startsAt);
+  return Number.isNaN(d.getTime()) ? null : toDateKey(d);
+}
+
+/**
+ * The schedule for moving an item to `day`: an all-day task when it had no
+ * time (or no date), otherwise the same clock time on the new day.
+ */
+export function moveToDay(
+  item: Pick<InboxItem, 'startsAt' | 'allDay' | 'scheduleKind'>,
+  day: Date,
+): { kind: 'event' | 'task'; start: Date; allDay: boolean } {
+  const start = new Date(day);
+  start.setHours(0, 0, 0, 0);
+  const old = item.startsAt ? new Date(item.startsAt) : null;
+  const timed = !!old && !Number.isNaN(old.getTime()) && !item.allDay;
+  if (timed && old) start.setHours(old.getHours(), old.getMinutes(), 0, 0);
+  return {
+    kind: item.scheduleKind ?? 'task',
+    start,
+    allDay: !timed,
+  };
+}

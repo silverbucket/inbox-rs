@@ -1,0 +1,108 @@
+// @vitest-environment jsdom
+import type { InboxItem } from '@inbox-rs/rs-module';
+import { flushSync, mount, unmount } from 'svelte';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { setItemPlan, storeItem, setItemCompleted } = vi.hoisted(() => ({
+  setItemPlan: vi.fn().mockResolvedValue(undefined),
+  storeItem: vi.fn().mockResolvedValue(undefined),
+  setItemCompleted: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../lib/stores', () => ({ setItemPlan, storeItem }));
+vi.mock('../lib/schedule-sync', () => ({ setItemCompleted }));
+
+import { planFor, toDateKey } from '../lib/plan';
+import SlippedReview from './SlippedReview.svelte';
+
+const todo = (id: string, extra: Partial<InboxItem> = {}): InboxItem =>
+  ({
+    id,
+    type: 'todo',
+    title: `Todo ${id}`,
+    completed: false,
+    createdAt: '2026-10-01T00:00:00.000Z',
+    ...extra,
+  }) as InboxItem;
+
+describe('SlippedReview', () => {
+  let host: HTMLElement;
+  let component: ReturnType<typeof mount> | undefined;
+  const overdue = todo('late', {
+    startsAt: '2026-09-03T07:00:00.000Z',
+    scheduleKind: 'task',
+  });
+  const rolled = todo('rolled', { planKind: 'week', planStart: '2026-10-26' });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    component = mount(SlippedReview, {
+      target: host,
+      props: {
+        overdue: [overdue],
+        rolled: [{ todo: rolled, from: 'from last week' }],
+        lookupCollection: () => null,
+        onclose: vi.fn(),
+      },
+    });
+    flushSync();
+  });
+
+  afterEach(() => {
+    if (component) unmount(component);
+    component = undefined;
+    host.remove();
+  });
+
+  const actionsFor = (title: string) =>
+    document.querySelector(
+      `[role="group"][aria-label="What to do with ${title}"]`,
+    );
+  const click = (title: string, label: string) => {
+    const btn = [...(actionsFor(title)?.querySelectorAll('button') ?? [])].find(
+      (b) => b.textContent?.trim() === label,
+    );
+    if (!btn) throw new Error(`no "${label}" for ${title}`);
+    btn.click();
+    flushSync();
+  };
+
+  it('counts and lists overdue and rolled-over todos', () => {
+    expect(document.querySelector('#slipped-title')?.textContent).toContain(
+      '2 things slipped',
+    );
+    expect(document.body.textContent).toContain('from last week');
+    // Only overdue todos get a "Today" shortcut.
+    expect(actionsFor('Todo late')?.textContent).toContain('Today');
+    expect(actionsFor('Todo rolled')?.textContent).not.toContain('Today');
+  });
+
+  it('re-plans a rolled-over todo', async () => {
+    click('Todo rolled', 'Someday');
+    await vi.waitFor(() => expect(setItemPlan).toHaveBeenCalledOnce());
+    expect(setItemPlan).toHaveBeenCalledWith(
+      rolled,
+      planFor('someday', new Date()),
+    );
+  });
+
+  it('moves an overdue todo to today as an all-day task', async () => {
+    click('Todo late', 'Today');
+    await vi.waitFor(() => expect(storeItem).toHaveBeenCalledOnce());
+    const saved = storeItem.mock.calls[0][0] as InboxItem;
+    expect(saved.allDay).toBe(true);
+    expect(saved.scheduleKind).toBe('task');
+    expect(toDateKey(new Date(saved.startsAt as string))).toBe(
+      toDateKey(new Date()),
+    );
+  });
+
+  it('completes a todo', async () => {
+    click('Todo late', 'Done');
+    await vi.waitFor(() =>
+      expect(setItemCompleted).toHaveBeenCalledWith(overdue, true),
+    );
+  });
+});
