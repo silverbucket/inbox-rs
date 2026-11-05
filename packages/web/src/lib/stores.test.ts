@@ -2556,6 +2556,59 @@ describe('visibleTodos', () => {
     expect(get(visibleTodos).map((t) => t.id)).toEqual(['u2', 'u1']);
   });
 
+  it("keeps a list's todos off the plan, except its plan column as Someday", () => {
+    items.set({
+      plain: makeTodo('plain', { collectionId: 'movies' }),
+      picked: makeTodo('picked', {
+        collectionId: 'movies',
+        boardColumns: { watch: 'want' },
+      }),
+      dated: makeTodo('dated', {
+        collectionId: 'movies',
+        boardColumns: { watch: 'want' },
+        planKind: 'week',
+        planStart: '2026-11-02',
+      }),
+      other: makeTodo('other', { collectionId: 'work' }),
+    });
+    collections.set({
+      movies: {
+        ...makeCollection('movies', 'g1'),
+        offPlan: true,
+        boardSetId: 'watch',
+        planColumnId: 'want',
+      },
+      work: makeCollection('work', 'g1'),
+    });
+    groups.set({ g1: makeGroup('g1', ['movies', 'work']) });
+    appConfig.set({
+      columnSets: [
+        {
+          id: 'watch',
+          name: 'Watch list',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          columns: [
+            { id: 'unsorted', name: 'Unsorted', color: '#888' },
+            { id: 'want', name: 'Want to watch', color: '#d97706' },
+          ],
+        },
+      ],
+    });
+
+    const shown = get(visibleTodos);
+    expect(shown.map((t) => t.id).sort()).toEqual(['dated', 'other', 'picked']);
+    expect(shown.find((t) => t.id === 'picked')?.planKind).toBe('someday');
+    // An existing plan wins over the Someday default.
+    expect(shown.find((t) => t.id === 'dated')?.planKind).toBe('week');
+
+    // Without a plan column, nothing from the list shows.
+    collections.update((c) => ({
+      ...c,
+      movies: { ...c.movies, planColumnId: undefined },
+    }));
+    expect(get(visibleTodos).map((t) => t.id)).toEqual(['other']);
+  });
+
   it('hides collection todos whose group is filtered out', () => {
     items.set({
       c1: makeTodo('c1', { collectionId: 'col-active' }),

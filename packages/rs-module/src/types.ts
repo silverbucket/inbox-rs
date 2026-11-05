@@ -47,6 +47,13 @@ export interface InboxItemBase {
    */
   planKind?: PlanKind;
   planStart?: string;
+  /**
+   * Board placement: column set id → column id. Keyed by set so an item
+   * keeps its column in every set it has been on; moving a collection back
+   * to an earlier set restores where its items were. A missing or unknown
+   * column reads as the set's Unsorted column.
+   */
+  boardColumns?: Record<string, string>;
   /** CalDAV object href + etag once posted to a calendar; absent until then. */
   eventUrl?: string;
   eventEtag?: string;
@@ -212,6 +219,34 @@ export interface AppConfig {
    * 'today' on narrow screens, 'horizon' otherwise.
    */
   todosView?: 'today' | 'horizon' | 'board' | 'calendar';
+  /**
+   * Shared board columns, in the user's order. A collection opts in with
+   * `Collection.boardSetId`; collections on the same set can share a board.
+   */
+  columnSets?: ColumnSet[];
+  /** How each collection is shown: collection id → view. Default: grid. */
+  collectionViews?: Record<string, CollectionViewMode>;
+}
+
+export type CollectionViewMode = 'grid' | 'list' | 'board';
+
+/** Id of every set's first column, where new and unplaced items land. */
+export const BOARD_UNSORTED = 'unsorted';
+
+export interface BoardColumn {
+  id: string;
+  name: string;
+  color: string;
+  /** Checking a todo on the board moves it here instead of hiding it. */
+  done?: boolean;
+}
+
+export interface ColumnSet {
+  id: string;
+  name: string;
+  /** First is always Unsorted (id `BOARD_UNSORTED`), which can't be deleted. */
+  columns: BoardColumn[];
+  createdAt: string;
 }
 
 export interface Collection {
@@ -224,6 +259,14 @@ export interface Collection {
   groupId?: string; // optional group membership
   archived?: boolean;
   archivedAt?: string;
+  /** Column set this collection's board uses; unset means no board. */
+  boardSetId?: string;
+  /**
+   * A list (Movies, a reading list): its todos stay off the Todos plan.
+   * `planColumnId` brings one board column's todos back as Someday.
+   */
+  offPlan?: boolean;
+  planColumnId?: string;
 }
 
 export interface CollectionGroup {

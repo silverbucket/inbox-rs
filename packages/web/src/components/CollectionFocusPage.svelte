@@ -8,6 +8,12 @@
   } from '../lib/stores';
   import CollectionView from './CollectionView.svelte';
   import CollectionFormModal from './CollectionFormModal.svelte';
+  import type { CollectionViewMode } from '@inbox-rs/rs-module';
+  import { collectionViews, columnSets, setCollectionView, viewFor } from '../lib/board-actions';
+  import { showToast } from '../lib/toast';
+  import BoardColumns from './boards/BoardColumns.svelte';
+  import BoardSettingsSheet from './boards/BoardSettingsSheet.svelte';
+  import CollectionListView from './boards/CollectionListView.svelte';
 
   let { collectionId, onselect, onexit }: {
     collectionId: string;
@@ -25,6 +31,31 @@
 
   let editing = $state(false);
   let panelEl = $state<HTMLElement>();
+  let boardSettings = $state(false);
+
+  const view = $derived<CollectionViewMode>(collection ? viewFor(collection, $collectionViews) : 'grid');
+  const set = $derived($columnSets.find((s) => s.id === collection?.boardSetId));
+  const ownItems = $derived($collectionItems[collectionId] ?? []);
+  const lookupCollection = (id: string | undefined) => (id ? ($collections[id] ?? null) : null);
+  const VIEWS: Array<{ id: CollectionViewMode; label: string }> = [
+    { id: 'grid', label: 'Grid' },
+    { id: 'list', label: 'List' },
+    { id: 'board', label: 'Board' },
+  ];
+
+  async function chooseView(next: CollectionViewMode) {
+    // A board needs a column set first: pick or create one.
+    if (next === 'board' && !set) {
+      boardSettings = true;
+      return;
+    }
+    try {
+      await setCollectionView(collectionId, next);
+    } catch (error) {
+      console.error('Failed to switch view', error);
+      showToast('Couldn’t switch the view');
+    }
+  }
 
   let isTouchDevice = $state(false);
   $effect(() => {
@@ -89,7 +120,7 @@
    */
   function handleWindowKeydown(e: KeyboardEvent) {
     if (e.key !== 'Escape' || e.defaultPrevented) return;
-    if (editing) return;
+    if (editing || boardSettings) return;
     const target = e.target as HTMLElement | null;
     if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
     for (const el of document.querySelectorAll('[aria-modal="true"]')) {
@@ -136,6 +167,16 @@
             {group.name}
           </span>
         {/if}
+        <span class="toolbar-spacer"></span>
+        <div class="view-switch" role="group" aria-label="View">
+          {#each VIEWS as v (v.id)}
+            <button type="button" aria-pressed={view === v.id} onclick={() => chooseView(v.id)}>{v.label}</button>
+          {/each}
+        </div>
+        <button type="button" class="btn-back" onclick={() => (boardSettings = true)} title="Board columns">
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="5" height="16" rx="1"></rect><rect x="10" y="4" width="5" height="11" rx="1"></rect><rect x="17" y="4" width="4" height="7" rx="1"></rect></svg>
+          Columns
+        </button>
       </div>
       <!-- The card is pinned open; collapsing it (header click / ontoggle) is
            how you leave, mirroring what collapse means on the Collections
@@ -146,6 +187,18 @@
            off the flex panel avoids shrinking CollectionView to the viewport,
            where its desktop overflow clipping would hide the remaining cards. -->
       <div class="focus-scroll">
+        {#if view === 'board' && set}
+          <div class="alt-view">
+            <h2 class="alt-title">{collection.name} <span class="alt-sub">{ownItems.length} {ownItems.length === 1 ? 'item' : 'items'} · {set.name}</span></h2>
+            <BoardColumns {set} items={ownItems} {lookupCollection} addTargets={[collection]} canAddColumns {onselect} />
+            <p class="alt-note">Drag cards between columns, or use a card's move button. Notes and links have no checkbox — moving them is the whole action.{#if set.columns.some((c) => c.done)} A todo checked here moves to {set.columns.find((c) => c.done)?.name} instead of disappearing.{/if}</p>
+          </div>
+        {:else if view === 'list'}
+          <div class="alt-view">
+            <h2 class="alt-title">{collection.name} <span class="alt-sub">{ownItems.length} {ownItems.length === 1 ? 'item' : 'items'}</span></h2>
+            <CollectionListView {collection} items={ownItems} {onselect} />
+          </div>
+        {:else}
         <CollectionView
           {collection}
           expanded
@@ -154,6 +207,7 @@
           onedit={() => editing = true}
           ontoggle={onexit}
         />
+        {/if}
       </div>
     {:else}
       <div class="focus-missing">
@@ -163,6 +217,10 @@
     {/if}
   </div>
 </div>
+
+{#if boardSettings && collection}
+  <BoardSettingsSheet {collectionId} onclose={() => (boardSettings = false)} />
+{/if}
 
 {#if editing && collection}
   <CollectionFormModal
@@ -247,6 +305,61 @@
   .btn-back:hover {
     color: var(--text);
     border-color: var(--text-muted);
+  }
+
+  .toolbar-spacer {
+    flex: 1;
+  }
+
+  .view-switch {
+    display: inline-flex;
+    padding: 2px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-tint);
+  }
+
+  .view-switch button {
+    padding: 0.28rem 0.65rem;
+    border: 0;
+    border-radius: calc(var(--radius-sm) - 2px);
+    background: none;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .view-switch button[aria-pressed='true'] {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 1px 2px var(--shadow);
+  }
+
+  .alt-view {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    padding-top: 0.5rem;
+  }
+
+  .alt-title {
+    margin: 0;
+    font-size: 1.15rem;
+  }
+
+  .alt-sub {
+    margin-left: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+
+  .alt-note {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
   }
 
   .crumb-group {

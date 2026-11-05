@@ -74,9 +74,12 @@ const CURRENT_TYPES: Set<string> = new Set<string>([
 export type {
   AppConfig,
   AudioItem,
+  BoardColumn,
   BookmarkItem,
   Collection,
   CollectionGroup,
+  CollectionViewMode,
+  ColumnSet,
   DocumentItem,
   EmailItem,
   ImageItem,
@@ -89,6 +92,7 @@ export type {
   UserSettings,
   VideoItem,
 } from './types.js';
+export { BOARD_UNSORTED } from './types.js';
 
 export interface InboxModuleExports {
   getAll(): Promise<Record<string, InboxItem>>;

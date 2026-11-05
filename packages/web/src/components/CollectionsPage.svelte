@@ -10,18 +10,99 @@
     appConfig, updateConfig, reorderGroupCollections, setExpandedCollections,
     collectionItems, groups, orphanCollections,
     archivedCollections, archivedGroups, setCollectionArchived, setGroupArchived,
+    favoriteCollections, collections,
   } from '../lib/stores';
+  import { now } from '../lib/now';
+  import { placeTodo } from '../lib/plan';
+  import FavoriteCard from './FavoriteCard.svelte';
   import CollectionView from './CollectionView.svelte';
   import GroupSection from './GroupSection.svelte';
   import CollectionFormModal from './CollectionFormModal.svelte';
   import GroupFormModal from './GroupFormModal.svelte';
   import Fab from './Fab.svelte';
 
-  let { onselect, onfocuscollection }: {
+  let { onselect, onfocuscollection, ongroupboard = undefined }: {
     onselect: (item: InboxItem) => void;
     /** Open a collection in focus mode (fullscreen, `#/collection/:id`). */
     onfocuscollection: (id: string) => void;
+    /** Open a group's board (`#/group-board/:id`). */
+    ongroupboard?: (groupId: string) => void;
   } = $props();
+
+  // ── Header: summary and filter ──────────────────────────────────────
+  let filter = $state('');
+  const query = $derived(filter.trim().toLowerCase());
+  const liveCollections = $derived(Object.values($collections).filter((c) => !c.archived));
+  const summary = $derived.by(() => {
+    const n = liveCollections.length;
+    const g = $sortedGroups.length;
+    const itemsTotal = liveCollections.reduce((sum, c) => sum + ($collectionItems[c.id]?.length ?? 0), 0);
+    return `${n} ${n === 1 ? 'collection' : 'collections'} in ${g} ${g === 1 ? 'group' : 'groups'} · ${itemsTotal} items`;
+  });
+  const matches = (c: Collection) => !query || c.name.toLowerCase().includes(query);
+
+  // ── Favourites: cards above the groups ──────────────────────────────
+  const favorites = $derived($favoriteCollections.filter((c) => c && !c.archived));
+
+  function todoSummary(col: Collection): { text: string; tone: 'plain' | 'week' | 'warn' | 'muted' } {
+    const todos = ($collectionItems[col.id] ?? []).filter((i) => (i.isTodo || i.type === 'todo') && !i.completed && !i.archived);
+    if (todos.length === 0) {
+      const unsorted = col.boardSetId
+        ? ($collectionItems[col.id] ?? []).filter((i) => !i.boardColumns?.[col.boardSetId as string]).length
+        : 0;
+      return unsorted
+        ? { text: `${unsorted} unsorted on the board`, tone: 'muted' }
+        : { text: 'Nothing to do', tone: 'muted' };
+    }
+    let week = 0;
+    let rolled = 0;
+    for (const t of todos) {
+      const p = placeTodo(t, $now);
+      if (p.rolledFrom) rolled++;
+      else if (p.section === 'week') week++;
+    }
+    const parts = [`${todos.length} to do`];
+    if (rolled) parts.push(`${rolled} rolled over`);
+    else if (week) parts.push(`${week} this week`);
+    return { text: parts.join(' · '), tone: rolled ? 'warn' : week ? 'week' : 'plain' };
+  }
+
+  function latestTitle(col: Collection): string {
+    const list = $collectionItems[col.id] ?? [];
+    let best: InboxItem | undefined;
+    for (const i of list) if (!best || i.createdAt > best.createdAt) best = i;
+    return best?.title ?? '';
+  }
+
+  // ── Folding groups (per device: a view preference, not data) ────────
+  const FOLD_KEY = 'inbox-rs:collapsed-groups';
+  function readFolded(): Set<string> {
+    try {
+      const raw = localStorage.getItem(FOLD_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : []);
+    } catch {
+      return new Set();
+    }
+  }
+  let folded = $state<Set<string>>(readFolded());
+  function toggleFold(groupId: string) {
+    const next = new Set(folded);
+    if (next.has(groupId)) next.delete(groupId);
+    else next.add(groupId);
+    folded = next;
+    try {
+      localStorage.setItem(FOLD_KEY, JSON.stringify([...next]));
+    } catch {
+      // Storage unavailable: folding still works for this visit.
+    }
+  }
+  function peekFor(cols: Collection[]): string {
+    const favs = new Set(favorites.map((c) => c.id));
+    const names = cols.slice(0, 5).map((c) => (favs.has(c.id) ? `${c.name} ★` : c.name));
+    return names.join(', ') + (cols.length > 5 ? '…' : '');
+  }
+  const hasBoard = (cols: Collection[]) => cols.some((c) => !!c.boardSetId);
 
   let editingCollection = $state<Collection | null>(null);
   let editingGroup = $state<CollectionGroup | null>(null);
@@ -283,6 +364,20 @@
     conditional. On mobile the Fab is position:fixed (out of flow) and the
     toolbar collapses to zero height when no other controls are present.
   -->
+  <header class="page-head">
+    <div>
+      <h1 class="page-title">Collections</h1>
+      <p class="page-summary">{summary}</p>
+    </div>
+    <input
+      class="page-filter"
+      type="search"
+      placeholder="Filter collections"
+      aria-label="Filter collections"
+      bind:value={filter}
+    />
+  </header>
+
   <div class="page-toolbar">
     {#if visibleIds.length > 0}
       <button type="button" class="btn-expand-toggle" onclick={toggleExpandAll}>
@@ -295,12 +390,63 @@
     <Fab onclick={() => openAddCollection(undefined)} label="New collection" />
   </div>
 
-  {#each sections as section (section.group.id)}
+  {#if favorites.length > 0 && !query}
+    <section class="favorites" aria-labelledby="favorites-heading">
+      <div class="fav-head">
+        <h2 id="favorites-heading">Favorites</h2>
+        <span class="fav-hint">also first in the sidebar and in every “File into…” picker</span>
+      </div>
+      <div class="fav-grid">
+        {#each favorites as col (col.id)}
+          {@const sum = todoSummary(col)}
+          <FavoriteCard
+            collection={col}
+            groupName={col.groupId ? ($groups[col.groupId]?.name ?? '') : ''}
+            itemCount={$collectionItems[col.id]?.length ?? 0}
+            latest={latestTitle(col)}
+            todoText={sum.text}
+            tone={sum.tone}
+            onopen={() => onfocuscollection(col.id)}
+          />
+        {/each}
+      </div>
+    </section>
+  {/if}
+
+  {#if query}
+    {@const found = liveCollections.filter(matches)}
+    <section class="filter-results" aria-label="Collections matching {filter}">
+      {#if found.length === 0}
+        <p class="page-empty">No collection matches “{filter}”.</p>
+      {:else}
+        <div class="collection-list">
+          {#each found as col (col.id)}
+            <CollectionView
+              collection={col}
+              expanded={isExpanded(col)}
+              {onselect}
+              {isTouchDevice}
+              onedit={() => editingCollection = col}
+              ontoggle={() => toggleExpand(col)}
+              onfocus={() => onfocuscollection(col.id)}
+            />
+          {/each}
+        </div>
+      {/if}
+    </section>
+  {/if}
+
+  {#each query ? [] : sections as section (section.group.id)}
     {@const realCount = dndByGroup[section.group.id]?.length ?? 0}
     <GroupSection
       group={section.group}
       onedit={() => editingGroup = section.group}
       onaddcollection={() => openAddCollection(section.group.id)}
+      collapsed={folded.has(section.group.id)}
+      ontogglecollapse={() => toggleFold(section.group.id)}
+      peek={realCount ? peekFor(section.collections) : 'Empty — drag a collection here'}
+      count={realCount}
+      onboard={ongroupboard && hasBoard(section.collections) ? () => ongroupboard?.(section.group.id) : undefined}
     >
       {#if realCount > 0}
         <div
@@ -479,6 +625,79 @@
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
+  }
+
+  .page-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem 1.25rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-head > div {
+    flex: 1 1 14rem;
+  }
+
+  .page-title {
+    margin: 0;
+    font-size: 1.35rem;
+  }
+
+  .page-summary {
+    margin: 0.15rem 0 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  .page-filter {
+    flex: 0 1 18rem;
+    min-width: 0;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    /* >= 1rem keeps iOS Safari from zooming on focus. */
+    font-size: 1rem;
+  }
+
+  .page-filter:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .favorites {
+    margin-bottom: 1.5rem;
+  }
+
+  .fav-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin-bottom: 0.65rem;
+  }
+
+  .fav-head h2 {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .fav-hint {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+
+  .fav-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    gap: 0.75rem;
+  }
+
+  .filter-results {
+    margin-bottom: 1.5rem;
   }
 
   .page-toolbar {

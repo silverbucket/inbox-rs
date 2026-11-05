@@ -4,6 +4,7 @@
   import { slide } from 'svelte/transition';
   import { alertPermission } from '../lib/alerts';
   import { trapFocus } from '../lib/actions';
+  import { columnSets } from '../lib/board-actions';
   import { calendarAccounts } from '../lib/calendar-accounts';
   import { needsLinkPreview } from '../lib/enrich';
   import { layout } from '../lib/layout';
@@ -16,6 +17,7 @@
   import AppearanceSettings from './settings/AppearanceSettings.svelte';
   import AppsSettings from './settings/AppsSettings.svelte';
   import CalendarSettings from './settings/CalendarSettings.svelte';
+  import ColumnSetsSettings from './settings/ColumnSetsSettings.svelte';
   import DataSettings from './settings/DataSettings.svelte';
   import LinkSettings from './settings/LinkSettings.svelte';
   import NotificationsSettings from './settings/NotificationsSettings.svelte';
@@ -45,6 +47,7 @@
       case 'links': return $userSettings.linkPreviews === false ? 'Off' : 'On';
       case 'calendars': return `${$calendarAccounts.length} account${$calendarAccounts.length === 1 ? '' : 's'}`;
       case 'notifications': return $alertPermission === 'granted' ? 'Allowed' : 'Not allowed';
+      case 'columns': return `${$columnSets.length} set${$columnSets.length === 1 ? '' : 's'}`;
       case 'data': return `${itemList.length} item${itemList.length === 1 ? '' : 's'}`;
       case 'apps': return 'Capture tools';
       case 'account': return $connectionStatus;
@@ -57,6 +60,7 @@
       case 'links': return `${missingPreviews} links still to fetch`;
       case 'calendars': return $calendarAccounts.length ? `${$calendarAccounts.reduce((n,a)=>n+a.calendars.length,0)} calendars` : 'Add a calendar account';
       case 'notifications': return 'Alerts when a todo is due';
+      case 'columns': return 'Shared columns for item boards';
       case 'data': return 'Export or restore a backup';
       case 'apps': return 'Apps and add-ons';
       case 'account': return $userAddress || 'Connect remoteStorage';
@@ -120,7 +124,7 @@
 
 {#snippet Section(section: SettingsSection)}
   <div class="section-head"><span class="sec-icon"><SettingsIcon name={section.icon}/></span><div><h3>{section.title}</h3><p>{stateLine(section)}</p></div>{#if !mobile}<button type="button" aria-label={`Collapse ${section.title}`} onclick={back}>✕</button>{/if}</div>
-  {#if section.id==='appearance'}<AppearanceSettings/>{:else if section.id==='links'}<LinkSettings/>{:else if section.id==='calendars'}<CalendarSettings/>{:else if section.id==='notifications'}<NotificationsSettings/>{:else if section.id==='data'}<DataSettings/>{:else if section.id==='apps'}<AppsSettings/>{:else if section.id==='account'}<AccountSettings focusConnect={initialSection==='account'}/>{:else}<AboutSettings/>{/if}
+  {#if section.id==='appearance'}<AppearanceSettings/>{:else if section.id==='links'}<LinkSettings/>{:else if section.id==='calendars'}<CalendarSettings/>{:else if section.id==='notifications'}<NotificationsSettings/>{:else if section.id==='columns'}<ColumnSetsSettings/>{:else if section.id==='data'}<DataSettings/>{:else if section.id==='apps'}<AppsSettings/>{:else if section.id==='account'}<AccountSettings focusConnect={initialSection==='account'}/>{:else}<AboutSettings/>{/if}
 {/snippet}
 
 <style>

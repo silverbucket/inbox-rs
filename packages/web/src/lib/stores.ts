@@ -8,6 +8,7 @@ import type {
 import { migrator, wrapCodeBlock } from '@inbox-rs/rs-module';
 import type { Readable, Writable } from 'svelte/store';
 import { derived, get, writable } from 'svelte/store';
+import { columnOf } from './boards';
 import { replayCardDrafts } from './card-draft-recovery';
 import { cleanForStorage } from './clean-for-storage';
 import { pinItemsFirst } from './collection-todos';
@@ -2515,9 +2516,24 @@ export const visibleTodos = derived(
         !!col.archived || !!(col.groupId && $groups[col.groupId]?.archived)
       );
     };
+    // Lists keep their todos off the plan, except the one board column the
+    // list brings back; those read as Someday when they have no plan.
+    const listColumn = (todo: InboxItem): 'off' | 'someday' | 'on' => {
+      const col = todo.collectionId
+        ? $collections[todo.collectionId]
+        : undefined;
+      if (!col?.offPlan) return 'on';
+      const set = col.planColumnId
+        ? $config.columnSets?.find((x) => x.id === col.boardSetId)
+        : undefined;
+      return set && columnOf(todo, set) === col.planColumnId
+        ? 'someday'
+        : 'off';
+    };
     const filtered = $allTodos.filter(
       (todo) =>
         !todo.archived &&
+        listColumn(todo) !== 'off' &&
         (($kept.has(todo.id) && !inArchivedCollection(todo)) ||
           todoPassesGroupFilter(
             todo,
@@ -2527,8 +2543,14 @@ export const visibleTodos = derived(
           )),
     );
 
+    const shown = filtered.map((todo) =>
+      listColumn(todo) === 'someday' && !todo.planKind && !todo.startsAt
+        ? ({ ...todo, planKind: 'someday' } as InboxItem)
+        : todo,
+    );
+
     const sorted = sortWithConfiguredOrder(
-      filtered,
+      shown,
       $config.todosGlobalOrder,
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
