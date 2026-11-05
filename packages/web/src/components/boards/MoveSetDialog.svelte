@@ -11,7 +11,7 @@
     makePrivateCopy,
     moveCollectionToSet,
   } from '../../lib/board-actions';
-  import { columnOf, isAutoMatch, matchColumns, moveTarget, withColumn } from '../../lib/boards';
+  import { columnOf, isAutoMatch, mapPlanColumn, matchColumns, moveTarget, withColumn } from '../../lib/boards';
   import { collections, items } from '../../lib/stores';
   import { showToast } from '../../lib/toast';
   import Sheet from './Sheet.svelte';
@@ -85,13 +85,21 @@
   });
 
   let busy = $state(false);
+  const planColumnName = $derived(
+    collection?.planColumnId ? from?.columns.find((c) => c.id === collection.planColumnId)?.name : undefined,
+  );
+  const planTarget = $derived(to ? mapPlanColumn(collection?.planColumnId, to, mapping) : undefined);
 
   async function move() {
     if (!to || busy) return;
     busy = true;
     try {
-      await moveCollectionToSet(collectionId, to.id, from ? mapping : {}, explicit);
-      showToast(`${collection?.name ?? 'Collection'} now uses ${to.name}`);
+      const { planColumnDropped } = await moveCollectionToSet(collectionId, to.id, from ? mapping : {}, explicit);
+      showToast(
+        planColumnDropped
+          ? `${collection?.name ?? 'Collection'} now uses ${to.name}. Pick its plan column again under Columns — until then none of its todos show on the plan.`
+          : `${collection?.name ?? 'Collection'} now uses ${to.name}`,
+      );
       onclose();
     } catch (error) {
       console.error('Failed to move collection to set', error);
@@ -170,6 +178,15 @@
         <strong>Result:</strong> {result}
         {#if others > 0}The {others} other {from.name} {others === 1 ? 'collection isn’t' : 'collections aren’t'} affected.{/if}
       </p>
+      {#if collection.offPlan && planColumnName}
+        <p class="bx-note">
+          {#if planTarget}
+            {collection.name}'s todos in {planColumnName} show on the plan; after the move, its {to.columns.find((c) => c.id === planTarget)?.name} todos will.
+          {:else}
+            <strong>{planColumnName}</strong> maps to Unsorted, so {collection.name} (a list) will have no todos on the plan until you pick a plan column again.
+          {/if}
+        </p>
+      {/if}
       <p class="bx-note">Items remember their {from.name} column — move {collection.name} back and they return to where they were.</p>
       {#if others > 0}
         <button type="button" class="bx-link" disabled={busy} onclick={copyInstead}>Make a private copy of {from.name} instead</button>

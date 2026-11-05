@@ -10,6 +10,7 @@ import {
   BOARD_UNSORTED,
   columnOf,
   copySet,
+  mapPlanColumn,
   moveTarget,
   normalizeColumns,
   placeItem,
@@ -211,11 +212,11 @@ export async function moveCollectionToSet(
   mapping: Record<string, string>,
   /** Source columns whose target the user picked (honoured even if Unsorted). */
   explicit: ReadonlySet<string> = new Set(),
-) {
+): Promise<{ planColumnDropped: boolean }> {
   const col = get(collections)[collectionId];
   const from = findSet(col?.boardSetId);
   const to = findSet(toSetId);
-  if (!col || !to) return;
+  if (!col || !to) return { planColumnDropped: false };
   flushItemChanges();
   for (const item of itemsOf([collectionId])) {
     const target = moveTarget(item, from, to, mapping, explicit);
@@ -223,7 +224,18 @@ export async function moveCollectionToSet(
     if (item.boardColumns?.[to.id] === target) continue;
     await storeItem(withColumn(item, to, target));
   }
-  await setCollectionsBoard([collectionId], toSetId);
+  // A list's plan column follows the mapping, so its todos stay on the plan.
+  const plan = col.offPlan
+    ? mapPlanColumn(col.planColumnId, to, mapping)
+    : undefined;
+  const next: Collection = {
+    ...get(collections)[collectionId],
+    boardSetId: to.id,
+  };
+  if (plan) next.planColumnId = plan;
+  else delete next.planColumnId;
+  await storeCollection(next);
+  return { planColumnDropped: !!col.offPlan && !!col.planColumnId && !plan };
 }
 
 /** Give a collection its own copy of its set; nothing else changes. */

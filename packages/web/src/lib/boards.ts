@@ -185,6 +185,22 @@ export function withColumn<T extends InboxItem>(
   };
 }
 
+/**
+ * A list's plan column after its collection moves to another set: the
+ * column it maps to, or undefined when it maps to Unsorted (that would put
+ * every unsorted todo on the plan) or the collection has none.
+ */
+export function mapPlanColumn(
+  planColumnId: string | undefined,
+  to: ColumnSet,
+  mapping: Record<string, string>,
+): string | undefined {
+  if (!planColumnId) return undefined;
+  const target = mapping[planColumnId];
+  if (!target || target === BOARD_UNSORTED) return undefined;
+  return to.columns.some((c) => c.id === target) ? target : undefined;
+}
+
 export function placeItem<T extends InboxItem>(
   item: T,
   set: ColumnSet,

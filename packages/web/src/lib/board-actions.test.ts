@@ -193,6 +193,29 @@ describe('board actions', () => {
     expect(columnOf(item('doneOne'), shipped)).toBe('done');
   });
 
+  it("carries a list's plan column across a set switch", async () => {
+    stores.collections.set({
+      a: col('a', { boardSetId: 'pipe', offPlan: true, planColumnId: 'build' }),
+    });
+    const kept = await moveCollectionToSet('a', 'read', { build: 'next' });
+    expect(kept.planColumnDropped).toBe(false);
+    expect(get(stores.collections).a).toMatchObject({
+      boardSetId: 'read',
+      offPlan: true,
+      planColumnId: 'next',
+    });
+  });
+
+  it('drops (and reports) a plan column that maps to Unsorted', async () => {
+    stores.collections.set({
+      a: col('a', { boardSetId: 'pipe', offPlan: true, planColumnId: 'idea' }),
+    });
+    const res = await moveCollectionToSet('a', 'read', {});
+    expect(res.planColumnDropped).toBe(true);
+    expect(get(stores.collections).a.planColumnId).toBeUndefined();
+    expect(get(stores.collections).a.offPlan).toBe(true);
+  });
+
   it('honours an explicit Unsorted over a remembered column', async () => {
     stores.items.set({
       x: note('x', {

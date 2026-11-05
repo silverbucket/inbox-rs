@@ -193,10 +193,14 @@
       {#if confirmDelete}
         {@const all = Object.values($collections).filter((c) => c.boardSetId === set.id)}
         {@const archived = all.length - u.length}
+        {@const lists = all.filter((c) => c.offPlan && c.planColumnId)}
         <p class="bx-warn">
           {all.length
             ? `${all.length} ${all.length === 1 ? 'collection loses its board' : 'collections lose their boards'}${archived ? ` (${archived} archived)` : ''}; their items keep their columns in case you set it up again.`
             : 'Nothing uses this set.'}
+          {#if lists.length}
+            {lists.map((c) => c.name).join(', ')} {lists.length === 1 ? 'is a list' : 'are lists'} showing a column on the plan; {lists.length === 1 ? 'its' : 'their'} todos leave the plan until you untick “It's a list”.
+          {/if}
         </p>
       {/if}
 
