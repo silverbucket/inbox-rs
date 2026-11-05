@@ -3,6 +3,7 @@
   import {
     captureImage,
     captureNote,
+    captureSharedFile,
     type SharedLink,
     captureVoice,
     type CaptureMode,
@@ -19,6 +20,7 @@
     startConnect,
   } from './store';
   import { bookmarkUrlFromText } from '../lib/capture-detect';
+  import { consumeSharedFiles, SHARE_CACHE } from '../lib/share-target';
   import {
     type Accent,
     ACCENT_LABELS,
@@ -29,6 +31,13 @@
     type Mode,
   } from './theme';
   import StagingBadge from '../components/StagingBadge.svelte';
+
+  // File Handling API ("Open with Inbox RS" on desktop Chromium).
+  type LaunchQueue = {
+    setConsumer: (
+      consumer: (params: { files: FileSystemFileHandle[] }) => void,
+    ) => void;
+  };
 
   type BeforeInstallPromptEvent = Event & {
     prompt: () => Promise<void>;
@@ -90,7 +99,20 @@
     history = getHistory();
     isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
     status = idleStatus();
-    void syncNow();
+    // Files from a POST share (stashed by the service worker) are queued
+    // before the first sync so they go out with it.
+    void receiveSharedFiles().then(syncNow);
+    const launchQueue = (window as Window & { launchQueue?: LaunchQueue })
+      .launchQueue;
+    launchQueue?.setConsumer(({ files }) => {
+      void (async () => {
+        for (const handle of files) {
+          await captureSharedFile(await handle.getFile());
+        }
+        if (files.length > 0) afterFilesCaptured();
+        await syncNow();
+      })().catch(reportFileError);
+    });
 
     // Web Share Target: the OS share sheet lands here as
     // /capture/?title=…&text=…&url=…. Prefill the note composer and scrub the
@@ -156,6 +178,29 @@
       if (imageUrl) URL.revokeObjectURL(imageUrl);
     };
   });
+
+  async function receiveSharedFiles() {
+    try {
+      if (!('caches' in window) || !(await caches.has(SHARE_CACHE))) return;
+      const count = await consumeSharedFiles(
+        await caches.open(SHARE_CACHE),
+        captureSharedFile,
+      );
+      if (count > 0) afterFilesCaptured();
+    } catch (error) {
+      reportFileError(error);
+    }
+  }
+
+  function afterFilesCaptured() {
+    history = getHistory();
+    status = navigator.onLine ? 'Saved ✓' : 'Saved offline';
+  }
+
+  function reportFileError(error: unknown) {
+    console.error('Could not capture the shared file', error);
+    status = 'Could not save the shared file';
+  }
 
   function idleStatus(): string {
     if (!connectedAddress) return 'Not connected';
@@ -526,7 +571,7 @@
       <ul class="rec-list">
         {#each history as rec (rec.id)}
           <li class="rec rec-{rec.status}">
-            <span class="rec-mode">{rec.mode === 'note' ? 'Note' : rec.mode === 'voice' ? 'Voice' : 'Image'}</span>
+            <span class="rec-mode">{rec.mode === 'note' ? 'Note' : rec.mode === 'voice' ? 'Voice' : rec.mode === 'file' ? 'File' : 'Image'}</span>
             <div class="rec-main">
               <p class="rec-preview">{rec.preview}</p>
               <p class="rec-meta">

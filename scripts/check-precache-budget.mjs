@@ -34,13 +34,13 @@ try {
   process.exit(1);
 }
 
-// Workbox emits the manifest as [{url:"...",revision:"..."}]. Sum the size of
+// The injected manifest is JSON: [{"revision":"...","url":"..."}]. Sum the size of
 // each referenced dist file. Count each URL once: `includeAssets` and the
 // glob both list the icons and web manifest, but Workbox collapses identical
 // entries and fetches every URL a single time on install, so a duplicate
 // costs the visitor nothing.
 const urls = [
-  ...new Set([...sw.matchAll(/url:\s*"([^"]+)"/g)].map((m) => m[1])),
+  ...new Set([...sw.matchAll(/"?url"?:\s*"([^"]+)"/g)].map((m) => m[1])),
 ];
 if (urls.length === 0) {
   console.error(
@@ -78,7 +78,7 @@ if (total > BUDGET_BYTES) {
     console.error(`  ${kib(bytes).padStart(9)}  ${url}`);
   }
   console.error(
-    '\nIf a lazy-loaded chunk landed in the precache, add it to workbox.globIgnores' +
+    '\nIf a lazy-loaded chunk landed in the precache, add it to injectManifest.globIgnores' +
       ' in packages/web/vite.config.ts (see the transformers/MarkdownEditor entries).',
   );
   process.exit(1);

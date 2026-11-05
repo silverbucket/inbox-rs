@@ -89,6 +89,64 @@ test.describe('PWA release transitions', () => {
     }
   });
 
+  test('a POST share with a file lands in capture via the service worker', async ({
+    browser,
+    webOrigin,
+  }) => {
+    const context = await browser.newContext();
+    try {
+      const page = await context.newPage();
+      await page.goto(`${webOrigin}/capture/`);
+      await waitForServiceWorkerController(page);
+
+      // Submit the same multipart POST the OS share sheet sends to the
+      // manifest's share_target action.
+      await page.evaluate(() => {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/capture/';
+        form.enctype = 'multipart/form-data';
+        form.innerHTML =
+          '<input name="title" value="Invite"><input type="file" name="files">';
+        document.body.append(form);
+      });
+      await page.locator('input[type=file]').setInputFiles({
+        name: 'invite.ics',
+        mimeType: 'text/calendar',
+        buffer: Buffer.from(
+          'BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:Standup\nDTSTART:20261110T090000Z\nEND:VEVENT\nEND:VCALENDAR',
+        ),
+      });
+      // Deferred so the navigation doesn't tear down this evaluate call.
+      await page.evaluate(() => {
+        setTimeout(() => document.querySelector('form')?.submit());
+      });
+
+      // Redirected to the capture shell with the text carried over (then
+      // scrubbed), and the file queued as a scheduled note.
+      await expect(page.getByPlaceholder('Jot it down…')).toHaveValue('Invite');
+      await expect
+        .poll(() =>
+          page.evaluate(() =>
+            JSON.parse(
+              localStorage.getItem('inbox-rs-capture:history') ?? '[]',
+            ).map((r: { item: { type: string; title: string } }) => [
+              r.item.type,
+              r.item.title,
+            ]),
+          ),
+        )
+        .toEqual([['note', 'Standup']]);
+      expect(
+        await page.evaluate(async () =>
+          (await caches.open('share-target')).keys().then((k) => k.length),
+        ),
+      ).toBe(0);
+    } finally {
+      await context.close();
+    }
+  });
+
   test('a dormant install loads the newest release directly', async ({
     browser,
     webOrigin,

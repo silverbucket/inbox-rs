@@ -15,6 +15,7 @@ vi.mock('@inbox-rs/rs-module/runtime', async (importOriginal) => {
 import {
   captureImage,
   captureNote,
+  captureSharedFile,
   captureVoice,
   finishConnectFromRedirect,
   flushQueue,
@@ -258,6 +259,47 @@ describe('capture history + delivery', () => {
       type: 'image',
       description: 'A useful caption',
     });
+  });
+
+  it('turns a shared .ics into a scheduled note with no blob', async () => {
+    const ics =
+      'BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:Standup\nDTSTART:20261110T090000Z\nDTEND:20261110T093000Z\nEND:VEVENT\nEND:VCALENDAR';
+    const record = await captureSharedFile(
+      new File([ics], 'invite.ics', { type: 'text/calendar' }),
+    );
+
+    expect(record.mode).toBe('file');
+    expect(record.hasBlob).toBe(false);
+    expect(record.preview).toBe('Standup');
+    expect(record.item).toMatchObject({
+      type: 'note',
+      title: 'Standup',
+      startsAt: '2026-11-10T09:00:00.000Z',
+    });
+    expect(getHistory()).toHaveLength(1);
+  });
+
+  it('queues any other shared file as a document with its bytes', async () => {
+    const record = await captureSharedFile(
+      new File(['%PDF'], 'ticket.pdf', { type: 'application/pdf' }),
+    );
+
+    expect(record.hasBlob).toBe(true);
+    expect(record.item).toMatchObject({
+      type: 'document',
+      title: 'ticket.pdf',
+      filePath: `files/${record.id}.pdf`,
+      mimeType: 'application/pdf',
+    });
+  });
+
+  it('routes a shared image through the photo capture', async () => {
+    const record = await captureSharedFile(
+      new File(['image'], 'photo.jpg', { type: 'image/jpeg' }),
+    );
+
+    expect(record.mode).toBe('image');
+    expect(record.item.type).toBe('image');
   });
 
   it('stores optional text with voice captures', async () => {
