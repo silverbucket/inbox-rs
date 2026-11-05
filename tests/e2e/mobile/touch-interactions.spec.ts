@@ -8,6 +8,8 @@
  * bug in PWAs.
  */
 
+import type { InboxItem } from '@inbox-rs/rs-module';
+import { putInboxItem } from '../helpers/armadietto';
 import { expect, test } from '../helpers/fixtures';
 
 test('tap opens settings and pushes the account screen', async ({
@@ -27,8 +29,26 @@ test('tap opens settings and pushes the account screen', async ({
   await expect(page.getByPlaceholder('user@storage.example')).toBeVisible();
 });
 
-test('tap navigates between pages', async ({ connectedPage, webOrigin }) => {
-  // Same coverage as the desktop nav test, but using touch dispatch.
+test('tap navigates between pages', async ({
+  connectedPage,
+  rsUser,
+  rsToken,
+  webOrigin,
+}) => {
+  // Same coverage as the desktop nav test, but using touch dispatch. An open
+  // todo makes the Todos page render its view switch, so the test can check
+  // that the tab bar really changes the view, not just its own markers.
+  await putInboxItem(rsUser, rsToken, {
+    item: {
+      id: 'tabbar-plan-todo',
+      type: 'note',
+      title: 'Tab bar plan todo',
+      body: '',
+      isTodo: true,
+      completed: false,
+      createdAt: new Date().toISOString(),
+    } as unknown as InboxItem,
+  });
   await connectedPage.goto(webOrigin);
   await connectedPage.waitForLoadState('networkidle');
 
@@ -40,8 +60,19 @@ test('tap navigates between pages', async ({ connectedPage, webOrigin }) => {
   await expect(todayBtn).toHaveAttribute('aria-current', 'page');
   await expect(connectedPage).toHaveURL(/#\/todos/);
 
+  const views = connectedPage.getByRole('group', { name: 'Todos view' });
+  await expect(views.getByRole('button', { name: 'Today' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+    { timeout: 15_000 },
+  );
+
   const planBtn = tabbar.getByRole('button', { name: 'Plan' });
   await planBtn.tap();
   await expect(planBtn).toHaveAttribute('aria-current', 'page');
   await expect(todayBtn).not.toHaveAttribute('aria-current', 'page');
+  await expect(views.getByRole('button', { name: 'Horizon' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
 });

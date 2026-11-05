@@ -127,13 +127,20 @@
   /** A swipe's release can be followed by a synthetic click; ignore it. */
   let suppressClickUntil = 0;
   let replanOpen = $state(false);
-  const swipeHint = $derived(swiping ? swipeAction(swipeDx) : null);
+  const swipeHint = $derived.by(() => {
+    const action = swiping ? swipeAction(swipeDx) : null;
+    return action === 'complete' && todo.completed ? null : action;
+  });
 
   function onSwipeStart(e: TouchEvent) {
     stopParentDndCapture(e);
     // Calendar receipt rows have no checkbox and can't be re-planned here.
-    swipeStart = null;
-    if (readonly || e.touches.length !== 1) return;
+    // A second finger cancels a swipe in progress rather than starting one.
+    if (swipeStart || e.touches.length !== 1) {
+      cancelSwipe();
+      return;
+    }
+    if (readonly) return;
     // A swipe may start on the pin or checkbox (the browser sends them no
     // click once the finger has moved); only the reorder grip is its own
     // gesture.
@@ -155,21 +162,42 @@
     swiping = true;
   }
 
-  async function onSwipeEnd() {
+  function cancelSwipe() {
+    swipeStart = null;
+    swiping = false;
+    swipeDx = 0;
+  }
+
+  async function onSwipeEnd(e: TouchEvent) {
+    // Act only once every finger is up; a lingering contact means this
+    // wasn't a clean one-finger swipe.
+    if (e.touches.length > 0) {
+      cancelSwipe();
+      return;
+    }
     const action = swiping ? swipeAction(swipeDx) : null;
     if (swiping) suppressClickUntil = Date.now() + 400;
     swipeStart = null;
     swiping = false;
     swipeDx = 0;
-    if (action === 'complete') {
+    // Right swipe only completes; a done row is reopened from its checkbox.
+    if (action === 'complete' && !todo.completed) {
       try {
-        await setItemCompleted(todo, !todo.completed);
+        await setItemCompleted(todo, true);
       } catch (err) {
         console.error('Failed to update todo:', err);
       }
     } else if (action === 'replan') {
       replanOpen = true;
     }
+  }
+
+  /** Capture phase: a swipe that began on the checkbox or pin mustn't also
+      activate it if the browser follows the release with a click. */
+  function swallowSwipeClick(e: MouseEvent) {
+    if (Date.now() >= suppressClickUntil) return;
+    e.preventDefault();
+    e.stopPropagation();
   }
 
   function handleClick(e: MouseEvent) {
@@ -286,13 +314,14 @@
   tabindex="0"
   draggable={!readonly}
   onclick={handleClick}
+  onclickcapture={swallowSwipeClick}
   onkeydown={handleKey}
   onpointerdown={onRowPointerDown}
   onmousedown={stopParentDndCapture}
   ontouchstart={onSwipeStart}
   ontouchmove={onSwipeMove}
   ontouchend={onSwipeEnd}
-  ontouchcancel={onSwipeEnd}
+  ontouchcancel={cancelSwipe}
   ondragstart={onFileDragStart}
   ondragend={onFileDragEnd}
   style="--group-color: {groupColor}; --collection-color: {collectionColor}; --swipe-x: {swipeOffset(swipeDx)}px"

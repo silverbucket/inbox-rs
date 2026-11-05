@@ -191,7 +191,13 @@
         {/if}
       </div>
       {#if confirmDelete}
-        <p class="bx-warn">{u.length ? `${u.length} ${u.length === 1 ? 'collection loses its board' : 'collections lose their boards'}; their items keep their columns in case you set it up again.` : 'Nothing uses this set.'}</p>
+        {@const all = Object.values($collections).filter((c) => c.boardSetId === set.id)}
+        {@const archived = all.length - u.length}
+        <p class="bx-warn">
+          {all.length
+            ? `${all.length} ${all.length === 1 ? 'collection loses its board' : 'collections lose their boards'}${archived ? ` (${archived} archived)` : ''}; their items keep their columns in case you set it up again.`
+            : 'Nothing uses this set.'}
+        </p>
       {/if}
 
       <div>

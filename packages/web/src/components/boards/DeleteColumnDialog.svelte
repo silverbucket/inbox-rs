@@ -26,7 +26,8 @@
 
   const column = $derived(set.columns.find((c) => c.id === columnId));
   const users = $derived(
-    Object.values($collections).filter((c) => c.boardSetId === set.id && !c.archived),
+    // Archived collections too: deleteColumn moves their items as well.
+    Object.values($collections).filter((c) => c.boardSetId === set.id),
   );
   const affected = $derived(
     Object.values($items).filter(

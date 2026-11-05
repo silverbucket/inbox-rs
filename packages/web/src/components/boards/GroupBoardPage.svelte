@@ -8,6 +8,7 @@
   import type { Collection, InboxItem } from '@inbox-rs/rs-module';
   import { fade } from 'svelte/transition';
   import { columnSets } from '../../lib/board-actions';
+  import { trapFocus } from '../../lib/actions';
   import { openColumnSet } from '../../lib/settings-request';
   import { collectionItems, collections, groupCollections, groups } from '../../lib/stores';
   import BoardColumns from './BoardColumns.svelte';
@@ -82,6 +83,7 @@
     aria-modal="true"
     aria-label={group ? `${group.name} board` : 'Group board'}
     bind:this={panelEl}
+    use:trapFocus
     onclick={(e) => e.stopPropagation()}
   >
     <div class="toolbar">

@@ -363,7 +363,9 @@
       {#if boardSetName || collection.offPlan || sameNameInGroup}
         <span class="col-tags">
           {#if boardSetName}<span class="board-badge" title="Board columns: {boardSetName}">{boardSetName}</span>{/if}
-          {#if collection.offPlan}<span class="board-badge list" title="A list: its todos stay off the Todos plan">List</span>{/if}
+          {#if collection.offPlan}<span class="board-badge list" title={collection.planColumnId
+              ? 'A list: its todos stay off the Todos plan, except its plan column’s'
+              : 'A list: its todos stay off the Todos plan'}>List</span>{/if}
           {#if sameNameInGroup}<span class="name-warn">same name as another collection here</span>{/if}
         </span>
       {/if}

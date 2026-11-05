@@ -113,7 +113,11 @@
       : live,
   );
   const setName = (id: string | undefined) => $columnSets.find((s) => s.id === id)?.name;
-  const switching = $derived(live.filter((c) => picked.has(c.id) && c.boardSetId));
+  // A failed create may have saved the set already; collections it reached
+  // are on it, not switching from another set.
+  const switching = $derived(
+    live.filter((c) => picked.has(c.id) && c.boardSetId && c.boardSetId !== createdSetId),
+  );
   const groupOptions = $derived(
     Object.values($groups)
       .filter((g) => !g.archived && live.some((c) => c.groupId === g.id))
@@ -141,13 +145,18 @@
     busy = true;
     // Decide who joins directly and who switches sets before any write:
     // once a collection is on the new set it no longer looks "unset".
-    const fresh = live.filter((c) => picked.has(c.id) && !c.boardSetId).map((c) => c.id);
+    const fresh = live
+      .filter((c) => picked.has(c.id) && (!c.boardSetId || c.boardSetId === createdSetId))
+      .map((c) => c.id);
     const queue = switching.map((c) => c.id);
     try {
-      const set = makeSet(
+      const made = makeSet(
         name,
         columns.map((c) => ({ ...c, name: c.name.trim() })),
       );
+      // Retrying after a failed assignment: update the set already saved
+      // rather than saving a second one.
+      const set = createdSetId ? { ...made, id: createdSetId } : made;
       await saveSet(set);
       createdSetId = set.id;
       await setCollectionsBoard(fresh, set.id);

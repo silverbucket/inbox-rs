@@ -7,6 +7,7 @@
    */
   import type { Page } from '../lib/route';
   import { appConfig, sortedItems, updateConfig } from '../lib/stores';
+  import { showToast } from '../lib/toast';
 
   let {
     page,
@@ -33,6 +34,7 @@
       await updateConfig({ todosView: view });
     } catch (error) {
       console.error('Failed to switch Todos view', error);
+      showToast(`Couldn’t switch to ${view === 'today' ? 'Today' : 'Plan'}`);
     }
   }
 </script>

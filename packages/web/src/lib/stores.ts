@@ -1160,7 +1160,11 @@ export async function storeItem(
 
 /** Toggle an item's top-of-list priority while preserving every other field. */
 export async function setItemPinned(item: InboxItem, pinned: boolean) {
-  await storeItem({ ...item, pinned });
+  // Write from the stored item: rows may pass a display copy (e.g. a list's
+  // Someday row carries a view-only planKind) that mustn't be saved.
+  flushPendingItemChanges();
+  const latest = get(items)[item.id] ?? item;
+  await storeItem({ ...latest, pinned });
 }
 
 /**

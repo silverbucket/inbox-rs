@@ -8,7 +8,6 @@
   import { BOARD_UNSORTED, type ColumnSet } from '@inbox-rs/rs-module';
   import {
     columnSets,
-    findSet,
     makePrivateCopy,
     moveCollectionToSet,
   } from '../../lib/board-actions';
@@ -32,7 +31,7 @@
   } = $props();
 
   const collection = $derived($collections[collectionId]);
-  const from = $derived(findSet(collection?.boardSetId));
+  const from = $derived($columnSets.find((s) => s.id === collection?.boardSetId));
   const targets = $derived($columnSets.filter((s) => s.id !== from?.id));
   // svelte-ignore state_referenced_locally
   let toId = $state(toSetId ?? '');
@@ -42,9 +41,12 @@
   const to = $derived<ColumnSet | undefined>(targets.find((s) => s.id === toId));
 
   let mapping = $state<Record<string, string>>({});
+  /** Source columns the user set by hand (an explicit Unsorted beats memory). */
+  let explicit = $state<Set<string>>(new Set());
   $effect(() => {
     // Recompute defaults whenever the destination changes.
     mapping = from && to ? matchColumns(from, to) : {};
+    explicit = new Set();
   });
 
   const own = $derived(
@@ -70,7 +72,7 @@
     if (!to) return '';
     const totals = new Map<string, number>();
     for (const item of own) {
-      const target = moveTarget(item, from, to, mapping);
+      const target = moveTarget(item, from, to, mapping, explicit);
       totals.set(target, (totals.get(target) ?? 0) + 1);
     }
     const parts = [...totals].map(([id, n]) => {
@@ -86,7 +88,7 @@
     if (!to || busy) return;
     busy = true;
     try {
-      await moveCollectionToSet(collectionId, to.id, from ? mapping : {});
+      await moveCollectionToSet(collectionId, to.id, from ? mapping : {}, explicit);
       showToast(`${collection?.name ?? 'Collection'} now uses ${to.name}`);
       onclose();
     } catch (error) {
@@ -148,7 +150,10 @@
                 class="bx-select map"
                 aria-label="Move {c.name} to"
                 value={mapping[c.id] ?? BOARD_UNSORTED}
-                onchange={(e) => (mapping = { ...mapping, [c.id]: (e.currentTarget as HTMLSelectElement).value })}
+                onchange={(e) => {
+                  mapping = { ...mapping, [c.id]: (e.currentTarget as HTMLSelectElement).value };
+                  explicit = new Set(explicit).add(c.id);
+                }}
               >
                 {#each to.columns as t (t.id)}
                   <option value={t.id}>{t.name}</option>

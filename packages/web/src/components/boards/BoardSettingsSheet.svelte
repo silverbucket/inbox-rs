@@ -7,7 +7,6 @@
   import {
     collectionViews,
     columnSets,
-    findSet,
     makePrivateCopy,
     setCollectionsBoard,
     setCollectionView,
@@ -25,7 +24,7 @@
   let { collectionId, onclose }: { collectionId: string; onclose: () => void } = $props();
 
   const collection = $derived($collections[collectionId]);
-  const set = $derived(findSet(collection?.boardSetId));
+  const set = $derived($columnSets.find((s) => s.id === collection?.boardSetId));
   const sharedWith = $derived(
     set
       ? Object.values($collections).filter(

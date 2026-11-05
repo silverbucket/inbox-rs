@@ -247,5 +247,12 @@ describe('group board route', () => {
 
   it('does not use group filters', () => {
     expect(pageUsesFilters('groupBoard')).toBe(false);
+    expect(parseHash('#/group-board/g1?g=g2')).toEqual({
+      page: 'groupBoard',
+      groupId: 'g1',
+    });
+    expect(
+      formatRoute({ page: 'groupBoard', groupId: 'g1', groupFilters: ['g2'] }),
+    ).toBe('#/group-board/g1');
   });
 });

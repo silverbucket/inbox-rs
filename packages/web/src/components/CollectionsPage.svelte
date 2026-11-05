@@ -14,6 +14,8 @@
   } from '../lib/stores';
   import { now } from '../lib/now';
   import { placeTodo } from '../lib/plan';
+  import { columnSets } from '../lib/board-actions';
+  import { BOARD_UNSORTED, columnOf } from '../lib/boards';
   import FavoriteCard from './FavoriteCard.svelte';
   import CollectionView from './CollectionView.svelte';
   import GroupSection from './GroupSection.svelte';
@@ -32,7 +34,10 @@
   // ── Header: summary and filter ──────────────────────────────────────
   let filter = $state('');
   const query = $derived(filter.trim().toLowerCase());
-  const liveCollections = $derived(Object.values($collections).filter((c) => !c.archived));
+  // Archiving a group leaves its collections unarchived; they're still out of view.
+  const liveCollections = $derived(
+    Object.values($collections).filter((c) => !c.archived && !$groups[c.groupId ?? '']?.archived),
+  );
   const summary = $derived.by(() => {
     const n = liveCollections.length;
     const g = $sortedGroups.length;
@@ -40,6 +45,7 @@
     return `${n} ${n === 1 ? 'collection' : 'collections'} in ${g} ${g === 1 ? 'group' : 'groups'} · ${itemsTotal} items`;
   });
   const matches = (c: Collection) => !query || c.name.toLowerCase().includes(query);
+  const found = $derived(query ? liveCollections.filter(matches) : []);
 
   // ── Favourites: cards above the groups ──────────────────────────────
   const favorites = $derived($favoriteCollections.filter((c) => c && !c.archived));
@@ -47,8 +53,10 @@
   function todoSummary(col: Collection): { text: string; tone: 'plain' | 'week' | 'warn' | 'muted' } {
     const todos = ($collectionItems[col.id] ?? []).filter((i) => (i.isTodo || i.type === 'todo') && !i.completed && !i.archived);
     if (todos.length === 0) {
-      const unsorted = col.boardSetId
-        ? ($collectionItems[col.id] ?? []).filter((i) => !i.boardColumns?.[col.boardSetId as string]).length
+      // Same rule as the board: a missing or deleted column is Unsorted.
+      const set = $columnSets.find((s) => s.id === col.boardSetId);
+      const unsorted = set
+        ? ($collectionItems[col.id] ?? []).filter((i) => columnOf(i, set) === BOARD_UNSORTED).length
         : 0;
       return unsorted
         ? { text: `${unsorted} unsorted on the board`, tone: 'muted' }
@@ -102,7 +110,7 @@
     const names = cols.slice(0, 5).map((c) => (favs.has(c.id) ? `${c.name} ★` : c.name));
     return names.join(', ') + (cols.length > 5 ? '…' : '');
   }
-  const hasBoard = (cols: Collection[]) => cols.some((c) => !!c.boardSetId);
+  const hasBoard = (cols: Collection[]) => cols.some((c) => $columnSets.some((s) => s.id === c.boardSetId));
 
   let editingCollection = $state<Collection | null>(null);
   let editingGroup = $state<CollectionGroup | null>(null);
@@ -144,13 +152,17 @@
   const sections = $derived($visibleGroupedCollections);
   const orphans = $derived($orphanCollections);
 
-  // Collection ids currently visible on the page — used for expand/collapse all.
-  // Includes orphans so the toggle covers every collection rendered on the page,
-  // not just the ones inside real groups.
-  const visibleIds = $derived([
-    ...sections.flatMap(s => s.collections.map(c => c.id)),
-    ...orphans.map(c => c.id),
-  ]);
+  // Collection ids currently shown on the page — used for expand/collapse all.
+  // While filtering, that's the matches; otherwise every collection in an
+  // unfolded group, plus orphans.
+  const visibleIds = $derived(
+    query
+      ? found.map(c => c.id)
+      : [
+          ...sections.filter(s => !folded.has(s.group.id)).flatMap(s => s.collections.map(c => c.id)),
+          ...orphans.map(c => c.id),
+        ],
+  );
   const anyExpanded = $derived(visibleIds.some(id => expandedSet.has(id)));
 
   async function toggleExpandAll() {
@@ -414,7 +426,6 @@
   {/if}
 
   {#if query}
-    {@const found = liveCollections.filter(matches)}
     <section class="filter-results" aria-label="Collections matching {filter}">
       {#if found.length === 0}
         <p class="page-empty">No collection matches “{filter}”.</p>
@@ -499,7 +510,7 @@
     </GroupSection>
   {/each}
 
-  {#if orphans.length > 0}
+  {#if !query && orphans.length > 0}
     <!--
       Advisory section for collections whose groupId is unset or points at a
       deleted group. Read-only by design: no add, no group edit, no drag.
@@ -556,7 +567,9 @@
     </section>
   {/if}
 
-  {#if $sortedGroups.length === 0 && sections.length === 0 && orphans.length === 0}
+  {#if query}
+    <!-- Filter results above stand in for the groups. -->
+  {:else if $sortedGroups.length === 0 && sections.length === 0 && orphans.length === 0}
     <p class="page-empty">
       No groups yet. Create one from the filter bar above to organise your collections.
     </p>

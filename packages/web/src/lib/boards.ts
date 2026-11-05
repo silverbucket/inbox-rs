@@ -257,11 +257,14 @@ export function moveTarget(
   from: ColumnSet | undefined,
   to: ColumnSet,
   mapping: Record<string, string>,
+  /** Source columns whose target the user picked: always honoured. */
+  explicit: ReadonlySet<string> = new Set(),
 ): string {
   const fromCol = from ? columnOf(item, from) : BOARD_UNSORTED;
   const mapped = mapping[fromCol] ?? BOARD_UNSORTED;
   const remembered = item.boardColumns?.[to.id];
   if (
+    !explicit.has(fromCol) &&
     mapped === BOARD_UNSORTED &&
     remembered &&
     to.columns.some((c) => c.id === remembered)

@@ -18,6 +18,7 @@ import { recordCollectionUse } from './collection-suggest';
 import {
   appConfig,
   collections,
+  deleteItem,
   flushItemChanges,
   items,
   moveItemToCollection,
@@ -32,8 +33,17 @@ import {
  * the freshest copies (buffered remote edits applied) before writing.
  */
 
-/** All column sets, in the user's order. */
-export const columnSets = derived(appConfig, ($c) => $c.columnSets ?? []);
+/**
+ * All column sets, in the user's order, each with Unsorted first. Sets
+ * written by another device or an import aren't normalized on the way in,
+ * and a board drops cards whose column is missing.
+ */
+export const columnSets = derived(appConfig, ($c) =>
+  ($c.columnSets ?? []).map((s) => ({
+    ...s,
+    columns: normalizeColumns(s.columns),
+  })),
+);
 
 export function findSet(id: string | undefined): ColumnSet | undefined {
   return id ? get(columnSets).find((s) => s.id === id) : undefined;
@@ -75,16 +85,21 @@ export async function setCollectionsBoard(
   }
 }
 
-/** Delete a set; collections on it lose their board, items keep their columns. */
+/**
+ * Delete a set; collections on it lose their board, items keep their columns.
+ * The set goes first: if clearing a collection then fails, its leftover
+ * reference points at no set, which reads as "no board" everywhere (see
+ * viewFor), so nothing is left half-assigned to a live set.
+ */
 export async function deleteSet(setId: string) {
   const users = Object.values(get(collections)).filter(
     (c) => c.boardSetId === setId,
   );
+  await saveSets(get(columnSets).filter((s) => s.id !== setId));
   await setCollectionsBoard(
     users.map((c) => c.id),
     undefined,
   );
-  await saveSets(get(columnSets).filter((s) => s.id !== setId));
 }
 
 function itemsOf(collectionIds: string[]): InboxItem[] {
@@ -191,6 +206,8 @@ export async function moveCollectionToSet(
   collectionId: string,
   toSetId: string,
   mapping: Record<string, string>,
+  /** Source columns whose target the user picked (honoured even if Unsorted). */
+  explicit: ReadonlySet<string> = new Set(),
 ) {
   const col = get(collections)[collectionId];
   const from = findSet(col?.boardSetId);
@@ -198,12 +215,16 @@ export async function moveCollectionToSet(
   if (!col || !to) return;
   flushItemChanges();
   for (const item of itemsOf([collectionId])) {
-    const target = moveTarget(item, from, to, mapping);
-    if (item.boardColumns?.[to.id] === target) continue;
-    await storeItem({
-      ...item,
-      boardColumns: { ...(item.boardColumns ?? {}), [to.id]: target },
-    });
+    const target = moveTarget(item, from, to, mapping, explicit);
+    // Same placement rules as a drag: into the done column completes a
+    // todo, out of it reopens one.
+    const placed = placeItem(item, to, target);
+    if (
+      placed.boardColumns?.[to.id] === item.boardColumns?.[to.id] &&
+      placed.completed === item.completed
+    )
+      continue;
+    await storeItem(placed);
   }
   await setCollectionsBoard([collectionId], toSetId);
 }
@@ -240,10 +261,13 @@ export const collectionViews = derived(
 export function viewFor(
   col: Collection,
   views: Record<string, CollectionViewMode>,
+  sets: ColumnSet[] = get(columnSets),
 ): CollectionViewMode {
+  // A reference to a deleted set (e.g. removed on another device) is no board.
+  const hasSet = !!col.boardSetId && sets.some((s) => s.id === col.boardSetId);
   const v = views[col.id];
-  if (v === 'board' && !col.boardSetId) return 'grid';
-  return v ?? (col.boardSetId ? 'board' : 'grid');
+  if (v === 'board' && !hasSet) return 'grid';
+  return v ?? (hasSet ? 'board' : 'grid');
 }
 
 export async function setCollectionView(
@@ -297,7 +321,15 @@ export async function addToColumn(
   }
   const item = placeItem(base as unknown as InboxItem, set, columnId);
   await storeItem(item);
-  await moveItemToCollection(item.id, collectionId);
+  try {
+    await moveItemToCollection(item.id, collectionId);
+  } catch (error) {
+    // Don't leave an unregistered copy behind for a retry to duplicate.
+    await deleteItem(item.id, item).catch((cleanupError) =>
+      console.error('Could not remove the unregistered card', cleanupError),
+    );
+    throw error;
+  }
   recordCollectionUse(collectionId);
   return item;
 }

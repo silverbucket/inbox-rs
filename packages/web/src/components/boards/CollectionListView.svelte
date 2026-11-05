@@ -4,7 +4,7 @@
    * order, with its board column when the collection has a board.
    */
   import type { Collection, InboxItem } from '@inbox-rs/rs-module';
-  import { findSet } from '../../lib/board-actions';
+  import { columnSets } from '../../lib/board-actions';
   import { columnOf } from '../../lib/boards';
   import { kindOf } from '../../lib/kinds';
   import { now } from '../../lib/now';
@@ -18,10 +18,12 @@
     onselect,
   }: { collection: Collection; items: InboxItem[]; onselect: (item: InboxItem) => void } = $props();
 
-  const set = $derived(findSet(collection.boardSetId));
+  const set = $derived($columnSets.find((s) => s.id === collection.boardSetId));
   const isTodo = (i: InboxItem) => !!i.isTodo || i.type === 'todo';
 
   async function toggle(item: InboxItem) {
+    // On a calendar: the calendar owns it now (read-only, as in CollectionView).
+    if (item.archived) return;
     try {
       await setItemCompleted(item, !item.completed);
     } catch (error) {
@@ -39,7 +41,7 @@
       {@const kind = kindOf(item.type)}
       {@const column = set ? set.columns.find((c) => c.id === columnOf(item, set)) : undefined}
       <li class="row" class:completed={isTodo(item) && item.completed}>
-        {#if isTodo(item)}
+        {#if isTodo(item) && !item.archived}
           <button
             type="button"
             class="check"

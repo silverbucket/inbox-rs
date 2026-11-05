@@ -336,6 +336,36 @@ describe('TodoRow touch swipes', () => {
     expect(document.body.querySelector('[role="dialog"]')).toBeNull();
   });
 
+  it('swallows a click on the checkbox right after a swipe', () => {
+    const { row } = render();
+    const box = row.querySelector('input.checkbox') as HTMLInputElement;
+    swipe(box, -120);
+    box.click();
+    expect(box.checked).toBe(false);
+    expect(setItemCompleted).not.toHaveBeenCalled();
+  });
+
+  it('does not reopen a completed todo on a right swipe', () => {
+    const { row } = render({ todo: todo({ completed: true }) });
+    swipe(row, 120);
+    expect(setItemCompleted).not.toHaveBeenCalled();
+  });
+
+  it('cancels when another finger is still down at release', () => {
+    const { row } = render();
+    touch(row, 'touchstart', 200, 100);
+    touch(row, 'touchmove', 260, 100);
+    touch(row, 'touchmove', 340, 100);
+    const end = new Event('touchend', { bubbles: true });
+    Object.defineProperty(end, 'touches', {
+      value: [{ clientX: 10, clientY: 10 }],
+    });
+    row.dispatchEvent(end);
+    flushSync();
+    expect(setItemCompleted).not.toHaveBeenCalled();
+    expect(row.classList.contains('swiping')).toBe(false);
+  });
+
   it('renders as a div when its list supplies the <li>', () => {
     const { row } = render({ as: 'div' });
     expect(row.tagName).toBe('DIV');

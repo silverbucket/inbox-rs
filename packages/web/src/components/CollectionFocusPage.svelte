@@ -33,7 +33,7 @@
   let panelEl = $state<HTMLElement>();
   let boardSettings = $state(false);
 
-  const view = $derived<CollectionViewMode>(collection ? viewFor(collection, $collectionViews) : 'grid');
+  const view = $derived<CollectionViewMode>(collection ? viewFor(collection, $collectionViews, $columnSets) : 'grid');
   const set = $derived($columnSets.find((s) => s.id === collection?.boardSetId));
   const ownItems = $derived($collectionItems[collectionId] ?? []);
   const lookupCollection = (id: string | undefined) => (id ? ($collections[id] ?? null) : null);

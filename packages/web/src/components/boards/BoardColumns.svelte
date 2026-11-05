@@ -195,18 +195,26 @@
         {#each shown as item (item.id)}
           {@const kind = kindOf(item.type)}
           {@const col = showCollection ? lookupCollection(item.collectionId) : null}
+          <!-- On a calendar (archived): the calendar owns it now, so it's
+               read-only here, as in the collection's "On calendar" list. -->
+          {@const locked = !!item.archived}
           <li
             class="card"
             class:dragging={dragId === item.id}
             class:completed={isTodo(item) && item.completed}
-            draggable="true"
-            ondragstart={(e) => onDragStart(e, item)}
+            class:locked
+            draggable={!locked}
+            ondragstart={(e) => (locked ? e.preventDefault() : onDragStart(e, item))}
             ondragend={() => {
               dragId = null;
               overColumn = null;
             }}
           >
-            {#if isTodo(item)}
+            {#if locked}
+              <span class="glyph cal" title="On calendar" role="img" aria-label="On calendar">
+                <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+              </span>
+            {:else if isTodo(item)}
               <button
                 type="button"
                 class="check"
@@ -229,6 +237,7 @@
                 {subline(item)}
               </span>
             </button>
+{#if !locked}
             <label class="move" title="Move to another column">
               <span class="sr-only">Move {item.title} to</span>
               <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l-3 3 3 3M19 9l3 3-3 3M2 12h20"></path></svg>
@@ -241,6 +250,7 @@
                 {/each}
               </select>
             </label>
+            {/if}
           </li>
         {/each}
       </ul>
@@ -466,6 +476,15 @@
     font-weight: 800;
     color: var(--kc);
     background: color-mix(in srgb, var(--kc) 15%, var(--surface));
+  }
+
+  .glyph.cal {
+    --kc: var(--text-muted);
+  }
+
+  .card.locked {
+    cursor: default;
+    opacity: 0.75;
   }
 
   .check {

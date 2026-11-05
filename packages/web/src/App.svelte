@@ -364,7 +364,9 @@
   function navToGroupBoard(groupId: string) {
     const hash = formatRoute({ page: 'groupBoard', groupId });
     if (window.location.hash !== hash) {
-      focusReturnAvailable = true;
+      // Back returns to the list page only if we came from one; opening a
+      // popup from another popup keeps whatever was true before.
+      if (!isOverlayPage(route.page)) focusReturnAvailable = true;
       window.location.hash = hash;
     }
   }
@@ -373,7 +375,7 @@
   function navToCollection(collectionId: string) {
     const hash = formatRoute({ page: 'collection', collectionId });
     if (window.location.hash !== hash) {
-      focusReturnAvailable = true;
+      if (!isOverlayPage(route.page)) focusReturnAvailable = true;
       window.location.hash = hash;
     }
   }

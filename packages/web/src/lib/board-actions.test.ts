@@ -22,6 +22,11 @@ vi.mock('./stores', async () => {
       items.set({ ...get(items), [i.id]: i });
     }),
     moveItemToCollection: vi.fn(async () => {}),
+    deleteItem: vi.fn(async (id: string) => {
+      const next = { ...get(items) };
+      delete next[id];
+      items.set(next);
+    }),
   };
 });
 vi.mock('./collection-suggest', () => ({ recordCollectionUse: vi.fn() }));
@@ -29,6 +34,7 @@ vi.mock('./collection-suggest', () => ({ recordCollectionUse: vi.fn() }));
 import {
   addToColumn,
   columnCounts,
+  columnSets,
   deleteColumn,
   deleteSet,
   makePrivateCopy,
@@ -113,6 +119,91 @@ describe('board actions', () => {
     const set = (get(stores.appConfig).columnSets as ColumnSet[])[0];
     expect(set.columns.map((c) => c.id)).not.toContain('build');
     expect(get(stores.collections).b.planColumnId).toBeUndefined();
+  });
+
+  it('reopens a completed todo when its done column is deleted', async () => {
+    stores.items.set({
+      ...get(stores.items),
+      t: note('t', {
+        collectionId: 'a',
+        isTodo: true,
+        completed: true,
+        completedAt: '2026-01-01T00:00:00.000Z',
+        boardColumns: { pipe: 'ship' },
+      }),
+    });
+    await deleteColumn('pipe', 'ship', 'idea');
+    expect(item('t').boardColumns?.pipe).toBe('idea');
+    expect(item('t').completed).toBe(false);
+    expect(item('t').completedAt).toBeUndefined();
+  });
+
+  it('completes an open todo moved into the destination done column', async () => {
+    const shipped: ColumnSet = {
+      ...reading,
+      id: 'shipset',
+      columns: [
+        ...reading.columns,
+        { id: 'done', name: 'Done', color: '#000', done: true },
+      ],
+    };
+    stores.appConfig.set({ columnSets: [pipeline, shipped] });
+    stores.items.set({
+      t: note('t', {
+        collectionId: 'a',
+        isTodo: true,
+        completed: false,
+        boardColumns: { pipe: 'build' },
+      }),
+    });
+    await moveCollectionToSet('a', 'shipset', { build: 'done' });
+    expect(item('t').completed).toBe(true);
+    expect(columnOf(item('t'), shipped)).toBe('done');
+  });
+
+  it('honours an explicit Unsorted over a remembered column', async () => {
+    stores.items.set({
+      x: note('x', {
+        collectionId: 'a',
+        boardColumns: { pipe: 'build', read: 'next' },
+      }),
+    });
+    await moveCollectionToSet('a', 'read', {}, new Set());
+    expect(item('x').boardColumns?.read).toBe('next');
+    await moveCollectionToSet('a', 'pipe', {});
+    await moveCollectionToSet(
+      'a',
+      'read',
+      { build: BOARD_UNSORTED },
+      new Set(['build']),
+    );
+    expect(item('x').boardColumns?.read).toBe(BOARD_UNSORTED);
+  });
+
+  it('removes the stored card if registering it fails', async () => {
+    vi.mocked(stores.moveItemToCollection).mockRejectedValueOnce(
+      new Error('offline'),
+    );
+    await expect(addToColumn('a', pipeline, 'idea', 'Oops')).rejects.toThrow(
+      'offline',
+    );
+    expect(stores.deleteItem).toHaveBeenCalled();
+  });
+
+  it('treats a reference to a deleted set as no board', () => {
+    expect(viewFor(col('c', { boardSetId: 'gone' }), {}, [pipeline])).toBe(
+      'grid',
+    );
+    expect(
+      viewFor(col('c', { boardSetId: 'gone' }), { c: 'board' }, [pipeline]),
+    ).toBe('grid');
+  });
+
+  it('normalizes synced sets so Unsorted comes first', () => {
+    stores.appConfig.set({
+      columnSets: [{ ...reading, columns: [reading.columns[1]] }],
+    });
+    expect(get(columnSets)[0].columns[0].id).toBe(BOARD_UNSORTED);
   });
 
   it('never deletes Unsorted', async () => {
