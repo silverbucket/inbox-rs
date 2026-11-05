@@ -140,6 +140,15 @@
   const DRAG_TYPE = 'application/x-inbox-rs-todo';
   let dragOverKey = $state<string | null>(null);
 
+  /** Week/month bands opened to show their todos as chips. */
+  let openBands = $state<Set<string>>(new Set());
+  function toggleBand(key: string) {
+    const next = new Set(openBands);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    openBands = next;
+  }
+
   /** Days whose full list is showing instead of the first three. */
   let expandedDays = $state<Set<string>>(new Set());
   const DAY_LIMIT = 3;
@@ -194,6 +203,30 @@
   </button>
 {/snippet}
 
+{#snippet band(key: string, label: string, items: InboxItem[], horizon: string)}
+  {@const isOpen = openBands.has(key)}
+  <button
+    type="button"
+    class="band-toggle"
+    aria-expanded={isOpen}
+    aria-controls="band-{key}"
+    onclick={() => toggleBand(key)}
+  >
+    <span class="swatch"></span>
+    <strong>{label}</strong>
+    {#if !isOpen}<span class="band-peek">{previewNames(items)}</span>{:else}<span class="band-peek">Drag one onto a day to date it</span>{/if}
+    <span class="band-count">{items.length}</span>
+    <svg aria-hidden="true" class="band-chevron" class:open={isOpen} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"></path></svg>
+  </button>
+  {#if isOpen}
+    <div class="band-items" id="band-{key}" style="--h: var(--horizon-{horizon})">
+      {#each items as t (t.id)}
+        {@render chip(t)}
+      {/each}
+    </div>
+  {/if}
+{/snippet}
+
 {#snippet sideItem(t: InboxItem)}
   <li>
     <button
@@ -227,10 +260,7 @@
 
     {#if monthPlans.length > 0}
       <div class="band month-band" style="--h: var(--horizon-month)">
-        <span class="swatch"></span>
-        <strong>Planned for {monthName}</strong>
-        <span class="band-peek">{previewNames(monthPlans)}</span>
-        <span class="band-count">{monthPlans.length}</span>
+        {@render band(`month-${toDateKey(viewMonth)}`, `Planned for ${monthName}`, monthPlans, 'month')}
       </div>
     {/if}
 
@@ -243,11 +273,10 @@
         </div>
         {#each rows as row (row.key)}
           {#if row.planned.length > 0}
-            <div class="band week-band" style="--h: var(--horizon-week)">
-              <span class="swatch"></span>
-              <strong>Week of {row.weekLabel}</strong>
-              <span class="band-peek">{previewNames(row.planned)}</span>
-              <span class="band-count">{row.planned.length}</span>
+            <div class="band week-band" style="--h: var(--horizon-week)" role="row">
+              <div role="gridcell" aria-colspan="7" class="band-cell">
+                {@render band(`week-${row.key}`, `Week of ${row.weekLabel}`, row.planned, 'week')}
+              </div>
             </div>
           {/if}
           <div class="row" role="row">
@@ -521,15 +550,55 @@
   }
 
   .band {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.3rem 0.6rem;
     font-size: 0.75rem;
     color: color-mix(in srgb, var(--h) 55%, var(--text));
     background: color-mix(in srgb, var(--h) 14%, var(--surface));
     border-bottom: 1px solid var(--border);
     min-width: 0;
+  }
+
+  .band-cell {
+    min-width: 0;
+  }
+
+  .band-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    min-height: 2rem;
+    padding: 0.3rem 0.6rem;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .band-toggle:hover {
+    background: color-mix(in srgb, var(--h) 8%, transparent);
+  }
+
+  .band-chevron {
+    flex-shrink: 0;
+    transition: transform 150ms;
+  }
+
+  .band-chevron.open {
+    transform: rotate(180deg);
+  }
+
+  .band-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    padding: 0 0.6rem 0.5rem;
+  }
+
+  .band-items .chip {
+    width: auto;
+    max-width: 14rem;
   }
 
   .month-band {
