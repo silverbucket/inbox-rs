@@ -58,6 +58,12 @@
   // svelte-ignore state_referenced_locally
   let target = $state(options.find((o) => o.hint === 'the column after')?.id ?? options[0]?.id ?? BOARD_UNSORTED);
   let busy = $state(false);
+  /** Lists showing this column on the plan; their plan column moves with the items. */
+  const planLists = $derived(
+    Object.values($collections).filter(
+      (c) => c.boardSetId === set.id && c.offPlan && c.planColumnId === columnId,
+    ),
+  );
   const openTodosToDone = $derived(
     target === doneColumn(set)?.id ? affected.filter(isOpenTodo).length : 0,
   );
@@ -87,15 +93,24 @@
       Its {affected.length} {affected.length === 1 ? 'item' : 'items'}{holders.length ? ` — in ${holders.join(', ')} —` : ''} need a new home. Nothing is deleted except the column, and no todo is checked or unchecked.
     {/if}
   </p>
+  {#if planLists.length > 0}
+    <p class="bx-note">
+      {#if target === BOARD_UNSORTED}
+        <strong>{planLists.map((c) => c.name).join(', ')}</strong> {planLists.length === 1 ? 'shows' : 'show'} this column on the Todos plan. Unsorted can't take its place, so {planLists.length === 1 ? 'that list has' : 'those lists have'} no todos on the plan until you pick a plan column again under Columns.
+      {:else}
+        {planLists.map((c) => c.name).join(', ')} {planLists.length === 1 ? 'shows' : 'show'} this column on the Todos plan; {set.columns.find((c) => c.id === target)?.name} takes its place.
+      {/if}
+    </p>
+  {/if}
   {#if openTodosToDone > 0}
     <p class="bx-note">
       {openTodosToDone} open {openTodosToDone === 1 ? 'todo stays' : 'todos stay'} open, so {openTodosToDone === 1 ? 'it shows' : 'they show'} in Unsorted rather than {set.columns.find((c) => c.id === target)?.name}.
     </p>
   {/if}
-  {#if affected.length > 0}
+  {#if affected.length > 0 || planLists.length > 0}
     <div>
-      <span class="bx-label">Move its items to</span>
-      <div class="opts" role="radiogroup" aria-label="Move its items to">
+      <span class="bx-label">{affected.length ? 'Move its items to' : 'Replace it on the plan with'}</span>
+      <div class="opts" role="radiogroup" aria-label={affected.length ? 'Move its items to' : 'Replace it on the plan with'}>
         {#each options as o (o.id)}
           {@const c = set.columns.find((x) => x.id === o.id)}
           <button

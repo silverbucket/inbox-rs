@@ -118,7 +118,8 @@ describe('board actions', () => {
     expect(item('y').boardColumns?.pipe).toBe('idea');
     const set = (get(stores.appConfig).columnSets as ColumnSet[])[0];
     expect(set.columns.map((c) => c.id)).not.toContain('build');
-    expect(get(stores.collections).b.planColumnId).toBeUndefined();
+    // The plan column follows its items.
+    expect(get(stores.collections).b.planColumnId).toBe('idea');
   });
 
   it('keeps completed todos completed when their done column is deleted', async () => {
@@ -259,6 +260,19 @@ describe('board actions', () => {
       columnSets: [{ ...reading, columns: [reading.columns[1]] }],
     });
     expect(get(columnSets)[0].columns[0].id).toBe(BOARD_UNSORTED);
+  });
+
+  it("moves a list's plan column with the deleted column's items", async () => {
+    stores.collections.set({
+      a: col('a', { boardSetId: 'pipe', offPlan: true, planColumnId: 'build' }),
+      b: col('b', { boardSetId: 'pipe', offPlan: true, planColumnId: 'idea' }),
+    });
+    await deleteColumn('pipe', 'build', 'idea');
+    expect(get(stores.collections).a.planColumnId).toBe('idea');
+    await deleteColumn('pipe', 'idea', BOARD_UNSORTED);
+    expect(get(stores.collections).a.planColumnId).toBeUndefined();
+    expect(get(stores.collections).b.planColumnId).toBeUndefined();
+    expect(get(stores.collections).a.offPlan).toBe(true);
   });
 
   it('never deletes Unsorted', async () => {

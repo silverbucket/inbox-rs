@@ -177,10 +177,13 @@ export async function deleteColumn(
     ...set,
     columns: set.columns.filter((c) => c.id !== columnId),
   });
+  // A list showing this column on the plan follows its items to the new
+  // column — unless that's Unsorted, which can't be a plan column.
   for (const col of Object.values(get(collections))) {
     if (col.boardSetId === setId && col.planColumnId === columnId) {
       const next = { ...col };
-      delete next.planColumnId;
+      if (moveTo !== BOARD_UNSORTED) next.planColumnId = moveTo;
+      else delete next.planColumnId;
       await storeCollection(next);
     }
   }
