@@ -268,4 +268,30 @@ describe('calendar helpers', () => {
     expect(moved.scheduleKind).toBe('task');
     expect(moved.endsAt).toBeUndefined();
   });
+
+  it('keeps an all-day end at local midnight across a clock change', () => {
+    const tz = process.env.TZ;
+    // Central Europe leaves summer time on Sunday, October 25 2026.
+    process.env.TZ = 'Europe/Prague';
+    try {
+      // The trip itself spans the change (Oct 24 to 26); its new dates
+      // (Oct 31 to Nov 2) don't, so elapsed-time shifting would land at 01:00.
+      const trip = todo({
+        startsAt: new Date(2026, 9, 24).toISOString(),
+        endsAt: new Date(2026, 9, 26).toISOString(),
+        allDay: true,
+        scheduleKind: 'event',
+      });
+      const moved = moveItemToDay(trip, new Date(2026, 9, 31));
+      const end = new Date(moved.endsAt as string);
+      expect([
+        end.getMonth(),
+        end.getDate(),
+        end.getHours(),
+        end.getMinutes(),
+      ]).toEqual([10, 2, 0, 0]);
+    } finally {
+      process.env.TZ = tz;
+    }
+  });
 });

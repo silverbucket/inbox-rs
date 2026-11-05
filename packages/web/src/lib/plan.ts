@@ -445,10 +445,15 @@ export function moveItemToDay<T extends InboxItem>(item: T, day: Date): T {
     const oldStart = new Date(item.startsAt);
     const oldEnd = new Date(item.endsAt);
     if (!Number.isNaN(oldStart.getTime()) && !Number.isNaN(oldEnd.getTime())) {
-      const shift =
-        (moved.startsAt ? new Date(moved.startsAt).getTime() : 0) -
-        new Date(oldStart).setHours(0, 0, 0, 0);
-      moved.endsAt = new Date(oldEnd.getTime() + shift).toISOString();
+      // Shift by calendar days, not elapsed time: across a daylight-saving
+      // change a day is 23 or 25 hours, and adding milliseconds would land
+      // the end at 23:00 or 01:00 instead of local midnight.
+      const from = startOfDay(oldStart);
+      const to = startOfDay(day);
+      const days = Math.round((to.getTime() - from.getTime()) / 86_400_000);
+      const end = new Date(oldEnd);
+      end.setDate(end.getDate() + days);
+      moved.endsAt = end.toISOString();
     }
   }
   return moved;

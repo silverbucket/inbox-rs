@@ -11,8 +11,7 @@
   import type { Collection, InboxItem } from '@inbox-rs/rs-module';
   import { trapFocus } from '../lib/actions';
   import { todayStart } from '../lib/now';
-  import { type PlanChoice, planFor } from '../lib/plan';
-  import { applySchedule } from '../lib/schedule';
+  import { moveItemToDay, type PlanChoice, planFor } from '../lib/plan';
   import { setItemCompleted } from '../lib/schedule-sync';
   import { setItemPlan, storeItem } from '../lib/stores';
   import { showToast } from '../lib/toast';
@@ -66,7 +65,8 @@
   const dueToday = (todo: InboxItem) =>
     run(
       todo,
-      () => storeItem(applySchedule(todo, { kind: 'task', start: today, allDay: true })),
+      // Only the date changes: a timed event keeps its kind, time and length.
+      () => storeItem(moveItemToDay(todo, today)),
       'Couldn’t move that todo to today',
     );
 

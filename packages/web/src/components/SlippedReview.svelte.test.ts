@@ -88,15 +88,46 @@ describe('SlippedReview', () => {
     );
   });
 
-  it('moves an overdue todo to today as an all-day task', async () => {
+  it('moves an overdue todo to today, keeping its kind and time', async () => {
     click('Todo late', 'Today');
     await vi.waitFor(() => expect(storeItem).toHaveBeenCalledOnce());
     const saved = storeItem.mock.calls[0][0] as InboxItem;
-    expect(saved.allDay).toBe(true);
+    const was = new Date(overdue.startsAt as string);
+    const now = new Date(saved.startsAt as string);
     expect(saved.scheduleKind).toBe('task');
-    expect(toDateKey(new Date(saved.startsAt as string))).toBe(
-      toDateKey(new Date()),
-    );
+    expect(saved.allDay).toBeFalsy();
+    expect(toDateKey(now)).toBe(toDateKey(new Date()));
+    expect([now.getHours(), now.getMinutes()]).toEqual([
+      was.getHours(),
+      was.getMinutes(),
+    ]);
+  });
+
+  it("keeps an overdue event's length when moved to today", async () => {
+    if (component) unmount(component);
+    const event = todo('meet', {
+      startsAt: new Date(2026, 8, 3, 14, 0).toISOString(),
+      endsAt: new Date(2026, 8, 3, 15, 30).toISOString(),
+      scheduleKind: 'event',
+    });
+    component = mount(SlippedReview, {
+      target: host,
+      props: {
+        overdue: [event],
+        rolled: [],
+        lookupCollection: () => null,
+        onclose: vi.fn(),
+      },
+    });
+    flushSync();
+    click('Todo meet', 'Today');
+    await vi.waitFor(() => expect(storeItem).toHaveBeenCalledOnce());
+    const saved = storeItem.mock.calls[0][0] as InboxItem;
+    const start = new Date(saved.startsAt as string);
+    const end = new Date(saved.endsAt as string);
+    expect(saved.scheduleKind).toBe('event');
+    expect([start.getHours(), start.getMinutes()]).toEqual([14, 0]);
+    expect((end.getTime() - start.getTime()) / 60_000).toBe(90);
   });
 
   it('completes a todo', async () => {
