@@ -1119,16 +1119,25 @@ export function loadFileBlobUrl(filePath: string, mimeType?: string): void {
 // ---- Item operations ----
 
 /**
- * In-flight saves by item id. Writes to one item run in order, so a reader
- * (e.g. enrichment) can wait for a pending save before merging against
- * `items` — which only reflects a save once it resolves.
+ * Per-item operation queues. Every write, delete or read-merge-write for an
+ * item runs after the ones queued before it, so a reader never merges
+ * against `items` while a save for that id is still landing.
  */
-const pendingSaves = new Map<string, Promise<unknown>>();
+const itemQueues = new Map<string, Promise<unknown>>();
 
-/** Resolves once no save for `id` is pending, including ones queued meanwhile. */
-export async function awaitPendingSave(id: string): Promise<void> {
-  let pending: Promise<unknown> | undefined;
-  while ((pending = pendingSaves.get(id))) await pending;
+/** Run `op` once every earlier op for `id` has settled. */
+function runForItem<T>(id: string, op: () => Promise<T>): Promise<T> {
+  // Start at once when nothing is queued: a pagehide flush must begin its
+  // write before the page unloads, so it can't wait a microtask. `prev` is
+  // already error-swallowed, so one failed op rejects only its own caller.
+  const prev = itemQueues.get(id);
+  const run = prev ? prev.then(op) : op();
+  const settled = run.catch(() => {});
+  itemQueues.set(id, settled);
+  settled.then(() => {
+    if (itemQueues.get(id) === settled) itemQueues.delete(id);
+  });
+  return run;
 }
 
 export function storeItem(
@@ -1136,20 +1145,23 @@ export function storeItem(
   fileData?: ArrayBuffer,
   thumbData?: ArrayBuffer,
 ): Promise<void> {
-  // Chain on a promise that swallows the previous error, so one failed
-  // save rejects only to its own caller.
-  // Start at once when nothing is queued: a pagehide flush must begin its
-  // write before the page unloads, so it can't wait a microtask.
-  const pending = pendingSaves.get(item.id);
-  const save = pending
-    ? pending.then(() => writeItem(item, fileData, thumbData))
-    : writeItem(item, fileData, thumbData);
-  const settled = save.catch(() => {});
-  pendingSaves.set(item.id, settled);
-  settled.then(() => {
-    if (pendingSaves.get(item.id) === settled) pendingSaves.delete(item.id);
+  return runForItem(item.id, () => writeItem(item, fileData, thumbData));
+}
+
+/**
+ * Read the live item inside its queue and write what `update` returns —
+ * nothing when it returns null (item gone, or no change). No other save for
+ * the id can land between the read and the write.
+ */
+export function updateItem<T extends InboxItem>(
+  id: string,
+  update: (current: InboxItem | undefined) => T | null,
+): Promise<T | null> {
+  return runForItem(id, async () => {
+    const next = update(get(items)[id]);
+    if (next) await writeItem(next);
+    return next;
   });
-  return save;
 }
 
 async function writeItem(
@@ -1432,11 +1444,14 @@ export async function removeFile(path: string) {
   releaseBlobPath(path);
 }
 
-export async function deleteItem(id: string, item?: InboxItem) {
+export function deleteItem(id: string, item?: InboxItem): Promise<void> {
+  // Queued so a save still landing can't follow the removal and resurrect
+  // the item, and a later read-merge-write finds it gone.
+  return runForItem(id, () => removeItem(id, item));
+}
+
+async function removeItem(id: string, item?: InboxItem) {
   const inbox = requireInbox();
-  // A save queued behind an in-flight write would otherwise land after the
-  // removal and resurrect the item.
-  await awaitPendingSave(id);
   await inbox.remove(id, item);
 
   // Revoke and remove any associated blob URLs (original + thumbnail) to
@@ -1617,7 +1632,8 @@ export async function moveItemToCollection(
     // 412 and the conflict resolves remote-wins, silently dropping the
     // filing (the todo reappears as Unfiled).
     if (!isSameCollection) {
-      await inbox.store(cleanForStorage(item));
+      const filed = cleanForStorage(item);
+      await runForItem(itemId, () => inbox.store(filed));
     }
 
     // Update source collection's itemIds

@@ -20,7 +20,11 @@ vi.mock('./link-metadata', async (importOriginal) => ({
 }));
 // Minimal readable-store stubs so `get(...)` resolves synchronously.
 vi.mock('./stores', () => ({
-  awaitPendingSave: () => Promise.resolve(),
+  updateItem: async (id: string, update: (c: unknown) => unknown) => {
+    const next = update(itemsMap[id]);
+    if (next) await storeItem(next);
+    return next;
+  },
   storeItem,
   items: {
     subscribe: (run: (value: unknown) => void) => {

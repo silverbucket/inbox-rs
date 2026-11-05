@@ -74,7 +74,6 @@ import {
   archivedCollections,
   archivedGroups,
   authorizationRequired,
-  awaitPendingSave,
   blobUrls,
   clearSessionVisibleTodos,
   collectionItems,
@@ -127,6 +126,7 @@ import {
   toggleCollectionFilter,
   toggleGroupFilter,
   triageToTodo,
+  updateItem,
   userAddress,
   userSettings,
   visibleGroupedCollections,
@@ -3590,7 +3590,7 @@ describe('storeItem write ordering', () => {
     return p;
   });
 
-  it('awaitPendingSave also waits for a save queued during the wait', async () => {
+  it('updateItem reads the live item only after queued saves have landed', async () => {
     const todo = makeTodo('chain', { title: 'A' });
     let resolveFirst!: () => void;
     mockInbox.store.mockReturnValueOnce(
@@ -3599,12 +3599,16 @@ describe('storeItem write ordering', () => {
       }),
     );
     void storeItem(todo);
-    const waited = awaitPendingSave('chain');
     const second = storeItem({ ...todo, title: 'B' } as InboxItem);
+    const seen: string[] = [];
+    const update = updateItem('chain', (current) => {
+      seen.push((current as { title: string }).title);
+      return null;
+    });
     resolveFirst();
-    await waited;
-    expect(get(items).chain).toMatchObject({ title: 'B' });
     await second;
+    await update;
+    expect(seen).toEqual(['B']);
   });
 
   it('deleteItem waits for queued saves so none resurrects the item', async () => {
