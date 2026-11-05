@@ -9,7 +9,16 @@ const { setItemPlan, storeItem, setItemCompleted } = vi.hoisted(() => ({
   setItemCompleted: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('../lib/stores', () => ({ setItemPlan, storeItem }));
+// The real move keeps kind, time and length; only the write is stubbed.
+vi.mock('../lib/stores', async () => {
+  const { moveItemToDay } = await import('../lib/plan');
+  return {
+    setItemPlan,
+    storeItem,
+    moveStoredItemToDay: (item: InboxItem, day: Date) =>
+      storeItem(moveItemToDay(item, day)),
+  };
+});
 vi.mock('../lib/schedule-sync', () => ({ setItemCompleted }));
 
 import { planFor, toDateKey } from '../lib/plan';
@@ -86,6 +95,44 @@ describe('SlippedReview', () => {
       rolled,
       planFor('someday', new Date()),
     );
+  });
+
+  it('plans a slipped todo for this week or next week', async () => {
+    click('Todo rolled', 'This week');
+    await vi.waitFor(() => expect(setItemPlan).toHaveBeenCalledOnce());
+    expect(setItemPlan).toHaveBeenLastCalledWith(
+      rolled,
+      planFor('week', new Date()),
+    );
+    // Actions unlock once the first write settles.
+    await vi.waitFor(() => {
+      flushSync();
+      expect(document.querySelector<HTMLButtonElement>('.act')?.disabled).toBe(
+        false,
+      );
+    });
+    click('Todo late', 'Next week');
+    await vi.waitFor(() => expect(setItemPlan).toHaveBeenCalledTimes(2));
+    expect(setItemPlan).toHaveBeenLastCalledWith(
+      overdue,
+      planFor('nextWeek', new Date()),
+    );
+  });
+
+  it('holds every action while a write is in flight', async () => {
+    let finish: () => void = () => {};
+    setItemPlan.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finish = resolve)),
+    );
+    click('Todo rolled', 'Someday');
+    const buttons = [...document.querySelectorAll<HTMLButtonElement>('.act')];
+    expect(buttons.length).toBeGreaterThan(0);
+    expect(buttons.every((b) => b.disabled)).toBe(true);
+    finish();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(buttons.every((b) => !b.disabled)).toBe(true);
+    });
   });
 
   it('moves an overdue todo to today, keeping its kind and time', async () => {

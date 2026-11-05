@@ -9,6 +9,7 @@
   import type { Collection, CollectionGroup, InboxItem } from '@inbox-rs/rs-module';
   import { todayStart } from '../lib/now';
   import { type Placement, scheduledDayKey, toDateKey, weekStart } from '../lib/plan';
+  import { compareByDueTime } from '../lib/schedule';
   import TodoRow from './TodoRow.svelte';
 
   let {
@@ -51,7 +52,11 @@
   });
 
   let pickedKey = $state<string | null>(null);
-  const selectedKey = $derived(pickedKey ?? todayKey);
+  // A pick from an earlier week (the strip moved on at midnight) falls back
+  // to today instead of pointing at a day that's no longer on screen.
+  const selectedKey = $derived(
+    pickedKey && week.some((d) => toDateKey(d) === pickedKey) ? pickedKey : todayKey,
+  );
 
   const byDay = $derived.by(() => {
     const map = new Map<string, InboxItem[]>();
@@ -63,7 +68,7 @@
       map.set(key, list);
     }
     for (const list of map.values()) {
-      list.sort((a, b) => (a.startsAt ?? '').localeCompare(b.startsAt ?? ''));
+      list.sort(compareByDueTime);
     }
     return map;
   });
@@ -100,7 +105,8 @@
     todos.filter((t) => {
       if (placements.get(t.id)?.section !== 'week') return false;
       const key = scheduledDayKey(t);
-      return !key || key > todayKey;
+      // The picked day is already listed above; don't show it twice.
+      return !key || (key > todayKey && key !== selectedKey);
     }),
   );
 

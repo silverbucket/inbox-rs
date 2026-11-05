@@ -14,7 +14,6 @@
     fromDateKey,
     monthGrid,
     monthStart,
-    moveItemToDay,
     type Placement,
     scheduledDayKey,
     sectionInfo,
@@ -22,7 +21,8 @@
     toDateKey,
     weekStart,
   } from '../lib/plan';
-  import { storeItem } from '../lib/stores';
+  import { compareByDueTime } from '../lib/schedule';
+  import { moveStoredItemToDay } from '../lib/stores';
   import { showToast } from '../lib/toast';
 
   let {
@@ -65,7 +65,7 @@
       map.set(key, list);
     }
     for (const list of map.values()) {
-      list.sort((a, b) => (a.startsAt ?? '').localeCompare(b.startsAt ?? ''));
+      list.sort(compareByDueTime);
     }
     return map;
   });
@@ -74,7 +74,7 @@
   const byWeek = $derived.by(() => {
     const map = new Map<string, InboxItem[]>();
     for (const t of todos) {
-      if (t.startsAt || t.planKind !== 'week' || !t.planStart) continue;
+      if (scheduledDayKey(t) || t.planKind !== 'week' || !t.planStart) continue;
       if (placements.get(t.id)?.rolledFrom) continue;
       const list = map.get(t.planStart) ?? [];
       list.push(t);
@@ -87,7 +87,7 @@
   const monthPlans = $derived(
     todos.filter(
       (t) =>
-        !t.startsAt &&
+        !scheduledDayKey(t) &&
         t.planKind === 'month' &&
         t.planStart === toDateKey(viewMonth) &&
         !placements.get(t.id)?.rolledFrom,
@@ -121,7 +121,7 @@
 
   const side = $derived.by(() => {
     const pick = (section: string) =>
-      todos.filter((t) => !t.startsAt && placements.get(t.id)?.section === section);
+      todos.filter((t) => !scheduledDayKey(t) && placements.get(t.id)?.section === section);
     return { next: pick('next'), someday: pick('someday'), unplanned: pick('unplanned') };
   });
 
@@ -180,7 +180,7 @@
     const todo = todos.find((t) => t.id === id);
     if (!todo) return;
     try {
-      await storeItem(moveItemToDay(todo, day));
+      await moveStoredItemToDay(todo, day);
     } catch (error) {
       console.error('Failed to move todo to day', error);
       showToast('Couldn’t move that todo');

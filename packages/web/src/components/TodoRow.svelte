@@ -794,8 +794,15 @@
   .todo-row.stacked .meta {
       grid-column: 2;
       grid-row: 2;
+      min-width: 0;
       gap: 0.4rem;
       flex-wrap: wrap;
+  }
+
+  .todo-row.stacked .sched-chip {
+      flex-shrink: 1;
+      max-width: 100%;
+      white-space: normal;
   }
 
   .todo-row.stacked.reorderable .meta {

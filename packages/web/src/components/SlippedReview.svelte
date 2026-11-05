@@ -11,9 +11,9 @@
   import type { Collection, InboxItem } from '@inbox-rs/rs-module';
   import { trapFocus } from '../lib/actions';
   import { todayStart } from '../lib/now';
-  import { moveItemToDay, type PlanChoice, planFor } from '../lib/plan';
+  import { type PlanChoice, planFor } from '../lib/plan';
   import { setItemCompleted } from '../lib/schedule-sync';
-  import { setItemPlan, storeItem } from '../lib/stores';
+  import { moveStoredItemToDay, setItemPlan } from '../lib/stores';
   import { showToast } from '../lib/toast';
   import ScheduleSheet from './ScheduleSheet.svelte';
 
@@ -66,7 +66,7 @@
     run(
       todo,
       // Only the date changes: a timed event keeps its kind, time and length.
-      () => storeItem(moveItemToDay(todo, today)),
+      () => moveStoredItemToDay(todo, today),
       'Couldn’t move that todo to today',
     );
 
@@ -84,13 +84,13 @@
 {#snippet actions(todo: InboxItem, isOverdue: boolean)}
   <div class="actions" role="group" aria-label="What to do with {todo.title}">
     {#if isOverdue}
-      <button type="button" class="act primary" disabled={busyId === todo.id} onclick={() => dueToday(todo)}>Today</button>
+      <button type="button" class="act primary" disabled={busyId !== null} onclick={() => dueToday(todo)}>Today</button>
     {/if}
-    <button type="button" class="act" class:primary={!isOverdue} disabled={busyId === todo.id} onclick={() => plan(todo, 'week')}>This week</button>
-    <button type="button" class="act" disabled={busyId === todo.id} onclick={() => plan(todo, 'nextWeek')}>Next week</button>
-    <button type="button" class="act" disabled={busyId === todo.id} onclick={() => (pickingDateFor = todo)}>Pick date…</button>
-    <button type="button" class="act quiet" disabled={busyId === todo.id} onclick={() => plan(todo, 'someday')}>Someday</button>
-    <button type="button" class="act quiet" disabled={busyId === todo.id} onclick={() => done(todo)}>Done</button>
+    <button type="button" class="act" class:primary={!isOverdue} disabled={busyId !== null} onclick={() => plan(todo, 'week')}>This week</button>
+    <button type="button" class="act" disabled={busyId !== null} onclick={() => plan(todo, 'nextWeek')}>Next week</button>
+    <button type="button" class="act" disabled={busyId !== null} onclick={() => (pickingDateFor = todo)}>Pick date…</button>
+    <button type="button" class="act quiet" disabled={busyId !== null} onclick={() => plan(todo, 'someday')}>Someday</button>
+    <button type="button" class="act quiet" disabled={busyId !== null} onclick={() => done(todo)}>Done</button>
   </div>
 {/snippet}
 
