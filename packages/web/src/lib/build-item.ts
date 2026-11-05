@@ -25,10 +25,9 @@ import type {
   NoteItem,
   TodoItem,
 } from '@inbox-rs/rs-module';
-import { noteTitleFromBody } from '@inbox-rs/rs-module';
+import { applySchedule, noteTitleFromBody } from '@inbox-rs/rs-module';
 import { type BuildItemResult, getFileExtension } from './add-entry-modal';
 import { isCalendarFile, parseIcs } from './ics';
-import { applySchedule } from './schedule';
 import { generateThumbnail, THUMB_MIME_TYPE } from './thumbnail';
 
 export interface BuildContext {

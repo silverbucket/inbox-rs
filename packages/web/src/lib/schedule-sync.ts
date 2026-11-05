@@ -7,7 +7,7 @@
  * someone was editing cards in this app. All detach/re-enable operations
  * are local-only.
  */
-import type { InboxItem } from '@inbox-rs/rs-module';
+import { applySchedule, type InboxItem } from '@inbox-rs/rs-module';
 import { get } from 'svelte/store';
 import { CaldavError, createEntry } from './caldav';
 import {
@@ -16,11 +16,7 @@ import {
   recordCalendarUse,
 } from './calendar-accounts';
 import { cleanForStorage } from './clean-for-storage';
-import {
-  applySchedule,
-  clearPostedEntry,
-  type PendingSchedule,
-} from './schedule';
+import { clearPostedEntry, type PendingSchedule } from './schedule';
 import { flushItemChanges, items, storeItem } from './stores';
 
 /**

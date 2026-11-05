@@ -5,9 +5,9 @@
  * All date math is local-time — the user schedules in their own wall-clock;
  * conversion to UTC happens only at .ics/CalDAV serialization (see ics.ts).
  */
-import type { InboxItem } from '@inbox-rs/rs-module';
+import type { InboxItem, ScheduleInput } from '@inbox-rs/rs-module';
 
-export type ScheduleKind = 'event' | 'task';
+export type { ScheduleKind } from '@inbox-rs/rs-module';
 
 export interface QuickOption {
   label: string;
@@ -132,16 +132,6 @@ export function isPast(
   return end.getTime() < now.getTime();
 }
 
-export interface ScheduleInput {
-  kind: ScheduleKind;
-  start: Date;
-  /** Minutes; only meaningful for timed events. */
-  durationMin?: number;
-  allDay?: boolean;
-  /** Omit to keep the item's current location; empty string clears it. */
-  location?: string;
-}
-
 /**
  * A schedule chosen before its item exists (capture-time "When?" chips).
  * Applied via applySchedule once the item is created. Deliberately
@@ -149,37 +139,6 @@ export interface ScheduleInput {
  * separate action taken later from the card.
  */
 export type PendingSchedule = ScheduleInput;
-
-/**
- * Return a copy of the item carrying the given schedule, dropping any soft
- * plan (a date supersedes "roughly when"). Any previously
- * posted calendar entry's href/etag is preserved — the caller (future CalDAV
- * sync) uses it to update the projection.
- */
-export function applySchedule<T extends InboxItem>(
-  item: T,
-  input: ScheduleInput,
-): T {
-  const start = new Date(input.start);
-  if (input.allDay) start.setHours(0, 0, 0, 0);
-  const endsAt =
-    input.kind === 'event' && !input.allDay && input.durationMin
-      ? new Date(start.getTime() + input.durationMin * 60_000).toISOString()
-      : undefined;
-  return {
-    ...item,
-    startsAt: start.toISOString(),
-    endsAt,
-    allDay: input.allDay || undefined,
-    scheduleKind: input.kind,
-    // A real date replaces any soft plan ("next week") — see plan.ts.
-    planKind: undefined,
-    planStart: undefined,
-    ...(input.location !== undefined
-      ? { location: input.location.trim() || undefined }
-      : {}),
-  };
-}
 
 /**
  * Return a copy of the item with all scheduling removed — including the
