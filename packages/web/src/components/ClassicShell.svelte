@@ -325,4 +325,15 @@
   .app-footer {
     margin-top: 2rem;
   }
+
+  /* Phones navigate with the bottom tab bar (MobileTabBar) instead. */
+  @media (max-width: 600px) {
+    .header-nav {
+      display: none;
+    }
+
+    .header-inner {
+      grid-template-rows: auto;
+    }
+  }
 </style>

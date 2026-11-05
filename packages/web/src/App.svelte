@@ -9,6 +9,7 @@
   import SidebarShell from './components/SidebarShell.svelte';
   import CaptureBar from './components/CaptureBar.svelte';
   import CaptureSheet from './components/CaptureSheet.svelte';
+  import MobileTabBar from './components/MobileTabBar.svelte';
   import Toast from './components/Toast.svelte';
   import {
     connected, deleteItem, items, visibleOpenTodos, openTodos, pendingMigrationCount, runAllMigrations,
@@ -792,6 +793,8 @@
     {#snippet children()}{@render shellBody()}{/snippet}
   </ClassicShell>
 {/if}
+
+<MobileTabBar page={bodyPage} planCount={viewTodoCount} {navTo} oncapture={() => (captureSheetOpen = true)} />
 
 <!-- Focus mode: a route-driven popup (#/collection/:id) over the page the
      user was on. Rendered here, not in the shell body, so the backdrop can

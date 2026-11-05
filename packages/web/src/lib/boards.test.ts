@@ -9,6 +9,7 @@ import {
   isAutoMatch,
   makeSet,
   matchColumns,
+  moveTarget,
   nextColumnColor,
   normalizeColumns,
   placeItem,
@@ -178,5 +179,34 @@ describe('matchColumns', () => {
     });
     expect(isAutoMatch(pipeline.columns[2], reading, 'building')).toBe(true);
     expect(isAutoMatch(pipeline.columns[3], reading, 'read')).toBe(false);
+  });
+});
+
+describe('moveTarget', () => {
+  const reading: ColumnSet = {
+    id: 'read',
+    name: 'Reading list',
+    createdAt: '',
+    columns: [
+      { id: BOARD_UNSORTED, name: 'Unsorted', color: '#8a8378' },
+      { id: 'next', name: 'Next', color: '#2563eb' },
+    ],
+  };
+
+  it('follows the mapping from the current column', () => {
+    const item = note('a', { boardColumns: { pipe: 'build' } });
+    expect(moveTarget(item, pipeline, reading, { build: 'next' })).toBe('next');
+    expect(moveTarget(item, pipeline, reading, {})).toBe(BOARD_UNSORTED);
+  });
+
+  it('returns an item to its remembered column when mapped to Unsorted', () => {
+    const item = note('a', { boardColumns: { pipe: 'idea', read: 'next' } });
+    expect(moveTarget(item, pipeline, reading, {})).toBe('next');
+    // An explicit choice still wins.
+    const back = note('b', { boardColumns: { read: 'next', pipe: 'build' } });
+    expect(moveTarget(back, reading, pipeline, { next: 'idea' })).toBe('idea');
+    // A remembered column that was since deleted doesn't count.
+    const gone = note('c', { boardColumns: { read: 'gone' } });
+    expect(moveTarget(gone, undefined, reading, {})).toBe(BOARD_UNSORTED);
   });
 });

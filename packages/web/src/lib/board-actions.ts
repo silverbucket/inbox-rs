@@ -10,6 +10,7 @@ import {
   BOARD_UNSORTED,
   columnOf,
   copySet,
+  moveTarget,
   normalizeColumns,
   placeItem,
 } from './boards';
@@ -182,7 +183,9 @@ export function columnCounts(set: ColumnSet): Map<string, number> {
 /**
  * Move a collection to another set, placing its items by `mapping`
  * (old column → new column). Their old-set columns stay recorded, so moving
- * back restores them.
+ * back restores them: an item mapped to Unsorted (no real choice made)
+ * returns to the column it last had in the destination set, if that column
+ * still exists.
  */
 export async function moveCollectionToSet(
   collectionId: string,
@@ -195,8 +198,7 @@ export async function moveCollectionToSet(
   if (!col || !to) return;
   flushItemChanges();
   for (const item of itemsOf([collectionId])) {
-    const fromCol = from ? columnOf(item, from) : BOARD_UNSORTED;
-    const target = mapping[fromCol] ?? BOARD_UNSORTED;
+    const target = moveTarget(item, from, to, mapping);
     if (item.boardColumns?.[to.id] === target) continue;
     await storeItem({
       ...item,

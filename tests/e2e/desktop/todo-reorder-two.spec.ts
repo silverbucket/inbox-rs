@@ -45,12 +45,12 @@ function reorderZone(scope: Page | Locator): Locator {
 
 function zoneTitles(zone: Locator): Promise<string[]> {
   return zone
-    .locator('li.todo-row .title')
+    .locator('.todo-row .title')
     .evaluateAll((els) => els.map((el) => (el.textContent ?? '').trim()));
 }
 
 function zoneRow(zone: Locator, title: string): Locator {
-  return zone.locator('li.todo-row', {
+  return zone.locator('.todo-row', {
     has: page.getByText(title, { exact: true }),
   });
 }

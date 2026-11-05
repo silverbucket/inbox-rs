@@ -12,7 +12,7 @@
     makePrivateCopy,
     moveCollectionToSet,
   } from '../../lib/board-actions';
-  import { columnOf, isAutoMatch, matchColumns } from '../../lib/boards';
+  import { columnOf, isAutoMatch, matchColumns, moveTarget } from '../../lib/boards';
   import { collections, items } from '../../lib/stores';
   import { showToast } from '../../lib/toast';
   import Sheet from './Sheet.svelte';
@@ -67,13 +67,11 @@
       : 0,
   );
   const result = $derived.by(() => {
-    if (!from || !to) return '';
+    if (!to) return '';
     const totals = new Map<string, number>();
-    for (const c of from.columns) {
-      const n = counts.get(c.id) ?? 0;
-      if (!n) continue;
-      const target = mapping[c.id] ?? BOARD_UNSORTED;
-      totals.set(target, (totals.get(target) ?? 0) + n);
+    for (const item of own) {
+      const target = moveTarget(item, from, to, mapping);
+      totals.set(target, (totals.get(target) ?? 0) + 1);
     }
     const parts = [...totals].map(([id, n]) => {
       const name = to.columns.find((c) => c.id === id)?.name ?? 'Unsorted';

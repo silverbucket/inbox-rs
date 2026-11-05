@@ -8,6 +8,9 @@
   import { animatePriorityChange } from '../lib/priority-motion';
   import { formatScheduled, isOverdue } from '../lib/schedule';
   import { setItemPinned } from '../lib/stores';
+  import { portal } from '../lib/actions';
+  import { swipeAction, swipeAxis, swipeOffset } from '../lib/swipe';
+  import ScheduleSheet from './ScheduleSheet.svelte';
 
   let {
     todo,
@@ -19,6 +22,7 @@
     reorderable = false,
     planTag,
     stacked = false,
+    as = 'li',
   }: {
     todo: InboxItem;
     /** The collection this todo belongs to, or null when unfiled. */
@@ -44,6 +48,9 @@
     /** Two-line card layout (title, then meta) for narrow containers such
         as board columns, regardless of viewport width. */
     stacked?: boolean;
+    /** Root element. Lists whose items are wrapped (for animate:flip in a
+        drag-and-drop zone) supply the <li> themselves and pass 'div'. */
+    as?: 'li' | 'div';
   } = $props();
 
   // Show the underlying item type as an icon for items that are "todos by flag"
@@ -112,7 +119,61 @@
     }
   }
 
+  // ── Touch swipe: right completes, left re-plans (opens When?) ──────────
+  let swipeStart: { x: number; y: number } | null = null;
+  let swipeLock: 'pending' | 'horizontal' | 'vertical' = 'pending';
+  let swipeDx = $state(0);
+  let swiping = $state(false);
+  /** A swipe's release can be followed by a synthetic click; ignore it. */
+  let suppressClickUntil = 0;
+  let replanOpen = $state(false);
+  const swipeHint = $derived(swiping ? swipeAction(swipeDx) : null);
+
+  function onSwipeStart(e: TouchEvent) {
+    stopParentDndCapture(e);
+    // Calendar receipt rows have no checkbox and can't be re-planned here.
+    swipeStart = null;
+    if (readonly || e.touches.length !== 1) return;
+    // A swipe may start on the pin or checkbox (the browser sends them no
+    // click once the finger has moved); only the reorder grip is its own
+    // gesture.
+    const target = e.target as Element | null;
+    if (target?.closest('.reorder-handle')) return;
+    swipeStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    swipeLock = 'pending';
+  }
+
+  function onSwipeMove(e: TouchEvent) {
+    if (!swipeStart || swipeLock === 'vertical') return;
+    const dx = e.touches[0].clientX - swipeStart.x;
+    const dy = e.touches[0].clientY - swipeStart.y;
+    if (swipeLock === 'pending') {
+      swipeLock = swipeAxis(dx, dy);
+      if (swipeLock !== 'horizontal') return;
+    }
+    swipeDx = dx;
+    swiping = true;
+  }
+
+  async function onSwipeEnd() {
+    const action = swiping ? swipeAction(swipeDx) : null;
+    if (swiping) suppressClickUntil = Date.now() + 400;
+    swipeStart = null;
+    swiping = false;
+    swipeDx = 0;
+    if (action === 'complete') {
+      try {
+        await setItemCompleted(todo, !todo.completed);
+      } catch (err) {
+        console.error('Failed to update todo:', err);
+      }
+    } else if (action === 'replan') {
+      replanOpen = true;
+    }
+  }
+
   function handleClick(e: MouseEvent) {
+    if (Date.now() < suppressClickUntil) return;
     // Don't open the view modal when clicking the checkbox or its label.
     const target = e.target as HTMLElement;
     if (target.closest('input, button, a')) return;
@@ -210,12 +271,16 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
-<li
+<svelte:element
+  this={as}
   class="todo-row"
   class:completed={todo.completed}
   class:unfiled={isUnfiled}
   class:reorderable
   class:stacked
+  class:swiping
+  class:swipe-complete={swipeHint === 'complete'}
+  class:swipe-replan={swipeHint === 'replan'}
   data-priority-item
   role="button"
   tabindex="0"
@@ -224,10 +289,13 @@
   onkeydown={handleKey}
   onpointerdown={onRowPointerDown}
   onmousedown={stopParentDndCapture}
-  ontouchstart={stopParentDndCapture}
+  ontouchstart={onSwipeStart}
+  ontouchmove={onSwipeMove}
+  ontouchend={onSwipeEnd}
+  ontouchcancel={onSwipeEnd}
   ondragstart={onFileDragStart}
   ondragend={onFileDragEnd}
-  style="--group-color: {groupColor}; --collection-color: {collectionColor}"
+  style="--group-color: {groupColor}; --collection-color: {collectionColor}; --swipe-x: {swipeOffset(swipeDx)}px"
 >
   {#if reorderable}
     <!-- Non-form handle: svelte-dnd-action ignores nested targets with a defined
@@ -343,7 +411,13 @@
       </svg>
     </button>
   {/if}
-</li>
+  {#if replanOpen}
+    <!-- Portalled to <body>: the sheet's clicks mustn't reach this row. -->
+    <div use:portal>
+      <ScheduleSheet item={todo} onclose={() => (replanOpen = false)} />
+    </div>
+  {/if}
+</svelte:element>
 
 <style>
   .todo-row {
@@ -358,6 +432,28 @@
     transition: background 150ms, border-color 150ms, box-shadow 150ms;
     -webkit-tap-highlight-color: transparent;
     min-width: 0;
+  }
+
+  /* Rows scroll vertically; horizontal drags are ours (swipe actions). */
+  @media (hover: none) {
+    .todo-row {
+      touch-action: pan-y;
+    }
+  }
+
+  .todo-row.swiping {
+    transform: translateX(var(--swipe-x));
+    transition: none;
+  }
+
+  .todo-row.swipe-complete {
+    border-color: var(--ok);
+    box-shadow: inset 4px 0 0 var(--ok);
+  }
+
+  .todo-row.swipe-replan {
+    border-color: var(--accent);
+    box-shadow: inset -4px 0 0 var(--accent);
   }
 
   .todo-row.reorderable {

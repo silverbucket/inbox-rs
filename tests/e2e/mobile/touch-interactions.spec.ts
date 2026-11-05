@@ -32,7 +32,16 @@ test('tap navigates between pages', async ({ connectedPage, webOrigin }) => {
   await connectedPage.goto(webOrigin);
   await connectedPage.waitForLoadState('networkidle');
 
-  const todosBtn = connectedPage.getByRole('button', { name: 'Todos' }).first();
-  await todosBtn.tap();
-  await expect(todosBtn).toHaveAttribute('aria-current', 'page');
+  const tabbar = connectedPage.getByRole('navigation', {
+    name: 'Primary (mobile)',
+  });
+  const todayBtn = tabbar.getByRole('button', { name: 'Today' });
+  await todayBtn.tap();
+  await expect(todayBtn).toHaveAttribute('aria-current', 'page');
+  await expect(connectedPage).toHaveURL(/#\/todos/);
+
+  const planBtn = tabbar.getByRole('button', { name: 'Plan' });
+  await planBtn.tap();
+  await expect(planBtn).toHaveAttribute('aria-current', 'page');
+  await expect(todayBtn).not.toHaveAttribute('aria-current', 'page');
 });

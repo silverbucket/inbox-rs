@@ -528,9 +528,9 @@
             onfinalize={handleDndFinalize}
           >
             {#each dndOpen as todo (todo.id)}
-              <div animate:flip={{ duration: 200 }} in:reorderFade.fade={{ duration: 180 }} out:reorderFade.fade={{ duration: 120 }}>
-                <TodoRow {todo} {collection} {group} reorderable {onselect} />
-              </div>
+              <li animate:flip={{ duration: 200 }} in:reorderFade.fade={{ duration: 180 }} out:reorderFade.fade={{ duration: 120 }}>
+                <TodoRow as="div" {todo} {collection} {group} reorderable {onselect} />
+              </li>
             {/each}
           </ul>
         {:else if dueTodos.length === 0 && completedTodos.length === 0}

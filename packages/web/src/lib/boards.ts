@@ -245,3 +245,27 @@ export function nextColumnColor(columns: BoardColumn[]): string {
     COLUMN_COLORS[columns.length % COLUMN_COLORS.length]
   );
 }
+
+/**
+ * Where an item lands when its collection moves from `from` (or no set) to
+ * `to` under `mapping` (old column → new column). A mapping to Unsorted is
+ * no real choice, so an item that remembers a column in `to` (it was there
+ * before) goes back to it, if that column still exists.
+ */
+export function moveTarget(
+  item: InboxItem,
+  from: ColumnSet | undefined,
+  to: ColumnSet,
+  mapping: Record<string, string>,
+): string {
+  const fromCol = from ? columnOf(item, from) : BOARD_UNSORTED;
+  const mapped = mapping[fromCol] ?? BOARD_UNSORTED;
+  const remembered = item.boardColumns?.[to.id];
+  if (
+    mapped === BOARD_UNSORTED &&
+    remembered &&
+    to.columns.some((c) => c.id === remembered)
+  )
+    return remembered;
+  return mapped;
+}
