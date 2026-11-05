@@ -335,6 +335,16 @@ describe('parseIcs', () => {
     expect(parseIcs(ics)?.unresolvedZone).toBe('Narnia Standard Time');
   });
 
+  it('keeps the unknown-zone flag when that end is dropped for preceding the start', () => {
+    const ics = outlookIcs('20261109T180000', '20261108T190000').replace(
+      'DTEND;TZID="Eastern Standard Time"',
+      'DTEND;TZID="Narnia Standard Time"',
+    );
+    const parsed = parseIcs(ics);
+    expect(parsed?.end).toBeUndefined();
+    expect(parsed?.unresolvedZone).toBe('Narnia Standard Time');
+  });
+
   it('reads a real-world zoned VEVENT, skipping VTIMEZONE and VALARM', () => {
     const parsed = parseIcs(MEETUP_ICS);
     expect(parsed).toMatchObject({
