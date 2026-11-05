@@ -350,6 +350,8 @@
     return () => mql.removeEventListener('change', handler);
   });
   const view = $derived<TodosView>($appConfig.todosView ?? (narrow ? 'today' : 'horizon'));
+  /** The On-calendar receipts render only in Horizon and Board. */
+  const showsReceipts = $derived((view === 'horizon' || view === 'board') && onCalendarTodos.length > 0);
 
   async function setView(next: TodosView) {
     try {
@@ -558,7 +560,7 @@
       {/each}
     </div>
     <!-- Hidden while the On-calendar receipts are open: those rows ignore swipes. -->
-    {#if !onCalendarExpanded}<p class="swipe-hint">Swipe right to complete · left to re-plan</p>{/if}
+    {#if !(showsReceipts && onCalendarExpanded)}<p class="swipe-hint">Swipe right to complete · left to re-plan</p>{/if}
 
     {#if view === 'today'}
       <TodosToday
@@ -698,7 +700,7 @@
       </div>
     {/if}
 
-    {#if (view === 'horizon' || view === 'board') && onCalendarTodos.length > 0}
+    {#if showsReceipts}
       <div class="completed-section">
         <button type="button"
           class="btn-completed-toggle"
