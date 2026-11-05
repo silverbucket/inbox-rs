@@ -96,6 +96,7 @@ import {
   reorderGroups,
   reorderTodosGlobal,
   reorderUnfiledTodos,
+  restoreItem,
   sessionPinGeneration,
   sessionVisibleTodoIds,
   setActiveGroupFilters,
@@ -114,6 +115,7 @@ import {
   todoItems,
   toggleCollectionFilter,
   toggleGroupFilter,
+  triageToTodo,
   userAddress,
   userSettings,
   visibleGroupedCollections,
@@ -623,6 +625,120 @@ describe('moveStoredItemToDay', () => {
     expect(saved.scheduleKind).toBe('event');
     expect([start.getDate(), start.getHours()]).toEqual([12, 14]);
     expect((end.getTime() - start.getTime()) / 60_000).toBe(90);
+  });
+});
+
+describe('triageToTodo / restoreItem', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    items.set({});
+  });
+
+  const card = () =>
+    ({
+      ...makeTodo('n1', { title: 'Plan the gig' }),
+      type: 'note',
+      body: 'Book the room',
+      isTodo: undefined,
+      completed: undefined,
+    }) as unknown as InboxItem;
+
+  it('makes an inbox card a planned todo, keeping its content', async () => {
+    const before = card();
+    items.set({ n1: before });
+    const change = await triageToTodo(before, {
+      plan: { planKind: 'week', planStart: '2026-11-02' },
+    });
+    const saved = get(items).n1;
+    expect(saved).toMatchObject({
+      isTodo: true,
+      completed: false,
+      title: 'Plan the gig',
+      planKind: 'week',
+      planStart: '2026-11-02',
+    });
+    expect(change.before).toEqual(before);
+    expect(change.after).toEqual(saved);
+  });
+
+  it('dates a todo for a day and drops a calendar receipt', async () => {
+    const before = {
+      ...card(),
+      startsAt: new Date(2026, 10, 1, 18).toISOString(),
+      scheduleKind: 'event',
+      eventUrl: 'https://cal.example.org/n1.ics',
+      eventEtag: '"e"',
+    } as InboxItem;
+    items.set({ n1: before });
+    await triageToTodo(before, { day: new Date(2026, 10, 6) });
+    const saved = get(items).n1;
+    const start = new Date(saved.startsAt as string);
+    expect(saved.isTodo).toBe(true);
+    expect(saved.scheduleKind).toBe('task');
+    expect([start.getDate(), start.getHours()]).toEqual([6, 18]);
+    expect(saved.eventUrl).toBeUndefined();
+    expect(saved.eventEtag).toBeUndefined();
+  });
+
+  it('undo puts the card back as it was', async () => {
+    const before = card();
+    items.set({ n1: before });
+    const change = await triageToTodo(before, {
+      plan: { planKind: 'someday' },
+    });
+    await expect(restoreItem(change)).resolves.toBe(true);
+    const saved = get(items).n1;
+    expect(saved.isTodo).toBeFalsy();
+    expect(saved.planKind).toBeUndefined();
+    expect(saved.title).toBe('Plan the gig');
+  });
+
+  it('undo keeps an edit that synced in after the action', async () => {
+    const before = card();
+    items.set({ n1: before });
+    const change = await triageToTodo(before, {
+      plan: { planKind: 'someday' },
+    });
+    // Another device renames the card before Undo is pressed.
+    items.update((all) => ({
+      ...all,
+      n1: { ...all.n1, title: 'Plan the tour' },
+    }));
+    vi.mocked(mockInbox.store).mockClear();
+    await restoreItem(change);
+    const saved = get(items).n1;
+    expect(saved.title).toBe('Plan the tour');
+    expect(saved.isTodo).toBeFalsy();
+    expect(saved.planKind).toBeUndefined();
+    expect(mockInbox.store).toHaveBeenCalledOnce();
+  });
+
+  it('undoing a filing writes the card once and empties the collection', async () => {
+    const before = card();
+    items.set({ n1: before });
+    collections.set({ c1: makeCollection('c1') });
+    await moveItemToCollection('n1', 'c1');
+    expect(get(collections).c1.itemIds).toEqual(['n1']);
+    const change = { before, after: get(items).n1 };
+    vi.mocked(mockInbox.store).mockClear();
+    await restoreItem(change);
+    expect(get(items).n1.collectionId).toBeUndefined();
+    expect(get(collections).c1.itemIds).toEqual([]);
+    expect(mockInbox.store).toHaveBeenCalledOnce();
+    expect(mockInbox.storeCollection).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 'c1', itemIds: [] }),
+    );
+  });
+
+  it('undo does nothing once the card is gone', async () => {
+    const before = card();
+    items.set({ n1: before });
+    const change = await triageToTodo(before, {
+      plan: { planKind: 'someday' },
+    });
+    items.set({});
+    await expect(restoreItem(change)).resolves.toBe(false);
+    expect(get(items).n1).toBeUndefined();
   });
 });
 

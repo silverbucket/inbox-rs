@@ -1206,6 +1206,119 @@ export async function moveStoredItemToDay(target: InboxItem, day: Date) {
   await storeItem(moveItemToDay(get(items)[target.id] ?? target, day));
 }
 
+/**
+ * Apply any remote edits still waiting in the 50 ms change buffer, so a
+ * read of `items` that follows sees them. For actions outside this module
+ * that read a card before writing it.
+ */
+export function flushItemChanges(): void {
+  flushPendingItemChanges();
+}
+
+/** A card before and after a triage write — what an undo needs. */
+export interface TriageChange {
+  before: InboxItem;
+  after: InboxItem;
+}
+
+/**
+ * Turn an inbox card into an unfiled todo, planned for a horizon or dated
+ * for a day, in one write. Like the Todos page's own conversion it drops
+ * any calendar receipt and treats an existing time as a task's. Builds on
+ * the freshest copy and returns it with the stored result, for undo.
+ */
+export async function triageToTodo(
+  target: InboxItem,
+  when: { plan: Plan } | { day: Date },
+): Promise<TriageChange> {
+  flushPendingItemChanges();
+  const before = get(items)[target.id] ?? target;
+  const todo: Record<string, unknown> = {
+    ...before,
+    isTodo: true,
+    completed: false,
+  };
+  for (const key of [
+    'completedAt',
+    'eventUrl',
+    'eventEtag',
+    'archived',
+    'archivedAt',
+    'archiveReason',
+  ]) {
+    delete todo[key];
+  }
+  if (todo.startsAt) todo.scheduleKind = 'task';
+  let next = todo as unknown as InboxItem;
+  if ('day' in when) {
+    next = moveItemToDay(next, when.day);
+  } else {
+    next = applyPlan(next.startsAt ? clearSchedule(next) : next, when.plan);
+  }
+  await storeItem(next);
+  return { before, after: get(items)[target.id] ?? next };
+}
+
+function sameValue(a: unknown, b: unknown): boolean {
+  return a === b || JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** Keep a collection's itemIds in step with an item that changed collection. */
+async function moveMembership(
+  itemId: string,
+  from: string | undefined,
+  to: string | undefined,
+) {
+  const inbox = requireInbox();
+  for (const [colId, add] of [
+    [from, false],
+    [to, true],
+  ] as const) {
+    if (!colId) continue;
+    const col = get(collections)[colId];
+    if (!col || col.itemIds.includes(itemId) === add) continue;
+    const updated = {
+      ...col,
+      itemIds: add
+        ? [...col.itemIds, itemId]
+        : col.itemIds.filter((id) => id !== itemId),
+    };
+    collections.update((current) => ({ ...current, [colId]: updated }));
+    await inbox.storeCollection(cleanForStorage(updated));
+  }
+}
+
+/**
+ * Undo a triage write. Re-reads the card and puts back only the fields the
+ * action changed and nobody has touched since, so an edit that synced in
+ * after the action survives. The card is written once; if it changes
+ * collection, only the collections' membership lists are written after it.
+ * Returns false when the card no longer exists.
+ */
+export async function restoreItem(change: TriageChange): Promise<boolean> {
+  flushPendingItemChanges();
+  const { before, after } = change;
+  const current = get(items)[before.id];
+  if (!current) return false;
+  const restored: Record<string, unknown> = { ...current };
+  const was = before as unknown as Record<string, unknown>;
+  const did = after as unknown as Record<string, unknown>;
+  const now = current as unknown as Record<string, unknown>;
+  for (const key of new Set([...Object.keys(was), ...Object.keys(did)])) {
+    if (sameValue(was[key], did[key])) continue; // the action left it alone
+    if (!sameValue(now[key], did[key])) continue; // edited since: keep it
+    if (was[key] === undefined) delete restored[key];
+    else restored[key] = was[key];
+  }
+  await storeItem(restored as unknown as InboxItem);
+  await moveMembership(
+    before.id,
+    current.collectionId,
+    restored.collectionId as string | undefined,
+  );
+  return true;
+}
+
 /** Favourite collection ids that still exist and aren't archived, in the user's order. */
 export const favoriteCollectionIds = derived(
   [appConfig, collections, groups],

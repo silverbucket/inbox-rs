@@ -14,7 +14,9 @@ test('default route renders inbox empty state', async ({ page, webOrigin }) => {
   await page.waitForLoadState('networkidle');
 
   // Disconnected → empty state, but the header nav must still be present.
-  await expect(page.getByRole('button', { name: 'Inbox' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Inbox', exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Collections' })).toBeVisible();
   // The disconnected empty state lives in InboxGrid: the heading is "Inbox
   // zero" with a "Connect to your remoteStorage" CTA below. The CTA only
@@ -120,6 +122,9 @@ test('unknown hash falls back to inbox', async ({
   await connectedPage.goto(`${webOrigin}/#/this-route-does-not-exist`);
   await connectedPage.waitForLoadState('networkidle');
 
-  const inboxBtn = connectedPage.getByRole('button', { name: 'Inbox' });
+  const inboxBtn = connectedPage.getByRole('button', {
+    name: 'Inbox',
+    exact: true,
+  });
   await expect(inboxBtn).toHaveAttribute('aria-current', 'page');
 });

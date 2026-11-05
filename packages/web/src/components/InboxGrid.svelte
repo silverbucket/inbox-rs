@@ -1,8 +1,21 @@
 <script lang="ts">
-  import type { InboxItem } from '@inbox-rs/rs-module';
+  import type { Collection, InboxItem } from '@inbox-rs/rs-module';
+  import { tick, untrack } from 'svelte';
   import { inview } from '../lib/actions';
-  import { archivedItems, connected, sortedItems } from '../lib/stores';
+  import { now } from '../lib/now';
+  import { archivedItems, collections, connected, items, sortedItems } from '../lib/stores';
+  import {
+    ageBucket,
+    buildSiteIndex,
+    type CardHints,
+    findDuplicates,
+    groupInbox,
+    lacksTitle,
+    quickSuggestion,
+  } from '../lib/triage';
+  import { fileFromInbox } from '../lib/triage-actions';
   import InboxCard from './InboxCard.svelte';
+  import TriagePanel from './TriagePanel.svelte';
 
   let {
     onselect,
@@ -11,7 +24,12 @@
     onselect: (item: InboxItem) => void;
     onconnect: () => void;
   } = $props();
-  const items = $derived($sortedItems);
+  const inboxItems = $derived($sortedItems);
+
+  // Age groups: what just arrived, the rest, and what has sat for months.
+  const groups = $derived(groupInbox(inboxItems, $now));
+  /** Display order across groups — the order Process inbox walks. */
+  const ordered = $derived(groups.flatMap((g) => g.items));
 
   // Cards archived by adding them to a calendar. Collapsed by default,
   // mirroring the Todos page's "N completed" pattern — same mental model:
@@ -29,16 +47,96 @@
   // window. The status bar always reflects the true total.
   const PAGE = 60;
   let visibleCount = $state(PAGE);
-  const visibleItems = $derived(items.slice(0, visibleCount));
+  /** Each group's share of the rendering window, in display order. */
+  const visibleGroups = $derived.by(() => {
+    let budget = visibleCount;
+    const out: Array<(typeof groups)[number] & { shown: InboxItem[] }> = [];
+    for (const g of groups) {
+      if (budget <= 0) break;
+      out.push({ ...g, shown: g.items.slice(0, budget) });
+      budget -= g.items.length;
+    }
+    return out;
+  });
 
   // Same incremental-rendering safeguard for the archived section:
   // expanding it must not mount every archived card (and queue every media
   // fetch) in one update.
   let archivedVisibleCount = $state(PAGE);
   const visibleArchived = $derived(archived.slice(0, archivedVisibleCount));
+
+  // ── Card hints ──────────────────────────────────────────────────────
+  const liveCollections = $derived(
+    Object.values($collections).filter((c) => !c.archived),
+  );
+  const siteIndex = $derived(buildSiteIndex(liveCollections, $items));
+  const duplicates = $derived(findDuplicates(inboxItems));
+
+  /** Shorten a title for a one-line hint. */
+  function clip(text: string, n = 40): string {
+    return text.length > n ? `${text.slice(0, n - 1).trimEnd()}…` : text;
+  }
+
+  /** The flag, filing suggestion and emphasis a card shows in the Inbox. */
+  function hintsFor(item: InboxItem): CardHints {
+    const dup = duplicates.get(item.id);
+    const flag = dup
+      ? `Same as “${clip(dup.title || 'another card')}” — archive one?`
+      : lacksTitle(item)
+        ? 'No title came through — add one?'
+        : undefined;
+    return {
+      flag,
+      suggest: quickSuggestion(item, siteIndex, liveCollections),
+      duplicate: !!dup,
+      stale: ageBucket(item, $now) === 'stale',
+      active: item.id === triageCurrent,
+    };
+  }
+
+  /** A card's "File to …?" button. */
+  function fileCard(item: InboxItem, collection: Collection) {
+    void fileFromInbox(item, collection);
+  }
+
+  // ── Process inbox ───────────────────────────────────────────────────
+  let triageQueue = $state<string[] | null>(null);
+  let triageCurrent = $state<string | null>(null);
+  let layoutEl = $state<HTMLElement | null>(null);
+
+  /** Start Process inbox on the inbox as it stands, in display order. */
+  function openTriage() {
+    triageQueue = ordered.map((i) => i.id);
+  }
+
+  /** Close Process inbox and clear the highlight. */
+  function closeTriage() {
+    triageQueue = null;
+    triageCurrent = null;
+  }
+
+  // Keep the card being processed rendered and in view beside the panel.
+  // Only a change of card should scroll: `ordered` rebuilds on every clock
+  // tick and item change, and tracking it would yank the grid back to the
+  // card whenever the user scrolls away.
+  $effect(() => {
+    const id = triageCurrent;
+    if (!id) return;
+    untrack(() => {
+      const at = ordered.findIndex((i) => i.id === id);
+      if (at >= visibleCount) visibleCount = Math.min(inboxItems.length, at + PAGE);
+    });
+    void tick().then(() => {
+      layoutEl
+        ?.querySelector(`[data-item-id="${CSS.escape(id)}"]`)
+        ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  });
 </script>
 
-{#if items.length === 0}
+<!-- While Process inbox is open it stays mounted even once the last card
+     is handled, so its summary and Close button still show. -->
+{#if inboxItems.length === 0 && !triageQueue}
   <div class="inbox-zero">
     <div class="zero-glow"></div>
     <div class="zero-icon">
@@ -57,26 +155,56 @@
     {/if}
   </div>
 {:else}
-  <div class="status-bar">You've got <span class="status-count">{items.length}</span> {items.length === 1 ? 'thing' : 'things'} waiting</div>
-  <div class="grid-wrap">
-    <div class="grid">
-      {#each visibleItems as item (item.id)}
-        <InboxCard {item} {onselect} />
-      {/each}
-    </div>
-    {#if visibleCount < items.length}
-      <!-- Keyed so a fresh sentinel (and a fresh IntersectionObserver) mounts
-           for each window size; the action fires once and disconnects. -->
-      {#key visibleCount}
-        <div
-          class="load-sentinel"
-          aria-hidden="true"
-          use:inview={() => {
-            visibleCount = Math.min(visibleCount + PAGE, items.length);
-          }}
-        ></div>
-      {/key}
+  {#if inboxItems.length > 0}
+  <div class="status-bar">
+    <span>You've got <span class="status-count">{inboxItems.length}</span> {inboxItems.length === 1 ? 'thing' : 'things'} waiting</span>
+    {#if !triageQueue}
+      <button type="button" class="process" onclick={openTriage}>Process inbox</button>
     {/if}
+  </div>
+  {/if}
+  <div class="inbox-layout" class:triaging={!!triageQueue} bind:this={layoutEl}>
+    {#if triageQueue}
+      <div class="triage-slot">
+        <TriagePanel
+          queue={triageQueue}
+          {hintsFor}
+          onopen={onselect}
+          onclose={closeTriage}
+          oncurrent={(id) => (triageCurrent = id)}
+        />
+      </div>
+    {/if}
+    <div class="groups">
+      {#each visibleGroups as g (g.key)}
+        <section class="group" aria-labelledby="inbox-group-{g.key}">
+          <div class="group-head">
+            <h2 id="inbox-group-{g.key}">{g.label}</h2>
+            <span class="group-hint">{g.hint}</span>
+          </div>
+          <div class="grid-wrap">
+            <div class="grid">
+              {#each g.shown as item (item.id)}
+                <InboxCard {item} {onselect} hints={hintsFor(item)} onfile={(c) => fileCard(item, c)} />
+              {/each}
+            </div>
+          </div>
+        </section>
+      {/each}
+      {#if visibleCount < inboxItems.length}
+        <!-- Keyed so a fresh sentinel (and a fresh IntersectionObserver) mounts
+             for each window size; the action fires once and disconnects. -->
+        {#key visibleCount}
+          <div
+            class="load-sentinel"
+            aria-hidden="true"
+            use:inview={() => {
+              visibleCount = Math.min(visibleCount + PAGE, inboxItems.length);
+            }}
+          ></div>
+        {/key}
+      {/if}
+    </div>
   </div>
 {/if}
 
@@ -134,12 +262,95 @@
 <style>
   .status-bar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
+    gap: 0.5rem 0.9rem;
     font-size: 0.9rem;
     color: var(--text-muted);
     margin-bottom: 0.75rem;
+  }
+
+  .process {
+    min-height: 2rem;
+    padding: 0 0.85rem;
+    border: 1px solid var(--accent-subtle-strong);
+    border-radius: 999px;
+    background: var(--accent-subtler);
+    color: var(--accent-text);
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .process:hover {
+    background: var(--accent-subtle);
+  }
+
+  .process:focus-visible {
+    outline: 2px solid var(--accent-text);
+    outline-offset: 2px;
+  }
+
+  /* With the panel open it sits beside the cards and stays in view while
+     they scroll; on narrow screens it becomes a bottom sheet instead. */
+  .inbox-layout.triaging {
+    display: grid;
+    grid-template-columns: minmax(18rem, 23rem) minmax(0, 1fr);
+    gap: 1.25rem;
+    align-items: start;
+  }
+
+  .triage-slot {
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    border-radius: var(--radius);
+  }
+
+  @media (max-width: 760px) {
+    .inbox-layout.triaging {
+      display: block;
+      padding-bottom: 55vh;
+    }
+
+    .triage-slot {
+      position: fixed;
+      left: 0.5rem;
+      right: 0.5rem;
+      bottom: 0.5rem;
+      top: auto;
+      max-height: 60vh;
+      z-index: 150;
+    }
+  }
+
+  .groups {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    min-width: 0;
+  }
+
+  .group-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .group-head h2 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+
+  .group-hint {
+    font-size: 0.82rem;
+    color: var(--text-muted);
   }
 
   .status-count {

@@ -117,7 +117,10 @@ test('a captured link is enriched with fetched title, description and image', as
 
   await connectedPage.goto(webOrigin);
   await connectedPage.waitForLoadState('networkidle');
-  await connectedPage.getByRole('button', { name: 'Inbox' }).first().click();
+  await connectedPage
+    .getByRole('button', { name: 'Inbox', exact: true })
+    .first()
+    .click();
 
   const input = connectedPage.getByPlaceholder(
     'Paste a link, jot a note, or drop a file…',
@@ -170,7 +173,10 @@ test('a failed metadata fetch leaves the capture intact and the view card offers
 
   await connectedPage.goto(webOrigin);
   await connectedPage.waitForLoadState('networkidle');
-  await connectedPage.getByRole('button', { name: 'Inbox' }).first().click();
+  await connectedPage
+    .getByRole('button', { name: 'Inbox', exact: true })
+    .first()
+    .click();
 
   const input = connectedPage.getByPlaceholder(
     'Paste a link, jot a note, or drop a file…',

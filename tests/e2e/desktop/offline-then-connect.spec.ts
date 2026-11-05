@@ -52,7 +52,10 @@ test('offline → online → connect with a brand-new account', async ({
   await expect(
     page.getByRole('button', { name: 'Collections' }).first(),
   ).toHaveAttribute('aria-current', 'page');
-  await page.getByRole('button', { name: 'Inbox' }).first().click();
+  await page
+    .getByRole('button', { name: 'Inbox', exact: true })
+    .first()
+    .click();
 
   // Network's back. Drive the real OAuth flow (mirrors connect-flow.spec.ts)
   // so we cover the connect transition under post-offline conditions.
@@ -116,7 +119,10 @@ test('offline → online → connect with an existing account that has data', as
   await expect(
     page.getByRole('button', { name: 'Collections' }).first(),
   ).toHaveAttribute('aria-current', 'page');
-  await page.getByRole('button', { name: 'Inbox' }).first().click();
+  await page
+    .getByRole('button', { name: 'Inbox', exact: true })
+    .first()
+    .click();
 
   // Network returns. Seed the auth state and reload — the seed only
   // takes effect on the next navigation because `addInitScript` runs

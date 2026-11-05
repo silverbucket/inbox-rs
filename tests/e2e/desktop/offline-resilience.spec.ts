@@ -21,7 +21,7 @@ test('warm offline still renders shell', async ({
   // We're in. Capture a sentinel from the live DOM so we can prove a
   // subsequent offline interaction worked against cached data.
   await expect(
-    connectedPage.getByRole('button', { name: 'Inbox' }).first(),
+    connectedPage.getByRole('button', { name: 'Inbox', exact: true }).first(),
   ).toBeVisible();
 
   // Drop the network. Existing in-memory app keeps working: RS's IndexedDB
@@ -59,7 +59,7 @@ test('installed app shell loads offline', async ({
   await offlinePage.goto(webOrigin);
 
   await expect(
-    offlinePage.getByRole('button', { name: 'Inbox' }).first(),
+    offlinePage.getByRole('button', { name: 'Inbox', exact: true }).first(),
   ).toBeVisible();
 
   await context.setOffline(false);
@@ -99,7 +99,7 @@ test('offline reload serves app shell after service worker install', async ({
   });
   expect(reload?.ok()).toBeTruthy();
   await expect(
-    page.getByRole('button', { name: 'Inbox' }).first(),
+    page.getByRole('button', { name: 'Inbox', exact: true }).first(),
   ).toBeVisible();
 
   await page.context().setOffline(false);

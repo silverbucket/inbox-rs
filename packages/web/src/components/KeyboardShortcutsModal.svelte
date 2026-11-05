@@ -18,6 +18,24 @@
       ],
     },
     {
+      title: 'Process inbox',
+      shortcuts: [
+        { keys: ['T'], label: 'Todo for today' },
+        { keys: ['N'], label: 'Todo for Up next' },
+        { keys: ['W'], label: 'Todo for this week' },
+        { keys: ['M'], label: 'Todo for this month' },
+        { keys: ['S'], label: 'Todo for someday' },
+        { keys: ['1'], label: 'File into the first suggestion' },
+        { keys: ['2'], label: 'File into the second suggestion' },
+        { keys: ['F'], label: 'Choose a collection' },
+        { keys: ['D'], label: 'Todo for the date the card mentions' },
+        { keys: ['A'], label: 'Archive' },
+        { keys: ['→'], label: 'Skip to the next card' },
+        { keys: ['←'], label: 'Back to the previous card' },
+        { keys: ['O'], label: 'Open the card' },
+      ],
+    },
+    {
       title: 'Quick entry',
       shortcuts: [
         { keys: ['Enter'], label: 'Save the quick entry' },

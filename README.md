@@ -38,7 +38,13 @@ on-device with a local Whisper model, so a recording is never handed to a
 third-party speech-to-text service to become searchable text — it syncs to your
 storage server like any other file, and nowhere else.
 
-**Organize** — File cards into collections, group related collections together,
+**Organize** — The Inbox groups cards by age (new since yesterday, earlier,
+and anything sitting for over two months) and flags likely duplicates, links
+that arrived without a title, and the collection a card probably belongs in.
+**Process inbox** walks it one card at a time: make it a todo for a horizon,
+file it or archive it, each with a one-key shortcut and an undo, or skip to
+the next card.
+File cards into collections, group related collections together,
 and filter the view down to what you're working on. Any card can become a todo,
 and todos get their own page with drag-to-order and a collapsed completed
 section. Todos don't need a deadline to be planned: mark one *Up next*, *This

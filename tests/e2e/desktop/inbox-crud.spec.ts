@@ -19,7 +19,10 @@ test('adding a note via the capture bar surfaces it in the inbox grid', async ({
   await connectedPage.waitForLoadState('networkidle');
 
   // Make sure we're on the inbox view; the test seed account is empty.
-  await connectedPage.getByRole('button', { name: 'Inbox' }).first().click();
+  await connectedPage
+    .getByRole('button', { name: 'Inbox', exact: true })
+    .first()
+    .click();
 
   // The desktop capture bar is a single text input. Multi-word plain text is
   // detected as a Note; Enter saves it instantly (no modal). The sentinel is
