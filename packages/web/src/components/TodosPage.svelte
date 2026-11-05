@@ -440,12 +440,13 @@
         onfinalize={(e) => handleDndFinalize(section, e)}
       >
         {#each dndSections[section] ?? [] as todo (todo.id)}
-          <div
+          <li
             animate:flip={{ duration: 200 }}
             in:reorderFade.fade={{ duration: 180 }}
             out:reorderFade.fade={{ duration: 120 }}
           >
             <TodoRow
+              as="div"
               {todo}
               collection={lookupCollection(todo.collectionId)}
               group={lookupGroup(todo.collectionId)}
@@ -455,7 +456,7 @@
               {onselect}
               onaddincollection={onaddtodoincollection}
             />
-          </div>
+          </li>
         {/each}
       </ul>
   {/snippet}
@@ -556,6 +557,7 @@
         </button>
       {/each}
     </div>
+    <p class="swipe-hint">Swipe right to complete · left to re-plan</p>
 
     {#if view === 'today'}
       <TodosToday
@@ -1009,6 +1011,19 @@
   }
 
   /* ── View switch ── */
+  .swipe-hint {
+    display: none;
+    margin: -0.35rem 0 0;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  @media (hover: none) and (max-width: 600px) {
+    .swipe-hint {
+      display: block;
+    }
+  }
+
   .view-switch {
     display: inline-flex;
     align-self: flex-start;

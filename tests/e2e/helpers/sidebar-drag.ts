@@ -114,7 +114,7 @@ export function sidebarCollectionNames(page: Page): Promise<string[]> {
 
 /** A todo row anywhere on the page, located by its title. */
 export function todoRow(page: Page, title: string): Locator {
-  return page.locator('li.todo-row', {
+  return page.locator('.todo-row', {
     has: page.getByText(title, { exact: true }),
   });
 }

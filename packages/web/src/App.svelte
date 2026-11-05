@@ -9,6 +9,7 @@
   import SidebarShell from './components/SidebarShell.svelte';
   import CaptureBar from './components/CaptureBar.svelte';
   import CaptureSheet from './components/CaptureSheet.svelte';
+  import MobileTabBar from './components/MobileTabBar.svelte';
   import Toast from './components/Toast.svelte';
   import {
     connected, deleteItem, items, visibleOpenTodos, openTodos, pendingMigrationCount, runAllMigrations,
@@ -17,6 +18,7 @@
   } from './lib/stores';
   import { initAlerts, setAlertOpenHandler } from './lib/alerts';
   import { captureDetected, captureFile } from './lib/capture';
+  import { settingsRequest } from './lib/settings-request';
   import { loadLazy } from './lib/lazy-load';
   import { showToast } from './lib/toast';
   import { parseHash, formatRoute, pageUsesFilters, type Page, type Route } from './lib/route';
@@ -46,6 +48,7 @@
   let CollectionsPageComponent = $state<LazyComponent | null>(null);
   let SearchPageComponent = $state<LazyComponent | null>(null);
   let CollectionFocusPageComponent = $state<LazyComponent | null>(null);
+  let GroupBoardPageComponent = $state<LazyComponent | null>(null);
   let CollectionFormModalComponent = $state<LazyComponent | null>(null);
   let GroupFormModalComponent = $state<LazyComponent | null>(null);
   // Collection to pre-select when opening the add-entry modal. Used by the
@@ -92,11 +95,13 @@
   // page keeps rendering underneath the dimmed backdrop. `lastListPage` is
   // that page; it defaults to Collections for direct links, where there is
   // no "underneath" to return to.
+  /** Pages that open as a popup over the page the user was on. */
+  const isOverlayPage = (page: Page) => page === 'collection' || page === 'groupBoard';
   let lastListPage = $state<Page>('collections');
   $effect(() => {
-    if (route.page !== 'collection') lastListPage = route.page;
+    if (!isOverlayPage(route.page)) lastListPage = route.page;
   });
-  const bodyPage = $derived(route.page === 'collection' ? lastListPage : route.page);
+  const bodyPage = $derived(isOverlayPage(route.page) ? lastListPage : route.page);
 
   // True only when focus mode was entered by in-app navigation, so exiting
   // can pop the history entry instead of pushing a new one. A direct link
@@ -104,7 +109,7 @@
   // Collections page instead.
   let focusReturnAvailable = false;
   $effect(() => {
-    if (route.page !== 'collection') focusReturnAvailable = false;
+    if (!isOverlayPage(route.page)) focusReturnAvailable = false;
   });
 
   function exitFocus() {
@@ -142,6 +147,15 @@
 
   async function loadSearchPage() {
     SearchPageComponent ??= await loadLazy<LazyComponent>(() => import('./components/SearchPage.svelte'));
+  }
+
+  async function loadGroupBoardPage() {
+    GroupBoardPageComponent ??= await loadLazy<LazyComponent>(
+      () => import('./components/boards/GroupBoardPage.svelte'),
+      () => {
+        if (route.page === 'groupBoard') exitFocus();
+      },
+    );
   }
 
   async function loadCollectionFocusPage() {
@@ -226,7 +240,7 @@
   // stale hashchange arrives). The $derived memoizes on the page *value*
   // (plus the focused collection, so switching focus targets also counts as
   // navigation), so this only fires when the user actually lands elsewhere.
-  const routePage = $derived(`${route.page}:${route.collectionId ?? ''}`);
+  const routePage = $derived(`${route.page}:${route.collectionId ?? route.groupId ?? ''}`);
   $effect(() => {
     void routePage;
     activeModal = null;
@@ -254,6 +268,10 @@
 
   $effect(() => {
     if (route.page === 'collection') void loadCollectionFocusPage();
+  });
+
+  $effect(() => {
+    if (route.page === 'groupBoard') void loadGroupBoardPage();
   });
 
   $effect(() => {
@@ -287,7 +305,8 @@
     || commandPaletteOpen
     // The focus popup scrolls internally; locking the body keeps the page
     // underneath at its scroll position for when the popup closes.
-    || (route.page === 'collection' && !!CollectionFocusPageComponent),
+    || (route.page === 'collection' && !!CollectionFocusPageComponent)
+    || (route.page === 'groupBoard' && !!GroupBoardPageComponent),
   );
   // The same set keyed on the *request* rather than the loaded chunk. The
   // search shortcut checks this one: during the moment between summoning a
@@ -302,7 +321,7 @@
     || settingsOpen
     || shortcutHelpOpen
     || commandPaletteOpen
-    || route.page === 'collection',
+    || isOverlayPage(route.page),
   );
   let savedScrollY = 0;
   let wasModalOpen = false;
@@ -341,11 +360,22 @@
     }
   }
 
+  /** Open a group's board: a popup over the current page, like focus mode. */
+  function navToGroupBoard(groupId: string) {
+    const hash = formatRoute({ page: 'groupBoard', groupId });
+    if (window.location.hash !== hash) {
+      // Back returns to the list page only if we came from one; opening a
+      // popup from another popup keeps whatever was true before.
+      if (!isOverlayPage(route.page)) focusReturnAvailable = true;
+      window.location.hash = hash;
+    }
+  }
+
   /** Open a collection in focus mode: a popup over the current page. */
   function navToCollection(collectionId: string) {
     const hash = formatRoute({ page: 'collection', collectionId });
     if (window.location.hash !== hash) {
-      focusReturnAvailable = true;
+      if (!isOverlayPage(route.page)) focusReturnAvailable = true;
       window.location.hash = hash;
     }
   }
@@ -602,6 +632,16 @@
     settingsOpen = true;
   }
 
+  // Other parts of the app (a board's "Edit columns…") ask for a section.
+  $effect(() => {
+    const section = $settingsRequest;
+    if (!section) return;
+    settingsRequest.set(null);
+    // Re-open so the modal's open-effect expands the requested section.
+    settingsOpen = false;
+    queueMicrotask(() => openSettings(section));
+  });
+
   const commandMod = modLabel();
   const commands = [
     { id: 'search', label: 'Search everything', hint: `${commandMod} K`, keywords: 'find' },
@@ -738,7 +778,7 @@
         {/if}
       {:else}
         {#if CollectionsPageComponent}
-          <CollectionsPageComponent onselect={openView} onfocuscollection={navToCollection} />
+          <CollectionsPageComponent onselect={openView} onfocuscollection={navToCollection} ongroupboard={navToGroupBoard} />
         {/if}
       {/if}
     {/if}
@@ -756,6 +796,8 @@
   </ClassicShell>
 {/if}
 
+<MobileTabBar page={bodyPage} planCount={viewTodoCount} {navTo} oncapture={() => (captureSheetOpen = true)} />
+
 <!-- Focus mode: a route-driven popup (#/collection/:id) over the page the
      user was on. Rendered here, not in the shell body, so the backdrop can
      dim the whole shell — header, sidebar and all. -->
@@ -765,6 +807,17 @@
       collectionId={route.collectionId}
       onselect={openView}
       onexit={exitFocus}
+    />
+  {/if}
+{/if}
+
+{#if route.page === 'groupBoard' && route.groupId}
+  {#if GroupBoardPageComponent}
+    <GroupBoardPageComponent
+      groupId={route.groupId}
+      onselect={openView}
+      onexit={exitFocus}
+      onfocuscollection={navToCollection}
     />
   {/if}
 {/if}

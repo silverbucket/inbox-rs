@@ -2,19 +2,57 @@
   import type { Snippet } from 'svelte';
   import type { CollectionGroup } from '@inbox-rs/rs-module';
 
-  let { group, onedit, onaddcollection = undefined, children }: {
+  let {
+    group,
+    onedit,
+    onaddcollection = undefined,
+    collapsed = false,
+    ontogglecollapse = undefined,
+    peek = '',
+    count = undefined,
+    onboard = undefined,
+    children,
+  }: {
     group: CollectionGroup;
     /** Omit to hide the edit button. */
     onedit?: () => void;
     onaddcollection?: () => void;
+    /** Folded to its header (with `peek` naming what's inside). */
+    collapsed?: boolean;
+    /** Omit to make the group unfoldable. */
+    ontogglecollapse?: () => void;
+    peek?: string;
+    count?: number;
+    /** Open the group's board; omit when no collection in it has one. */
+    onboard?: () => void;
     children: Snippet;
   } = $props();
 </script>
 
 <section class="group-section" style="--group-color: {group.color || 'var(--accent)'}">
   <header class="group-header">
+    {#if ontogglecollapse}
+      <button
+        type="button"
+        class="btn-fold"
+        aria-expanded={!collapsed}
+        aria-label="{collapsed ? 'Expand' : 'Collapse'} group {group.name}"
+        onclick={ontogglecollapse}
+      >
+        <svg aria-hidden="true" class="fold" class:open={!collapsed} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+      </button>
+    {/if}
     <span class="group-swatch"></span>
     <h2 class="group-name">{group.name}</h2>
+    {#if count !== undefined}<span class="group-count">{count} {count === 1 ? 'collection' : 'collections'}</span>{/if}
+    {#if collapsed && peek}<span class="group-peek">{peek}</span>{/if}
+    <span class="header-spacer"></span>
+    {#if onboard}
+      <button type="button" class="btn-board" onclick={onboard} title="Open {group.name} as one board">
+        <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="5" height="16" rx="1"></rect><rect x="10" y="4" width="5" height="11" rx="1"></rect><rect x="17" y="4" width="4" height="7" rx="1"></rect></svg>
+        Board
+      </button>
+    {/if}
     <div class="group-actions">
       <!--
         The add-collection button mirrors the per-row quick-add in TodoRow:
@@ -42,9 +80,11 @@
       {/if}
     </div>
   </header>
-  <div class="group-body">
-    {@render children()}
-  </div>
+  {#if !collapsed}
+    <div class="group-body">
+      {@render children()}
+    </div>
+  {/if}
 </section>
 
 <style>
@@ -61,6 +101,72 @@
     border-bottom: 1px solid color-mix(in srgb, var(--group-color) 25%, var(--border) 75%);
   }
 
+  .header-spacer {
+    flex: 1 0 0;
+  }
+
+  .btn-fold {
+    display: grid;
+    place-items: center;
+    width: 1.6rem;
+    height: 1.6rem;
+    margin-left: -0.35rem;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .btn-fold:hover {
+    background: var(--surface-tint);
+  }
+
+  .fold {
+    transition: transform 0.15s;
+  }
+
+  .fold.open {
+    transform: rotate(90deg);
+  }
+
+  .group-count {
+    flex-shrink: 0;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  .group-peek {
+    min-width: 0;
+    flex: 1 1 8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+
+  .btn-board {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-height: 1.85rem;
+    padding: 0 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .btn-board:hover {
+    color: var(--text);
+    border-color: var(--accent);
+  }
+
   .group-swatch {
     width: 10px;
     height: 10px;
@@ -74,7 +180,7 @@
     font-weight: 700;
     color: var(--text);
     margin: 0;
-    flex: 1;
+    flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;

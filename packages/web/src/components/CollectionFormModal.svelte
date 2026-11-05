@@ -22,6 +22,7 @@
   let name = $state(collection?.name ?? '');
   let description = $state(collection?.description ?? '');
   let color = $state(collection?.color ?? randomPresetColor());
+  let offPlan = $state(!!collection?.offPlan);
 
   /**
    * Pick the initial group selection for the picker. Resolution order:
@@ -72,7 +73,10 @@
         console.error('Failed to persist lastSelectedGroupId', e);
       }
     }
-    onsave({
+    // Start from the existing collection so fields this form doesn't edit
+    // (board set, plan column, archive state) survive an edit.
+    const saved: Collection = {
+      ...(collection ?? {}),
       id: collection?.id ?? crypto.randomUUID(),
       name: name.trim(),
       description: description.trim() || undefined,
@@ -80,7 +84,13 @@
       createdAt: collection?.createdAt ?? new Date().toISOString(),
       color,
       groupId: selectedGroupId,
-    });
+    } as Collection;
+    if (offPlan) saved.offPlan = true;
+    else {
+      delete saved.offPlan;
+      delete saved.planColumnId;
+    }
+    onsave(saved);
   }
 </script>
 
@@ -118,6 +128,13 @@
       {/if}
     </select>
   </label>
+  <label class="check">
+    <input type="checkbox" bind:checked={offPlan} />
+    <span>
+      <span class="check-title">It's a list</span>
+      <span class="check-hint">Like Movies or a reading list: its todos stay off the Todos plan.</span>
+    </span>
+  </label>
 {/snippet}
 
 <style>
@@ -152,6 +169,31 @@
     font-size: 1rem;
     font-family: inherit;
     cursor: pointer;
+  }
+
+  .check {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    margin-bottom: 0.85rem;
+    cursor: pointer;
+  }
+
+  .check input {
+    margin-top: 0.2rem;
+    accent-color: var(--accent);
+  }
+
+  .check-title {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+
+  .check-hint {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-muted);
   }
 
   select:focus {

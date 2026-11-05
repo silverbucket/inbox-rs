@@ -207,4 +207,14 @@
       right: calc(1rem + env(safe-area-inset-right, 0px));
     }
   }
+
+  /* Phones: sit above the bottom tab bar (MobileTabBar). */
+  @media (max-width: 600px) {
+    .fab {
+      bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+      right: calc(1rem + env(safe-area-inset-right, 0px));
+      width: 48px;
+      height: 48px;
+    }
+  }
 </style>

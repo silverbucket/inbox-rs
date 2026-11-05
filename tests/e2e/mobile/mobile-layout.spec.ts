@@ -1,14 +1,14 @@
 /**
- * Mobile-specific layout: the 768 px breakpoint in App.svelte switches
- * the header from a single row into a 2-row CSS grid (brand + menu on
- * row 1, nav buttons centered on row 2).
+ * Mobile-specific layout: the 768 px breakpoint switches the header from
+ * a single row into a CSS grid (brand + menu on row 1, nav pills on row 2).
+ * At phone width (≤600 px) the nav pills give way to the bottom tab bar.
  */
 
 import { expect, test } from '../helpers/fixtures';
 
 test('header uses grid layout on mobile', async ({ page, webOrigin }) => {
-  // On phones, App.svelte's media query promotes `.header-inner` to
-  // `display: grid` and pushes the nav onto its own row. Verify the
+  // On phones, the shell's media query promotes `.header-inner` to
+  // `display: grid`. Verify the
   // computed style so a future regression in the breakpoint is caught.
   await page.goto(webOrigin);
   await page.waitForLoadState('networkidle');
@@ -21,6 +21,8 @@ test('header uses grid layout on mobile', async ({ page, webOrigin }) => {
     display,
     `.header-inner should be 'grid' on mobile, got ${display}`,
   ).toBe('grid');
+  // The header nav pills give way to the bottom tab bar at this width.
+  await expect(page.locator('.header-nav')).toBeHidden();
 });
 
 test('brand logo shrinks on mobile', async ({ page, webOrigin }) => {
@@ -44,13 +46,14 @@ test('nav buttons remain visible at touch-target size', async ({
   webOrigin,
 }) => {
   // Tab bars are notorious for getting clipped under the iOS home
-  // indicator. Confirm the three primary nav buttons each occupy
+  // indicator. Confirm the bottom tab bar's buttons each occupy
   // non-zero box sizes inside the visible viewport.
   await page.goto(webOrigin);
   await page.waitForLoadState('networkidle');
 
-  for (const label of ['Inbox', 'Todos', 'Collections']) {
-    const btn = page.getByRole('button', { name: label }).first();
+  const tabbar = page.getByRole('navigation', { name: 'Primary (mobile)' });
+  for (const label of ['Inbox', 'Today', 'Capture', 'Plan', 'Collections']) {
+    const btn = tabbar.getByRole('button', { name: label });
     await expect(btn).toBeVisible();
     const box = await btn.boundingBox();
     expect(box, `${label} bounding box missing`).not.toBeNull();

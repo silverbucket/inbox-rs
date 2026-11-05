@@ -8,6 +8,7 @@
  * are local-only.
  */
 import type { InboxItem } from '@inbox-rs/rs-module';
+import { get } from 'svelte/store';
 import { CaldavError, createEntry } from './caldav';
 import {
   accountEndpoint,
@@ -20,7 +21,7 @@ import {
   clearPostedEntry,
   type PendingSchedule,
 } from './schedule';
-import { storeItem } from './stores';
+import { flushItemChanges, items, storeItem } from './stores';
 
 /**
  * The shared completion toggle — local-only. Completing a todo here never
@@ -30,8 +31,12 @@ export async function setItemCompleted(
   item: InboxItem,
   completed: boolean,
 ): Promise<void> {
+  // Merge into the stored item (buffered remote edits applied), not the
+  // caller's snapshot, which may be stale or a display copy.
+  flushItemChanges();
+  const latest = get(items)[item.id] ?? item;
   const updated: InboxItem = {
-    ...item,
+    ...latest,
     isTodo: true,
     completed,
     completedAt: completed ? new Date().toISOString() : undefined,

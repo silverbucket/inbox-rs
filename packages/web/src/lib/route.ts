@@ -5,8 +5,9 @@
  * typical URL looks like:
  *   https://example.com/#/todos?g=workId,personalId
  *
- * Pages: inbox (default), todos, collections, plugins, search, and
- * collection (focus mode for one collection: `#/collection/:id`).
+ * Pages: inbox (default), todos, collections, plugins, search,
+ * collection (focus mode for one collection: `#/collection/:id`), and
+ * groupBoard (one group's items as a board: `#/group-board/:id`).
  * Query params:
  *   g  — comma-separated group IDs for filter state. Only meaningful on
  *        the `todos` and `collections` pages; ignored elsewhere.
@@ -19,7 +20,8 @@ export type Page =
   | 'collections'
   | 'plugins'
   | 'search'
-  | 'collection';
+  | 'collection'
+  | 'groupBoard';
 
 export interface Route {
   page: Page;
@@ -27,6 +29,8 @@ export interface Route {
   groupFilters?: string[];
   /** Focused collection id. Only set when `page` is `collection`. */
   collectionId?: string;
+  /** Group whose board is open. Only set when `page` is `groupBoard`. */
+  groupId?: string;
   /** Search text from the `q=` param. Only set when `page` is `search`. */
   query?: string;
 }
@@ -53,6 +57,15 @@ export function parseHash(hash: string): Route {
     } catch {
       // Malformed percent-encoding (e.g. #/collection/%) — treat like any
       // other unknown path rather than letting URIError break routing.
+    }
+  }
+
+  if (clean.startsWith('group-board/')) {
+    try {
+      const id = decodeURIComponent(clean.slice('group-board/'.length));
+      if (id) return { page: 'groupBoard', groupId: id };
+    } catch {
+      // Malformed encoding: fall through like any unknown path.
     }
   }
 
@@ -118,6 +131,11 @@ export function formatRoute(route: Route): string {
       ? `#/collection/${encodeURIComponent(route.collectionId)}`
       : '#/collections';
   }
+  if (route.page === 'groupBoard') {
+    return route.groupId
+      ? `#/group-board/${encodeURIComponent(route.groupId)}`
+      : '#/collections';
+  }
   if (route.page === 'search') {
     // URLSearchParams encodes spaces as `+`, which reads better in a shared
     // link than `%20` and round-trips through `parseQueryText`.
@@ -135,7 +153,9 @@ export function formatRoute(route: Route): string {
   return `#${path}?g=${route.groupFilters.join(',')}`;
 }
 
-function pathFromPage(page: Exclude<Page, 'collection' | 'search'>): string {
+function pathFromPage(
+  page: Exclude<Page, 'collection' | 'search' | 'groupBoard'>,
+): string {
   switch (page) {
     case 'inbox':
       return '/';

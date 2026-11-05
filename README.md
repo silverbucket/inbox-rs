@@ -54,9 +54,25 @@ rolls forward into Up next, tagged with where it came from. Switch the Todos pag
 **Today** (the phone default), **Horizon**, **Board** and **Calendar** views;
 anything that slipped can be re-planned, parked or finished in one pass from
 the review sheet. Star your most-used
-collections to keep them at the top of the sidebar and the filing picker. Search (`/`, or `⌘K` on a Mac and `Ctrl+K` elsewhere) runs across
+collections to keep them at the top of the sidebar, the Collections page and
+the filing picker. Search (`/`, or `⌘K` on a Mac and `Ctrl+K` elsewhere) runs across
 everything at once — titles, notes, links, transcripts, and collection names —
 and never leaves the browser.
+
+**Boards** — Any collection can be viewed as a grid, a list or a board.
+A board's columns come from a *column set* (a Pipeline, a Reading list, a
+Watch list…) that several collections can share, so editing the set in
+Settings › Column sets changes every board that uses it. Cards move by drag
+or a *Move to* menu; checking off a todo moves it to the set's done column,
+and dragging it back out reopens it. A collection can switch to another set
+— matching columns carry across, and moving back restores where everything
+was — or take a private copy. A whole group can open as one board across its
+collections. Mark a collection as a list (a watch list, say) to keep its
+todos off the Todos plan, optionally letting one column through as Someday.
+
+**On a phone** — A bottom tab bar holds Inbox, Today, Plan and Collections
+around a central Capture button. Swipe a todo right to complete it, or left
+to re-plan it.
 
 **Act** — Give a card a time and it becomes a scheduled event or task, with an
 in-app alert when it comes due. From there it can be published to a real

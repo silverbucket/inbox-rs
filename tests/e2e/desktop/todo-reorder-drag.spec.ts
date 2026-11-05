@@ -62,7 +62,7 @@ function reorderZone(scope: Page | Locator): Locator {
 
 function zoneTitles(zone: Locator): Promise<string[]> {
   return zone
-    .locator('li.todo-row .title')
+    .locator('.todo-row .title')
     .evaluateAll((els) => els.map((el) => (el.textContent ?? '').trim()));
 }
 
@@ -72,7 +72,7 @@ function zoneTitles(zone: Locator): Promise<string[]> {
  * page-wide lookup would find three of the todo that was just dropped.
  */
 function zoneRow(zone: Locator, title: string): Locator {
-  return zone.locator('li.todo-row', {
+  return zone.locator('.todo-row', {
     has: page.getByText(title, { exact: true }),
   });
 }
@@ -107,7 +107,7 @@ async function dragDownAndCheck(
           carried,
         );
         // …the list holds exactly one slot per todo, no leftover copies…
-        await expect(zone.locator('li.todo-row')).toHaveCount(titles.length);
+        await expect(zone.locator('.todo-row')).toHaveCount(titles.length);
         // …and the only hidden slot is the gap the carried todo will fill.
         expect(await hiddenZoneChildren(zone)).toBe(1);
         for (const title of titles.filter((t) => t !== carried))

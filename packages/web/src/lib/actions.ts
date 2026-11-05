@@ -169,3 +169,13 @@ export function inview(node: HTMLElement, onEnter: () => void) {
   io.observe(node);
   return { destroy: () => io.disconnect() };
 }
+
+/**
+ * Move a node to `document.body` so an overlay rendered inside a list row
+ * (e.g. a sheet opened from a TodoRow) isn't nested in that row's markup
+ * and its clicks don't bubble into the row's handlers.
+ */
+export function portal(node: HTMLElement) {
+  document.body.appendChild(node);
+  return { destroy: () => node.remove() };
+}

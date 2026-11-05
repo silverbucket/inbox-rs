@@ -8,6 +8,9 @@
   import { animatePriorityChange } from '../lib/priority-motion';
   import { formatScheduled, isOverdue } from '../lib/schedule';
   import { setItemPinned } from '../lib/stores';
+  import { portal } from '../lib/actions';
+  import { swipeAction, swipeAxis, swipeOffset } from '../lib/swipe';
+  import ScheduleSheet from './ScheduleSheet.svelte';
 
   let {
     todo,
@@ -19,6 +22,7 @@
     reorderable = false,
     planTag,
     stacked = false,
+    as = 'li',
   }: {
     todo: InboxItem;
     /** The collection this todo belongs to, or null when unfiled. */
@@ -44,6 +48,9 @@
     /** Two-line card layout (title, then meta) for narrow containers such
         as board columns, regardless of viewport width. */
     stacked?: boolean;
+    /** Root element. Lists whose items are wrapped (for animate:flip in a
+        drag-and-drop zone) supply the <li> themselves and pass 'div'. */
+    as?: 'li' | 'div';
   } = $props();
 
   // Show the underlying item type as an icon for items that are "todos by flag"
@@ -112,7 +119,89 @@
     }
   }
 
+  // ── Touch swipe: right completes, left re-plans (opens When?) ──────────
+  let swipeStart: { x: number; y: number } | null = null;
+  let swipeLock: 'pending' | 'horizontal' | 'vertical' = 'pending';
+  let swipeDx = $state(0);
+  let swiping = $state(false);
+  /** A swipe's release can be followed by a synthetic click; ignore it. */
+  let suppressClickUntil = 0;
+  let replanOpen = $state(false);
+  const swipeHint = $derived.by(() => {
+    const action = swiping ? swipeAction(swipeDx) : null;
+    return action === 'complete' && todo.completed ? null : action;
+  });
+
+  function onSwipeStart(e: TouchEvent) {
+    stopParentDndCapture(e);
+    // Calendar receipt rows have no checkbox and can't be re-planned here.
+    // A second finger cancels a swipe in progress rather than starting one.
+    if (swipeStart || e.touches.length !== 1) {
+      cancelSwipe();
+      return;
+    }
+    if (readonly) return;
+    // A swipe may start on the pin or checkbox (the browser sends them no
+    // click once the finger has moved); only the reorder grip is its own
+    // gesture.
+    const target = e.target as Element | null;
+    if (target?.closest('.reorder-handle')) return;
+    swipeStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    swipeLock = 'pending';
+  }
+
+  function onSwipeMove(e: TouchEvent) {
+    if (!swipeStart || swipeLock === 'vertical') return;
+    const dx = e.touches[0].clientX - swipeStart.x;
+    const dy = e.touches[0].clientY - swipeStart.y;
+    if (swipeLock === 'pending') {
+      swipeLock = swipeAxis(dx, dy);
+      if (swipeLock !== 'horizontal') return;
+    }
+    swipeDx = dx;
+    swiping = true;
+  }
+
+  function cancelSwipe() {
+    swipeStart = null;
+    swiping = false;
+    swipeDx = 0;
+  }
+
+  async function onSwipeEnd(e: TouchEvent) {
+    // Act only once every finger is up; a lingering contact means this
+    // wasn't a clean one-finger swipe.
+    if (e.touches.length > 0) {
+      cancelSwipe();
+      return;
+    }
+    const action = swiping ? swipeAction(swipeDx) : null;
+    if (swiping) suppressClickUntil = Date.now() + 400;
+    swipeStart = null;
+    swiping = false;
+    swipeDx = 0;
+    // Right swipe only completes; a done row is reopened from its checkbox.
+    if (action === 'complete' && !todo.completed) {
+      try {
+        await setItemCompleted(todo, true);
+      } catch (err) {
+        console.error('Failed to update todo:', err);
+      }
+    } else if (action === 'replan') {
+      replanOpen = true;
+    }
+  }
+
+  /** Capture phase: a swipe that began on the checkbox or pin mustn't also
+      activate it if the browser follows the release with a click. */
+  function swallowSwipeClick(e: MouseEvent) {
+    if (Date.now() >= suppressClickUntil) return;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
   function handleClick(e: MouseEvent) {
+    if (Date.now() < suppressClickUntil) return;
     // Don't open the view modal when clicking the checkbox or its label.
     const target = e.target as HTMLElement;
     if (target.closest('input, button, a')) return;
@@ -210,24 +299,32 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
-<li
+<svelte:element
+  this={as}
   class="todo-row"
   class:completed={todo.completed}
   class:unfiled={isUnfiled}
   class:reorderable
   class:stacked
+  class:swiping
+  class:swipe-complete={swipeHint === 'complete'}
+  class:swipe-replan={swipeHint === 'replan'}
   data-priority-item
   role="button"
   tabindex="0"
   draggable={!readonly}
   onclick={handleClick}
+  onclickcapture={swallowSwipeClick}
   onkeydown={handleKey}
   onpointerdown={onRowPointerDown}
   onmousedown={stopParentDndCapture}
-  ontouchstart={stopParentDndCapture}
+  ontouchstart={onSwipeStart}
+  ontouchmove={onSwipeMove}
+  ontouchend={onSwipeEnd}
+  ontouchcancel={cancelSwipe}
   ondragstart={onFileDragStart}
   ondragend={onFileDragEnd}
-  style="--group-color: {groupColor}; --collection-color: {collectionColor}"
+  style="--group-color: {groupColor}; --collection-color: {collectionColor}; --swipe-x: {swipeOffset(swipeDx)}px"
 >
   {#if reorderable}
     <!-- Non-form handle: svelte-dnd-action ignores nested targets with a defined
@@ -343,7 +440,13 @@
       </svg>
     </button>
   {/if}
-</li>
+  {#if replanOpen}
+    <!-- Portalled to <body>: the sheet's clicks mustn't reach this row. -->
+    <div use:portal>
+      <ScheduleSheet item={todo} onclose={() => (replanOpen = false)} />
+    </div>
+  {/if}
+</svelte:element>
 
 <style>
   .todo-row {
@@ -358,6 +461,28 @@
     transition: background 150ms, border-color 150ms, box-shadow 150ms;
     -webkit-tap-highlight-color: transparent;
     min-width: 0;
+  }
+
+  /* Rows scroll vertically; horizontal drags are ours (swipe actions). */
+  @media (hover: none) {
+    .todo-row {
+      touch-action: pan-y;
+    }
+  }
+
+  .todo-row.swiping {
+    transform: translateX(var(--swipe-x));
+    transition: none;
+  }
+
+  .todo-row.swipe-complete {
+    border-color: var(--ok);
+    box-shadow: inset 4px 0 0 var(--ok);
+  }
+
+  .todo-row.swipe-replan {
+    border-color: var(--accent);
+    box-shadow: inset -4px 0 0 var(--accent);
   }
 
   .todo-row.reorderable {

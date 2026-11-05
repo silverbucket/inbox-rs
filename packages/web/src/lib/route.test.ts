@@ -220,3 +220,39 @@ describe('search route', () => {
     expect(pageUsesFilters('search')).toBe(false);
   });
 });
+
+describe('group board route', () => {
+  it('parses #/group-board/:id', () => {
+    expect(parseHash('#/group-board/g1')).toEqual({
+      page: 'groupBoard',
+      groupId: 'g1',
+    });
+    expect(parseHash('#/group-board/a%20b')).toEqual({
+      page: 'groupBoard',
+      groupId: 'a b',
+    });
+  });
+
+  it('falls back to inbox without an id or with a malformed one', () => {
+    expect(parseHash('#/group-board/')).toEqual({ page: 'inbox' });
+    expect(parseHash('#/group-board/%E0%A4%A')).toEqual({ page: 'inbox' });
+  });
+
+  it('round-trips through formatRoute', () => {
+    const hash = formatRoute({ page: 'groupBoard', groupId: 'a b' });
+    expect(hash).toBe('#/group-board/a%20b');
+    expect(parseHash(hash)).toEqual({ page: 'groupBoard', groupId: 'a b' });
+    expect(formatRoute({ page: 'groupBoard' })).toBe('#/collections');
+  });
+
+  it('does not use group filters', () => {
+    expect(pageUsesFilters('groupBoard')).toBe(false);
+    expect(parseHash('#/group-board/g1?g=g2')).toEqual({
+      page: 'groupBoard',
+      groupId: 'g1',
+    });
+    expect(
+      formatRoute({ page: 'groupBoard', groupId: 'g1', groupFilters: ['g2'] }),
+    ).toBe('#/group-board/g1');
+  });
+});

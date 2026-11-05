@@ -34,6 +34,8 @@ const scheduleFields = {
 const planFields = {
   planKind: { type: 'string', enum: ['next', 'week', 'month', 'someday'] },
   planStart: { type: 'string' },
+  // Board placement: column set id → column id. See InboxItemBase.
+  boardColumns: { type: 'object', additionalProperties: { type: 'string' } },
 };
 
 // rs-migrate version stamp — must be in every item schema so remoteStorage persists it
@@ -227,6 +229,35 @@ export const appConfigSchema = {
       type: 'string',
       enum: ['today', 'horizon', 'board', 'calendar'],
     },
+    columnSets: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          createdAt: { type: 'string' },
+          columns: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+                color: { type: 'string' },
+                done: { type: 'boolean' },
+              },
+              required: ['id', 'name', 'color'],
+            },
+          },
+        },
+        required: ['id', 'name', 'columns', 'createdAt'],
+      },
+    },
+    collectionViews: {
+      type: 'object',
+      additionalProperties: { type: 'string', enum: ['grid', 'list', 'board'] },
+    },
   },
 };
 
@@ -262,6 +293,9 @@ export const collectionSchema = {
     groupId: { type: 'string' },
     archived: { type: 'boolean' },
     archivedAt: { type: 'string' },
+    boardSetId: { type: 'string' },
+    offPlan: { type: 'boolean' },
+    planColumnId: { type: 'string' },
   },
   required: ['id', 'name', 'itemIds', 'createdAt'],
 };

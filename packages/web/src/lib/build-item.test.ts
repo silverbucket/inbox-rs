@@ -312,6 +312,26 @@ describe('buildNoteItem', () => {
     expect((result.item as NoteItem).collectionId).toBe('col-42');
   });
 
+  it('keeps a note in its board column when it is edited', () => {
+    const editItem: NoteItem = {
+      id: 'note-1',
+      type: 'note',
+      title: 'Old title',
+      body: 'Old body',
+      collectionId: 'movies',
+      boardColumns: { watch: 'want' },
+      createdAt: '2026-04-29T08:00:00.000Z',
+    };
+
+    const result = buildNoteItem(ctx({ id: 'note-1', editItem }), {
+      title: 'New title',
+      body: 'New body',
+      description: '',
+    });
+
+    expect(result.item.boardColumns).toEqual({ watch: 'want' });
+  });
+
   it('leaves collectionId undefined for a brand-new note (stays in Inbox)', () => {
     const result = buildNoteItem(ctx(), {
       title: 'Title',

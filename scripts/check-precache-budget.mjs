@@ -8,14 +8,18 @@
  * Run after `vite build` in packages/web.
  *
  * Budget rationale: after excluding the lazy transformers/MarkdownEditor
- * chunks the precache sits around 0.9 MB; 1.2 MB leaves headroom for normal
- * growth while still catching a heavyweight regression.
+ * chunks the precache sat around 0.9 MB, and 1.2 MB left headroom for normal
+ * growth. By the redesign it had grown to exactly 1.2 MB; boards, lists and
+ * the phone tab bar add ~0.1 MB of ordinary app code (no new dependency),
+ * which an offline-first app should precache. 1.35 MB restores a margin for
+ * normal growth while a heavyweight regression (a library pulled into the
+ * eager graph is typically 300 KB+) still fails.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const BUDGET_BYTES = 1.2 * 1024 * 1024;
+const BUDGET_BYTES = 1.35 * 1024 * 1024;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const swPath = path.resolve(__dirname, '../packages/web/dist/sw.js');

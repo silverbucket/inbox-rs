@@ -2,6 +2,7 @@
   import type { InboxItem, InboxItemType, Collection } from '@inbox-rs/rs-module';
   import {
     collectionItems,
+    collections,
     deleteItem,
     sortedGroups, moveCollectionToGroup,
     appConfig, updateConfig, reorderCollectionItems,
@@ -33,6 +34,7 @@
     moveItemToCollection,
     toggleFavoriteCollection,
   } from '../lib/stores';
+  import { columnSets } from '../lib/board-actions';
   import { showToast } from '../lib/toast';
   import InboxCard from './InboxCard.svelte';
   import CaptureBar from './CaptureBar.svelte';
@@ -289,6 +291,22 @@
   }
 
   const isFavorite = $derived($favoriteCollectionIds.includes(collection.id));
+  // Board badge: the column set this collection's board uses.
+  const boardSetName = $derived(
+    collection.boardSetId ? $columnSets.find((s) => s.id === collection.boardSetId)?.name : undefined,
+  );
+  // Another live collection in the same group with the same name is easy to
+  // file into by mistake; say so on both.
+  const sameNameInGroup = $derived(
+    !!collection.groupId &&
+      Object.values($collections).some(
+        (c) =>
+          c.id !== collection.id &&
+          !c.archived &&
+          c.groupId === collection.groupId &&
+          c.name.trim().toLowerCase() === collection.name.trim().toLowerCase(),
+      ),
+  );
 
   async function toggleFavorite(e: MouseEvent) {
     e.stopPropagation();
@@ -342,6 +360,15 @@
           <svg class="fav-mark" role="img" aria-label="Favourite" width="13" height="13" viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6L3.2 9.4l6.1-.8z"></path></svg>
         {/if}
       </div>
+      {#if boardSetName || collection.offPlan || sameNameInGroup}
+        <span class="col-tags">
+          {#if boardSetName}<span class="board-badge" title="Board columns: {boardSetName}">{boardSetName}</span>{/if}
+          {#if collection.offPlan}<span class="board-badge list" title={collection.planColumnId
+              ? 'A list: its todos stay off the Todos plan, except its plan column’s'
+              : 'A list: its todos stay off the Todos plan'}>List</span>{/if}
+          {#if sameNameInGroup}<span class="name-warn">same name as another collection here</span>{/if}
+        </span>
+      {/if}
       {#if collection.description && !expanded}
         <span class="col-description">{collection.description}</span>
       {/if}
@@ -503,9 +530,9 @@
             onfinalize={handleDndFinalize}
           >
             {#each dndOpen as todo (todo.id)}
-              <div animate:flip={{ duration: 200 }} in:reorderFade.fade={{ duration: 180 }} out:reorderFade.fade={{ duration: 120 }}>
-                <TodoRow {todo} {collection} {group} reorderable {onselect} />
-              </div>
+              <li animate:flip={{ duration: 200 }} in:reorderFade.fade={{ duration: 180 }} out:reorderFade.fade={{ duration: 120 }}>
+                <TodoRow as="div" {todo} {collection} {group} reorderable {onselect} />
+              </li>
             {/each}
           </ul>
         {:else if dueTodos.length === 0 && completedTodos.length === 0}
@@ -765,6 +792,36 @@
 
   /* Separate open-todo badge so the colored count reads as "active work" and
      doesn't blend into the neutral reference count. */
+  .col-tags {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.15rem;
+  }
+
+  .board-badge {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--accent-text);
+    background: var(--accent-subtler);
+    border-radius: 4px;
+    padding: 0.05rem 0.35rem;
+  }
+
+  .board-badge.list {
+    color: var(--text-muted);
+    background: var(--surface-tint);
+  }
+
+  .name-warn {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--warn-text);
+  }
+
   .badge-todos {
     color: white;
     background: var(--_col);

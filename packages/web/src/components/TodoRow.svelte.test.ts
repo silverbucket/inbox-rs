@@ -10,12 +10,16 @@ vi.mock('../lib/stores', async () => {
     items: writable({}),
   };
 });
+vi.mock('./ScheduleSheet.svelte', async () => ({
+  default: (await import('../test/ScheduleSheet.stub.svelte')).default,
+}));
 vi.mock('../lib/schedule-sync', () => ({
   setItemCompleted: vi.fn().mockResolvedValue(undefined),
 }));
 
 import type { InboxItem } from '@inbox-rs/rs-module';
 import { DRAG_MIME, draggingItemId } from '../lib/drag';
+import { setItemCompleted } from '../lib/schedule-sync';
 import {
   dragStartFrom,
   mousedownReachesZoneUncancelled,
@@ -241,5 +245,129 @@ describe('TodoRow sidebar filing drag', () => {
     flushSync();
 
     expect(get(draggingItemId)).toBeNull();
+  });
+});
+
+describe('TodoRow touch swipes', () => {
+  let host: HTMLElement;
+  let component: ReturnType<typeof mount> | undefined;
+
+  beforeEach(() => {
+    stubMatchMedia();
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    vi.mocked(setItemCompleted).mockClear();
+  });
+
+  afterEach(() => {
+    if (component) unmount(component);
+    component = undefined;
+    host.remove();
+  });
+
+  function touch(el: Element, type: string, x = 0, y = 0) {
+    const e = new Event(type, { bubbles: true, cancelable: true });
+    const points = type === 'touchend' ? [] : [{ clientX: x, clientY: y }];
+    Object.defineProperty(e, 'touches', { value: points });
+    el.dispatchEvent(e);
+    flushSync();
+  }
+
+  function swipe(el: Element, dx: number, dy = 0) {
+    touch(el, 'touchstart', 200, 100);
+    for (let i = 1; i <= 5; i++) {
+      touch(el, 'touchmove', 200 + (dx * i) / 5, 100 + (dy * i) / 5);
+    }
+    touch(el, 'touchend');
+  }
+
+  function render(props: Record<string, unknown> = {}) {
+    const onselect = vi.fn();
+    component = mount(TodoRow, {
+      target: host,
+      props: {
+        todo: todo(),
+        collection: null,
+        group: null,
+        onselect,
+        ...props,
+      },
+    });
+    flushSync();
+    const row = host.querySelector('.todo-row') as HTMLElement;
+    return { row, onselect };
+  }
+
+  it('completes on a right swipe without opening the card', async () => {
+    const { row, onselect } = render();
+    swipe(row.querySelector('.title') as Element, 120);
+    await Promise.resolve();
+    expect(setItemCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'todo-1' }),
+      true,
+    );
+    row.click();
+    expect(onselect).not.toHaveBeenCalled();
+  });
+
+  it('opens When? on a left swipe, outside the row', () => {
+    const { row } = render();
+    swipe(row.querySelector('.title') as Element, -120);
+    const sheet = document.body.querySelector('[role="dialog"]');
+    expect(sheet?.getAttribute('data-title')).toBe('Buy milk');
+    expect(row.contains(sheet)).toBe(false);
+    (sheet?.querySelector('button') as HTMLButtonElement).click();
+    flushSync();
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('ignores short, vertical and calendar-receipt swipes', () => {
+    const { row } = render();
+    swipe(row, 40);
+    swipe(row, 120, 200);
+    expect(setItemCompleted).not.toHaveBeenCalled();
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    unmount(component as ReturnType<typeof mount>);
+    component = undefined;
+    const receipt = render({ readonly: true });
+    swipe(receipt.row, 120);
+    swipe(receipt.row, -120);
+    expect(setItemCompleted).not.toHaveBeenCalled();
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('swallows a click on the checkbox right after a swipe', () => {
+    const { row } = render();
+    const box = row.querySelector('input.checkbox') as HTMLInputElement;
+    swipe(box, -120);
+    box.click();
+    expect(box.checked).toBe(false);
+    expect(setItemCompleted).not.toHaveBeenCalled();
+  });
+
+  it('does not reopen a completed todo on a right swipe', () => {
+    const { row } = render({ todo: todo({ completed: true }) });
+    swipe(row, 120);
+    expect(setItemCompleted).not.toHaveBeenCalled();
+  });
+
+  it('cancels when another finger is still down at release', () => {
+    const { row } = render();
+    touch(row, 'touchstart', 200, 100);
+    touch(row, 'touchmove', 260, 100);
+    touch(row, 'touchmove', 340, 100);
+    const end = new Event('touchend', { bubbles: true });
+    Object.defineProperty(end, 'touches', {
+      value: [{ clientX: 10, clientY: 10 }],
+    });
+    row.dispatchEvent(end);
+    flushSync();
+    expect(setItemCompleted).not.toHaveBeenCalled();
+    expect(row.classList.contains('swiping')).toBe(false);
+  });
+
+  it('renders as a div when its list supplies the <li>', () => {
+    const { row } = render({ as: 'div' });
+    expect(row.tagName).toBe('DIV');
   });
 });

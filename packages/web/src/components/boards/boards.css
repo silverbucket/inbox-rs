@@ -1,0 +1,184 @@
+/* Shared controls for the board screens and dialogs (bx- prefix). */
+
+.bx-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.25rem;
+  padding: 0 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bx-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.bx-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.bx-btn.bx-primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: #fff;
+}
+
+.bx-btn.bx-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.bx-btn.bx-danger {
+  color: var(--danger-text);
+}
+
+.bx-btn.bx-small {
+  min-height: 1.85rem;
+  padding: 0 0.6rem;
+  font-size: 0.8rem;
+}
+
+.bx-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bx-link:hover {
+  text-decoration: underline;
+}
+
+.bx-label {
+  display: block;
+  margin: 0 0 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.bx-input,
+.bx-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  /* >= 1rem keeps iOS Safari from zooming on focus. */
+  font-size: 1rem;
+}
+
+.bx-input:focus,
+.bx-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.bx-note {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.bx-warn {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--warn-text);
+}
+
+.bx-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.bx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bx-chip[aria-pressed="true"],
+.bx-chip.bx-on {
+  border: 2px solid var(--accent);
+  background: var(--accent-subtler);
+  color: var(--accent-text);
+}
+
+.bx-swatch {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 3px;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.bx-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.bx-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.bx-rows > li {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.65rem;
+  background: var(--surface);
+}
+
+.bx-rows > li + li {
+  border-top: 1px solid var(--border);
+}
+
+.bx-muted {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.bx-grow {
+  flex: 1;
+  min-width: 0;
+}
