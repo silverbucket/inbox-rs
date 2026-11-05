@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { InboxItem } from '@inbox-rs/rs-module';
+  import type { Collection, InboxItem } from '@inbox-rs/rs-module';
   import BookmarkCard from './BookmarkCard.svelte';
   import NoteCard from './NoteCard.svelte';
   import ImageCard from './ImageCard.svelte';
@@ -11,8 +11,21 @@
   import { animatePriorityChange } from '../lib/priority-motion';
   import { formatScheduled, isOverdue, isPast } from '../lib/schedule';
   import { setItemPinned } from '../lib/stores';
+  import { type CardHints, relativeAge } from '../lib/triage';
 
-  let { item, onselect }: { item: InboxItem; onselect: (item: InboxItem) => void } = $props();
+  let {
+    item,
+    onselect,
+    hints,
+    onfile,
+  }: {
+    item: InboxItem;
+    onselect: (item: InboxItem) => void;
+    /** Inbox-only extras: a warning line, a filing suggestion, emphasis. */
+    hints?: CardHints;
+    /** File the card into the suggested collection. */
+    onfile?: (collection: Collection) => void;
+  } = $props();
 
   // Drag onto a sidebar collection to file the item there. The id rides in
   // dataTransfer; the store lets drop targets highlight during the drag.
@@ -127,6 +140,9 @@
     });
   }
 
+  // "yesterday", "5 days ago" — the full date stays in the tooltip.
+  const age = $derived(relativeAge(item.createdAt, $now) || formatDate(item.createdAt));
+
   const scheduledLabel = $derived(item.startsAt ? formatScheduled(item) : '');
   const scheduleOverdue = $derived(isOverdue(item, $now));
   const schedulePast = $derived(isPast(item, $now));
@@ -148,6 +164,10 @@
 
 <article class="card"
   class:pinned={item.pinned}
+  class:duplicate={hints?.duplicate}
+  class:stale={hints?.stale}
+  class:active={hints?.active}
+  data-item-id={item.id}
   data-priority-item
   draggable="true"
   ondragstart={onDragStart}
@@ -217,7 +237,6 @@
         {/if}
       </span>
       <span class="kind-label">{kindLabel}</span>
-      <span class="type-tag">{item.type}</span>
     </div>
 
     {#if item.type === 'bookmark'}
@@ -236,10 +255,27 @@
     {#if cardNotes}
       <p class="card-notes">{cardNotes}</p>
     {/if}
+    {#if hints?.flag}
+      <p class="hint-flag">{hints.flag}</p>
+    {/if}
+    {#if hints?.suggest && onfile}
+      {@const target = hints.suggest}
+      <button
+        type="button"
+        class="hint-file"
+        onclick={(e) => {
+          e.stopPropagation();
+          onfile(target);
+        }}
+      >
+        <span class="hint-dot" style="background: {target.color || 'var(--text-muted)'}" aria-hidden="true"></span>
+        File to {target.name}?
+      </button>
+    {/if}
   </div>
 
   <footer class="card-footer">
-    <time class="date">{formatDate(item.createdAt)}</time>
+    <time class="date" datetime={item.createdAt} title={formatDate(item.createdAt)}>{age}</time>
     {#if scheduledLabel}
       <span
         class="sched-chip"
@@ -407,15 +443,64 @@
     min-width: 0;
   }
 
-  .type-tag {
-    margin-left: auto;
-    color: var(--text-muted);
-    font-size: 0.6rem;
+  .hint-flag {
+    margin: 0.55rem 0 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--warn-text);
+  }
+
+  .hint-file {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.55rem;
+    padding: 0.2rem 0.55rem 0.2rem 0.45rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: var(--accent-subtler);
+    color: var(--accent-text);
+    font: inherit;
+    font-size: 0.78rem;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    white-space: nowrap;
+    cursor: pointer;
+    max-width: 100%;
+    text-align: left;
+  }
+
+  .hint-file:hover,
+  .hint-file:focus-visible {
+    border-color: var(--accent-subtle-strong);
+  }
+
+  .hint-file:focus-visible {
+    outline: 2px solid var(--accent-text);
+    outline-offset: 1px;
+  }
+
+  .hint-dot {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 999px;
     flex-shrink: 0;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Triage emphasis. Drawn inside the card (inset) so it can't bleed
+     across masonry columns. */
+  .card.duplicate {
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--warn) 70%, transparent);
+  }
+
+  .card.stale {
+    border-style: dashed;
+    background: color-mix(in srgb, var(--surface) 70%, var(--bg));
+  }
+
+  .card.active,
+  .card.active:hover {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 2px var(--accent);
   }
 
   .card-footer {

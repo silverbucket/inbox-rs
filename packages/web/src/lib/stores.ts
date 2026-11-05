@@ -1206,6 +1206,57 @@ export async function moveStoredItemToDay(target: InboxItem, day: Date) {
   await storeItem(moveItemToDay(get(items)[target.id] ?? target, day));
 }
 
+/**
+ * Turn an inbox card into an unfiled todo, planned for a horizon or dated
+ * for a day, in one write. Like the Todos page's own conversion it drops
+ * any calendar receipt and treats an existing time as a task's. Builds on
+ * the freshest copy and returns that copy, so the caller can offer undo.
+ */
+export async function triageToTodo(
+  target: InboxItem,
+  when: { plan: Plan } | { day: Date },
+): Promise<InboxItem> {
+  flushPendingItemChanges();
+  const before = get(items)[target.id] ?? target;
+  const todo: Record<string, unknown> = {
+    ...before,
+    isTodo: true,
+    completed: false,
+  };
+  for (const key of [
+    'completedAt',
+    'eventUrl',
+    'eventEtag',
+    'archived',
+    'archivedAt',
+    'archiveReason',
+  ]) {
+    delete todo[key];
+  }
+  if (todo.startsAt) todo.scheduleKind = 'task';
+  let next = todo as unknown as InboxItem;
+  if ('day' in when) {
+    next = moveItemToDay(next, when.day);
+  } else {
+    next = applyPlan(next.startsAt ? clearSchedule(next) : next, when.plan);
+  }
+  await storeItem(next);
+  return before;
+}
+
+/**
+ * Put an item back exactly as it was (the undo behind triage toasts),
+ * moving it out of any collection it was filed into since.
+ */
+export async function restoreItem(before: InboxItem) {
+  flushPendingItemChanges();
+  const now = get(items)[before.id];
+  if (now && now.collectionId !== before.collectionId) {
+    await moveItemToCollection(before.id, before.collectionId);
+  }
+  await storeItem(before);
+}
+
 /** Favourite collection ids that still exist and aren't archived, in the user's order. */
 export const favoriteCollectionIds = derived(
   [appConfig, collections, groups],
