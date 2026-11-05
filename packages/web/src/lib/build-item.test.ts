@@ -233,6 +233,25 @@ describe('edit preservation of type-agnostic fields', () => {
     });
   });
 
+  it('an edit keeps an imported event cancelled', () => {
+    const editItem: NoteItem = {
+      id: 'item-1',
+      type: 'note',
+      title: 'Standup',
+      body: '',
+      createdAt: '2026-04-01T00:00:00Z',
+      startsAt: '2026-11-09T18:00:00.000Z',
+      scheduleKind: 'event',
+      cancelled: true,
+    };
+    const result = buildNoteItem(ctx({ editItem }), {
+      title: 'Standup (moved)',
+      body: '',
+      description: '',
+    });
+    expect(result.item).toMatchObject({ cancelled: true });
+  });
+
   it('unscheduled edits stay unscheduled', () => {
     const editItem: NoteItem = {
       id: 'item-1',

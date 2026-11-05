@@ -90,6 +90,13 @@ export async function addItemToCalendar(
       'Item is already on a calendar — posting is one-shot and never updates entries.',
     );
   }
+  // platform-caldav takes no event status yet (sockethub/sockethub#1364), so
+  // a cancelled event would be published as a live one.
+  if (item.cancelled) {
+    throw new CaldavError(
+      'Cancelled events cannot be added to a calendar yet — download the .ics instead',
+    );
+  }
   const target = findCalendarChoice(calendarId);
   if (!target) throw new CaldavError('caldav:invalid-calendar');
   const receipt = await createEntry(

@@ -100,6 +100,13 @@ describe('addItemToCalendar — the archive ownership rule', () => {
     expect(result.eventUrl).toBeTruthy();
   });
 
+  it('refuses to post a cancelled event — the relay has no event status', async () => {
+    await expect(
+      addItemToCalendar(note({ cancelled: true }), CAL.id),
+    ).rejects.toThrow(/Cancelled events/);
+    expect(vi.mocked(createEntry)).not.toHaveBeenCalled();
+  });
+
   it('refuses to post an already-posted item — publishing is one-shot', async () => {
     const posted = note({
       eventUrl: `${CAL.id}x.ics`,

@@ -147,6 +147,8 @@
     delete updated.archived;
     delete updated.archivedAt;
     delete updated.archiveReason;
+    // A todo made from a cancelled event is a live task again.
+    delete updated.cancelled;
     if (updated.startsAt) updated.scheduleKind = newKind;
   }
 

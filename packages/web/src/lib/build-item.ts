@@ -59,6 +59,7 @@ function preserveCollection<T extends InboxItem>(
       'endsAt',
       'allDay',
       'scheduleKind',
+      'cancelled',
       'location',
       'eventUrl',
       'eventEtag',
