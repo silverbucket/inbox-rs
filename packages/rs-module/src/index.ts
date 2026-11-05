@@ -58,6 +58,8 @@ export {
   parseUserAddress,
   schemeForHost,
 } from './runtime.js';
+export type { ScheduleInput, ScheduleKind } from './schedule.js';
+export { applySchedule, eventSchedule } from './schedule.js';
 
 /** Current item types — legacy types like 'voice-memo' are excluded */
 const CURRENT_TYPES: Set<string> = new Set<string>([

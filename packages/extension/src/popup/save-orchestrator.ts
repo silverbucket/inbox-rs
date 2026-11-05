@@ -15,7 +15,11 @@
  * spinner in `finally` regardless of outcome.
  */
 
-import { type NoteItem, noteTitleFromBody } from '@inbox-rs/rs-module';
+import {
+  type LinkEvent,
+  type NoteItem,
+  noteTitleFromBody,
+} from '@inbox-rs/rs-module';
 import type { DirectRS } from '../lib/rs';
 import { saveAsBookmark, saveAsImage } from './save-logic';
 
@@ -34,6 +38,7 @@ export interface SavePageOrchestratorParams {
   favicon: string;
   siteName: string;
   isDirectImage: boolean;
+  event?: LinkEvent;
   /** Override for tests; defaults to `crypto.randomUUID()`. */
   generateId?: () => string;
   /** Override for tests; defaults to `new Date().toISOString()`. */
@@ -81,6 +86,7 @@ export async function runSavePage(
       ogImage: params.ogImage,
       favicon: params.favicon,
       siteName: params.siteName,
+      event: params.event,
       createdAt,
     });
     return { ok: true };
