@@ -72,10 +72,18 @@ export function formatScheduled(
 
 /** A pending task past its due moment. Events merely become "past", not overdue. */
 export function isOverdue(
-  item: Pick<InboxItem, 'startsAt' | 'allDay' | 'scheduleKind' | 'completed'>,
+  item: Pick<
+    InboxItem,
+    'startsAt' | 'allDay' | 'scheduleKind' | 'completed' | 'cancelled'
+  >,
   now: Date = new Date(),
 ): boolean {
-  if (!item.startsAt || item.scheduleKind !== 'task' || item.completed) {
+  if (
+    !item.startsAt ||
+    item.scheduleKind !== 'task' ||
+    item.completed ||
+    item.cancelled
+  ) {
     return false;
   }
   const due = new Date(item.startsAt);
@@ -91,10 +99,12 @@ export function isOverdue(
  * ticking clock.
  */
 export function isDueTodayOrOverdue(
-  item: Pick<InboxItem, 'startsAt' | 'completed' | 'archived'>,
+  item: Pick<InboxItem, 'startsAt' | 'completed' | 'archived' | 'cancelled'>,
   todayStartMs: number,
 ): boolean {
-  if (!item.startsAt || item.completed || item.archived) return false;
+  if (!item.startsAt || item.completed || item.archived || item.cancelled) {
+    return false;
+  }
   const d = new Date(item.startsAt);
   if (Number.isNaN(d.getTime())) return false;
   d.setHours(0, 0, 0, 0);
@@ -182,6 +192,7 @@ export function clearSchedule<T extends InboxItem>(item: T): T {
     endsAt: undefined,
     allDay: undefined,
     scheduleKind: undefined,
+    cancelled: undefined,
     ...clearPostedEntryFields(),
   };
 }

@@ -139,6 +139,7 @@ export function buildIcs(
     lines.push(`DTSTART:${toUtcStamp(item.startsAt)}`);
     if (item.endsAt) lines.push(`DTEND:${toUtcStamp(item.endsAt)}`);
   }
+  if (!isTask && item.cancelled) lines.push('STATUS:CANCELLED');
 
   if (item.description) {
     lines.push(`DESCRIPTION:${escapeText(item.description)}`);
@@ -196,6 +197,8 @@ export interface ParsedIcs {
   /** Timed events only. */
   end?: Date;
   allDay: boolean;
+  /** VEVENT with STATUS:CANCELLED. */
+  cancelled?: boolean;
   /** VTODO with STATUS:COMPLETED. */
   completed: boolean;
   /** The COMPLETED instant, when the entry records one. */
@@ -407,7 +410,8 @@ export function parseIcs(text: string): ParsedIcs | null {
   const status = props.STATUS?.value.trim().toUpperCase();
   const untitled = kind === 'task' ? 'Untitled task' : 'Untitled event';
   return {
-    title: `${status === 'CANCELLED' ? 'Cancelled: ' : ''}${summary ?? untitled}`,
+    title: summary ?? untitled,
+    cancelled: (kind === 'event' && status === 'CANCELLED') || undefined,
     body: props.URL?.value.trim() ?? '',
     description: field('DESCRIPTION'),
     location: field('LOCATION'),

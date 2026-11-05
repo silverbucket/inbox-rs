@@ -687,6 +687,9 @@
           </svg>
           {scheduledLabel}
         </span>
+        {#if item.cancelled}
+          <span class="meta-item overdue">Cancelled</span>
+        {/if}
       {/if}
       {#if plannedLabel}
         <span class="meta-item">Planned: {plannedLabel}</span>

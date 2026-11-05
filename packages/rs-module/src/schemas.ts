@@ -22,6 +22,7 @@ const scheduleFields = {
   endsAt: { type: 'string' },
   allDay: { type: 'boolean' },
   scheduleKind: { type: 'string', enum: ['event', 'task'] },
+  cancelled: { type: 'boolean' },
   location: { type: 'string' },
   eventUrl: { type: 'string' },
   eventEtag: { type: 'string' },

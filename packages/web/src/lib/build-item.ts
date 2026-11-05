@@ -307,6 +307,7 @@ export async function buildDocumentItem(
         allDay: parsed.allDay,
         location: parsed.location,
       });
+      if (parsed.cancelled) scheduled.cancelled = true;
       return {
         item: parsed.completed
           ? {
