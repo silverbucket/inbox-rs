@@ -285,6 +285,7 @@ export async function enrichAllBookmarks(): Promise<{
             // behind earlier fetches. Convert the live copy, and only
             // while it is still the same link-only note — the same
             // stale-write guard enrichBookmark applies.
+            await awaitPendingSave(item.id);
             const current = get(items)[item.id];
             if (!current || linkNoteUrl(current) !== url) continue;
             bookmark = noteToBookmark(current as NoteItem, url as string);

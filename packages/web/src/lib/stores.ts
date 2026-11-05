@@ -1125,9 +1125,10 @@ export function loadFileBlobUrl(filePath: string, mimeType?: string): void {
  */
 const pendingSaves = new Map<string, Promise<unknown>>();
 
-/** Resolves once every save queued so far for `id` has settled. */
-export function awaitPendingSave(id: string): Promise<unknown> {
-  return pendingSaves.get(id) ?? Promise.resolve();
+/** Resolves once no save for `id` is pending, including ones queued meanwhile. */
+export async function awaitPendingSave(id: string): Promise<void> {
+  let pending: Promise<unknown> | undefined;
+  while ((pending = pendingSaves.get(id))) await pending;
 }
 
 export function storeItem(
@@ -1433,6 +1434,9 @@ export async function removeFile(path: string) {
 
 export async function deleteItem(id: string, item?: InboxItem) {
   const inbox = requireInbox();
+  // A save queued behind an in-flight write would otherwise land after the
+  // removal and resurrect the item.
+  await awaitPendingSave(id);
   await inbox.remove(id, item);
 
   // Revoke and remove any associated blob URLs (original + thumbnail) to

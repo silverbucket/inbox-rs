@@ -74,6 +74,7 @@ import {
   archivedCollections,
   archivedGroups,
   authorizationRequired,
+  awaitPendingSave,
   blobUrls,
   clearSessionVisibleTodos,
   collectionItems,
@@ -3587,6 +3588,41 @@ describe('storeItem write ordering', () => {
     const p = storeItem(makeTodo('sync', { title: 'A' }));
     expect(mockInbox.store).toHaveBeenCalledTimes(1);
     return p;
+  });
+
+  it('awaitPendingSave also waits for a save queued during the wait', async () => {
+    const todo = makeTodo('chain', { title: 'A' });
+    let resolveFirst!: () => void;
+    mockInbox.store.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveFirst = resolve;
+      }),
+    );
+    void storeItem(todo);
+    const waited = awaitPendingSave('chain');
+    const second = storeItem({ ...todo, title: 'B' } as InboxItem);
+    resolveFirst();
+    await waited;
+    expect(get(items).chain).toMatchObject({ title: 'B' });
+    await second;
+  });
+
+  it('deleteItem waits for queued saves so none resurrects the item', async () => {
+    const todo = makeTodo('gone', { title: 'A' });
+    let resolveFirst!: () => void;
+    mockInbox.store.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveFirst = resolve;
+      }),
+    );
+    void storeItem(todo);
+    const queued = storeItem({ ...todo, title: 'B' } as InboxItem);
+    const removal = deleteItem('gone', todo);
+    resolveFirst();
+    await queued;
+    await removal;
+    expect(mockInbox.remove).toHaveBeenCalledWith('gone', todo);
+    expect(get(items).gone).toBeUndefined();
   });
 
   it('a failed save rejects to its caller without blocking the next write', async () => {
