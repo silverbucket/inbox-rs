@@ -30,7 +30,10 @@ test('an open modal survives a same-page hashchange but closes on real navigatio
   const log = attachConsoleCapture(connectedPage);
   await connectedPage.goto(webOrigin);
   await connectedPage.waitForLoadState('networkidle');
-  await connectedPage.getByRole('button', { name: 'Inbox' }).first().click();
+  await connectedPage
+    .getByRole('button', { name: 'Inbox', exact: true })
+    .first()
+    .click();
 
   // Open the Add Image modal via the capture bar's hidden file input —
   // the exact flow that raced the nav click's hashchange.

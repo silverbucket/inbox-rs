@@ -24,7 +24,10 @@ test('attaching an image via the capture bar opens the Add Image modal with the 
 
   // Make sure we're on the inbox view — that's the only page that renders the
   // desktop CaptureBar (and therefore the hidden .file-input).
-  await connectedPage.getByRole('button', { name: 'Inbox' }).first().click();
+  await connectedPage
+    .getByRole('button', { name: 'Inbox', exact: true })
+    .first()
+    .click();
 
   // Build a minimal valid 1×1 PNG in memory so we never need a real file on
   // disk.  The bytes are the standard 67-byte 1×1 transparent PNG.

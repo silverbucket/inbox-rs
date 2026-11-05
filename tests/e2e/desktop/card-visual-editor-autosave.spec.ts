@@ -56,7 +56,10 @@ async function closeModal(page: Page, how: CloseMethod): Promise<void> {
   }
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10_000 });
   if (how === 'navigate') {
-    await page.getByRole('button', { name: 'Inbox' }).first().click();
+    await page
+      .getByRole('button', { name: 'Inbox', exact: true })
+      .first()
+      .click();
   }
 }
 
@@ -115,7 +118,10 @@ async function expectBodyAfterReload(
 ): Promise<void> {
   await page.goto(webOrigin);
   await page.waitForLoadState('networkidle');
-  await page.getByRole('button', { name: 'Inbox' }).first().click();
+  await page
+    .getByRole('button', { name: 'Inbox', exact: true })
+    .first()
+    .click();
   await openCard(page, title);
   const editor = page.getByRole('dialog').locator('.tiptap-editor');
   for (const text of texts) {
@@ -133,7 +139,10 @@ for (const how of CLOSE_METHODS) {
     const log = attachConsoleCapture(connectedPage);
     await connectedPage.goto(webOrigin);
     await connectedPage.waitForLoadState('networkidle');
-    await connectedPage.getByRole('button', { name: 'Inbox' }).first().click();
+    await connectedPage
+      .getByRole('button', { name: 'Inbox', exact: true })
+      .first()
+      .click();
 
     // Seed a note through the capture bar (dotless so it's never a bookmark).
     const title = `visual autosave ${how} note`;
@@ -202,7 +211,10 @@ test('edits to a note whose markdown the Visual editor rewrites on load still sa
   const log = attachConsoleCapture(page);
   await page.goto(webOrigin);
   await page.waitForLoadState('networkidle');
-  await page.getByRole('button', { name: 'Inbox' }).first().click();
+  await page
+    .getByRole('button', { name: 'Inbox', exact: true })
+    .first()
+    .click();
 
   await openCard(page, title);
   const typed = 'appended after normalisation';
@@ -237,7 +249,10 @@ test('text typed in the Visual editor is saved when the page is left right away'
   const page = await connectedContext.newPage();
   await page.goto(webOrigin);
   await page.waitForLoadState('networkidle');
-  await page.getByRole('button', { name: 'Inbox' }).first().click();
+  await page
+    .getByRole('button', { name: 'Inbox', exact: true })
+    .first()
+    .click();
 
   const title = 'visual autosave page left note';
   const input = page.getByPlaceholder(
@@ -260,7 +275,10 @@ test('text typed in the Visual editor is saved when the page is left right away'
   await next.waitForLoadState('networkidle');
   await expectBodyOnServer(rsUser, rsToken, title, [typed]);
 
-  await next.getByRole('button', { name: 'Inbox' }).first().click();
+  await next
+    .getByRole('button', { name: 'Inbox', exact: true })
+    .first()
+    .click();
   await openCard(next, title);
   await expect(
     next.getByRole('dialog').locator('.tiptap-editor'),

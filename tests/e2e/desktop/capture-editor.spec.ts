@@ -20,7 +20,10 @@ test('Ctrl+Enter opens the note editor modal pre-filled with the capture bar tex
   await connectedPage.waitForLoadState('networkidle');
 
   // Navigate to the inbox view where the desktop capture bar is rendered.
-  await connectedPage.getByRole('button', { name: 'Inbox' }).first().click();
+  await connectedPage
+    .getByRole('button', { name: 'Inbox', exact: true })
+    .first()
+    .click();
 
   // Dotless sentinel → detected as a note (not a bare-domain bookmark).
   const sentinel = 'playwright open editor sentinel';

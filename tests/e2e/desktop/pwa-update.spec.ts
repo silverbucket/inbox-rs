@@ -98,7 +98,7 @@ test.describe('PWA release transitions', () => {
       const oldPage = await context.newPage();
       await oldPage.goto(webOrigin);
       await expect(
-        oldPage.getByRole('button', { name: 'Inbox' }).first(),
+        oldPage.getByRole('button', { name: 'Inbox', exact: true }).first(),
       ).toBeVisible();
       await oldPage.close();
 
@@ -139,7 +139,7 @@ test.describe('PWA release transitions', () => {
       const page = await context.newPage();
       await page.goto(webOrigin);
       await expect(
-        page.getByRole('button', { name: 'Inbox' }).first(),
+        page.getByRole('button', { name: 'Inbox', exact: true }).first(),
       ).toBeVisible();
 
       await page.route('**/asset-manifest.json*', (route) =>
@@ -159,7 +159,7 @@ test.describe('PWA release transitions', () => {
 
       await page.reload();
       await expect(
-        page.getByRole('button', { name: 'Inbox' }).first(),
+        page.getByRole('button', { name: 'Inbox', exact: true }).first(),
       ).toBeVisible();
     } finally {
       await context.close();
@@ -175,7 +175,7 @@ test.describe('PWA release transitions', () => {
       const page = await context.newPage();
       await page.goto(webOrigin);
       await expect(
-        page.getByRole('button', { name: 'Inbox' }).first(),
+        page.getByRole('button', { name: 'Inbox', exact: true }).first(),
       ).toBeVisible();
 
       await page.route('**/asset-manifest.json*', (route) =>
@@ -202,7 +202,7 @@ test.describe('PWA release transitions', () => {
 
       await page.reload();
       await expect(
-        page.getByRole('button', { name: 'Inbox' }).first(),
+        page.getByRole('button', { name: 'Inbox', exact: true }).first(),
       ).toBeVisible();
       await expect(
         page.locator('link[href*="failed-release.css"]'),

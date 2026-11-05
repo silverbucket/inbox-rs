@@ -156,7 +156,10 @@ test.describe('search', () => {
 
     // ⌘/Ctrl+K works even while the inbox capture bar holds focus (it
     // autofocuses, empty, on that page).
-    await connectedPage.getByRole('button', { name: 'Inbox' }).first().click();
+    await connectedPage
+      .getByRole('button', { name: 'Inbox', exact: true })
+      .first()
+      .click();
     const capture = connectedPage.getByPlaceholder(
       'Paste a link, jot a note, or drop a file…',
     );
@@ -166,7 +169,10 @@ test.describe('search', () => {
     await expect(box).toBeFocused();
 
     // The shortcut still navigates with a draft, and Escape restores it.
-    await connectedPage.getByRole('button', { name: 'Inbox' }).first().click();
+    await connectedPage
+      .getByRole('button', { name: 'Inbox', exact: true })
+      .first()
+      .click();
     await capture.fill('half-written thought');
     await connectedPage.keyboard.press('ControlOrMeta+k');
     await expect(connectedPage).toHaveURL(/#\/search$/);
