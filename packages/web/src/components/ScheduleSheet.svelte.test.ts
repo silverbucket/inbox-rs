@@ -69,6 +69,21 @@ describe('ScheduleSheet all-day end', () => {
     expect((await save()).endsAt).toBe(new Date(2026, 10, 12).toISOString());
   });
 
+  it('blocks saving an end before the start', () => {
+    const ends = open(conf)!;
+    ends.value = '2026-11-08';
+    ends.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+    const btn = [...document.querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === 'Update time',
+    ) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(ends.getAttribute('aria-invalid')).toBe('true');
+    expect(document.getElementById('schedule-ends-error')?.textContent).toBe(
+      'Ends before it starts',
+    );
+  });
+
   it('is hidden for timed events', () => {
     expect(open({ ...conf, allDay: undefined, endsAt: undefined })).toBeNull();
   });

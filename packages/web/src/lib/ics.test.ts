@@ -324,6 +324,22 @@ describe('parseIcs', () => {
     );
   });
 
+  it('ignores a timed DTEND on an all-day start (mixed bounds are invalid)', () => {
+    const parsed = parseIcs(
+      [
+        'BEGIN:VCALENDAR',
+        'BEGIN:VEVENT',
+        'DTSTART;VALUE=DATE:20261109',
+        'DTEND:20261112T000000',
+        'SUMMARY:Offsite',
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\n'),
+    );
+    expect(parsed).toMatchObject({ title: 'Offsite', allDay: true });
+    expect(parsed?.end).toBeUndefined();
+  });
+
   it('reads an all-day event with a location and a cancelled status', () => {
     const parsed = parseIcs(
       [

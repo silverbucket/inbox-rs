@@ -197,6 +197,7 @@
     pendingSchedule
       ? formatScheduled({
           startsAt: pendingSchedule.start.toISOString(),
+          endsAt: pendingSchedule.end?.toISOString(),
           allDay: pendingSchedule.allDay,
         })
       : pendingPlan && isTodoType

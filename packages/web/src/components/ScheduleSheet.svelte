@@ -116,7 +116,11 @@
   const start = $derived(fromInputValues(dateStr, allDay ? '' : timeStr));
   // Tasks may be date-only ("sometime that day") — that's all-day semantics.
   const effectiveAllDay = $derived(allDay || (kind === 'task' && !timeStr));
-  const canSave = $derived(!!start && !saving);
+  // Date inputs are ISO strings, so lexical order is date order.
+  const endInvalid = $derived(
+    kind === 'event' && allDay && !!endStr && endStr < dateStr,
+  );
+  const canSave = $derived(!!start && !saving && !endInvalid);
   const end = $derived(
     kind === 'event' && allDay && endStr ? fromInputValues(endStr, '') : null,
   );
@@ -358,8 +362,13 @@
         class="input"
         min={dateStr}
         value={endStr || dateStr}
+        aria-invalid={endInvalid}
+        aria-describedby={endInvalid ? 'schedule-ends-error' : undefined}
         oninput={(e) => (endStr = e.currentTarget.value)}
       />
+      {#if endInvalid}
+        <span id="schedule-ends-error" class="fhint" role="alert">Ends before it starts</span>
+      {/if}
     {/if}
 
     {#if kind === 'event'}
@@ -516,6 +525,11 @@
   .chip:disabled {
     opacity: 0.45;
     cursor: default;
+  }
+
+  .fhint {
+    font-size: 0.8rem;
+    color: var(--danger-text);
   }
 
   .flabel {
