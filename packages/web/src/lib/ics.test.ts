@@ -327,7 +327,8 @@ describe('parseIcs', () => {
   });
 
   it('flags an unknown zone that appears only on DTEND', () => {
-    const ics = outlookIcs('20261109T180000', '20261109T190000').replace(
+    // Next-day end so the local-time guess follows the start in any zone.
+    const ics = outlookIcs('20261109T180000', '20261110T190000').replace(
       'DTEND;TZID="Eastern Standard Time"',
       'DTEND;TZID="Narnia Standard Time"',
     );
