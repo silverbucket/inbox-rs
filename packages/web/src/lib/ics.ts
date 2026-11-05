@@ -193,7 +193,7 @@ export interface ParsedIcs {
   location?: string;
   kind: ScheduleKind;
   start: Date;
-  /** Timed events only. */
+  /** Timed events: the end instant. All-day events: the inclusive last day. */
   end?: Date;
   allDay: boolean;
   /** VTODO with STATUS:COMPLETED. */
@@ -396,9 +396,11 @@ export function parseIcs(text: string): ParsedIcs | null {
   const start = startProp && parseIcsDate(startProp.value, startProp.params);
   if (!start) return null;
   const end =
-    kind === 'event' && !start.allDay && props.DTEND
+    kind === 'event' && props.DTEND
       ? parseIcsDate(props.DTEND.value, props.DTEND.params)
       : null;
+  // An all-day DTEND is exclusive; store the inclusive last day.
+  if (end?.allDay && start.allDay) end.date.setDate(end.date.getDate() - 1);
   const field = (name: string) =>
     props[name]
       ? unescapeText(props[name].value).trim() || undefined

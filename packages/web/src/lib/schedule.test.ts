@@ -89,6 +89,24 @@ describe('formatScheduled', () => {
     expect(label).not.toContain('·');
   });
 
+  it('renders a multi-day all-day span compactly', () => {
+    const span = (s: Date, e: Date) =>
+      formatScheduled(
+        note({
+          startsAt: s.toISOString(),
+          endsAt: e.toISOString(),
+          allDay: true,
+        }),
+        WED_1423,
+      );
+    expect(span(new Date(2026, 10, 9), new Date(2026, 10, 11))).toMatch(
+      /^Nov 9\s?–\s?11$/,
+    );
+    expect(span(new Date(2026, 10, 30), new Date(2026, 11, 2))).toMatch(
+      /^Nov 30\s?–\s?Dec 2$/,
+    );
+  });
+
   it('is empty for unscheduled or malformed values', () => {
     expect(formatScheduled(note(), WED_1423)).toBe('');
     expect(formatScheduled(note({ startsAt: 'garbage' }), WED_1423)).toBe('');
@@ -128,6 +146,17 @@ describe('isOverdue / isPast', () => {
     });
     expect(isPast(running, WED_1423)).toBe(false);
     expect(isPast(note({ startsAt: past }), WED_1423)).toBe(true);
+  });
+
+  it('a multi-day all-day event stays current until its last day passes', () => {
+    const span = note({
+      startsAt: new Date(2026, 6, 27).toISOString(),
+      endsAt: new Date(2026, 6, 29).toISOString(),
+      allDay: true,
+      scheduleKind: 'event',
+    });
+    expect(isPast(span, WED_1423)).toBe(false);
+    expect(isPast(span, new Date(2026, 6, 30, 0, 1))).toBe(true);
   });
 });
 
@@ -203,6 +232,29 @@ describe('applySchedule / clearSchedule', () => {
     expect([d.getHours(), d.getMinutes()]).toEqual([0, 0]);
     expect(item.endsAt).toBeUndefined();
     expect(item.allDay).toBe(true);
+  });
+
+  it('stores an all-day end as its local midnight, only when after the start', () => {
+    const span = applySchedule(note(), {
+      kind: 'event',
+      start: new Date(2026, 10, 9),
+      end: new Date(2026, 10, 11, 15, 0),
+      allDay: true,
+    });
+    expect(span.endsAt).toBe(new Date(2026, 10, 11).toISOString());
+    const sameDay = applySchedule(note(), {
+      kind: 'event',
+      start: new Date(2026, 10, 9),
+      end: new Date(2026, 10, 9),
+      allDay: true,
+    });
+    expect(sameDay.endsAt).toBeUndefined();
+    const timed = applySchedule(note(), {
+      kind: 'event',
+      start: new Date(2026, 10, 9, 9, 0),
+      end: new Date(2026, 10, 11),
+    });
+    expect(timed.endsAt).toBeUndefined();
   });
 
   it('tasks never get endsAt; rescheduling preserves the posted event ref', () => {

@@ -156,9 +156,15 @@ function eventSchedule(event: LinkEvent): ScheduleInput | null {
     end && !dateOnly && end > start
       ? (end.getTime() - start.getTime()) / 60_000
       : undefined;
+  // schema.org's endDate is inclusive, so a date-only end is the last day.
+  const endDay =
+    dateOnly && event.endDate && /^\d{4}-\d{2}-\d{2}$/.test(event.endDate)
+      ? new Date(`${event.endDate}T00:00`)
+      : undefined;
   return {
     kind: 'event',
     start,
+    end: endDay,
     durationMin,
     allDay: !!dateOnly,
     location: event.location,
