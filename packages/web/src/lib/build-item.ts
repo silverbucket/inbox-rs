@@ -292,7 +292,12 @@ export async function buildDocumentItem(
       const note = buildNoteItem(ctx, {
         title: data.title || parsed.title,
         body: parsed.body,
-        description: [data.description, parsed.description]
+        description: [
+          data.description,
+          parsed.description,
+          parsed.unresolvedZone &&
+            `Time zone '${parsed.unresolvedZone}' not recognised; shown in local time`,
+        ]
           .filter(Boolean)
           .join('\n\n'),
       });
