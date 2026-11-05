@@ -314,6 +314,8 @@ describe('board actions', () => {
       offPlan: true,
       planColumnId: 'idea',
     });
+    await setOffPlan('a', true, BOARD_UNSORTED);
+    expect(get(stores.collections).a.planColumnId).toBeUndefined();
     await setOffPlan('a', false, 'idea');
     expect(get(stores.collections).a.offPlan).toBeUndefined();
     expect(get(stores.collections).a.planColumnId).toBeUndefined();

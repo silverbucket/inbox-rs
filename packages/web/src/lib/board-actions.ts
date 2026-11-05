@@ -299,7 +299,9 @@ export async function setOffPlan(
   const next: Collection = { ...col };
   if (offPlan) next.offPlan = true;
   else delete next.offPlan;
-  if (offPlan && planColumnId) next.planColumnId = planColumnId;
+  // Unsorted can't be a plan column: it would put every unsorted todo on the plan.
+  if (offPlan && planColumnId && planColumnId !== BOARD_UNSORTED)
+    next.planColumnId = planColumnId;
   else delete next.planColumnId;
   await storeCollection(next);
 }

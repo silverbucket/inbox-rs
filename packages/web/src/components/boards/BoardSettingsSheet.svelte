@@ -12,7 +12,7 @@
     setCollectionView,
     setOffPlan,
   } from '../../lib/board-actions';
-  import { columnOf, doneColumn } from '../../lib/boards';
+  import { BOARD_UNSORTED, columnOf, doneColumn } from '../../lib/boards';
   import { openColumnSet } from '../../lib/settings-request';
   import { collections, items } from '../../lib/stores';
   import { showToast } from '../../lib/toast';
@@ -88,6 +88,7 @@
   }
 
   const planColumn = $derived(collection?.planColumnId ?? '');
+  const planOptions = $derived(set ? set.columns.filter((c) => c.id !== BOARD_UNSORTED) : []);
 </script>
 
 {#if switching && collection}
@@ -167,21 +168,23 @@
       </label>
 
       {@render listToggle(collection)}
-      {#if collection.offPlan}
+      <!-- Unsorted can't be the plan column (it would put every unsorted
+           todo on the plan), so this needs another column to offer. -->
+      {#if collection.offPlan && planOptions.length}
         <label class="toggle sub">
           <input
             type="checkbox"
             checked={!!planColumn}
-            onchange={(e) => void run(() => setOffPlan(collectionId, true, (e.currentTarget as HTMLInputElement).checked ? (set.columns[1]?.id ?? '') : undefined), 'Couldn’t save that')}
+            onchange={(e) => void run(() => setOffPlan(collectionId, true, (e.currentTarget as HTMLInputElement).checked ? planOptions[0].id : undefined), 'Couldn’t save that')}
           />
           Show
           <select
             class="bx-select inline"
             aria-label="Column shown on the Todos plan"
-            value={planColumn || set.columns[1]?.id}
+            value={planColumn || planOptions[0].id}
             onchange={(e) => void run(() => setOffPlan(collectionId, true, (e.currentTarget as HTMLSelectElement).value), 'Couldn’t save that')}
           >
-            {#each set.columns as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+            {#each planOptions as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
           </select>
           todos on the Todos plan, as Someday
         </label>
