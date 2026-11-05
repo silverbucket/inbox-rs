@@ -400,10 +400,12 @@ export function parseIcs(text: string): ParsedIcs | null {
   const startProp = (kind === 'task' && props.DUE) || props.DTSTART;
   const start = startProp && parseIcsDate(startProp.value, startProp.params);
   if (!start) return null;
-  const end =
+  const parsedEnd =
     kind === 'event' && !start.allDay && props.DTEND
       ? parseIcsDate(props.DTEND.value, props.DTEND.params)
       : null;
+  // An end that doesn't follow the start is dropped, zone guess included.
+  const end = parsedEnd && parsedEnd.date > start.date ? parsedEnd : null;
   const field = (name: string) =>
     props[name]
       ? unescapeText(props[name].value).trim() || undefined
@@ -418,12 +420,12 @@ export function parseIcs(text: string): ParsedIcs | null {
     location: field('LOCATION'),
     kind,
     start: start.date,
-    end: end && end.date > start.date ? end.date : undefined,
+    end: end?.date,
     allDay: start.allDay,
     completed: kind === 'task' && status === 'COMPLETED',
     completedAt: props.COMPLETED
       ? parseIcsDate(props.COMPLETED.value, props.COMPLETED.params)?.date
       : undefined,
-    unresolvedZone: start.unresolvedZone,
+    unresolvedZone: start.unresolvedZone ?? end?.unresolvedZone,
   };
 }
