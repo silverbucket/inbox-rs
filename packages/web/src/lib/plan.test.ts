@@ -7,6 +7,7 @@ import {
   fromDateKey,
   monthGrid,
   monthStart,
+  moveItemToDay,
   moveToDay,
   placeTodo,
   planFor,
@@ -231,5 +232,40 @@ describe('calendar helpers', () => {
       timed.start.getHours(),
       timed.start.getMinutes(),
     ]).toEqual([12, 14, 30]);
+  });
+
+  it("keeps a timed event's duration when it moves", () => {
+    const event = todo({
+      startsAt: new Date(2026, 10, 6, 14, 0).toISOString(),
+      endsAt: new Date(2026, 10, 6, 15, 30).toISOString(),
+      scheduleKind: 'event',
+    });
+    const moved = moveItemToDay(event, new Date(2026, 10, 12));
+    const start = new Date(moved.startsAt as string);
+    const end = new Date(moved.endsAt as string);
+    expect([start.getDate(), start.getHours(), start.getMinutes()]).toEqual([
+      12, 14, 0,
+    ]);
+    expect((end.getTime() - start.getTime()) / 60_000).toBe(90);
+  });
+
+  it('shifts a multi-day all-day event by whole days', () => {
+    const trip = todo({
+      startsAt: new Date(2026, 10, 6).toISOString(),
+      endsAt: new Date(2026, 10, 9).toISOString(),
+      allDay: true,
+      scheduleKind: 'event',
+    });
+    const moved = moveItemToDay(trip, new Date(2026, 10, 12));
+    expect(moved.allDay).toBe(true);
+    expect(new Date(moved.startsAt as string).getDate()).toBe(12);
+    expect(new Date(moved.endsAt as string).getDate()).toBe(15);
+  });
+
+  it('gives an undated todo an all-day date with no end', () => {
+    const moved = moveItemToDay(todo(), new Date(2026, 10, 12));
+    expect(moved.allDay).toBe(true);
+    expect(moved.scheduleKind).toBe('task');
+    expect(moved.endsAt).toBeUndefined();
   });
 });

@@ -14,7 +14,7 @@
     fromDateKey,
     monthGrid,
     monthStart,
-    moveToDay,
+    moveItemToDay,
     type Placement,
     scheduledDayKey,
     sectionInfo,
@@ -22,7 +22,6 @@
     toDateKey,
     weekStart,
   } from '../lib/plan';
-  import { applySchedule } from '../lib/schedule';
   import { storeItem } from '../lib/stores';
   import { showToast } from '../lib/toast';
 
@@ -141,6 +140,16 @@
   const DRAG_TYPE = 'application/x-inbox-rs-todo';
   let dragOverKey = $state<string | null>(null);
 
+  /** Days whose full list is showing instead of the first three. */
+  let expandedDays = $state<Set<string>>(new Set());
+  const DAY_LIMIT = 3;
+  function toggleDay(key: string) {
+    const next = new Set(expandedDays);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    expandedDays = next;
+  }
+
   function startDrag(e: DragEvent, todo: InboxItem) {
     if (!e.dataTransfer) return;
     e.dataTransfer.setData(DRAG_TYPE, todo.id);
@@ -162,7 +171,7 @@
     const todo = todos.find((t) => t.id === id);
     if (!todo) return;
     try {
-      await storeItem(applySchedule(todo, moveToDay(todo, day)));
+      await storeItem(moveItemToDay(todo, day));
     } catch (error) {
       console.error('Failed to move todo to day', error);
       showToast('Couldn’t move that todo');
@@ -256,11 +265,18 @@
                 ondrop={(e) => dropOn(e, cell.day)}
               >
                 <span class="num">{cell.n}</span>
-                {#each cell.items.slice(0, 3) as t (t.id)}
+                {#each expandedDays.has(cell.key) ? cell.items : cell.items.slice(0, DAY_LIMIT) as t (t.id)}
                   {@render chip(t)}
                 {/each}
-                {#if cell.items.length > 3}
-                  <span class="more">+{cell.items.length - 3} more</span>
+                {#if cell.items.length > DAY_LIMIT}
+                  <button
+                    type="button"
+                    class="more"
+                    aria-expanded={expandedDays.has(cell.key)}
+                    onclick={() => toggleDay(cell.key)}
+                  >
+                    {expandedDays.has(cell.key) ? 'Show less' : `+${cell.items.length - DAY_LIMIT} more`}
+                  </button>
                 {/if}
               </div>
             {/each}
@@ -487,9 +503,21 @@
   }
 
   .more {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    padding-left: 0.3rem;
+    align-self: flex-start;
+    min-height: 1.5rem;
+    padding: 0 0.3rem;
+    border: none;
+    border-radius: 0.35rem;
+    background: none;
+    color: var(--accent-text);
+    font: inherit;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .more:hover {
+    background: var(--surface-tint);
   }
 
   .band {

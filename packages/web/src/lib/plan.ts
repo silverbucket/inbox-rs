@@ -16,6 +16,7 @@
  * schedule.ts. All math is local wall-clock time.
  */
 import type { InboxItem, PlanKind } from '@inbox-rs/rs-module';
+import { applySchedule } from './schedule';
 
 export type { PlanKind };
 
@@ -403,20 +404,52 @@ export function scheduledDayKey(
 
 /**
  * The schedule for moving an item to `day`: an all-day task when it had no
- * time (or no date), otherwise the same clock time on the new day.
+ * time (or no date), otherwise the same clock time on the new day. A timed
+ * item with an end keeps its duration.
  */
 export function moveToDay(
-  item: Pick<InboxItem, 'startsAt' | 'allDay' | 'scheduleKind'>,
+  item: Pick<InboxItem, 'startsAt' | 'endsAt' | 'allDay' | 'scheduleKind'>,
   day: Date,
-): { kind: 'event' | 'task'; start: Date; allDay: boolean } {
+): {
+  kind: 'event' | 'task';
+  start: Date;
+  allDay: boolean;
+  durationMin?: number;
+} {
   const start = new Date(day);
   start.setHours(0, 0, 0, 0);
   const old = item.startsAt ? new Date(item.startsAt) : null;
   const timed = !!old && !Number.isNaN(old.getTime()) && !item.allDay;
   if (timed && old) start.setHours(old.getHours(), old.getMinutes(), 0, 0);
+  const end = item.endsAt ? new Date(item.endsAt) : null;
+  const durationMin =
+    timed && old && end && !Number.isNaN(end.getTime())
+      ? Math.max(1, Math.round((end.getTime() - old.getTime()) / 60_000))
+      : undefined;
   return {
     kind: item.scheduleKind ?? 'task',
     start,
     allDay: !timed,
+    ...(durationMin !== undefined ? { durationMin } : {}),
   };
+}
+
+/**
+ * Return a copy of the item rescheduled onto `day`, keeping what the move
+ * shouldn't change: a timed event's duration, and a multi-day all-day
+ * event's length (its end shifts by the same number of days).
+ */
+export function moveItemToDay<T extends InboxItem>(item: T, day: Date): T {
+  const moved = applySchedule(item, moveToDay(item, day));
+  if (item.allDay && item.startsAt && item.endsAt) {
+    const oldStart = new Date(item.startsAt);
+    const oldEnd = new Date(item.endsAt);
+    if (!Number.isNaN(oldStart.getTime()) && !Number.isNaN(oldEnd.getTime())) {
+      const shift =
+        (moved.startsAt ? new Date(moved.startsAt).getTime() : 0) -
+        new Date(oldStart).setHours(0, 0, 0, 0);
+      moved.endsAt = new Date(oldEnd.getTime() + shift).toISOString();
+    }
+  }
+  return moved;
 }
