@@ -72,7 +72,11 @@ function clearBlobLoadFailed(filePath: string) {
 }
 
 export const connected = writable(false);
-const startup = createRestoring({ sessionPending: hasStoredSession() });
+// The cap also bounds the wait for a first sync on a device with no cache.
+const startup = createRestoring({
+  sessionPending: hasStoredSession(),
+  timeoutMs: 8000,
+});
 /**
  * True on page load until local data has loaded and any stored session has
  * resolved (or ~3s pass). Empty states that depend on `connected` wait for
@@ -539,6 +543,12 @@ rs.on('wire-done', () => {
   markMigrationAlertReady();
 });
 rs.on('sync-done', () => {
+  if (awaitingFirstSync) {
+    awaitingFirstSync = false;
+    // Synced items sit in the change buffer briefly; land them first.
+    flushPendingItemChanges();
+    startup.sessionSettled();
+  }
   hideSync();
   markMigrationAlertReady();
 });
@@ -563,8 +573,12 @@ rs.on('error', (e: unknown) => {
   }
 });
 
+// An empty cache on connect may just not have synced yet, so the startup
+// "restoring" state holds until the first sync (or its safety timeout).
+let awaitingFirstSync = false;
+
 rs.on('connected', async () => {
-  startup.sessionSettled();
+  awaitingFirstSync = true;
   storageReachable.set(true);
   authorizationRequired.set(false);
   connected.set(true);
@@ -580,7 +594,11 @@ rs.on('connected', async () => {
   // Confirm a connect the user just made; a reload that resumes a stored
   // session stays quiet.
   if (consumeFreshAuthorization() && addr) showToast(`Connected as ${addr}`);
-  await loadConnectedData();
+  try {
+    await loadConnectedData();
+  } finally {
+    if (Object.keys(get(items)).length > 0) startup.sessionSettled();
+  }
 });
 
 rs.on('disconnected', () => {
