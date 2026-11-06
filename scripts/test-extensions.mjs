@@ -265,6 +265,7 @@ try {
           ),
       );
       await browser.click('.btn-disconnect');
+      await browser.click('.confirm-disconnect .btn-disconnect');
       await browser.goto(popupUrl);
       await browser.wait('.not-connected');
       console.log(
