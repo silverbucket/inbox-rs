@@ -1209,8 +1209,8 @@ export async function setItemPinned(item: InboxItem, pinned: boolean) {
   // Write from the stored item: rows may pass a display copy (e.g. a list's
   // Someday row carries a view-only planKind) that mustn't be saved.
   flushPendingItemChanges();
-  const latest = get(items)[item.id] ?? item;
-  await storeItem({ ...latest, pinned });
+  // Read inside the queue: a save still landing must not be overwritten.
+  await updateItem(item.id, (current) => ({ ...(current ?? item), pinned }));
 }
 
 /**
@@ -1597,48 +1597,48 @@ export async function moveItemToCollection(
   const prevItems = get(items);
   const prevCollections = get(collections);
 
-  let item: InboxItem | undefined;
   let oldCollectionId: string | undefined;
 
-  items.update((current) => {
-    const next = { ...current };
-    for (const key of Object.keys(next)) {
-      if (next[key].id === itemId) {
-        oldCollectionId = next[key].collectionId;
-        // Cast to a record so we can drop `collectionId` when the caller
-        // moves the item back to Inbox/unfiled — the InboxItem union types
-        // collectionId as required-but-optional and rejects structural
-        // delete.
-        const updated: Record<string, unknown> = { ...next[key] };
-        if (collectionId) {
-          updated.collectionId = collectionId;
-        } else {
-          delete updated.collectionId;
-        }
-        next[key] = updated as unknown as InboxItem;
-        item = updated as unknown as InboxItem;
-        break;
-      }
-    }
-    return next;
-  });
-
-  if (!item) return;
-
-  const isSameCollection = oldCollectionId === collectionId;
-
   try {
-    // Skip the item write when it already carries the target: creators store
-    // the item pre-filed and call this only to register it in the
-    // collection's itemIds. A second PUT to the same path right after the
-    // first races remoteStorage.js's ETag bookkeeping — the server answers
-    // 412 and the conflict resolves remote-wins, silently dropping the
-    // filing (the todo reappears as Unfiled).
-    if (!isSameCollection) {
-      // Through the queue *and* the store updater: a save landing just
-      // before ours would otherwise put its unfiled snapshot back in `items`.
-      await storeItem(item);
-    }
+    // Read and write inside the item's queue, so a save still landing is
+    // what we move, not an older snapshot.
+    const item = await runForItem(itemId, async () => {
+      let moved: InboxItem | undefined;
+      items.update((current) => {
+        const next = { ...current };
+        for (const key of Object.keys(next)) {
+          if (next[key].id === itemId) {
+            oldCollectionId = next[key].collectionId;
+            // Cast to a record so we can drop `collectionId` when the caller
+            // moves the item back to Inbox/unfiled — the InboxItem union types
+            // collectionId as required-but-optional and rejects structural
+            // delete.
+            const updated: Record<string, unknown> = { ...next[key] };
+            if (collectionId) {
+              updated.collectionId = collectionId;
+            } else {
+              delete updated.collectionId;
+            }
+            next[key] = updated as unknown as InboxItem;
+            moved = updated as unknown as InboxItem;
+            break;
+          }
+        }
+        return next;
+      });
+      // Skip the item write when it already carries the target: creators
+      // store the item pre-filed and call this only to register it in the
+      // collection's itemIds. A second PUT to the same path right after the
+      // first races remoteStorage.js's ETag bookkeeping — the server answers
+      // 412 and the conflict resolves remote-wins, silently dropping the
+      // filing (the todo reappears as Unfiled).
+      if (moved && oldCollectionId !== collectionId) await writeItem(moved);
+      return moved;
+    });
+
+    if (!item) return;
+
+    const isSameCollection = oldCollectionId === collectionId;
 
     // Update source collection's itemIds
     if (oldCollectionId && !isSameCollection) {

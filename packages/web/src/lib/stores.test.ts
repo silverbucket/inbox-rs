@@ -3614,6 +3614,28 @@ describe('storeItem write ordering', () => {
     expect(seen).toEqual(['B']);
   });
 
+  it('a move made while a save is landing files the saved item', async () => {
+    const todo = makeTodo('mv', { title: 'A' });
+    items.set({ mv: todo });
+    collections.set({ c1: makeCollection('c1') });
+    let resolveFirst!: () => void;
+    mockInbox.store.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveFirst = resolve;
+      }),
+    );
+    const save = storeItem({ ...todo, title: 'B' } as InboxItem);
+    const move = moveItemToCollection('mv', 'c1');
+    resolveFirst();
+    await save;
+    await move;
+    expect(get(items).mv).toMatchObject({ title: 'B', collectionId: 'c1' });
+    expect(mockInbox.store.mock.calls.at(-1)?.[0]).toMatchObject({
+      title: 'B',
+      collectionId: 'c1',
+    });
+  });
+
   it('deleteItem waits for queued saves so none resurrects the item', async () => {
     const todo = makeTodo('gone', { title: 'A' });
     let resolveFirst!: () => void;
