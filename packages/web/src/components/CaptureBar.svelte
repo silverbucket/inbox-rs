@@ -11,6 +11,7 @@
     onfilecapture,
     onextrafiles,
     onrecord,
+    onaddtodo,
     focusOnMount = false,
     value = $bindable(''),
   }: {
@@ -25,6 +26,10 @@
         captured; the parent surfaces "ignored the rest". */
     onextrafiles?: (ignored: number) => void;
     onrecord: () => void;
+    /** ⌘/Ctrl-Shift-Enter on typed text: add it straight to Todos. Without
+        it (or on an empty bar) the key bubbles to the global Add-todo
+        shortcut, which opens an empty todo editor. */
+    onaddtodo?: (title: string) => void;
     /** Focus the input on mount (the inbox does; the collection view doesn't,
         to avoid stealing focus when a collection is expanded). */
     focusOnMount?: boolean;
@@ -69,9 +74,15 @@
       return;
     }
     if (e.metaKey || e.ctrlKey) {
-      // The global handler owns modified Shift-Enter (Add todo). Leave the
-      // event untouched so it can bubble there instead of quick-saving.
-      if (e.shiftKey && !e.altKey) return;
+      if (e.shiftKey && !e.altKey) {
+        // Typed text becomes a todo here; otherwise leave the event
+        // untouched so it bubbles to the global Add-todo shortcut.
+        if (!onaddtodo || !value.trim()) return;
+        e.preventDefault();
+        onaddtodo(value.trim());
+        value = '';
+        return;
+      }
       e.preventDefault();
       onopeneditor(value);
       value = '';
@@ -214,6 +225,10 @@
       <span>↵ {enterHint}</span>
       <span class="sep">·</span>
       <span>{mod}↵ Open editor</span>
+      {#if onaddtodo}
+        <span class="sep">·</span>
+        <span>{mod}⇧↵ Add as todo</span>
+      {/if}
     {/if}
   </div>
 </div>

@@ -12,13 +12,14 @@
   import MobileTabBar from './components/MobileTabBar.svelte';
   import Toast from './components/Toast.svelte';
   import {
-    connected, deleteItem, items, visibleOpenTodos, openTodos, pendingMigrationCount, runAllMigrations,
+    connected, deleteItem, items, storeItem, visibleOpenTodos, openTodos, pendingMigrationCount, runAllMigrations,
     createCollection, storeGroup,
     appConfig, setActiveGroupFilters,
   } from './lib/stores';
   import { initAlerts, setAlertOpenHandler } from './lib/alerts';
   import { scheduleAutoTranscriptionDownload } from './lib/transcription-store';
   import { captureDetected, captureFile } from './lib/capture';
+  import { makeUnfiledTodo } from './lib/add-entry-modal';
   import { settingsRequest } from './lib/settings-request';
   import { loadLazy } from './lib/lazy-load';
   import { showToast } from './lib/toast';
@@ -497,6 +498,30 @@
     });
   }
 
+  // ⌘/Ctrl-Shift-Enter on typed capture-bar text: an unfiled todo, with the
+  // same Undo as a quick-saved note. The toast names the destination, since
+  // the todo lands on another page.
+  async function handleQuickTodo(title: string) {
+    const todo = makeUnfiledTodo(title);
+    try {
+      await storeItem(todo);
+    } catch (error) {
+      console.error('Failed to add todo', error);
+      // Hand the text back rather than losing it with the cleared bar.
+      if (!inboxQuickDraft) inboxQuickDraft = title;
+      showToast("Couldn't add the todo.");
+      return;
+    }
+    showToast('Added to Todos', {
+      label: 'Undo',
+      run: () => {
+        void deleteItem(todo.id, todo).catch(() => {
+          showToast("Couldn't undo — open the item to remove it.");
+        });
+      },
+    });
+  }
+
   // Drop/paste onto the bar or inbox feed: store the file directly (no form),
   // mirroring the text quick-capture Undo. `deleteItem` removes the file and
   // thumbnail bytes too, so Undo leaves nothing orphaned.
@@ -736,6 +761,7 @@
               onfilecapture={handleFileCapture}
               onextrafiles={notifyExtraFiles}
               onrecord={handleRecord}
+              onaddtodo={handleQuickTodo}
             />
           {/if}
         </div>

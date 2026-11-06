@@ -28,7 +28,7 @@ describe('CaptureBar', () => {
     host.remove();
   });
 
-  function render() {
+  function render(extra: { onaddtodo?: (title: string) => void } = {}) {
     component = mount(CaptureBar, {
       target: host,
       props: {
@@ -38,6 +38,7 @@ describe('CaptureBar', () => {
         onfilecapture,
         onextrafiles,
         onrecord,
+        ...extra,
       },
     });
     flushSync();
@@ -101,6 +102,55 @@ describe('CaptureBar', () => {
     typeAndKey('a todo draft', { metaKey: true, shiftKey: true });
     expect(oncapture).not.toHaveBeenCalled();
     expect(onopeneditor).not.toHaveBeenCalled();
+  });
+
+  it('adds typed text as a todo on modified Shift-Enter when onaddtodo is given', () => {
+    const onaddtodo = vi.fn();
+    render({ onaddtodo });
+    const input = host.querySelector('.text-input') as HTMLInputElement;
+    type('  buy milk  ');
+    const e = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      ctrlKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    input.dispatchEvent(e);
+    flushSync();
+    expect(onaddtodo).toHaveBeenCalledWith('buy milk');
+    // Claimed, so the global handler doesn't also open an empty todo editor.
+    expect(e.defaultPrevented).toBe(true);
+    expect(input.value).toBe('');
+    expect(oncapture).not.toHaveBeenCalled();
+  });
+
+  it('leaves modified Shift-Enter on an empty bar for the global shortcut', () => {
+    const onaddtodo = vi.fn();
+    render({ onaddtodo });
+    typeAndKey('   ', { metaKey: true, shiftKey: true });
+    expect(onaddtodo).not.toHaveBeenCalled();
+  });
+
+  it('hints the Add-as-todo shortcut only while focused with text', () => {
+    render({ onaddtodo: vi.fn() });
+    const input = host.querySelector('.text-input') as HTMLInputElement;
+    const hint = () => host.querySelector('.hint')?.textContent ?? '';
+    input.dispatchEvent(new FocusEvent('focus'));
+    flushSync();
+    expect(hint()).not.toContain('Add as todo');
+    type('buy milk');
+    expect(hint()).toMatch(/(⌘|Ctrl)⇧↵ Add as todo/);
+  });
+
+  it('omits the Add-as-todo hint without onaddtodo', () => {
+    render();
+    const input = host.querySelector('.text-input') as HTMLInputElement;
+    input.dispatchEvent(new FocusEvent('focus'));
+    type('buy milk');
+    expect(host.querySelector('.hint')?.textContent).not.toContain(
+      'Add as todo',
+    );
   });
 
   it('preserves Alt-modified Shift-Enter as an editor shortcut', () => {
