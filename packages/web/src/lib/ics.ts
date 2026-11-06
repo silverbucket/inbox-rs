@@ -10,6 +10,7 @@
  */
 import type { InboxItem } from '@inbox-rs/rs-module';
 import type { ScheduleKind } from './schedule';
+import { WINDOWS_ZONES } from './windows-zones';
 
 /** Rejecting the C0 control range is the point: a CR/LF inside a verbatim
  *  URI value would break out of its content line (property injection). */
@@ -183,7 +184,8 @@ export function downloadIcs(item: InboxItem): void {
 // Reading. A dropped or uploaded .ics (a mail invite, a Meetup/Luma export)
 // becomes a scheduled card. Only the first VEVENT/VTODO is read; recurrence,
 // alarms, attendees and the embedded VTIMEZONE are ignored — the IANA name
-// in a TZID parameter is enough to place a wall-clock time.
+// in a TZID parameter (or Outlook's Windows name, via windows-zones.ts) is
+// enough to place a wall-clock time.
 
 export interface ParsedIcs {
   title: string;
@@ -203,6 +205,8 @@ export interface ParsedIcs {
   completed: boolean;
   /** The COMPLETED instant, when the entry records one. */
   completedAt?: Date;
+  /** A TZID neither Intl nor the Windows alias table knows; start is local. */
+  unresolvedZone?: string;
 }
 
 /** True for files worth parsing as a calendar entry. */
@@ -333,7 +337,7 @@ function zonedToUtc(
 export function parseIcsDate(
   value: string,
   params: Record<string, string> = {},
-): { date: Date; allDay: boolean } | null {
+): { date: Date; allDay: boolean; unresolvedZone?: string } | null {
   const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?$/.exec(
     value.trim(),
   );
@@ -348,19 +352,20 @@ export function parseIcsDate(
   }
   if (m[7])
     return { date: new Date(Date.UTC(y, mo - 1, d, h, mi, s)), allDay: false };
-  if (params.TZID) {
+  const local = new Date(y, mo - 1, d, h, mi, s);
+  const zone = params.TZID;
+  if (!zone) return { date: local, allDay: false };
+  // Outlook writes Windows names ("Eastern Standard Time"); map them to IANA.
+  for (const timeZone of [zone, WINDOWS_ZONES[zone]]) {
+    if (!timeZone) continue;
     try {
-      return {
-        date: zonedToUtc(y, mo, d, h, mi, s, params.TZID),
-        allDay: false,
-      };
+      return { date: zonedToUtc(y, mo, d, h, mi, s, timeZone), allDay: false };
     } catch {
-      // shortcut: Outlook's Windows zone names ("Central Standard Time")
-      // aren't IANA and fall through to floating local time; add an alias
-      // table if invites from Outlook land hours off.
+      // Not a zone Intl knows; try the alias.
     }
   }
-  return { date: new Date(y, mo - 1, d, h, mi, s), allDay: false };
+  // Floating local time is a guess; flag it so the card can say so.
+  return { date: local, allDay: false, unresolvedZone: zone };
 }
 
 /** Parse the first VEVENT/VTODO of an iCalendar text; null when there is none. */
@@ -398,15 +403,22 @@ export function parseIcs(text: string): ParsedIcs | null {
   const startProp = (kind === 'task' && props.DUE) || props.DTSTART;
   const start = startProp && parseIcsDate(startProp.value, startProp.params);
   if (!start) return null;
-  let end =
+  const parsedEnd =
     kind === 'event' && props.DTEND
       ? parseIcsDate(props.DTEND.value, props.DTEND.params)
       : null;
   // RFC 5545 requires DTEND's value type to match DTSTART's; mixed bounds
   // are ambiguous, so keep the start alone rather than guess the span.
-  if (end && end.allDay !== start.allDay) end = null;
+  // `parsedEnd` itself is kept: its unresolved-zone flag still applies.
+  const typed =
+    parsedEnd && parsedEnd.allDay === start.allDay ? parsedEnd : null;
   // An all-day DTEND is exclusive; store the inclusive last day.
-  if (end?.allDay) end.date.setDate(end.date.getDate() - 1);
+  if (typed?.allDay) typed.date.setDate(typed.date.getDate() - 1);
+  // An end that doesn't follow the start is dropped.
+  const end = typed && typed.date > start.date ? typed : null;
+  const completed = props.COMPLETED
+    ? parseIcsDate(props.COMPLETED.value, props.COMPLETED.params)
+    : null;
   const field = (name: string) =>
     props[name]
       ? unescapeText(props[name].value).trim() || undefined
@@ -422,11 +434,15 @@ export function parseIcs(text: string): ParsedIcs | null {
     location: field('LOCATION'),
     kind,
     start: start.date,
-    end: end && end.date > start.date ? end.date : undefined,
+    end: end?.date,
     allDay: start.allDay,
     completed: kind === 'task' && status === 'COMPLETED',
-    completedAt: props.COMPLETED
-      ? parseIcsDate(props.COMPLETED.value, props.COMPLETED.params)?.date
-      : undefined,
+    completedAt: completed?.date,
+    // From the parsed end, not the kept one: a dropped end still had a
+    // zone we couldn't place, and the user should know.
+    unresolvedZone:
+      start.unresolvedZone ??
+      parsedEnd?.unresolvedZone ??
+      completed?.unresolvedZone,
   };
 }

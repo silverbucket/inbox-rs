@@ -754,6 +754,21 @@ describe('buildDocumentItem', () => {
     expect(buildIcs(result!.item)?.text).toContain('URL:https://x.example/e');
   });
 
+  it('notes an unrecognised time zone in the description', async () => {
+    const ics =
+      'BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:Sync\nDTSTART;TZID=Narnia Standard Time:20261110T090000\nDESCRIPTION:Agenda\nEND:VEVENT\nEND:VCALENDAR';
+    const result = await buildDocumentItem(ctx({ id: 'cal-5' }), {
+      title: '',
+      description: '',
+      file: new File([ics], 'invite.ics', { type: 'text/calendar' }),
+    });
+    expect(result?.item).toMatchObject({
+      startsAt: new Date(2026, 10, 10, 9).toISOString(),
+      description:
+        "Agenda\n\nTime zone 'Narnia Standard Time' not recognised; shown in local time",
+    });
+  });
+
   it('imports a cancelled event as cancelled, title untouched', async () => {
     const ics =
       'BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:Standup\nDTSTART:20261110T090000Z\nSTATUS:CANCELLED\nEND:VEVENT\nEND:VCALENDAR';

@@ -303,14 +303,117 @@ describe('parseIcsDate', () => {
     ).toBe('2026-11-01T06:30:00.000Z');
   });
 
-  it('falls back to floating local time for an unknown TZID', () => {
+  it('maps a Windows zone name without VTIMEZONE to IANA', () => {
     expect(
-      parseIcsDate('20261109T180000', { TZID: 'Central Standard Time' }),
-    ).toEqual({ date: new Date(2026, 10, 9, 18, 0, 0), allDay: false });
+      parseIcsDate('20261109T180000', {
+        TZID: 'W. Europe Standard Time',
+      })?.date.toISOString(),
+    ).toBe('2026-11-09T17:00:00.000Z');
+  });
+
+  it('falls back to floating local time for an unknown TZID, flagged', () => {
+    expect(
+      parseIcsDate('20261109T180000', { TZID: 'Narnia Standard Time' }),
+    ).toEqual({
+      date: new Date(2026, 10, 9, 18, 0, 0),
+      allDay: false,
+      unresolvedZone: 'Narnia Standard Time',
+    });
   });
 });
 
+// Trimmed Outlook invite: Windows zone name, quoted, with its VTIMEZONE.
+const outlookIcs = (start: string, end: string) =>
+  [
+    'BEGIN:VCALENDAR',
+    'PRODID:-//Microsoft Corporation//Outlook 16.0 MIMEDIR//EN',
+    'BEGIN:VTIMEZONE',
+    'TZID:Eastern Standard Time',
+    'BEGIN:STANDARD',
+    'DTSTART:16011104T020000',
+    'RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=11',
+    'TZOFFSETFROM:-0400',
+    'TZOFFSETTO:-0500',
+    'END:STANDARD',
+    'BEGIN:DAYLIGHT',
+    'DTSTART:16010311T020000',
+    'RRULE:FREQ=YEARLY;BYDAY=2SU;BYMONTH=3',
+    'TZOFFSETFROM:-0500',
+    'TZOFFSETTO:-0400',
+    'END:DAYLIGHT',
+    'END:VTIMEZONE',
+    'BEGIN:VEVENT',
+    'SUMMARY:Quarterly review',
+    `DTSTART;TZID="Eastern Standard Time":${start}`,
+    `DTEND;TZID="Eastern Standard Time":${end}`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+
 describe('parseIcs', () => {
+  it('places an Outlook Windows-zone invite in Eastern time across DST', () => {
+    const winter = parseIcs(outlookIcs('20261109T180000', '20261109T190000'));
+    expect(winter?.start.toISOString()).toBe('2026-11-09T23:00:00.000Z');
+    expect(winter?.end?.toISOString()).toBe('2026-11-10T00:00:00.000Z');
+    expect(winter?.unresolvedZone).toBeUndefined();
+    const summer = parseIcs(outlookIcs('20260709T180000', '20260709T190000'));
+    expect(summer?.start.toISOString()).toBe('2026-07-09T22:00:00.000Z');
+  });
+
+  it('flags an unknown zone that appears only on DTEND', () => {
+    // Next-day end so the local-time guess follows the start in any zone.
+    const ics = outlookIcs('20261109T180000', '20261110T190000').replace(
+      'DTEND;TZID="Eastern Standard Time"',
+      'DTEND;TZID="Narnia Standard Time"',
+    );
+    expect(parseIcs(ics)?.unresolvedZone).toBe('Narnia Standard Time');
+  });
+
+  it('keeps the unknown-zone flag when that end is dropped for preceding the start', () => {
+    const ics = outlookIcs('20261109T180000', '20261108T190000').replace(
+      'DTEND;TZID="Eastern Standard Time"',
+      'DTEND;TZID="Narnia Standard Time"',
+    );
+    const parsed = parseIcs(ics);
+    expect(parsed?.end).toBeUndefined();
+    expect(parsed?.unresolvedZone).toBe('Narnia Standard Time');
+  });
+
+  it('keeps the unknown-zone flag when the end is dropped for a type mismatch', () => {
+    // All-day start, timed end in an unknown zone: the end is discarded
+    // (mixed bounds) but its zone guess still deserves the warning.
+    const parsed = parseIcs(
+      [
+        'BEGIN:VCALENDAR',
+        'BEGIN:VEVENT',
+        'SUMMARY:Offsite',
+        'DTSTART;VALUE=DATE:20261109',
+        'DTEND;TZID="Narnia Standard Time":20261110T190000',
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\r\n'),
+    );
+    expect(parsed?.end).toBeUndefined();
+    expect(parsed?.unresolvedZone).toBe('Narnia Standard Time');
+  });
+
+  it('flags an unknown zone on a VTODO COMPLETED stamp', () => {
+    const parsed = parseIcs(
+      [
+        'BEGIN:VCALENDAR',
+        'BEGIN:VTODO',
+        'SUMMARY:Pay rent',
+        'DUE:20261109T180000Z',
+        'STATUS:COMPLETED',
+        'COMPLETED;TZID="Narnia Standard Time":20261108T100000',
+        'END:VTODO',
+        'END:VCALENDAR',
+      ].join('\r\n'),
+    );
+    expect(parsed?.completed).toBe(true);
+    expect(parsed?.unresolvedZone).toBe('Narnia Standard Time');
+  });
+
   it('reads a real-world zoned VEVENT, skipping VTIMEZONE and VALARM', () => {
     const parsed = parseIcs(MEETUP_ICS);
     expect(parsed).toMatchObject({
