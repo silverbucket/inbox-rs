@@ -318,8 +318,8 @@ test.describe('search', () => {
     const capture = connectedPage.getByPlaceholder(
       'Paste a link, jot a note, or drop a file…',
     );
-    // On an empty bar the todo shortcut opens the editor (typed text is
-    // added directly instead — see capture-todo-shortcut.spec.ts).
+    // On an empty bar the todo shortcut opens an empty editor (typed text
+    // goes into it instead — see capture-todo-shortcut.spec.ts).
     await capture.fill('');
     await connectedPage.keyboard.press('ControlOrMeta+Shift+Enter');
     await expect(

@@ -11,7 +11,7 @@
     onfilecapture,
     onextrafiles,
     onrecord,
-    onaddtodo,
+    onopentodo,
     focusOnMount = false,
     value = $bindable(''),
   }: {
@@ -26,10 +26,10 @@
         captured; the parent surfaces "ignored the rest". */
     onextrafiles?: (ignored: number) => void;
     onrecord: () => void;
-    /** ⌘/Ctrl-Shift-Enter on typed text: add it straight to Todos. Without
-        it (or on an empty bar) the key bubbles to the global Add-todo
-        shortcut, which opens an empty todo editor. */
-    onaddtodo?: (title: string) => void;
+    /** ⌘/Ctrl-Shift-Enter on typed text: open the todo editor with it, as
+        ⌘↵ does for the card editor. Without it (or on an empty bar) the key
+        bubbles to the global Add-todo shortcut, which opens an empty one. */
+    onopentodo?: (title: string) => void;
     /** Focus the input on mount (the inbox does; the collection view doesn't,
         to avoid stealing focus when a collection is expanded). */
     focusOnMount?: boolean;
@@ -75,11 +75,11 @@
     }
     if (e.metaKey || e.ctrlKey) {
       if (e.shiftKey && !e.altKey) {
-        // Typed text becomes a todo here; otherwise leave the event
+        // Typed text goes into the todo editor; otherwise leave the event
         // untouched so it bubbles to the global Add-todo shortcut.
-        if (!onaddtodo || !value.trim()) return;
+        if (!onopentodo || !value.trim()) return;
         e.preventDefault();
-        onaddtodo(value.trim());
+        onopentodo(value.trim());
         value = '';
         return;
       }
@@ -225,9 +225,9 @@
       <span>↵ {enterHint}</span>
       <span class="sep">·</span>
       <span>{mod}↵ Open editor</span>
-      {#if onaddtodo}
+      {#if onopentodo}
         <span class="sep">·</span>
-        <span>{mod}⇧↵ Add as todo</span>
+        <span>{mod}⇧↵ Open as todo</span>
       {/if}
     {/if}
   </div>

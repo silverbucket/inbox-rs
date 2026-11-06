@@ -28,7 +28,7 @@ describe('CaptureBar', () => {
     host.remove();
   });
 
-  function render(extra: { onaddtodo?: (title: string) => void } = {}) {
+  function render(extra: { onopentodo?: (title: string) => void } = {}) {
     component = mount(CaptureBar, {
       target: host,
       props: {
@@ -104,9 +104,9 @@ describe('CaptureBar', () => {
     expect(onopeneditor).not.toHaveBeenCalled();
   });
 
-  it('adds typed text as a todo on modified Shift-Enter when onaddtodo is given', () => {
-    const onaddtodo = vi.fn();
-    render({ onaddtodo });
+  it('opens the todo editor with typed text on modified Shift-Enter when onopentodo is given', () => {
+    const onopentodo = vi.fn();
+    render({ onopentodo });
     const input = host.querySelector('.text-input') as HTMLInputElement;
     type('  buy milk  ');
     const e = new KeyboardEvent('keydown', {
@@ -118,38 +118,38 @@ describe('CaptureBar', () => {
     });
     input.dispatchEvent(e);
     flushSync();
-    expect(onaddtodo).toHaveBeenCalledWith('buy milk');
-    // Claimed, so the global handler doesn't also open an empty todo editor.
+    expect(onopentodo).toHaveBeenCalledWith('buy milk');
+    // Claimed, so the global handler doesn't open a second, empty todo editor.
     expect(e.defaultPrevented).toBe(true);
     expect(input.value).toBe('');
     expect(oncapture).not.toHaveBeenCalled();
   });
 
   it('leaves modified Shift-Enter on an empty bar for the global shortcut', () => {
-    const onaddtodo = vi.fn();
-    render({ onaddtodo });
+    const onopentodo = vi.fn();
+    render({ onopentodo });
     typeAndKey('   ', { metaKey: true, shiftKey: true });
-    expect(onaddtodo).not.toHaveBeenCalled();
+    expect(onopentodo).not.toHaveBeenCalled();
   });
 
-  it('hints the Add-as-todo shortcut only while focused with text', () => {
-    render({ onaddtodo: vi.fn() });
+  it('hints the Open-as-todo shortcut only while focused with text', () => {
+    render({ onopentodo: vi.fn() });
     const input = host.querySelector('.text-input') as HTMLInputElement;
     const hint = () => host.querySelector('.hint')?.textContent ?? '';
     input.dispatchEvent(new FocusEvent('focus'));
     flushSync();
-    expect(hint()).not.toContain('Add as todo');
+    expect(hint()).not.toContain('Open as todo');
     type('buy milk');
-    expect(hint()).toMatch(/(⌘|Ctrl)⇧↵ Add as todo/);
+    expect(hint()).toMatch(/(⌘|Ctrl)⇧↵ Open as todo/);
   });
 
-  it('omits the Add-as-todo hint without onaddtodo', () => {
+  it('omits the Open-as-todo hint without onopentodo', () => {
     render();
     const input = host.querySelector('.text-input') as HTMLInputElement;
     input.dispatchEvent(new FocusEvent('focus'));
     type('buy milk');
     expect(host.querySelector('.hint')?.textContent).not.toContain(
-      'Add as todo',
+      'Open as todo',
     );
   });
 
