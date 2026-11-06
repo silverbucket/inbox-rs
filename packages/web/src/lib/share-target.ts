@@ -45,9 +45,31 @@ export async function stashShare(
   return query ? `/capture/?${query}` : '/capture/';
 }
 
+async function fileFrom(response: Response): Promise<File> {
+  const blob = await response.blob();
+  const name = decodeURIComponent(response.headers.get(NAME_HEADER) ?? '');
+  const type = response.headers.get('content-type') ?? blob.type;
+  return new File([blob], name || 'shared-file', { type });
+}
+
+/** The stashed files, oldest first, left in place. */
+export async function listSharedFiles(cache: ShareCache): Promise<File[]> {
+  const files: File[] = [];
+  for (const request of await cache.keys()) {
+    const response = await cache.match(request);
+    if (response) files.push(await fileFrom(response));
+  }
+  return files;
+}
+
+/** Drop every stashed file. */
+export async function discardSharedFiles(cache: ShareCache): Promise<void> {
+  for (const request of await cache.keys()) await cache.delete(request);
+}
+
 /**
  * Hand every stashed file to `handle`, oldest first, deleting each only once
- * it has been handled, so a failure leaves it for the next shell start.
+ * it has been handled, so a failure leaves it (and the rest) for a retry.
  */
 export async function consumeSharedFiles(
   cache: ShareCache,
@@ -58,12 +80,7 @@ export async function consumeSharedFiles(
     for (const request of await cache.keys()) {
       const response = await cache.match(request);
       if (response) {
-        const blob = await response.blob();
-        const name = decodeURIComponent(
-          response.headers.get(NAME_HEADER) ?? '',
-        );
-        const type = response.headers.get('content-type') ?? blob.type;
-        await handle(new File([blob], name || 'shared-file', { type }));
+        await handle(await fileFrom(response));
         count++;
       }
       await cache.delete(request);

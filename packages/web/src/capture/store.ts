@@ -355,12 +355,13 @@ export async function flushQueue(
         ? await getBlobBytes(thumbKey(entry.id))
         : undefined;
       await rs.store(entry.item, fileData, thumbData);
+      if (entry.hasBlob) await deleteBlob(entry.id);
+      if (entry.hasThumb) await deleteBlob(thumbKey(entry.id));
+      // Patched after the last await, right before saveHistory.
       records = patch(getHistory(), entry.id, {
         status: 'synced',
         lastError: undefined,
       });
-      if (entry.hasBlob) await deleteBlob(entry.id);
-      if (entry.hasThumb) await deleteBlob(thumbKey(entry.id));
     } catch (error) {
       records = patch(getHistory(), entry.id, {
         status: 'failed',

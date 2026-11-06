@@ -20,7 +20,12 @@
     startConnect,
   } from './store';
   import { bookmarkUrlFromText } from '../lib/capture-detect';
-  import { consumeSharedFiles, SHARE_CACHE } from '../lib/share-target';
+  import {
+    consumeSharedFiles,
+    discardSharedFiles,
+    listSharedFiles,
+    SHARE_CACHE,
+  } from '../lib/share-target';
   import {
     type Accent,
     ACCENT_LABELS,
@@ -56,7 +61,9 @@
   let syncAgain = false;
   // Files a POST share stashed. The worker can't tell an OS share from a
   // cross-origin form post (Sec-Fetch-* never reaches it), so these wait
-  // for a tap, like shared text does — nothing is saved on a stranger's say-so.
+  // for a tap, like shared text does — nothing is saved on a stranger's
+  // say-so. They stay in the cache until saved or discarded, so a reload or
+  // a failed save keeps them.
   let sharedFiles = $state<File[]>([]);
 
   let connectedAddress = $state('');
@@ -188,16 +195,15 @@
     };
   });
 
+  async function shareCache(): Promise<Cache | null> {
+    if (!('caches' in window) || !(await caches.has(SHARE_CACHE))) return null;
+    return caches.open(SHARE_CACHE);
+  }
+
   async function receiveSharedFiles(): Promise<boolean> {
     try {
-      if (!('caches' in window) || !(await caches.has(SHARE_CACHE))) {
-        return true;
-      }
-      const files: File[] = [];
-      await consumeSharedFiles(await caches.open(SHARE_CACHE), async (file) => {
-        files.push(file);
-      });
-      sharedFiles = [...sharedFiles, ...files];
+      const cache = await shareCache();
+      sharedFiles = cache ? await listSharedFiles(cache) : [];
       return true;
     } catch (error) {
       console.error('Could not read the shared file', error);
@@ -206,15 +212,23 @@
   }
 
   async function saveSharedFiles() {
-    const files = sharedFiles;
-    sharedFiles = [];
     try {
-      for (const file of files) await captureSharedFile(file);
+      const cache = await shareCache();
+      if (cache) await consumeSharedFiles(cache, captureSharedFile);
       afterFilesCaptured();
       await syncNow();
     } catch (error) {
       reportFileError(error);
     }
+    // Whatever is still stashed (nothing, or the failed file and those
+    // after it) is what the banner should offer.
+    await receiveSharedFiles();
+  }
+
+  async function discardShared() {
+    const cache = await shareCache();
+    if (cache) await discardSharedFiles(cache);
+    sharedFiles = [];
   }
 
   function afterFilesCaptured() {
@@ -480,7 +494,7 @@
           : `${sharedFiles.length} shared files`}
       </span>
       <button class="ghost small" type="button" onclick={saveSharedFiles}>Save to inbox</button>
-      <button class="ghost small" type="button" onclick={() => (sharedFiles = [])}>Discard</button>
+      <button class="ghost small" type="button" onclick={discardShared}>Discard</button>
     </div>
   {/if}
 

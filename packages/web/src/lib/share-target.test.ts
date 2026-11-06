@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { consumeSharedFiles, stashShare } from './share-target';
+import {
+  consumeSharedFiles,
+  discardSharedFiles,
+  listSharedFiles,
+  stashShare,
+} from './share-target';
 
 /** In-memory stand-in for a Cache API cache (insertion-ordered, like the real one). */
 function fakeCache() {
@@ -110,6 +115,20 @@ describe('consumeSharedFiles', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it('lists stashed files without taking them, and discards them all', async () => {
+    const cache = fakeCache();
+    await stashShare(
+      form({ files: new File(['x'], 'a.ics', { type: 'text/calendar' }) }),
+      cache,
+    );
+    expect((await listSharedFiles(cache)).map((f) => f.name)).toEqual([
+      'a.ics',
+    ]);
+    expect(cache.entries.size).toBe(1);
+    await discardSharedFiles(cache);
+    expect(cache.entries.size).toBe(0);
   });
 
   it('keeps a file whose handling failed for the next start', async () => {
