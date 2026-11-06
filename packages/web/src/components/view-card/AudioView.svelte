@@ -151,6 +151,8 @@
           edited = true;
           return null;
         }
+        // Same recording, same words: a repeat tap must not stack copies.
+        if (current.body?.includes(text)) return null;
         // The body may be a note the user typed rather than an old
         // transcript, and we can't tell which. Never replace it: append the
         // new transcript below, so nothing the user wrote is lost.

@@ -253,6 +253,25 @@ describe('AudioView transcribe', () => {
     );
   });
 
+  it('does not stack another copy when the transcript is already in the body', async () => {
+    transcribeAudio.mockResolvedValueOnce('model words');
+    const existing = {
+      ...audio(),
+      body: 'my note\n\nmodel words',
+      transcribed: true,
+    };
+    liveItems.set('a1', existing);
+    component = mount(AudioView, {
+      target: host,
+      props: { item: existing, titleId: 't' },
+    });
+    flushSync();
+    (host.querySelector('button.btn-link') as HTMLButtonElement).click();
+    await settle();
+
+    expect(storeItem).not.toHaveBeenCalled();
+  });
+
   it('shows nothing offline for an item that already has a transcript', () => {
     browserOnline.set(false);
     component = mount(AudioView, {
