@@ -15,6 +15,7 @@ import { pinItemsFirst } from './collection-todos';
 import { todayStart } from './now';
 import { consumeFreshAuthorization } from './oauth-state';
 import { applyPlan, clearPlan, moveItemToDay, type Plan } from './plan';
+import { createRestoring, hasStoredSession } from './restoring';
 import rs, { fetchFileBlobUrl } from './rs';
 import {
   clearSchedule,
@@ -71,6 +72,14 @@ function clearBlobLoadFailed(filePath: string) {
 }
 
 export const connected = writable(false);
+const startup = createRestoring({ sessionPending: hasStoredSession() });
+/**
+ * True on page load until local data has loaded and any stored session has
+ * resolved (or ~3s pass). Empty states that depend on `connected` wait for
+ * it so a returning user doesn't flash first-run.
+ */
+export const restoring = startup.restoring;
+rs.on('not-connected', startup.sessionSettled);
 export const syncing = writable(false);
 // Keep the account and local data intact while authorization needs renewal.
 export const authorizationRequired = writable(false);
@@ -425,7 +434,9 @@ function runLoaders(): Promise<void> {
     loadUserSettings(),
     loadCollections(),
     loadGroups(),
-  ]).then(() => undefined);
+  ])
+    .then(() => undefined)
+    .finally(startup.localLoaded);
 }
 
 async function loadCachedData() {
@@ -533,6 +544,7 @@ rs.on('sync-done', () => {
 });
 
 rs.on('error', (e: unknown) => {
+  startup.sessionSettled();
   console.warn('[inbox] rs:error', e);
   if (
     typeof e === 'object' &&
@@ -552,6 +564,7 @@ rs.on('error', (e: unknown) => {
 });
 
 rs.on('connected', async () => {
+  startup.sessionSettled();
   storageReachable.set(true);
   authorizationRequired.set(false);
   connected.set(true);
@@ -571,6 +584,7 @@ rs.on('connected', async () => {
 });
 
 rs.on('disconnected', () => {
+  startup.sessionSettled();
   stopSyncIndicator();
   storageReachable.set(true);
   authorizationRequired.set(false);
