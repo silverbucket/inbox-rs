@@ -186,7 +186,11 @@
         bind:value={newGroupName}
         placeholder="e.g. Personal"
         aria-label="New group name"
+        aria-describedby="collection-new-group-hint"
       />
+      <p class="field-hint" id="collection-new-group-hint">
+        Groups hold related collections, like Work or Home. Collections hold your cards.
+      </p>
       {#if hasGroups}
         <button type="button" class="group-switch" onclick={() => (wantsNewGroup = false)}>
           Choose an existing group
@@ -271,6 +275,12 @@
     display: block;
     font-weight: 600;
     font-size: 0.9rem;
+  }
+
+  .field-hint {
+    margin: 0.3rem 0 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
   }
 
   .check-hint {

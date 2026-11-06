@@ -82,6 +82,10 @@ for (const layout of ['sidebar', 'classic'] as const) {
     const empty = page.locator('.page-empty');
     await expect(empty).toBeVisible();
     await expect(empty).not.toContainText('filter bar');
+    // First-time users learn what a group is vs a collection (#310).
+    await expect(empty).toContainText(
+      'groups hold related collections, like Work or Home',
+    );
 
     await page.getByRole('button', { name: 'New collection' }).first().click();
     const dialog = page.getByRole('dialog');
@@ -92,6 +96,9 @@ for (const layout of ['sidebar', 'classic'] as const) {
     await expect(create).toBeDisabled();
     await expect(
       dialog.getByText('Name the new group to create'),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText('Groups hold related collections, like Work or Home.'),
     ).toBeVisible();
 
     await dialog.getByLabel('New group name').fill('Reading');
