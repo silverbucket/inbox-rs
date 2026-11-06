@@ -126,6 +126,9 @@
           {:else}
             <button type="button" class="btn-delete" onclick={() => confirmingDelete = true}>Delete</button>
             <div class="actions-spacer"></div>
+            {#if submitHint && !canSubmit}
+              <span class="submit-hint" role="status">{submitHint}</span>
+            {/if}
             <button type="button" class="btn-cancel" onclick={onclose}>Cancel</button>
             <button type="submit" class="btn-save" disabled={submitDisabled}>Save</button>
           {/if}

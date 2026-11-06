@@ -63,7 +63,12 @@ describe('CollectionFormModal', () => {
 
     finishGroup();
     await vi.waitFor(() => expect(onsave).toHaveBeenCalledTimes(1));
-    expect(onsave.mock.calls[0][0]).toMatchObject({ name: 'Reading list' });
+    const saved = onsave.mock.calls[0][0];
+    expect(saved).toMatchObject({ name: 'Reading list' });
+    // The new group was written already listing the collection it was made for.
+    const [group] = storeGroup.mock.calls[0];
+    expect(group.collectionIds).toEqual([saved.id]);
+    expect(saved.groupId).toBe(group.id);
   });
 
   it('stays open until the collection is stored, and shows a failure to retry', async () => {

@@ -143,6 +143,18 @@ describe('OAuth callback state validation', () => {
     expect(consumeFreshAuthorization()).toBe(false);
   });
 
+  it('does not flag a denied authorization as fresh', () => {
+    consumeFreshAuthorization();
+    const state = beginOAuthAuthorization('');
+    window.history.replaceState(
+      null,
+      '',
+      `/#error=access_denied&access_token=&state=${state}`,
+    );
+    guardOAuthCallback();
+    expect(consumeFreshAuthorization()).toBe(false);
+  });
+
   it('does not flag forged callbacks or ordinary loads as fresh', () => {
     consumeFreshAuthorization();
     beginOAuthAuthorization('');
