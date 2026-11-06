@@ -25,6 +25,7 @@
     discardSharedFiles,
     listSharedFiles,
     SHARE_CACHE,
+    type SharedEntry,
   } from '../lib/share-target';
   import {
     type Accent,
@@ -64,7 +65,7 @@
   // for a tap, like shared text does — nothing is saved on a stranger's
   // say-so. They stay in the cache until saved or discarded, so a reload or
   // a failed save keeps them.
-  let sharedFiles = $state<File[]>([]);
+  let sharedFiles = $state<SharedEntry[]>([]);
 
   let connectedAddress = $state('');
   let userAddress = $state('');
@@ -211,24 +212,28 @@
     }
   }
 
+  // Both act only on what the banner showed; a file stashed since waits
+  // for its own confirmation.
   async function saveSharedFiles() {
+    const keys = sharedFiles.map((e) => e.key);
     try {
       const cache = await shareCache();
-      if (cache) await consumeSharedFiles(cache, captureSharedFile);
+      if (cache) await consumeSharedFiles(cache, captureSharedFile, keys);
       afterFilesCaptured();
       await syncNow();
     } catch (error) {
       reportFileError(error);
     }
-    // Whatever is still stashed (nothing, or the failed file and those
-    // after it) is what the banner should offer.
+    // Whatever is still stashed (nothing, the failed file and those after
+    // it, or new arrivals) is what the banner should offer.
     await receiveSharedFiles();
   }
 
   async function discardShared() {
+    const keys = sharedFiles.map((e) => e.key);
     const cache = await shareCache();
-    if (cache) await discardSharedFiles(cache);
-    sharedFiles = [];
+    if (cache) await discardSharedFiles(cache, keys);
+    await receiveSharedFiles();
   }
 
   function afterFilesCaptured() {
@@ -490,7 +495,7 @@
     <div class="share-banner" role="status">
       <span>
         {sharedFiles.length === 1
-          ? sharedFiles[0].name
+          ? sharedFiles[0].file.name
           : `${sharedFiles.length} shared files`}
       </span>
       <button class="ghost small" type="button" onclick={saveSharedFiles}>Save to inbox</button>

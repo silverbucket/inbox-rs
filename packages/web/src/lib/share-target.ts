@@ -52,32 +52,50 @@ async function fileFrom(response: Response): Promise<File> {
   return new File([blob], name || 'shared-file', { type });
 }
 
-/** The stashed files, oldest first, left in place. */
-export async function listSharedFiles(cache: ShareCache): Promise<File[]> {
-  const files: File[] = [];
-  for (const request of await cache.keys()) {
-    const response = await cache.match(request);
-    if (response) files.push(await fileFrom(response));
-  }
-  return files;
+/** A stashed file with the cache key that identifies it. */
+export interface SharedEntry {
+  key: string;
+  file: File;
 }
 
-/** Drop every stashed file. */
-export async function discardSharedFiles(cache: ShareCache): Promise<void> {
-  for (const request of await cache.keys()) await cache.delete(request);
+/** The stashed files, oldest first, left in place. */
+export async function listSharedFiles(
+  cache: ShareCache,
+): Promise<SharedEntry[]> {
+  const entries: SharedEntry[] = [];
+  for (const request of await cache.keys()) {
+    const response = await cache.match(request);
+    if (response)
+      entries.push({ key: request.url, file: await fileFrom(response) });
+  }
+  return entries;
+}
+
+/** Drop the given stashed files (every one when `keys` is omitted). */
+export async function discardSharedFiles(
+  cache: ShareCache,
+  keys?: string[],
+): Promise<void> {
+  for (const request of await cache.keys()) {
+    if (!keys || keys.includes(request.url)) await cache.delete(request);
+  }
 }
 
 /**
- * Hand every stashed file to `handle`, oldest first, deleting each only once
- * it has been handled, so a failure leaves it (and the rest) for a retry.
+ * Hand the stashed files (those in `keys`, or all) to `handle`, oldest
+ * first, deleting each only once it has been handled, so a failure leaves
+ * it (and the rest) for a retry. Keys scope the action to what the user
+ * saw: a file stashed meanwhile waits for its own confirmation.
  */
 export async function consumeSharedFiles(
   cache: ShareCache,
   handle: (file: File) => Promise<unknown>,
+  keys?: string[],
 ): Promise<number> {
   const run = async () => {
     let count = 0;
     for (const request of await cache.keys()) {
+      if (keys && !keys.includes(request.url)) continue;
       const response = await cache.match(request);
       if (response) {
         await handle(await fileFrom(response));

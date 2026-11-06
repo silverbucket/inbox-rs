@@ -6,6 +6,9 @@ import {
   stashShare,
 } from './share-target';
 
+const keyOf = (key: RequestInfo | URL) =>
+  typeof key === 'string' ? key : (key as Request).url;
+
 /** In-memory stand-in for a Cache API cache (insertion-ordered, like the real one). */
 function fakeCache() {
   const entries = new Map<string, Response>();
@@ -13,9 +16,10 @@ function fakeCache() {
     entries,
     put: async (key: RequestInfo | URL, response: Response) =>
       void entries.set(String(key), response),
-    keys: async () => [...entries.keys()].map((k) => k as unknown as Request),
-    match: async (key: RequestInfo | URL) => entries.get(String(key)),
-    delete: async (key: RequestInfo | URL) => entries.delete(String(key)),
+    // Like the real one: keys come back as Requests, matches are fresh bodies.
+    keys: async () => [...entries.keys()].map((k) => ({ url: k }) as Request),
+    match: async (key: RequestInfo | URL) => entries.get(keyOf(key))?.clone(),
+    delete: async (key: RequestInfo | URL) => entries.delete(keyOf(key)),
   } as unknown as Cache & { entries: Map<string, Response> };
 }
 
@@ -123,12 +127,39 @@ describe('consumeSharedFiles', () => {
       form({ files: new File(['x'], 'a.ics', { type: 'text/calendar' }) }),
       cache,
     );
-    expect((await listSharedFiles(cache)).map((f) => f.name)).toEqual([
+    expect((await listSharedFiles(cache)).map((e) => e.file.name)).toEqual([
       'a.ics',
     ]);
     expect(cache.entries.size).toBe(1);
     await discardSharedFiles(cache);
     expect(cache.entries.size).toBe(0);
+  });
+
+  it('scopes save and discard to the listed keys, leaving later arrivals', async () => {
+    const cache = fakeCache();
+    await stashShare(
+      form({ files: new File(['x'], 'seen.ics', { type: 'text/calendar' }) }),
+      cache,
+    );
+    const seen = (await listSharedFiles(cache)).map((e) => e.key);
+    await stashShare(
+      form({ files: new File(['y'], 'later.ics', { type: 'text/calendar' }) }),
+      cache,
+    );
+    const handled: string[] = [];
+    await consumeSharedFiles(
+      cache,
+      async (f) => {
+        handled.push(f.name);
+      },
+      seen,
+    );
+    expect(handled).toEqual(['seen.ics']);
+    expect((await listSharedFiles(cache)).map((e) => e.file.name)).toEqual([
+      'later.ics',
+    ]);
+    await discardSharedFiles(cache, seen);
+    expect(cache.entries.size).toBe(1);
   });
 
   it('keeps a file whose handling failed for the next start', async () => {
