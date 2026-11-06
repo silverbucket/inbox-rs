@@ -1366,6 +1366,9 @@ export async function restoreItem(change: TriageChange): Promise<boolean> {
     if (was[key] === undefined) delete restored[key];
     else restored[key] = was[key];
   }
+  // The old collection was deleted meanwhile: land in the inbox, not nowhere.
+  const target = restored.collectionId as string | undefined;
+  if (target && !get(collections)[target]) delete restored.collectionId;
   await storeItem(restored as unknown as InboxItem);
   await moveMembership(
     before.id,

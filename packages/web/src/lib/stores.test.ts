@@ -754,6 +754,17 @@ describe('triageToTodo / restoreItem', () => {
     await expect(restoreItem(change)).resolves.toBe(false);
     expect(get(items).n1).toBeUndefined();
   });
+  it('undo sends the card to the inbox when its old collection is gone', async () => {
+    const before = { ...card(), collectionId: 'gone' } as InboxItem;
+    const after = { ...card(), collectionId: 'here' } as InboxItem;
+    collections.set({
+      here: { id: 'here', name: 'Here', itemIds: ['n1'], createdAt: '' },
+    } as never);
+    items.set({ n1: after });
+    await expect(restoreItem({ before, after })).resolves.toBe(true);
+    expect(get(items).n1).not.toHaveProperty('collectionId');
+    expect(get(collections).here.itemIds).toEqual([]);
+  });
 });
 
 describe('favoriteCollectionIds', () => {
