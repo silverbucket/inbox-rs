@@ -127,6 +127,12 @@ describe('isOverdue / isPast', () => {
     expect(
       isOverdue(note({ startsAt: past, scheduleKind: 'event' }), WED_1423),
     ).toBe(false);
+    expect(
+      isOverdue(
+        note({ startsAt: past, scheduleKind: 'task', cancelled: true }),
+        WED_1423,
+      ),
+    ).toBe(false);
   });
 
   it('all-day tasks are due end-of-day, not midnight', () => {
@@ -178,7 +184,7 @@ describe('isDueTodayOrOverdue / compareByDueTime', () => {
     );
   });
 
-  it('excludes completed, archived, and unscheduled items', () => {
+  it('excludes completed, archived, cancelled, and unscheduled items', () => {
     const due = new Date(2026, 6, 29, 9, 0).toISOString();
     expect(
       isDueTodayOrOverdue(
@@ -188,6 +194,12 @@ describe('isDueTodayOrOverdue / compareByDueTime', () => {
     ).toBe(false);
     expect(
       isDueTodayOrOverdue(note({ startsAt: due, archived: true }), TODAY_START),
+    ).toBe(false);
+    expect(
+      isDueTodayOrOverdue(
+        note({ startsAt: due, cancelled: true }),
+        TODAY_START,
+      ),
     ).toBe(false);
     expect(isDueTodayOrOverdue(note(), TODAY_START)).toBe(false);
   });
@@ -207,7 +219,11 @@ describe('isDueTodayOrOverdue / compareByDueTime', () => {
 describe('clearSchedule', () => {
   it('clearSchedule strips every scheduling field including the event ref', () => {
     const scheduled = applySchedule(
-      note({ eventUrl: 'https://cal/x.ics', eventEtag: '"1"' }),
+      note({
+        eventUrl: 'https://cal/x.ics',
+        eventEtag: '"1"',
+        cancelled: true,
+      }),
       { kind: 'event', start: new Date(), durationMin: 60 },
     );
     const cleared = clearSchedule(scheduled);
@@ -216,6 +232,7 @@ describe('clearSchedule', () => {
       'endsAt',
       'allDay',
       'scheduleKind',
+      'cancelled',
       'eventUrl',
       'eventEtag',
     ] as const) {

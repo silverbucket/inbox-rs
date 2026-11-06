@@ -147,6 +147,8 @@
     delete updated.archived;
     delete updated.archivedAt;
     delete updated.archiveReason;
+    // A todo made from a cancelled event is a live task again.
+    delete updated.cancelled;
     if (updated.startsAt) updated.scheduleKind = newKind;
   }
 
@@ -687,6 +689,9 @@
           </svg>
           {scheduledLabel}
         </span>
+        {#if item.cancelled}
+          <span class="meta-item overdue">Cancelled</span>
+        {/if}
       {/if}
       {#if plannedLabel}
         <span class="meta-item">Planned: {plannedLabel}</span>

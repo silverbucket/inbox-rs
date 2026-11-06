@@ -218,6 +218,8 @@ export function itemToCalendarObject(
     }
     return base;
   }
+  // `cancelled` isn't sent: platform-caldav takes no event status yet
+  // (sockethub/sockethub#1364).
   base.startTime = when;
   if (!allDay && item.endsAt) base.endTime = item.endsAt;
   if (allDay && item.endsAt) {

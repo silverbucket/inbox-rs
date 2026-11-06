@@ -233,6 +233,25 @@ describe('edit preservation of type-agnostic fields', () => {
     });
   });
 
+  it('an edit keeps an imported event cancelled', () => {
+    const editItem: NoteItem = {
+      id: 'item-1',
+      type: 'note',
+      title: 'Standup',
+      body: '',
+      createdAt: '2026-04-01T00:00:00Z',
+      startsAt: '2026-11-09T18:00:00.000Z',
+      scheduleKind: 'event',
+      cancelled: true,
+    };
+    const result = buildNoteItem(ctx({ editItem }), {
+      title: 'Standup (moved)',
+      body: '',
+      description: '',
+    });
+    expect(result.item).toMatchObject({ cancelled: true });
+  });
+
   it('unscheduled edits stay unscheduled', () => {
     const editItem: NoteItem = {
       id: 'item-1',
@@ -736,6 +755,17 @@ describe('buildDocumentItem', () => {
       description:
         "Agenda\n\nTime zone 'Narnia Standard Time' not recognised; shown in local time",
     });
+  });
+
+  it('imports a cancelled event as cancelled, title untouched', async () => {
+    const ics =
+      'BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:Standup\nDTSTART:20261110T090000Z\nSTATUS:CANCELLED\nEND:VEVENT\nEND:VCALENDAR';
+    const result = await buildDocumentItem(ctx({ id: 'cal-5' }), {
+      title: '',
+      description: '',
+      file: new File([ics], 'invite.ics', { type: 'text/calendar' }),
+    });
+    expect(result?.item).toMatchObject({ title: 'Standup', cancelled: true });
   });
 
   it('imports a completed VTODO as a done task', async () => {

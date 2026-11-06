@@ -87,6 +87,19 @@ describe('applySchedule all-day end', () => {
   });
 });
 
+describe('applySchedule cancelled', () => {
+  const start = new Date(2026, 10, 9, 18, 0);
+  it('clears cancelled when an event becomes a task, keeps it for events', () => {
+    const cancelled = note({ cancelled: true, scheduleKind: 'event' });
+    expect(
+      applySchedule(cancelled, { kind: 'task', start }).cancelled,
+    ).toBeUndefined();
+    expect(applySchedule(cancelled, { kind: 'event', start }).cancelled).toBe(
+      true,
+    );
+  });
+});
+
 describe('applySchedule location', () => {
   const base = {
     id: 'n1',

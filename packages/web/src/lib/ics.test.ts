@@ -133,6 +133,16 @@ describe('buildIcs', () => {
     expect(ics.text).not.toContain('VEVENT');
   });
 
+  it('round-trips a cancelled event as STATUS:CANCELLED with a clean title', () => {
+    const ics = buildIcs(note({ cancelled: true }), NOW)!;
+    expect(ics.text).toContain('STATUS:CANCELLED');
+    expect(parseIcs(ics.text)).toMatchObject({
+      title: 'Test note',
+      cancelled: true,
+    });
+    expect(buildIcs(note(), NOW)!.text).not.toContain('STATUS');
+  });
+
   it('writes LOCATION, escaped', () => {
     const ics = buildIcs(note({ location: 'HQ, 3rd floor' }), NOW);
     expect(ics?.text).toContain('LOCATION:HQ\\, 3rd floor');
@@ -369,6 +379,24 @@ describe('parseIcs', () => {
     expect(parsed?.unresolvedZone).toBe('Narnia Standard Time');
   });
 
+  it('keeps the unknown-zone flag when the end is dropped for a type mismatch', () => {
+    // All-day start, timed end in an unknown zone: the end is discarded
+    // (mixed bounds) but its zone guess still deserves the warning.
+    const parsed = parseIcs(
+      [
+        'BEGIN:VCALENDAR',
+        'BEGIN:VEVENT',
+        'SUMMARY:Offsite',
+        'DTSTART;VALUE=DATE:20261109',
+        'DTEND;TZID="Narnia Standard Time":20261110T190000',
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\r\n'),
+    );
+    expect(parsed?.end).toBeUndefined();
+    expect(parsed?.unresolvedZone).toBe('Narnia Standard Time');
+  });
+
   it('reads a real-world zoned VEVENT, skipping VTIMEZONE and VALARM', () => {
     const parsed = parseIcs(MEETUP_ICS);
     expect(parsed).toMatchObject({
@@ -423,7 +451,8 @@ describe('parseIcs', () => {
       ].join('\n'),
     );
     expect(parsed).toEqual({
-      title: 'Cancelled: Office closed',
+      title: 'Office closed',
+      cancelled: true,
       body: '',
       description: undefined,
       location: 'HQ, 3rd floor',

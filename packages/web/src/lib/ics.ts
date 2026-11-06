@@ -140,6 +140,7 @@ export function buildIcs(
     lines.push(`DTSTART:${toUtcStamp(item.startsAt)}`);
     if (item.endsAt) lines.push(`DTEND:${toUtcStamp(item.endsAt)}`);
   }
+  if (!isTask && item.cancelled) lines.push('STATUS:CANCELLED');
 
   if (item.description) {
     lines.push(`DESCRIPTION:${escapeText(item.description)}`);
@@ -198,6 +199,8 @@ export interface ParsedIcs {
   /** Timed events: the end instant. All-day events: the inclusive last day. */
   end?: Date;
   allDay: boolean;
+  /** VEVENT with STATUS:CANCELLED. */
+  cancelled?: boolean;
   /** VTODO with STATUS:COMPLETED. */
   completed: boolean;
   /** The COMPLETED instant, when the entry records one. */
@@ -400,17 +403,19 @@ export function parseIcs(text: string): ParsedIcs | null {
   const startProp = (kind === 'task' && props.DUE) || props.DTSTART;
   const start = startProp && parseIcsDate(startProp.value, startProp.params);
   if (!start) return null;
-  let parsedEnd =
+  const parsedEnd =
     kind === 'event' && props.DTEND
       ? parseIcsDate(props.DTEND.value, props.DTEND.params)
       : null;
   // RFC 5545 requires DTEND's value type to match DTSTART's; mixed bounds
   // are ambiguous, so keep the start alone rather than guess the span.
-  if (parsedEnd && parsedEnd.allDay !== start.allDay) parsedEnd = null;
+  // `parsedEnd` itself is kept: its unresolved-zone flag still applies.
+  const typed =
+    parsedEnd && parsedEnd.allDay === start.allDay ? parsedEnd : null;
   // An all-day DTEND is exclusive; store the inclusive last day.
-  if (parsedEnd?.allDay) parsedEnd.date.setDate(parsedEnd.date.getDate() - 1);
+  if (typed?.allDay) typed.date.setDate(typed.date.getDate() - 1);
   // An end that doesn't follow the start is dropped.
-  const end = parsedEnd && parsedEnd.date > start.date ? parsedEnd : null;
+  const end = typed && typed.date > start.date ? typed : null;
   const field = (name: string) =>
     props[name]
       ? unescapeText(props[name].value).trim() || undefined
@@ -419,7 +424,8 @@ export function parseIcs(text: string): ParsedIcs | null {
   const status = props.STATUS?.value.trim().toUpperCase();
   const untitled = kind === 'task' ? 'Untitled task' : 'Untitled event';
   return {
-    title: `${status === 'CANCELLED' ? 'Cancelled: ' : ''}${summary ?? untitled}`,
+    title: summary ?? untitled,
+    cancelled: (kind === 'event' && status === 'CANCELLED') || undefined,
     body: props.URL?.value.trim() ?? '',
     description: field('DESCRIPTION'),
     location: field('LOCATION'),
