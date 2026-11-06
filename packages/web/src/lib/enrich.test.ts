@@ -22,7 +22,10 @@ vi.mock('./link-metadata', async (importOriginal) => ({
 vi.mock('./stores', () => ({
   updateItem: async (id: string, update: (c: unknown) => unknown) => {
     const next = update(itemsMap[id]);
-    if (next) await storeItem(next);
+    if (next) {
+      await storeItem(next);
+      itemsMap[id] = next;
+    }
     return next;
   },
   storeItem,
@@ -432,6 +435,10 @@ describe('enrichAllBookmarks', () => {
     });
     expect(fetchLinkMetadata).toHaveBeenCalledOnce();
     expect(fetchLinkMetadata.mock.calls[0][0]).toBe(url);
+    // The fetched metadata lands on the converted bookmark, not the note.
+    expect(storeItem).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 'n1', type: 'bookmark', title: 'Fetched' }),
+    );
   });
 
   it('does not convert a link note that changed or vanished while queued', async () => {

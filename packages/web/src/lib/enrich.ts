@@ -24,7 +24,7 @@ import {
   fetchLinkMetadata,
   type LinkMetadata,
 } from './link-metadata';
-import { items, storeItem, updateItem, userSettings } from './stores';
+import { items, updateItem, userSettings } from './stores';
 import { showToast } from './toast';
 
 export const LOCAL_LINK_PREVIEWS_KEY = 'inbox-rs:link-previews';

@@ -3146,8 +3146,11 @@ describe('removeItemFromCollection', () => {
 
     expect(get(items).t1.collectionId).toBeUndefined();
     expect(get(collections).c1.itemIds).toEqual([]);
+    // Through storeItem now, so the shared write's (item, file, thumb) shape.
     expect(mockInbox.store).toHaveBeenCalledWith(
       expect.objectContaining({ id: 't1' }),
+      undefined,
+      undefined,
     );
     expect(mockInbox.storeCollection).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'c1', itemIds: [] }),
@@ -3625,7 +3628,11 @@ describe('storeItem write ordering', () => {
     resolveFirst();
     await queued;
     await removal;
-    expect(mockInbox.remove).toHaveBeenCalledWith('gone', todo);
+    // Removes what is stored now (the queued 'B'), not the caller's snapshot.
+    expect(mockInbox.remove).toHaveBeenCalledWith(
+      'gone',
+      expect.objectContaining({ title: 'B' }),
+    );
     expect(get(items).gone).toBeUndefined();
   });
 

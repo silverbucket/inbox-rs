@@ -1126,7 +1126,7 @@ export function loadFileBlobUrl(filePath: string, mimeType?: string): void {
 const itemQueues = new Map<string, Promise<unknown>>();
 
 /** Run `op` once every earlier op for `id` has settled. */
-function runForItem<T>(id: string, op: () => Promise<T>): Promise<T> {
+export function runForItem<T>(id: string, op: () => Promise<T>): Promise<T> {
   // Start at once when nothing is queued: a pagehide flush must begin its
   // write before the page unloads, so it can't wait a microtask. `prev` is
   // already error-swallowed, so one failed op rejects only its own caller.
@@ -1450,8 +1450,11 @@ export function deleteItem(id: string, item?: InboxItem): Promise<void> {
   return runForItem(id, () => removeItem(id, item));
 }
 
-async function removeItem(id: string, item?: InboxItem) {
+async function removeItem(id: string, snapshot?: InboxItem) {
   const inbox = requireInbox();
+  // Saves queued ahead of us may have moved the binaries; remove what is
+  // stored now, not what the caller saw.
+  const item = get(items)[id] ?? snapshot;
   await inbox.remove(id, item);
 
   // Revoke and remove any associated blob URLs (original + thumbnail) to
@@ -1632,8 +1635,9 @@ export async function moveItemToCollection(
     // 412 and the conflict resolves remote-wins, silently dropping the
     // filing (the todo reappears as Unfiled).
     if (!isSameCollection) {
-      const filed = cleanForStorage(item);
-      await runForItem(itemId, () => inbox.store(filed));
+      // Through the queue *and* the store updater: a save landing just
+      // before ours would otherwise put its unfiled snapshot back in `items`.
+      await storeItem(item);
     }
 
     // Update source collection's itemIds
