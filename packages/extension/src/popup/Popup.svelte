@@ -106,7 +106,7 @@
       });
       if (result.ok) {
         saved = true;
-        setTimeout(() => window.close(), 800);
+        setTimeout(() => window.close(), 2000);
       } else {
         saveError = result.error;
       }
@@ -123,7 +123,7 @@
       const result = await runSaveNote({ rs, noteTitle, noteBody });
       if (result.ok) {
         saved = true;
-        setTimeout(() => window.close(), 800);
+        setTimeout(() => window.close(), 2000);
       } else {
         saveError = result.error;
       }
@@ -137,7 +137,7 @@
   <header>
     <h1>Inbox <span class="accent">RS</span></h1>
     {#if connected}
-      <button type="button" class="btn-text" onclick={openSetup} title="Settings">
+      <button type="button" class="btn-text" onclick={openSetup} title="Settings" aria-label="Settings">
         <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
     {/if}
@@ -146,11 +146,12 @@
   {#if !connected}
     <div class="not-connected">
       <p>Connect your remoteStorage to get started.</p>
-      <button type="button" class="btn-primary" onclick={openSetup}>Set Up</button>
+      <button type="button" class="btn-primary" onclick={openSetup}>Connect storage</button>
     </div>
   {:else if saved}
     <div class="saved">
       <span class="check">&#10003;</span> Saved to inbox
+      <a class="open-inbox" href="https://inbox.5apps.com" target="_blank" rel="noopener">Open inbox</a>
     </div>
   {:else}
     <div class="tabs">
@@ -362,6 +363,13 @@
     color: var(--success);
     font-size: 1.1rem;
     font-weight: 500;
+  }
+
+  .open-inbox {
+    display: block;
+    margin-top: 0.75rem;
+    font-size: 0.9rem;
+    color: var(--accent-text);
   }
 
   .error {
