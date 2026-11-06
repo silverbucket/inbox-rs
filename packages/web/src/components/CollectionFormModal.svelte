@@ -86,8 +86,10 @@
   async function handleSubmit() {
     if (!name.trim() || !canSubmit) return;
     let destinationGroupId = selectedGroupId;
+    // Stays set until onsave so Cancel can't close the form mid-write and
+    // leave the remaining writes creating a collection anyway.
+    saving = true;
     if (creatingNewGroup) {
-      saving = true;
       saveError = '';
       const group: CollectionGroup = {
         id: crypto.randomUUID(),
@@ -109,7 +111,6 @@
       selectedGroupId = group.id;
       wantsNewGroup = false;
       newGroupName = '';
-      saving = false;
     }
     // Persist the picked group as the next default before the parent's
     // onsave runs. Best-effort: if the write fails the user's creation
@@ -138,7 +139,13 @@
       delete saved.offPlan;
       delete saved.planColumnId;
     }
+    saving = false;
     onsave(saved);
+  }
+
+  /** Ignored while a submit is still writing (see handleSubmit). */
+  function close() {
+    if (!saving) onclose();
   }
 </script>
 
@@ -152,7 +159,7 @@
   namePlaceholder="e.g. Reading List"
   descriptionPlaceholder="What's this collection for?"
   maxWidth="440px"
-  {onclose}
+  onclose={close}
   onsubmit={handleSubmit}
   {ondelete}
   {onarchive}
