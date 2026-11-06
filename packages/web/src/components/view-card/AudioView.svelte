@@ -145,6 +145,7 @@
       // so transcription can never resurrect a removed card. Edits made
       // meanwhile are kept; only the transcript fields change.
       let edited = false;
+      let unchanged = false;
       await updateItem(item.id, (current) => {
         if (!current || current.type !== 'audio') return null;
         if (current.body !== bodyAtStart) {
@@ -152,7 +153,10 @@
           return null;
         }
         // Same recording, same words: a repeat tap must not stack copies.
-        if (current.body?.includes(text)) return null;
+        if (current.body?.includes(text)) {
+          unchanged = true;
+          return null;
+        }
         // The body may be a note the user typed rather than an old
         // transcript, and we can't tell which. Never replace it: append the
         // new transcript below, so nothing the user wrote is lost.
@@ -170,6 +174,8 @@
       if (edited) {
         transcriptionError =
           'The note was edited while transcribing, so the transcript was not applied.';
+      } else if (unchanged) {
+        transcriptionError = 'Transcript unchanged.';
       }
       void refreshTranscriptionModelStatus();
     } catch (e) {

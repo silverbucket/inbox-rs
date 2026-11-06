@@ -270,6 +270,7 @@ describe('AudioView transcribe', () => {
     await settle();
 
     expect(storeItem).not.toHaveBeenCalled();
+    expect(host.textContent).toContain('Transcript unchanged');
   });
 
   it('shows nothing offline for an item that already has a transcript', () => {
