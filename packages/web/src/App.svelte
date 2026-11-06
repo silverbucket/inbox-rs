@@ -17,6 +17,7 @@
     appConfig, setActiveGroupFilters,
   } from './lib/stores';
   import { initAlerts, setAlertOpenHandler } from './lib/alerts';
+  import { scheduleAutoTranscriptionDownload } from './lib/transcription-store';
   import { captureDetected, captureFile } from './lib/capture';
   import { settingsRequest } from './lib/settings-request';
   import { loadLazy } from './lib/lazy-load';
@@ -225,6 +226,11 @@
     // page or filter is active. Idempotent across remounts.
     setAlertOpenHandler(openView);
     initAlerts();
+
+    // Fetch the offline transcription model in the background once the app
+    // is idle, so the first voice note transcribes without a visible
+    // download. Never delays startup; see transcription-store.ts.
+    scheduleAutoTranscriptionDownload();
 
     return () => {
       window.removeEventListener('hashchange', syncRoute);

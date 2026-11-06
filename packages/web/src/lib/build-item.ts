@@ -244,8 +244,9 @@ export async function buildAudioItem(
     }
     const memoBody = data.body || data.transcript || undefined;
     const autoTitle = data.title || data.transcript || 'Audio';
-    const transcribed =
-      !!(data.recordedBlob || data.transcript || data.body) || undefined;
+    // Only text counts. A recording whose transcription failed or was
+    // skipped (offline) must keep offering Transcribe in the item view.
+    const transcribed = !!(data.transcript || data.body) || undefined;
     const item: AudioItem = {
       id: ctx.id,
       type: 'audio',
