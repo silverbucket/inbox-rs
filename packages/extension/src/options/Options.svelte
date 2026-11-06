@@ -7,6 +7,7 @@
   let connecting = $state(false);
   let error = $state('');
   let savedAddress = $state('');
+  let confirmingDisconnect = $state(false);
 
   $effect(() => {
     init();
@@ -39,6 +40,7 @@
 
   async function disconnect() {
     await clearConfig();
+    confirmingDisconnect = false;
     connected = false;
     savedAddress = '';
   }
@@ -63,7 +65,16 @@
         You're all set. Click the extension icon in your toolbar to save links and notes.
         You can also right-click on any link or selected text to send it to your inbox.
       </p>
-      <button type="button" class="btn-disconnect" onclick={disconnect}>Disconnect</button>
+      <a class="btn-primary btn-open" href="https://inbox.5apps.com" target="_blank" rel="noopener">Open inbox</a>
+      {#if confirmingDisconnect}
+        <div class="confirm-disconnect" role="group" aria-label="Confirm disconnect">
+          <p class="help-text">Disconnect {savedAddress}? Saving stops until you connect again. Your saved items stay in your storage.</p>
+          <button type="button" class="btn-disconnect" onclick={disconnect}>Disconnect</button>
+          <button type="button" class="btn-cancel" onclick={() => (confirmingDisconnect = false)}>Cancel</button>
+        </div>
+      {:else}
+        <button type="button" class="btn-disconnect" onclick={() => (confirmingDisconnect = true)}>Disconnect</button>
+      {/if}
     {:else}
       <div class="steps">
         <div class="step">
@@ -71,8 +82,12 @@
           <div>
             <p class="step-title">Get a remoteStorage account</p>
             <p class="step-detail">
-              Sign up with a remoteStorage provider, or run your own server.
-              For local development, visit <a href="http://localhost:8000/signup" target="_blank">localhost:8000/signup</a>.
+              Sign up for free at <a href="https://5apps.com/storage" target="_blank" rel="noopener">5apps</a>,
+              pick another <a href="https://remotestorage.io/get" target="_blank" rel="noopener">remoteStorage provider</a>,
+              or run your own server.
+              {#if import.meta.env.DEV}
+                For local development, visit <a href="http://localhost:8000/signup" target="_blank">localhost:8000/signup</a>.
+              {/if}
             </p>
           </div>
         </div>
@@ -95,7 +110,7 @@
           disabled={connecting}
         />
         <button type="submit" class="btn-primary" disabled={connecting || !userAddress.trim()}>
-          {connecting ? 'Connecting...' : 'Connect & Authorize'}
+          {connecting ? 'Connecting...' : 'Connect storage'}
         </button>
         {#if error}
           <p class="error">{error}</p>
@@ -284,7 +299,25 @@
     margin-bottom: 1.5rem;
   }
 
-  .btn-disconnect {
+  .btn-open {
+    display: block;
+    text-align: center;
+    text-decoration: none;
+    margin-bottom: 0.75rem;
+  }
+
+  .confirm-disconnect {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .confirm-disconnect .help-text {
+    margin-bottom: 0.25rem;
+  }
+
+  .btn-disconnect,
+  .btn-cancel {
     background: transparent;
     color: var(--text-muted);
     border: 1px solid var(--border);
@@ -297,6 +330,11 @@
   }
 
   .btn-disconnect:hover {
+    color: var(--danger);
+    border-color: var(--danger);
+  }
+
+  .confirm-disconnect .btn-disconnect {
     color: var(--danger);
     border-color: var(--danger);
   }

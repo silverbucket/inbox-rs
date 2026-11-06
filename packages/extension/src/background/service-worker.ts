@@ -1,6 +1,6 @@
 import type { BookmarkItem, ImageItem, NoteItem } from '@inbox-rs/rs-module';
-import browser from 'webextension-polyfill';
-import { DirectRS } from '../lib/rs';
+import browser, { type Menus, type Tabs } from 'webextension-polyfill';
+import { DirectRS, type RSConfig } from '../lib/rs';
 import { getConfig } from '../lib/storage';
 
 // Register context menus on install
@@ -96,11 +96,43 @@ async function getPageMetadata(tabId: number) {
   }
 }
 
+/** Flash a ✓ or ! on the toolbar icon so a right-click save never passes silently. */
+let badgeTimer: ReturnType<typeof setTimeout> | undefined;
+async function flashBadge(ok: boolean) {
+  // A newer result restarts the clock, so an older save can't clear it early.
+  clearTimeout(badgeTimer);
+  await browser.action.setBadgeBackgroundColor({
+    color: ok ? '#2e7d32' : '#c62828',
+  });
+  await browser.action.setBadgeText({ text: ok ? '✓' : '!' });
+  badgeTimer = setTimeout(
+    () => void browser.action.setBadgeText({ text: '' }),
+    4000,
+  );
+}
+
 // Handle context menu clicks
 browser.contextMenus.onClicked.addListener(async (info, tab) => {
   const config = await getConfig();
-  if (!config?.token || !config?.href) return;
+  if (!config?.token || !config?.href) {
+    // Not connected yet: send the user to setup instead of dropping the save.
+    await browser.runtime.openOptionsPage();
+    return;
+  }
+  try {
+    await flashBadge(await saveFromContextMenu(config, info, tab));
+  } catch (error) {
+    console.error('Context menu save failed', error);
+    await flashBadge(false);
+  }
+});
 
+/** Store what was right-clicked; false when there was nothing to store. */
+async function saveFromContextMenu(
+  config: RSConfig,
+  info: Menus.OnClickData,
+  tab: Tabs.Tab | undefined,
+): Promise<boolean> {
   const rs = new DirectRS(config);
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
@@ -133,6 +165,8 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
         item.description = `Source page: ${info.pageUrl}`;
       }
       await rs.store(item, imageData.data);
+    } else {
+      return false;
     }
   } else if (info.menuItemId === 'save-selection' && info.selectionText) {
     // Get page metadata for context
@@ -154,8 +188,11 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
       ...(pageUrl ? { description: `Source: ${pageUrl}` } : {}),
     };
     await rs.store(item);
+  } else {
+    return false;
   }
-});
+  return true;
+}
 
 // Listen for messages from popup
 browser.runtime.onMessage.addListener(async (msg, _sender) => {

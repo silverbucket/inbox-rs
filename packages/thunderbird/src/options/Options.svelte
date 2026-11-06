@@ -12,6 +12,7 @@
   let connecting = $state(false);
   let error = $state('');
   let savedAddress = $state('');
+  let confirmingDisconnect = $state(false);
   /** Saved config exists but its storage permission was revoked outside the extension (e.g. via about:addons). */
   let permissionMissing = $state(false);
 
@@ -63,6 +64,7 @@
 
   async function disconnect() {
     await clearConfig();
+    confirmingDisconnect = false;
     connected = false;
     permissionMissing = false;
     savedAddress = '';
@@ -87,7 +89,16 @@
       <p class="help-text">
         You're all set. Click the Inbox RS button in the message toolbar to save emails to your inbox.
       </p>
-      <button type="button" class="btn-disconnect" onclick={disconnect}>Disconnect</button>
+      <a class="btn-primary btn-open" href="https://inbox.5apps.com" target="_blank" rel="noopener">Open inbox</a>
+      {#if confirmingDisconnect}
+        <div class="confirm-disconnect" role="group" aria-label="Confirm disconnect">
+          <p class="help-text">Disconnect {savedAddress}? Saving stops until you connect again. Your saved items stay in your storage.</p>
+          <button type="button" class="btn-disconnect" onclick={disconnect}>Disconnect</button>
+          <button type="button" class="btn-cancel" onclick={() => (confirmingDisconnect = false)}>Cancel</button>
+        </div>
+      {:else}
+        <button type="button" class="btn-disconnect" onclick={() => (confirmingDisconnect = true)}>Disconnect</button>
+      {/if}
     {:else}
       {#if permissionMissing}
         <p class="help-text">
@@ -100,8 +111,12 @@
           <div>
             <p class="step-title">Get a remoteStorage account</p>
             <p class="step-detail">
-              Sign up with a remoteStorage provider, or run your own server.
-              For local development, visit <a href="http://localhost:8000/signup" target="_blank">localhost:8000/signup</a>.
+              Sign up for free at <a href="https://5apps.com/storage" target="_blank" rel="noopener">5apps</a>,
+              pick another <a href="https://remotestorage.io/get" target="_blank" rel="noopener">remoteStorage provider</a>,
+              or run your own server.
+              {#if import.meta.env.DEV}
+                For local development, visit <a href="http://localhost:8000/signup" target="_blank">localhost:8000/signup</a>.
+              {/if}
             </p>
           </div>
         </div>
@@ -124,7 +139,7 @@
           disabled={connecting}
         />
         <button type="submit" class="btn-primary" disabled={connecting || !userAddress.trim()}>
-          {connecting ? 'Connecting...' : 'Connect & Authorize'}
+          {connecting ? 'Connecting...' : 'Connect storage'}
         </button>
         {#if error}
           <p class="error">{error}</p>
@@ -313,7 +328,25 @@
     margin-bottom: 1.5rem;
   }
 
-  .btn-disconnect {
+  .btn-open {
+    display: block;
+    text-align: center;
+    text-decoration: none;
+    margin-bottom: 0.75rem;
+  }
+
+  .confirm-disconnect {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .confirm-disconnect .help-text {
+    margin-bottom: 0.25rem;
+  }
+
+  .btn-disconnect,
+  .btn-cancel {
     background: transparent;
     color: var(--text-muted);
     border: 1px solid var(--border);
@@ -326,6 +359,11 @@
   }
 
   .btn-disconnect:hover {
+    color: var(--danger);
+    border-color: var(--danger);
+  }
+
+  .confirm-disconnect .btn-disconnect {
     color: var(--danger);
     border-color: var(--danger);
   }

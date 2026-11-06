@@ -9,6 +9,8 @@ const {
   mockTabsSendMessage,
   mockStorageGet,
   mockFetch,
+  mockSetBadgeText,
+  mockOpenOptionsPage,
 } = vi.hoisted(() => {
   type Listener = (...args: unknown[]) => unknown;
   const onInstalledListeners: Listener[] = [];
@@ -22,12 +24,19 @@ const {
     mockTabsSendMessage: vi.fn(),
     mockStorageGet: vi.fn(),
     mockFetch: vi.fn(),
+    mockSetBadgeText: vi.fn(),
+    mockOpenOptionsPage: vi.fn(),
   };
 });
 
 vi.mock('webextension-polyfill', () => ({
   default: {
+    action: {
+      setBadgeText: mockSetBadgeText,
+      setBadgeBackgroundColor: vi.fn(),
+    },
     runtime: {
+      openOptionsPage: mockOpenOptionsPage,
       onInstalled: {
         addListener: (fn: Listener) => onInstalledListeners.push(fn),
       },
@@ -138,7 +147,7 @@ describe('service-worker', () => {
       });
     });
 
-    it('does nothing when image download fails', async () => {
+    it('stores nothing and flags the failure when image download fails', async () => {
       mockFetch.mockResolvedValueOnce({ ok: false });
 
       const handler = onClickedListeners[0];
@@ -148,6 +157,7 @@ describe('service-worker', () => {
       );
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockSetBadgeText).toHaveBeenCalledWith({ text: '!' });
     });
   });
 
@@ -201,6 +211,60 @@ describe('service-worker', () => {
         body: 'Selected paragraph of text',
         description: 'Source: https://example.com',
       });
+    });
+  });
+
+  describe('context menu: feedback', () => {
+    it('flashes a check on the toolbar icon after a save', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true });
+      await onClickedListeners[0](
+        { menuItemId: 'save-link', linkUrl: 'https://example.com' },
+        { id: 1 },
+      );
+      expect(mockSetBadgeText).toHaveBeenCalledWith({ text: '✓' });
+    });
+
+    it('flags the failure when storage rejects the save', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
+      await onClickedListeners[0](
+        { menuItemId: 'save-link', linkUrl: 'https://example.com' },
+        { id: 1 },
+      );
+      expect(mockSetBadgeText).toHaveBeenCalledWith({ text: '!' });
+    });
+
+    it('keeps a later result up for its full time', async () => {
+      vi.useFakeTimers();
+      try {
+        mockFetch.mockResolvedValue({ ok: true });
+        const click = {
+          menuItemId: 'save-link',
+          linkUrl: 'https://example.com',
+        };
+        await onClickedListeners[0](click, { id: 1 });
+        await vi.advanceTimersByTimeAsync(3000);
+        mockFetch.mockResolvedValue({ ok: false, status: 500 });
+        await onClickedListeners[0](click, { id: 1 });
+        mockSetBadgeText.mockClear();
+        // The first save's timer would have fired here and wiped the '!'.
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(mockSetBadgeText).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(mockSetBadgeText).toHaveBeenCalledWith({ text: '' });
+      } finally {
+        mockFetch.mockReset();
+        vi.useRealTimers();
+      }
+    });
+
+    it('opens setup instead of saving when not connected', async () => {
+      mockStorageGet.mockResolvedValue({});
+      await onClickedListeners[0](
+        { menuItemId: 'save-link', linkUrl: 'https://example.com' },
+        { id: 1 },
+      );
+      expect(mockOpenOptionsPage).toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
     });
   });
 
