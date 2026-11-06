@@ -79,6 +79,10 @@
           : 'Choose a group for this collection.',
   );
 
+  // Fixed up front so a new group can be written already listing it: adding it
+  // in a second write right after the first 412s and drops the link.
+  const collectionId = collection?.id ?? crypto.randomUUID();
+
   async function handleSubmit() {
     if (!name.trim() || !canSubmit) return;
     let destinationGroupId = selectedGroupId;
@@ -88,7 +92,7 @@
       const group: CollectionGroup = {
         id: crypto.randomUUID(),
         name: newGroupName.trim(),
-        collectionIds: [],
+        collectionIds: [collectionId],
         createdAt: new Date().toISOString(),
         color: randomPresetColor(),
       };
@@ -121,7 +125,7 @@
     // (board set, plan column, archive state) survive an edit.
     const saved: Collection = {
       ...(collection ?? {}),
-      id: collection?.id ?? crypto.randomUUID(),
+      id: collectionId,
       name: name.trim(),
       description: description.trim() || undefined,
       itemIds: collection?.itemIds ?? [],

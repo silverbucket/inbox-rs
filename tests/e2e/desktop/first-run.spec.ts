@@ -9,7 +9,11 @@
  */
 
 import { expect, test } from '../helpers/fixtures';
-import { seedRsSession } from '../helpers/pwa';
+import {
+  assertNoConsoleErrors,
+  attachConsoleCapture,
+  seedRsSession,
+} from '../helpers/pwa';
 
 test('disconnected empty inbox shows a first-run connect state', async ({
   page,
@@ -65,6 +69,7 @@ for (const layout of ['sidebar', 'classic'] as const) {
       (l) => localStorage.setItem('inbox-rs:layout', l),
       layout,
     );
+    const log = attachConsoleCapture(page);
     await page.goto(`${webOrigin}/#/collections`);
     await page.waitForLoadState('networkidle');
     await expect(
@@ -97,5 +102,14 @@ for (const layout of ['sidebar', 'classic'] as const) {
     await expect(
       main.getByText('Reading', { exact: true }).first(),
     ).toBeVisible();
+
+    // The group and collection each land in one write: a second PUT right
+    // after the first 412s and the collection drops out of its group.
+    await page.waitForLoadState('networkidle');
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    await expect(main.getByText('Reading list').first()).toBeVisible();
+    await expect(page.locator('.page-empty')).toHaveCount(0);
+    assertNoConsoleErrors(log);
   });
 }

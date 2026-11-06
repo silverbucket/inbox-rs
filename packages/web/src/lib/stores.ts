@@ -1674,11 +1674,14 @@ export async function moveItemToCollection(
       }
     }
 
-    // Update target collection's itemIds
+    // Update target collection's itemIds. A collection created with the
+    // item already listed needs no second write (it would 412, see above).
     if (collectionId) {
+      let added = false;
       collections.update((current) => {
         const col = current[collectionId];
         if (col && !col.itemIds.includes(itemId)) {
+          added = true;
           return {
             ...current,
             [collectionId]: { ...col, itemIds: [...col.itemIds, itemId] },
@@ -1687,7 +1690,7 @@ export async function moveItemToCollection(
         return current;
       });
       const targetCol = get(collections)[collectionId];
-      if (targetCol) {
+      if (targetCol && added) {
         await inbox.storeCollection(cleanForStorage(targetCol));
       }
     }
@@ -1930,10 +1933,13 @@ export async function moveCollectionToGroup(
       }
     }
 
-    // Add to new group
+    // Add to new group. A group created with the collection already listed
+    // needs no second write (it would 412, see above).
+    let added = false;
     groups.update((current) => {
       const grp = current[groupId];
       if (grp && !grp.collectionIds.includes(collectionId)) {
+        added = true;
         return {
           ...current,
           [groupId]: {
@@ -1945,7 +1951,7 @@ export async function moveCollectionToGroup(
       return current;
     });
     const newGrp = get(groups)[groupId];
-    if (newGrp) {
+    if (newGrp && added) {
       await inbox.storeGroup(cleanForStorage(newGrp));
     }
   } catch (e) {
