@@ -140,6 +140,9 @@ describe('AccountSettings Sockethub status', () => {
     await settleProbe();
     expect(statusPill()?.textContent).toBe('Unavailable');
     expect(statusPill()?.classList.contains('ok')).toBe(false);
+    expect(host.querySelector('.server-problem')?.textContent).toContain(
+      "Can't reach the default service",
+    );
   });
 
   it('shows Unavailable for a blank custom endpoint without probing', async () => {
@@ -155,6 +158,9 @@ describe('AccountSettings Sockethub status', () => {
     await settleProbe();
     expect(fetchSockethubInfo).not.toHaveBeenCalled();
     expect(statusPill()?.textContent).toBe('Unavailable');
+    expect(host.querySelector('.server-problem')?.textContent).toContain(
+      'or use the default',
+    );
   });
 
   it('re-probes when the custom endpoint changes', async () => {
@@ -188,6 +194,26 @@ describe('AccountSettings Sockethub status', () => {
       'https://relay.example/sockethub-http',
     );
     expect(statusPill()?.textContent).toBe('API v6');
+  });
+
+  it('says to check the address when a custom endpoint is unreachable', async () => {
+    render();
+    await settleProbe();
+    Array.from(host.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('My own server'))
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    flushSync();
+    const input = host.querySelector('#sockethub-endpoint') as HTMLInputElement;
+    input.value = 'https://relay.example/sockethub-http';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+
+    fetchSockethubInfo.mockRejectedValue(new Error('network down'));
+    await settleProbe();
+    expect(statusPill()?.textContent).toBe('Unavailable');
+    expect(host.querySelector('.server-problem')?.textContent).toContain(
+      "Can't reach the service — check the address",
+    );
   });
 
   it('shows reconnect required state while keeping the connected account visible', () => {

@@ -18,11 +18,11 @@ test('default route renders inbox empty state', async ({ page, webOrigin }) => {
     page.getByRole('button', { name: 'Inbox', exact: true }),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Collections' })).toBeVisible();
-  // The disconnected empty state lives in InboxGrid: the heading is "Inbox
-  // zero" with a "Connect to your remoteStorage" CTA below. The CTA only
-  // renders when not connected, so it's the unambiguous disconnected marker.
+  // The disconnected empty state lives in InboxGrid: a first-run
+  // explanation with a "Connect storage" CTA. The CTA only renders when
+  // not connected, so it's the unambiguous disconnected marker.
   await expect(
-    page.getByRole('button', { name: 'Connect to your remoteStorage' }),
+    page.getByRole('main').getByRole('button', { name: 'Connect storage' }),
   ).toBeVisible();
   assertNoConsoleErrors(log);
 });
@@ -84,9 +84,9 @@ test('nav buttons swap routes when connected', async ({
   // Wait for the connected UI to be present — the nav exists in both
   // states but the disconnected CTA is gone only after RS attaches.
   await expect(
-    connectedPage.getByRole('button', {
-      name: 'Connect to your remoteStorage',
-    }),
+    connectedPage
+      .getByRole('main')
+      .getByRole('button', { name: 'Connect storage' }),
   ).toHaveCount(0);
 
   // Each (label, hash-suffix) pair: hash-suffix is what `parseHash`

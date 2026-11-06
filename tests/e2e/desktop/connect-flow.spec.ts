@@ -27,10 +27,13 @@ test('full connect round-trip via OAuth', async ({
   await page.getByRole('button', { name: /^Account — Not connected/ }).click();
 
   // Type the RS address and submit. The form's submit button reads
-  // "Connect" until in-flight, then "Connecting…".
+  // "Connect storage" until in-flight, then "Connecting…".
   await page.getByPlaceholder('user@storage.example').fill(rsUser.address);
   // `exact: true` avoids matching descriptive copy in the section.
-  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Settings' })
+    .getByRole('button', { name: 'Connect storage', exact: true })
+    .click();
 
   // remotestoragejs navigates to Armadietto's /oauth/<user> page. Wait
   // for the URL to flip to localhost:8000 so we know the redirect fired.
@@ -50,11 +53,21 @@ test('full connect round-trip via OAuth', async ({
   // aria-label is in place. Use the aria-label as the assertion target since
   // the avatar text is the user's initials and not stable across runs.
   await expect(
-    page.getByRole('button', { name: 'Connect to your remoteStorage' }),
+    page.getByRole('main').getByRole('button', { name: 'Connect storage' }),
   ).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: 'User menu — connected' }),
   ).toBeVisible();
+
+  // A fresh connect is confirmed once; resuming the session on reload isn't.
+  const toast = page.getByText(`Connected as ${rsUser.address}`);
+  await expect(toast).toBeVisible();
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+  await expect(
+    page.getByRole('button', { name: 'User menu — connected' }),
+  ).toBeVisible();
+  await expect(toast).toHaveCount(0);
 });
 
 test('disconnect returns to empty state', async ({
@@ -63,7 +76,7 @@ test('disconnect returns to empty state', async ({
 }) => {
   // Once connected, the Account section shows Disconnect. Clicking it must
   // reset the UI to the disconnected empty state — InboxGrid's
-  // "Connect to your remoteStorage" CTA is the marker.
+  // "Connect storage" CTA is the marker.
   await connectedPage.goto(webOrigin);
   await connectedPage.waitForLoadState('networkidle');
 
@@ -80,8 +93,8 @@ test('disconnect returns to empty state', async ({
   await connectedPage.getByRole('button', { name: 'Disconnect' }).click();
 
   await expect(
-    connectedPage.getByRole('button', {
-      name: 'Connect to your remoteStorage',
-    }),
+    connectedPage
+      .getByRole('main')
+      .getByRole('button', { name: 'Connect storage' }),
   ).toBeVisible();
 });

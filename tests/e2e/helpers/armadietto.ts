@@ -249,25 +249,36 @@ export async function getInboxItems(
   user: RsUser,
   token: string,
 ): Promise<InboxItem[]> {
+  return getInboxFolder<InboxItem>(user, token, 'items');
+}
+
+/** Every object in one inbox folder (`items`, `groups`, `collections`), read from the server. */
+export async function getInboxFolder<T>(
+  user: RsUser,
+  token: string,
+  folder: string,
+): Promise<T[]> {
   const headers = { Authorization: `Bearer ${token}` };
-  const listing = await fetch(
-    `${ARMADIETTO_ORIGIN}/storage/${user.username}/inbox/items/`,
-    { headers, signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS) },
-  );
+  const base = `${ARMADIETTO_ORIGIN}/storage/${user.username}/inbox/${folder}/`;
+  const listing = await fetch(base, {
+    headers,
+    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+  });
   if (listing.status === 404) return [];
   if (!listing.ok) {
-    throw new Error(`GET /inbox/items/ failed: HTTP ${listing.status}`);
+    throw new Error(`GET /inbox/${folder}/ failed: HTTP ${listing.status}`);
   }
-  const folder = (await listing.json()) as { items?: Record<string, unknown> };
-  const ids = Object.keys(folder.items ?? {}).filter((k) => !k.endsWith('/'));
+  const listed = (await listing.json()) as { items?: Record<string, unknown> };
+  const ids = Object.keys(listed.items ?? {}).filter((k) => !k.endsWith('/'));
   return Promise.all(
     ids.map(async (id) => {
-      const r = await fetch(
-        `${ARMADIETTO_ORIGIN}/storage/${user.username}/inbox/items/${id}`,
-        { headers, signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS) },
-      );
-      if (!r.ok) throw new Error(`GET /inbox/items/${id}: HTTP ${r.status}`);
-      return (await r.json()) as InboxItem;
+      const r = await fetch(`${base}${id}`, {
+        headers,
+        signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+      });
+      if (!r.ok)
+        throw new Error(`GET /inbox/${folder}/${id}: HTTP ${r.status}`);
+      return (await r.json()) as T;
     }),
   );
 }

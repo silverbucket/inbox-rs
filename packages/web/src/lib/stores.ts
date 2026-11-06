@@ -13,6 +13,7 @@ import { replayCardDrafts } from './card-draft-recovery';
 import { cleanForStorage } from './clean-for-storage';
 import { pinItemsFirst } from './collection-todos';
 import { todayStart } from './now';
+import { consumeFreshAuthorization } from './oauth-state';
 import { applyPlan, clearPlan, moveItemToDay, type Plan } from './plan';
 import rs, { fetchFileBlobUrl } from './rs';
 import {
@@ -20,6 +21,7 @@ import {
   compareByDueTime,
   isDueTodayOrOverdue,
 } from './schedule';
+import { showToast } from './toast';
 
 function getInbox() {
   return rs.inbox;
@@ -562,6 +564,9 @@ rs.on('connected', async () => {
     remote?.userAddress || localStorage.getItem('inbox-rs:userAddress') || '';
   userAddress.set(addr);
   storageHref.set(remote?.href || '');
+  // Confirm a connect the user just made; a reload that resumes a stored
+  // session stays quiet.
+  if (consumeFreshAuthorization() && addr) showToast(`Connected as ${addr}`);
   await loadConnectedData();
 });
 

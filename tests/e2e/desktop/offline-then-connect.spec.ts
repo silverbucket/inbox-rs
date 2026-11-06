@@ -36,10 +36,10 @@ test('offline → online → connect with a brand-new account', async ({
   await page.waitForLoadState('networkidle');
 
   // Disconnected at first paint, then we yank the network. The
-  // "Connect to your remoteStorage" CTA in InboxGrid is the unambiguous
+  // "Connect storage" CTA in InboxGrid is the unambiguous
   // disconnected-empty-state marker.
   await expect(
-    page.getByRole('button', { name: 'Connect to your remoteStorage' }),
+    page.getByRole('main').getByRole('button', { name: 'Connect storage' }),
   ).toBeVisible();
   // networkidle ignores the worker's precache fetches; go offline too early
   // and the lazy Collections chunk is never cached.
@@ -49,7 +49,7 @@ test('offline → online → connect with a brand-new account', async ({
   // Disconnected UI must keep working with no network — the empty state
   // is fully static and hash routing doesn't hit the wire.
   await expect(
-    page.getByRole('button', { name: 'Connect to your remoteStorage' }),
+    page.getByRole('main').getByRole('button', { name: 'Connect storage' }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Collections' }).first().click();
   await expect(
@@ -66,7 +66,10 @@ test('offline → online → connect with a brand-new account', async ({
   await page.getByRole('button', { name: 'User menu — disconnected' }).click();
   await page.getByRole('button', { name: /^Account — Not connected/ }).click();
   await page.getByPlaceholder('user@storage.example').fill(freshRsUser.address);
-  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Settings' })
+    .getByRole('button', { name: 'Connect storage', exact: true })
+    .click();
 
   await page.waitForURL(/^http:\/\/localhost:8000\/oauth\//, {
     timeout: 10_000,
@@ -82,7 +85,7 @@ test('offline → online → connect with a brand-new account', async ({
     page.getByRole('button', { name: 'User menu — connected' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Connect to your remoteStorage' }),
+    page.getByRole('main').getByRole('button', { name: 'Connect storage' }),
   ).toHaveCount(0);
 });
 
@@ -113,7 +116,7 @@ test('offline → online → connect with an existing account that has data', as
 
   // Disconnected first, then drop the network.
   await expect(
-    page.getByRole('button', { name: 'Connect to your remoteStorage' }),
+    page.getByRole('main').getByRole('button', { name: 'Connect storage' }),
   ).toBeVisible();
   await waitForServiceWorkerController(page);
   await context.setOffline(true);

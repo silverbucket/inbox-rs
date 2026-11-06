@@ -670,7 +670,7 @@
       {:else}
         <form class="connect-form" onsubmit={(e) => { e.preventDefault(); void connect(); }}>
           <input bind:value={userAddress} type="text" placeholder="user@storage.example" aria-label="remoteStorage address" />
-          <button class="ghost" type="submit" disabled={!userAddress.trim()}>Connect</button>
+          <button class="ghost" type="submit" disabled={!userAddress.trim()}>Connect storage</button>
         </form>
       {/if}
     </section>

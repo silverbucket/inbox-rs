@@ -28,7 +28,10 @@ async function beginConnect(page: Page, origin: string, user: RsUser) {
   await page.getByRole('button', { name: 'User menu — disconnected' }).click();
   await page.getByRole('button', { name: /^Account — Not connected/ }).click();
   await page.getByPlaceholder('user@storage.example').fill(user.address);
-  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Settings' })
+    .getByRole('button', { name: 'Connect storage', exact: true })
+    .click();
   await page.waitForURL(/^http:\/\/localhost:8000\/oauth\//);
 }
 
@@ -204,15 +207,23 @@ test('discovery failure lets the user correct the address and connect again', as
   await page.getByRole('button', { name: /^Account — Not connected/ }).click();
   await failDiscovery(page, webOrigin);
   await page.getByPlaceholder('user@storage.example').fill(freshRsUser.address);
-  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Settings' })
+    .getByRole('button', { name: 'Connect storage', exact: true })
+    .click();
   await expect(
-    page.getByRole('button', { name: 'Connect', exact: true }),
+    page
+      .getByRole('dialog', { name: 'Settings' })
+      .getByRole('button', { name: 'Connect storage', exact: true }),
   ).toBeEnabled();
   await expect(
     page.getByRole('alert').filter({ hasText: 'Reconnect your storage' }),
   ).toHaveCount(0);
   await page.unroute(DISCOVERY);
-  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Settings' })
+    .getByRole('button', { name: 'Connect storage', exact: true })
+    .click();
   await page.waitForURL(/^http:\/\/localhost:8000\/oauth\//);
   await allow(page, webOrigin, freshRsUser);
 });
@@ -266,7 +277,7 @@ test('denying reauthorization clears the stale account and reconnect warning', a
     account.getByRole('textbox', { name: 'Storage address' }),
   ).toBeVisible();
   await expect(
-    account.getByRole('button', { name: 'Connect', exact: true }),
+    account.getByRole('button', { name: 'Connect storage', exact: true }),
   ).toBeVisible();
   await page.reload();
   await expect(
@@ -471,7 +482,10 @@ test('a crafted return route cannot send a new token to another storage server',
   await page.getByRole('button', { name: 'User menu — disconnected' }).click();
   await page.getByRole('button', { name: /^Account — Not connected/ }).click();
   await page.getByPlaceholder('user@storage.example').fill(freshRsUser.address);
-  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Settings' })
+    .getByRole('button', { name: 'Connect storage', exact: true })
+    .click();
   await page.waitForURL(/^http:\/\/localhost:8000\/oauth\//);
   await allow(page, webOrigin, freshRsUser);
 

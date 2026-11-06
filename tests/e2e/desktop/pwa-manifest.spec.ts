@@ -139,7 +139,7 @@ test.describe('PWA manifest & install requirements', () => {
     // first-paint smoke check — proves the shell renders under the
     // installed-app media query.
     await expect(
-      page.getByRole('button', { name: 'Connect to your remoteStorage' }),
+      page.getByRole('main').getByRole('button', { name: 'Connect storage' }),
     ).toBeVisible();
   });
 });
