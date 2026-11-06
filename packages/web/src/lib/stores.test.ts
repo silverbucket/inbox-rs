@@ -113,6 +113,7 @@ import {
   setCollectionArchived,
   setGroupArchived,
   setItemArchived,
+  setItemPinned,
   setItemPlan,
   soleVisibleCollectionId,
   soloCollectionFilter,
@@ -3634,6 +3635,24 @@ describe('storeItem write ordering', () => {
       title: 'B',
       collectionId: 'c1',
     });
+  });
+
+  it('a pin queued behind a delete does not resurrect the item', async () => {
+    const todo = makeTodo('pinned', { title: 'A' });
+    items.set({ pinned: todo });
+    let resolveRemove!: () => void;
+    mockInbox.remove.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveRemove = resolve;
+      }),
+    );
+    const removal = deleteItem('pinned', todo);
+    const pin = setItemPinned(todo, true);
+    resolveRemove();
+    await removal;
+    await pin;
+    expect(get(items).pinned).toBeUndefined();
+    expect(mockInbox.store).not.toHaveBeenCalled();
   });
 
   it('deleteItem waits for queued saves so none resurrects the item', async () => {

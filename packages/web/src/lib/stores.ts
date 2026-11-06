@@ -1209,8 +1209,11 @@ export async function setItemPinned(item: InboxItem, pinned: boolean) {
   // Write from the stored item: rows may pass a display copy (e.g. a list's
   // Someday row carries a view-only planKind) that mustn't be saved.
   flushPendingItemChanges();
-  // Read inside the queue: a save still landing must not be overwritten.
-  await updateItem(item.id, (current) => ({ ...(current ?? item), pinned }));
+  // Read inside the queue: a save still landing must not be overwritten,
+  // and a delete queued ahead of us must not be undone (null = gone).
+  await updateItem(item.id, (current) =>
+    current ? { ...current, pinned } : null,
+  );
 }
 
 /**

@@ -175,7 +175,9 @@ export async function importFromZipBytes(
   for (const [id, item] of Object.entries(existingItems)) {
     // Through the per-item queue so a save still landing can't follow the
     // clear and resurrect the item.
-    await runForItem(id, () => inbox.remove(id, item));
+    // Remove what is stored once our turn comes: a queued save may have
+    // moved the binaries the snapshot names.
+    await runForItem(id, () => inbox.remove(id, get(items)[id] ?? item));
     removed++;
     onProgress?.({ phase: 'clearing', current: removed, total: totalToRemove });
   }
