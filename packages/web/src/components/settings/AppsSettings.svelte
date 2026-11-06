@@ -5,7 +5,24 @@
   import thunderbirdLogo from '../../assets/logos/thunderbird.svg';
   import { BROWSER_STORE_URLS } from '../../lib/constants';
   import { pluginArtifacts } from '../../lib/plugin-downloads.generated';
-  import OfflineTranscriptionAssets from '../OfflineTranscriptionAssets.svelte';
+  import {
+    TRANSCRIPTION_MODEL_SIZE_LABEL,
+    connectionPrefersSavingData,
+    downloadTranscriptionModel,
+    offlineTranscriptionEnabled,
+    setOfflineTranscriptionEnabled,
+    summariseTranscriptionModel,
+    transcriptionModel,
+  } from '../../lib/transcription-store';
+  import { browserOnline } from '../../lib/stores';
+
+  const transcriptionSummary = $derived(
+    summariseTranscriptionModel(
+      $transcriptionModel,
+      $offlineTranscriptionEnabled,
+      $browserOnline,
+    ),
+  );
 </script>
 
 <div class="settings-section">
@@ -50,10 +67,25 @@
     </div>
   </div>
 
-  <div class="row wide transcription-row">
+  <div class="row">
     <div class="row-main">
-      <div class="row-label">Transcribe voice notes offline</div>
-      <div class="row-desc"><OfflineTranscriptionAssets /></div>
+      <div class="row-label">Keep the transcription model for offline voice notes</div>
+      <div class="row-desc">{transcriptionSummary}</div>
+    </div>
+    <div class="row-ctl">
+      {#if $offlineTranscriptionEnabled && !$transcriptionModel.ready && !$transcriptionModel.downloading && (connectionPrefersSavingData() || $transcriptionModel.error)}
+        <button type="button" class="btn" onclick={() => void downloadTranscriptionModel()}
+          >Download ({TRANSCRIPTION_MODEL_SIZE_LABEL})</button
+        >
+      {/if}
+      <button
+        type="button"
+        class="switch"
+        class:on={$offlineTranscriptionEnabled}
+        aria-label="Keep the transcription model for offline voice notes"
+        aria-pressed={$offlineTranscriptionEnabled}
+        onclick={() => void setOfflineTranscriptionEnabled(!$offlineTranscriptionEnabled)}
+      ></button>
     </div>
   </div>
 </div>

@@ -7,6 +7,21 @@ import {
   TRANSCRIPTION_WASM_FILES,
 } from './transcription-manifest';
 
+/**
+ * Browser-local preference: keep the model cached for offline use. Read here
+ * (not in transcription-store) so the on-demand asset cache can honour it
+ * without a dependency cycle. 'false' is the only value that turns it off.
+ */
+export const OFFLINE_TRANSCRIPTION_KEY = 'inbox-rs:offline-transcription';
+
+export function offlineTranscriptionRetentionEnabled(): boolean {
+  try {
+    return localStorage.getItem(OFFLINE_TRANSCRIPTION_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
 const DB_NAME = 'inbox-rs-transcription-assets';
 const DB_VERSION = 1;
 const STORE_NAME = 'assets';
@@ -233,8 +248,23 @@ async function assertEnoughStorage(remainingBytes: number) {
   }
 }
 
+function throwIfAborted(signal?: AbortSignal) {
+  if (signal?.aborted) {
+    throw new DOMException(
+      'Transcription asset download aborted',
+      'AbortError',
+    );
+  }
+}
+
+/**
+ * Download every missing asset into IndexedDB. Pass `signal` to stop between
+ * files (and mid-fetch); once aborted no further writes happen, so a caller
+ * that aborts and then deletes the cache ends up with an empty cache.
+ */
 export async function downloadTranscriptionAssets(
   onProgress?: (progress: TranscriptionAssetProgress) => void,
+  signal?: AbortSignal,
 ): Promise<TranscriptionAssetStatus> {
   if (typeof indexedDB === 'undefined') {
     throw new Error('Offline transcription storage is not available here.');
@@ -244,16 +274,19 @@ export async function downloadTranscriptionAssets(
   await assertEnoughStorage(status.totalBytes - status.storedBytes);
 
   for (const asset of TRANSCRIPTION_ASSETS) {
+    throwIfAborted(signal);
     if (await readAsset(asset.url)) continue;
     onProgress?.({
       ...(await getTranscriptionAssetStatus()),
       currentUrl: asset.url,
     });
-    const response = await fetch(asset.url, { cache: 'no-cache' });
+    const response = await fetch(asset.url, { cache: 'no-cache', signal });
     if (!response.ok) {
       throw new Error(`Failed to download ${asset.url}: ${response.status}`);
     }
-    await writeAsset(asset.url, await response.blob());
+    const blob = await response.blob();
+    throwIfAborted(signal);
+    await writeAsset(asset.url, blob);
   }
 
   const finalStatus = await getTranscriptionAssetStatus();
@@ -281,6 +314,9 @@ export function createTranscriptionAssetCache() {
     },
     async put(input: RequestInfo | URL, response: Response): Promise<void> {
       if (typeof indexedDB === 'undefined') return;
+      // The user turned "keep for offline" off: serve the model for this
+      // session only, never re-persist what they asked us to remove.
+      if (!offlineTranscriptionRetentionEnabled()) return;
       const url = normalizeUrl(input);
       if (!url || !assetUrls.has(url) || !response.ok) return;
       await writeAsset(url, await response.clone().blob());

@@ -1124,6 +1124,22 @@
     cursor: default;
   }
 
+  /* Secondary, low-emphasis action next to the player (e.g. "Transcribe again"). */
+  .modal :global(.btn-link) {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-bottom: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .modal :global(.btn-link:hover) {
+    color: var(--text);
+  }
+
   .modal :global(.content-block) {
     margin-bottom: 0.75rem;
   }

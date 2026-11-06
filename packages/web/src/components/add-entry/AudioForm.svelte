@@ -7,8 +7,18 @@
     formatRecordingTimer,
   } from '../../lib/add-entry-modal';
   import { buildAudioItem } from '../../lib/build-item';
-  import { transcribeAudio } from '../../lib/transcribe';
-  import OfflineTranscriptionAssets from '../OfflineTranscriptionAssets.svelte';
+  import { browserOnline } from '../../lib/stores';
+  import {
+    describeTranscriptionError,
+    type TranscriptionProgress,
+    transcribeAudio,
+    transcriberLoaded,
+  } from '../../lib/transcribe';
+  import {
+    TRANSCRIPTION_MODEL_SIZE_LABEL,
+    refreshTranscriptionModelStatus,
+    transcriptionModel,
+  } from '../../lib/transcription-store';
   import MarkdownContentField from './MarkdownContentField.svelte';
 
   let {
@@ -49,6 +59,17 @@
   let recordedUrl = $state<string | null>(null);
   let transcript = $state('');
   let transcribing = $state(false);
+  let transcribeProgress = $state<TranscriptionProgress | null>(null);
+  let transcribeNotice = $state('');
+  const transcribeLabel = $derived(
+    transcribeProgress?.phase === 'downloading'
+      ? `Downloading transcription model ${transcribeProgress.percent}%`
+      : 'Transcribing...',
+  );
+
+  $effect(() => {
+    void refreshTranscriptionModelStatus();
+  });
   // `transcriptionId` increments each time we kick off a transcription so a
   // late-arriving result from a previous recording can't clobber a fresher
   // capture's transcript.
@@ -72,19 +93,54 @@
 
   async function runTranscription(blob: Blob) {
     const myId = ++transcriptionId;
+    transcribeNotice = '';
+    // Offline with no cached model and no pipeline in memory: don't start a
+    // run that can only fail. The note still saves; the item view offers
+    // Transcribe once the device is back online. An unfinished status check
+    // never blocks: we only skip once we know the model is missing.
+    if (
+      $transcriptionModel.checked &&
+      !$transcriptionModel.ready &&
+      !$transcriberLoaded &&
+      !$browserOnline
+    ) {
+      transcribeNotice = `Transcription needs a one-time ${TRANSCRIPTION_MODEL_SIZE_LABEL} download. Connect to the internet to transcribe this note later.`;
+      return;
+    }
     transcribing = true;
+    transcribeProgress = null;
     try {
-      const result = await transcribeAudio(blob);
+      const result = await transcribeAudio(blob, {
+        onProgress: (p) => {
+          if (myId === transcriptionId) transcribeProgress = p;
+        },
+      });
       if (myId !== transcriptionId) return; // discarded
       transcript = result;
       if (transcript && !body) body = transcript;
       if (transcript && !title) title = truncateTitle(transcript);
+      void refreshTranscriptionModelStatus();
     } catch (e) {
       if (myId !== transcriptionId) return;
       console.warn('Transcription failed:', e);
+      transcribeNotice = describeTranscriptionError(e, {
+        online: $browserOnline,
+        modelReady: $transcriptionModel.ready,
+      });
     } finally {
-      if (myId === transcriptionId) transcribing = false;
+      if (myId === transcriptionId) {
+        transcribing = false;
+        transcribeProgress = null;
+      }
     }
+  }
+
+  // Stop waiting on a slow transcription. The recording is kept; the model
+  // download (if one was running) keeps caching in the background.
+  function cancelTranscription() {
+    transcriptionId++;
+    transcribing = false;
+    transcribeProgress = null;
   }
 
   async function startRecording() {
@@ -139,6 +195,8 @@
     recordingDuration = 0;
     transcript = '';
     transcribing = false;
+    transcribeProgress = null;
+    transcribeNotice = '';
   }
 
   buildItem = ({ id, createdAt, editItem: ctxEditItem }) =>
@@ -195,9 +253,15 @@
     </div>
   </div>
   {#if transcribing}
-    <p class="transcript-status">Transcribing...</p>
+    <p class="transcript-status" role="status">
+      {transcribeLabel}
+      <button type="button" class="rec-btn rec-discard" onclick={cancelTranscription}
+        >Cancel</button
+      >
+    </p>
+  {:else if transcribeNotice}
+    <p class="transcript-status" role="status">{transcribeNotice}</p>
   {/if}
-  <OfflineTranscriptionAssets />
   {#if transcript}
     <div class="field">
       <span>Transcript</span>

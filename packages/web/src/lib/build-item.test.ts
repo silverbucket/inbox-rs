@@ -608,10 +608,9 @@ describe('buildAudioItem', () => {
     });
 
     expect((result?.item as AudioItem).title).toBe('Audio');
-    // Recording exists (even with no transcript text) → mark as having
-    // audio content. The `transcribed` field here indicates presence of
-    // a recording rather than the existence of text.
-    expect((result?.item as AudioItem).transcribed).toBe(true);
+    // No transcript text (failed or skipped offline) → not transcribed, so
+    // the item view still offers the Transcribe button.
+    expect((result?.item as AudioItem).transcribed).toBeUndefined();
   });
 
   it('uses uploaded file extension when no recording is present', async () => {
