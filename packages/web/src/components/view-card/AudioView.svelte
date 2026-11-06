@@ -107,6 +107,9 @@
     // applying state writes from a destroyed component. So we don't need
     // an explicit id-guard around the finally block.
     const myRun = ++runId;
+    // The body the user saw when they clicked. If it changes while the
+    // model runs (an edit saved meanwhile), the result must not replace it.
+    const bodyAtStart = item.body;
     transcribing = true;
     transcriptionError = '';
     progress = null;
@@ -141,8 +144,13 @@
       // landed while inference ran returns undefined and nothing is written,
       // so transcription can never resurrect a removed card. Edits made
       // meanwhile are kept; only the transcript fields change.
+      let edited = false;
       await updateItem(item.id, (current) => {
         if (!current || current.type !== 'audio') return null;
+        if (current.body !== bodyAtStart) {
+          edited = true;
+          return null;
+        }
         const updated: AudioItem = {
           ...current,
           body: text,
@@ -154,6 +162,10 @@
         };
         return updated;
       });
+      if (edited) {
+        transcriptionError =
+          'The note was edited while transcribing, so the transcript was not applied.';
+      }
       void refreshTranscriptionModelStatus();
     } catch (e) {
       if (myRun !== runId) return;

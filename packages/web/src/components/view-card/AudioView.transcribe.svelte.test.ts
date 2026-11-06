@@ -208,6 +208,27 @@ describe('AudioView transcribe', () => {
     expect(host.textContent).toContain('No speech detected');
   });
 
+  it('does not overwrite a note edited and saved while transcribing', async () => {
+    let finish: (text: string) => void = () => {};
+    transcribeAudio.mockImplementationOnce(
+      () => new Promise<string>((resolve) => (finish = resolve)),
+    );
+    component = mount(AudioView, {
+      target: host,
+      props: { item: audio(), titleId: 't' },
+    });
+    flushSync();
+    (host.querySelector('button.btn-action') as HTMLButtonElement).click();
+    await settle();
+
+    liveItems.set('a1', { ...audio(), body: 'typed meanwhile' });
+    finish('model words');
+    await settle();
+
+    expect(storeItem).not.toHaveBeenCalled();
+    expect(host.textContent).toContain('edited while transcribing');
+  });
+
   it('shows download progress, then transcribing, with a Cancel button', async () => {
     let resolveRun: (text: string) => void = () => {};
     transcribeAudio.mockImplementationOnce(
