@@ -24,7 +24,7 @@ import {
   fetchLinkMetadata,
   type LinkMetadata,
 } from './link-metadata';
-import { items, storeItem, userSettings } from './stores';
+import { items, updateItem, userSettings } from './stores';
 import { showToast } from './toast';
 
 export const LOCAL_LINK_PREVIEWS_KEY = 'inbox-rs:link-previews';
@@ -187,20 +187,22 @@ export async function enrichBookmark(
   if (!linkPreviewsEnabled() || !navigator.onLine) return 'none';
   const meta = await fetchLinkMetadata(item.url, resolveSockethubEndpoint());
   if (!meta) return 'none';
-  // Re-read the live item: the user may have edited it during the fetch,
-  // and merging into the *current* fields keeps their changes protected.
-  // If it's gone (deleted or the capture was undone), storing again would
-  // resurrect it — bail instead.
-  const current = get(items)[item.id];
-  if (!current || current.type !== 'bookmark' || current.url !== item.url) {
-    return 'none';
-  }
-  const updated = applyLinkMetadata(current, meta);
+  // Read-merge-write inside the item's queue: the user may have edited it
+  // during the fetch, and a save still landing must be merged against, not
+  // overwritten. If it's gone (deleted or the capture was undone), storing
+  // again would resurrect it — bail instead.
+  let before: BookmarkItem | undefined;
+  const updated = await updateItem(item.id, (current) => {
+    if (!current || current.type !== 'bookmark' || current.url !== item.url) {
+      return null;
+    }
+    before = current;
+    return applyLinkMetadata(current, meta);
+  });
   if (!updated) return 'none';
-  await storeItem(updated);
   // Background enrichment is otherwise silent; a date appearing on its own
   // would read as a glitch.
-  if (updated.startsAt && !current.startsAt) {
+  if (updated.startsAt && !before?.startsAt) {
     showToast('Event time added from the page');
   }
   return 'updated';
@@ -252,10 +254,13 @@ export async function enrichAllBookmarks(): Promise<{
             // behind earlier fetches. Convert the live copy, and only
             // while it is still the same link-only note — the same
             // stale-write guard enrichBookmark applies.
-            const current = get(items)[item.id];
-            if (!current || linkNoteUrl(current) !== url) continue;
-            bookmark = noteToBookmark(current as NoteItem, url as string);
-            await storeItem(bookmark);
+            const converted = await updateItem(item.id, (current) =>
+              current && linkNoteUrl(current) === url
+                ? noteToBookmark(current as NoteItem, url as string)
+                : null,
+            );
+            if (!converted) continue;
+            bookmark = converted;
             changed = true;
           }
           if ((await enrichBookmark(bookmark)) === 'updated') changed = true;

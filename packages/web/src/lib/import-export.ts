@@ -8,7 +8,14 @@ import type {
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { get } from 'svelte/store';
 import rs from './rs';
-import { appConfig, collections, groups, items, userSettings } from './stores';
+import {
+  appConfig,
+  collections,
+  groups,
+  items,
+  runForItem,
+  userSettings,
+} from './stores';
 
 export interface ExportManifest {
   version: 1;
@@ -166,7 +173,11 @@ export async function importFromZipBytes(
   onProgress?.({ phase: 'clearing', current: 0, total: totalToRemove });
 
   for (const [id, item] of Object.entries(existingItems)) {
-    await inbox.remove(id, item);
+    // Through the per-item queue so a save still landing can't follow the
+    // clear and resurrect the item.
+    // Remove what is stored once our turn comes: a queued save may have
+    // moved the binaries the snapshot names.
+    await runForItem(id, () => inbox.remove(id, get(items)[id] ?? item));
     removed++;
     onProgress?.({ phase: 'clearing', current: removed, total: totalToRemove });
   }
@@ -222,7 +233,7 @@ export async function importFromZipBytes(
         ) as ArrayBuffer;
       }
     }
-    await inbox.store(item, fileData);
+    await runForItem(item.id, () => inbox.store(item, fileData));
     restored++;
     onProgress?.({
       phase: 'restoring',

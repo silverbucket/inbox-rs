@@ -47,16 +47,26 @@ vi.mock('./rs', () => {
   };
 });
 
+const { mockFetchLinkMetadata } = vi.hoisted(() => ({
+  mockFetchLinkMetadata: vi.fn(),
+}));
+vi.mock('./link-metadata', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./link-metadata')>()),
+  fetchLinkMetadata: mockFetchLinkMetadata,
+}));
+
 // Mock clean-for-storage
 vi.mock('./clean-for-storage', () => ({
   cleanForStorage: (x: any) => x,
 }));
 
 import type {
+  BookmarkItem,
   Collection,
   CollectionGroup,
   InboxItem,
 } from '@inbox-rs/rs-module';
+import { enrichBookmark } from './enrich';
 import {
   activeGroupIds,
   allTodos,
@@ -103,6 +113,7 @@ import {
   setCollectionArchived,
   setGroupArchived,
   setItemArchived,
+  setItemPinned,
   setItemPlan,
   soleVisibleCollectionId,
   soloCollectionFilter,
@@ -116,6 +127,7 @@ import {
   toggleCollectionFilter,
   toggleGroupFilter,
   triageToTodo,
+  updateItem,
   userAddress,
   userSettings,
   visibleGroupedCollections,
@@ -3137,8 +3149,11 @@ describe('removeItemFromCollection', () => {
 
     expect(get(items).t1.collectionId).toBeUndefined();
     expect(get(collections).c1.itemIds).toEqual([]);
+    // Through storeItem now, so the shared write's (item, file, thumb) shape.
     expect(mockInbox.store).toHaveBeenCalledWith(
       expect.objectContaining({ id: 't1' }),
+      undefined,
+      undefined,
     );
     expect(mockInbox.storeCollection).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'c1', itemIds: [] }),
@@ -3518,5 +3533,159 @@ describe('connection status during network outages', () => {
     emitRsEvent('disconnected');
     expect(get(syncing)).toBe(false);
     expect(get(connectionStatus)).toBe('Not connected');
+  });
+});
+
+describe('storeItem write ordering', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    items.set({});
+  });
+
+  it('enrichment merges against a user edit whose save is still in flight', async () => {
+    const bookmark: BookmarkItem = {
+      id: 'race',
+      type: 'bookmark',
+      title: 'https://example.com',
+      url: 'https://example.com',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    items.set({ race: bookmark });
+
+    let resolveFetch!: (meta: unknown) => void;
+    mockFetchLinkMetadata.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveFetch = resolve;
+      }),
+    );
+    const enrichment = enrichBookmark(bookmark);
+
+    let resolveUserSave!: () => void;
+    mockInbox.store.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveUserSave = resolve;
+      }),
+    );
+    const userSave = storeItem({
+      ...bookmark,
+      startsAt: '2026-02-01T10:00:00.000Z',
+    } as BookmarkItem);
+
+    resolveFetch({ description: 'From the page' });
+    await Promise.resolve();
+    resolveUserSave();
+    await userSave;
+    await enrichment;
+
+    expect(get(items).race).toMatchObject({
+      startsAt: '2026-02-01T10:00:00.000Z',
+      description: 'From the page',
+    });
+    const lastWrite = mockInbox.store.mock.calls.at(-1)?.[0];
+    expect(lastWrite).toMatchObject({
+      startsAt: '2026-02-01T10:00:00.000Z',
+      description: 'From the page',
+    });
+  });
+
+  it('starts the write synchronously when nothing is queued for the item', () => {
+    // A pagehide flush calls storeItem as the page unloads; a deferred
+    // write would never reach storage.
+    const p = storeItem(makeTodo('sync', { title: 'A' }));
+    expect(mockInbox.store).toHaveBeenCalledTimes(1);
+    return p;
+  });
+
+  it('updateItem reads the live item only after queued saves have landed', async () => {
+    const todo = makeTodo('chain', { title: 'A' });
+    let resolveFirst!: () => void;
+    mockInbox.store.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveFirst = resolve;
+      }),
+    );
+    void storeItem(todo);
+    const second = storeItem({ ...todo, title: 'B' } as InboxItem);
+    const seen: string[] = [];
+    const update = updateItem('chain', (current) => {
+      seen.push((current as { title: string }).title);
+      return null;
+    });
+    resolveFirst();
+    await second;
+    await update;
+    expect(seen).toEqual(['B']);
+  });
+
+  it('a move made while a save is landing files the saved item', async () => {
+    const todo = makeTodo('mv', { title: 'A' });
+    items.set({ mv: todo });
+    collections.set({ c1: makeCollection('c1') });
+    let resolveFirst!: () => void;
+    mockInbox.store.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveFirst = resolve;
+      }),
+    );
+    const save = storeItem({ ...todo, title: 'B' } as InboxItem);
+    const move = moveItemToCollection('mv', 'c1');
+    resolveFirst();
+    await save;
+    await move;
+    expect(get(items).mv).toMatchObject({ title: 'B', collectionId: 'c1' });
+    expect(mockInbox.store.mock.calls.at(-1)?.[0]).toMatchObject({
+      title: 'B',
+      collectionId: 'c1',
+    });
+  });
+
+  it('a pin queued behind a delete does not resurrect the item', async () => {
+    const todo = makeTodo('pinned', { title: 'A' });
+    items.set({ pinned: todo });
+    let resolveRemove!: () => void;
+    mockInbox.remove.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveRemove = resolve;
+      }),
+    );
+    const removal = deleteItem('pinned', todo);
+    const pin = setItemPinned(todo, true);
+    resolveRemove();
+    await removal;
+    await pin;
+    expect(get(items).pinned).toBeUndefined();
+    expect(mockInbox.store).not.toHaveBeenCalled();
+  });
+
+  it('deleteItem waits for queued saves so none resurrects the item', async () => {
+    const todo = makeTodo('gone', { title: 'A' });
+    let resolveFirst!: () => void;
+    mockInbox.store.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveFirst = resolve;
+      }),
+    );
+    void storeItem(todo);
+    const queued = storeItem({ ...todo, title: 'B' } as InboxItem);
+    const removal = deleteItem('gone', todo);
+    resolveFirst();
+    await queued;
+    await removal;
+    // Removes what is stored now (the queued 'B'), not the caller's snapshot.
+    expect(mockInbox.remove).toHaveBeenCalledWith(
+      'gone',
+      expect.objectContaining({ title: 'B' }),
+    );
+    expect(get(items).gone).toBeUndefined();
+  });
+
+  it('a failed save rejects to its caller without blocking the next write', async () => {
+    const todo = makeTodo('fail', { title: 'A' });
+    mockInbox.store.mockRejectedValueOnce(new Error('boom'));
+    const first = storeItem(todo);
+    const second = storeItem({ ...todo, title: 'B' } as InboxItem);
+    await expect(first).rejects.toThrow('boom');
+    await expect(second).resolves.toBeUndefined();
+    expect(get(items).fail).toMatchObject({ title: 'B' });
   });
 });

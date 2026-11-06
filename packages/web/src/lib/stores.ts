@@ -1118,7 +1118,53 @@ export function loadFileBlobUrl(filePath: string, mimeType?: string): void {
 
 // ---- Item operations ----
 
-export async function storeItem(
+/**
+ * Per-item operation queues. Every write, delete or read-merge-write for an
+ * item runs after the ones queued before it, so a reader never merges
+ * against `items` while a save for that id is still landing.
+ */
+const itemQueues = new Map<string, Promise<unknown>>();
+
+/** Run `op` once every earlier op for `id` has settled. */
+export function runForItem<T>(id: string, op: () => Promise<T>): Promise<T> {
+  // Start at once when nothing is queued: a pagehide flush must begin its
+  // write before the page unloads, so it can't wait a microtask. `prev` is
+  // already error-swallowed, so one failed op rejects only its own caller.
+  const prev = itemQueues.get(id);
+  const run = prev ? prev.then(op) : op();
+  const settled = run.catch(() => {});
+  itemQueues.set(id, settled);
+  settled.then(() => {
+    if (itemQueues.get(id) === settled) itemQueues.delete(id);
+  });
+  return run;
+}
+
+export function storeItem(
+  item: InboxItem,
+  fileData?: ArrayBuffer,
+  thumbData?: ArrayBuffer,
+): Promise<void> {
+  return runForItem(item.id, () => writeItem(item, fileData, thumbData));
+}
+
+/**
+ * Read the live item inside its queue and write what `update` returns —
+ * nothing when it returns null (item gone, or no change). No other save for
+ * the id can land between the read and the write.
+ */
+export function updateItem<T extends InboxItem>(
+  id: string,
+  update: (current: InboxItem | undefined) => T | null,
+): Promise<T | null> {
+  return runForItem(id, async () => {
+    const next = update(get(items)[id]);
+    if (next) await writeItem(next);
+    return next;
+  });
+}
+
+async function writeItem(
   item: InboxItem,
   fileData?: ArrayBuffer,
   thumbData?: ArrayBuffer,
@@ -1163,8 +1209,11 @@ export async function setItemPinned(item: InboxItem, pinned: boolean) {
   // Write from the stored item: rows may pass a display copy (e.g. a list's
   // Someday row carries a view-only planKind) that mustn't be saved.
   flushPendingItemChanges();
-  const latest = get(items)[item.id] ?? item;
-  await storeItem({ ...latest, pinned });
+  // Read inside the queue: a save still landing must not be overwritten,
+  // and a delete queued ahead of us must not be undone (null = gone).
+  await updateItem(item.id, (current) =>
+    current ? { ...current, pinned } : null,
+  );
 }
 
 /**
@@ -1400,8 +1449,17 @@ export async function removeFile(path: string) {
   releaseBlobPath(path);
 }
 
-export async function deleteItem(id: string, item?: InboxItem) {
+export function deleteItem(id: string, item?: InboxItem): Promise<void> {
+  // Queued so a save still landing can't follow the removal and resurrect
+  // the item, and a later read-merge-write finds it gone.
+  return runForItem(id, () => removeItem(id, item));
+}
+
+async function removeItem(id: string, snapshot?: InboxItem) {
   const inbox = requireInbox();
+  // Saves queued ahead of us may have moved the binaries; remove what is
+  // stored now, not what the caller saw.
+  const item = get(items)[id] ?? snapshot;
   await inbox.remove(id, item);
 
   // Revoke and remove any associated blob URLs (original + thumbnail) to
@@ -1544,46 +1602,48 @@ export async function moveItemToCollection(
   const prevItems = get(items);
   const prevCollections = get(collections);
 
-  let item: InboxItem | undefined;
   let oldCollectionId: string | undefined;
 
-  items.update((current) => {
-    const next = { ...current };
-    for (const key of Object.keys(next)) {
-      if (next[key].id === itemId) {
-        oldCollectionId = next[key].collectionId;
-        // Cast to a record so we can drop `collectionId` when the caller
-        // moves the item back to Inbox/unfiled — the InboxItem union types
-        // collectionId as required-but-optional and rejects structural
-        // delete.
-        const updated: Record<string, unknown> = { ...next[key] };
-        if (collectionId) {
-          updated.collectionId = collectionId;
-        } else {
-          delete updated.collectionId;
-        }
-        next[key] = updated as unknown as InboxItem;
-        item = updated as unknown as InboxItem;
-        break;
-      }
-    }
-    return next;
-  });
-
-  if (!item) return;
-
-  const isSameCollection = oldCollectionId === collectionId;
-
   try {
-    // Skip the item write when it already carries the target: creators store
-    // the item pre-filed and call this only to register it in the
-    // collection's itemIds. A second PUT to the same path right after the
-    // first races remoteStorage.js's ETag bookkeeping — the server answers
-    // 412 and the conflict resolves remote-wins, silently dropping the
-    // filing (the todo reappears as Unfiled).
-    if (!isSameCollection) {
-      await inbox.store(cleanForStorage(item));
-    }
+    // Read and write inside the item's queue, so a save still landing is
+    // what we move, not an older snapshot.
+    const item = await runForItem(itemId, async () => {
+      let moved: InboxItem | undefined;
+      items.update((current) => {
+        const next = { ...current };
+        for (const key of Object.keys(next)) {
+          if (next[key].id === itemId) {
+            oldCollectionId = next[key].collectionId;
+            // Cast to a record so we can drop `collectionId` when the caller
+            // moves the item back to Inbox/unfiled — the InboxItem union types
+            // collectionId as required-but-optional and rejects structural
+            // delete.
+            const updated: Record<string, unknown> = { ...next[key] };
+            if (collectionId) {
+              updated.collectionId = collectionId;
+            } else {
+              delete updated.collectionId;
+            }
+            next[key] = updated as unknown as InboxItem;
+            moved = updated as unknown as InboxItem;
+            break;
+          }
+        }
+        return next;
+      });
+      // Skip the item write when it already carries the target: creators
+      // store the item pre-filed and call this only to register it in the
+      // collection's itemIds. A second PUT to the same path right after the
+      // first races remoteStorage.js's ETag bookkeeping — the server answers
+      // 412 and the conflict resolves remote-wins, silently dropping the
+      // filing (the todo reappears as Unfiled).
+      if (moved && oldCollectionId !== collectionId) await writeItem(moved);
+      return moved;
+    });
+
+    if (!item) return;
+
+    const isSameCollection = oldCollectionId === collectionId;
 
     // Update source collection's itemIds
     if (oldCollectionId && !isSameCollection) {
