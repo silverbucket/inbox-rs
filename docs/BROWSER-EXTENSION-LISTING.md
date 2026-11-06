@@ -85,7 +85,9 @@ https://github.com/remotestorage/armadietto.
 
 Website access supports page metadata, fetching selected images, remoteStorage
 discovery, and sending saved content to the storage provider you choose. Context
-menus provide the right-click save actions. Local extension storage remembers
+menus provide the right-click save actions. Notifications tell you when a
+right-click save fails, since the toolbar badge is hidden while the icon is
+unpinned; successful saves don't notify. Local extension storage remembers
 your storage connection; the identity API opens the provider's authorization
 flow. Review the store's privacy disclosures against this behavior before publishing.
 

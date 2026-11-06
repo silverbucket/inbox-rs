@@ -11,6 +11,7 @@ const {
   mockFetch,
   mockSetBadgeText,
   mockOpenOptionsPage,
+  mockNotificationsCreate,
 } = vi.hoisted(() => {
   type Listener = (...args: unknown[]) => unknown;
   const onInstalledListeners: Listener[] = [];
@@ -26,6 +27,7 @@ const {
     mockFetch: vi.fn(),
     mockSetBadgeText: vi.fn(),
     mockOpenOptionsPage: vi.fn(),
+    mockNotificationsCreate: vi.fn(),
   };
 });
 
@@ -35,7 +37,11 @@ vi.mock('webextension-polyfill', () => ({
       setBadgeText: mockSetBadgeText,
       setBadgeBackgroundColor: vi.fn(),
     },
+    notifications: {
+      create: mockNotificationsCreate,
+    },
     runtime: {
+      getURL: (path: string) => `chrome-extension://test/${path}`,
       openOptionsPage: mockOpenOptionsPage,
       onInstalled: {
         addListener: (fn: Listener) => onInstalledListeners.push(fn),
@@ -158,6 +164,7 @@ describe('service-worker', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       expect(mockSetBadgeText).toHaveBeenCalledWith({ text: '!' });
+      expect(mockNotificationsCreate).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -222,6 +229,7 @@ describe('service-worker', () => {
         { id: 1 },
       );
       expect(mockSetBadgeText).toHaveBeenCalledWith({ text: '✓' });
+      expect(mockNotificationsCreate).not.toHaveBeenCalled();
     });
 
     it('flags the failure when storage rejects the save', async () => {
@@ -230,6 +238,25 @@ describe('service-worker', () => {
         { menuItemId: 'save-link', linkUrl: 'https://example.com' },
         { id: 1 },
       );
+      expect(mockSetBadgeText).toHaveBeenCalledWith({ text: '!' });
+      expect(mockNotificationsCreate).toHaveBeenCalledWith({
+        type: 'basic',
+        iconUrl: 'chrome-extension://test/icons/icon-128.png',
+        title: 'Inbox RS',
+        message:
+          "Couldn't save to your inbox. Open the extension to try again.",
+      });
+    });
+
+    it('still flags the failure when notifications are unavailable', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
+      mockNotificationsCreate.mockRejectedValueOnce(new Error('unsupported'));
+      await expect(
+        onClickedListeners[0](
+          { menuItemId: 'save-link', linkUrl: 'https://example.com' },
+          { id: 1 },
+        ),
+      ).resolves.toBeUndefined();
       expect(mockSetBadgeText).toHaveBeenCalledWith({ text: '!' });
     });
 
@@ -265,6 +292,7 @@ describe('service-worker', () => {
       );
       expect(mockOpenOptionsPage).toHaveBeenCalled();
       expect(mockFetch).not.toHaveBeenCalled();
+      expect(mockNotificationsCreate).not.toHaveBeenCalled();
     });
   });
 
