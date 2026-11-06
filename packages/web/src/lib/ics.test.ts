@@ -397,6 +397,23 @@ describe('parseIcs', () => {
     expect(parsed?.unresolvedZone).toBe('Narnia Standard Time');
   });
 
+  it('flags an unknown zone on a VTODO COMPLETED stamp', () => {
+    const parsed = parseIcs(
+      [
+        'BEGIN:VCALENDAR',
+        'BEGIN:VTODO',
+        'SUMMARY:Pay rent',
+        'DUE:20261109T180000Z',
+        'STATUS:COMPLETED',
+        'COMPLETED;TZID="Narnia Standard Time":20261108T100000',
+        'END:VTODO',
+        'END:VCALENDAR',
+      ].join('\r\n'),
+    );
+    expect(parsed?.completed).toBe(true);
+    expect(parsed?.unresolvedZone).toBe('Narnia Standard Time');
+  });
+
   it('reads a real-world zoned VEVENT, skipping VTIMEZONE and VALARM', () => {
     const parsed = parseIcs(MEETUP_ICS);
     expect(parsed).toMatchObject({

@@ -416,6 +416,9 @@ export function parseIcs(text: string): ParsedIcs | null {
   if (typed?.allDay) typed.date.setDate(typed.date.getDate() - 1);
   // An end that doesn't follow the start is dropped.
   const end = typed && typed.date > start.date ? typed : null;
+  const completed = props.COMPLETED
+    ? parseIcsDate(props.COMPLETED.value, props.COMPLETED.params)
+    : null;
   const field = (name: string) =>
     props[name]
       ? unescapeText(props[name].value).trim() || undefined
@@ -434,11 +437,12 @@ export function parseIcs(text: string): ParsedIcs | null {
     end: end?.date,
     allDay: start.allDay,
     completed: kind === 'task' && status === 'COMPLETED',
-    completedAt: props.COMPLETED
-      ? parseIcsDate(props.COMPLETED.value, props.COMPLETED.params)?.date
-      : undefined,
+    completedAt: completed?.date,
     // From the parsed end, not the kept one: a dropped end still had a
     // zone we couldn't place, and the user should know.
-    unresolvedZone: start.unresolvedZone ?? parsedEnd?.unresolvedZone,
+    unresolvedZone:
+      start.unresolvedZone ??
+      parsedEnd?.unresolvedZone ??
+      completed?.unresolvedZone,
   };
 }
