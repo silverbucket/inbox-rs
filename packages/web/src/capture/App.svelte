@@ -3,6 +3,7 @@
   import {
     captureImage,
     captureNote,
+    captureSharedFile,
     type SharedLink,
     captureVoice,
     type CaptureMode,
@@ -20,6 +21,13 @@
   } from './store';
   import { bookmarkUrlFromText } from '../lib/capture-detect';
   import {
+    consumeSharedFiles,
+    discardSharedFiles,
+    listSharedFiles,
+    SHARE_CACHE,
+    type SharedEntry,
+  } from '../lib/share-target';
+  import {
     type Accent,
     ACCENT_LABELS,
     ACCENT_SWATCHES,
@@ -29,6 +37,13 @@
     type Mode,
   } from './theme';
   import StagingBadge from '../components/StagingBadge.svelte';
+
+  // File Handling API ("Open with Inbox RS" on desktop Chromium).
+  type LaunchQueue = {
+    setConsumer: (
+      consumer: (params: { files: FileSystemFileHandle[] }) => void,
+    ) => void;
+  };
 
   type BeforeInstallPromptEvent = Event & {
     prompt: () => Promise<void>;
@@ -44,6 +59,13 @@
   let history = $state<CaptureRecord[]>([]);
   let status = $state('');
   let syncing = $state(false);
+  let syncAgain = false;
+  // Files a POST share stashed. The worker can't tell an OS share from a
+  // cross-origin form post (Sec-Fetch-* never reaches it), so these wait
+  // for a tap, like shared text does — nothing is saved on a stranger's
+  // say-so. They stay in the cache until saved or discarded, so a reload or
+  // a failed save keeps them.
+  let sharedFiles = $state<SharedEntry[]>([]);
 
   let connectedAddress = $state('');
   let userAddress = $state('');
@@ -90,7 +112,24 @@
     history = getHistory();
     isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
     status = idleStatus();
-    void syncNow();
+    // Files from a POST share (stashed by the service worker) are offered
+    // for saving; existing captures sync regardless, and a pickup failure
+    // must outlive that sync's status line.
+    void receiveSharedFiles().then(async (ok) => {
+      await syncNow();
+      if (!ok) status = 'Could not read the shared file';
+    });
+    const launchQueue = (window as Window & { launchQueue?: LaunchQueue })
+      .launchQueue;
+    launchQueue?.setConsumer(({ files }) => {
+      void (async () => {
+        for (const handle of files) {
+          await captureSharedFile(await handle.getFile());
+        }
+        if (files.length > 0) afterFilesCaptured();
+        await syncNow();
+      })().catch(reportFileError);
+    });
 
     // Web Share Target: the OS share sheet lands here as
     // /capture/?title=…&text=…&url=…. Prefill the note composer and scrub the
@@ -157,6 +196,56 @@
     };
   });
 
+  async function shareCache(): Promise<Cache | null> {
+    if (!('caches' in window) || !(await caches.has(SHARE_CACHE))) return null;
+    return caches.open(SHARE_CACHE);
+  }
+
+  async function receiveSharedFiles(): Promise<boolean> {
+    try {
+      const cache = await shareCache();
+      sharedFiles = cache ? await listSharedFiles(cache) : [];
+      return true;
+    } catch (error) {
+      console.error('Could not read the shared file', error);
+      return false;
+    }
+  }
+
+  // Both act only on what the banner showed; a file stashed since waits
+  // for its own confirmation.
+  async function saveSharedFiles() {
+    const keys = sharedFiles.map((e) => e.key);
+    try {
+      const cache = await shareCache();
+      if (cache) await consumeSharedFiles(cache, captureSharedFile, keys);
+      afterFilesCaptured();
+      await syncNow();
+    } catch (error) {
+      reportFileError(error);
+    }
+    // Whatever is still stashed (nothing, the failed file and those after
+    // it, or new arrivals) is what the banner should offer.
+    await receiveSharedFiles();
+  }
+
+  async function discardShared() {
+    const keys = sharedFiles.map((e) => e.key);
+    const cache = await shareCache();
+    if (cache) await discardSharedFiles(cache, keys);
+    await receiveSharedFiles();
+  }
+
+  function afterFilesCaptured() {
+    history = getHistory();
+    status = navigator.onLine ? 'Saved ✓' : 'Saved offline';
+  }
+
+  function reportFileError(error: unknown) {
+    console.error('Could not capture the shared file', error);
+    status = 'Could not save the shared file';
+  }
+
   function idleStatus(): string {
     if (!connectedAddress) return 'Not connected';
     const p = pendingCount();
@@ -185,7 +274,11 @@
   }
 
   async function syncNow() {
-    if (syncing) return;
+    if (syncing) {
+      // A capture queued mid-flush isn't in that batch; go again after it.
+      syncAgain = true;
+      return;
+    }
     const config = getConfig();
     if (!config?.href || !config.token) {
       history = getHistory();
@@ -203,6 +296,10 @@
       status = error instanceof Error ? error.message : 'Sync failed';
     } finally {
       syncing = false;
+    }
+    if (syncAgain) {
+      syncAgain = false;
+      await syncNow();
     }
   }
 
@@ -394,6 +491,18 @@
     </div>
   </header>
 
+  {#if sharedFiles.length > 0}
+    <div class="share-banner" role="status">
+      <span>
+        {sharedFiles.length === 1
+          ? sharedFiles[0].file.name
+          : `${sharedFiles.length} shared files`}
+      </span>
+      <button class="ghost small" type="button" onclick={saveSharedFiles}>Save to inbox</button>
+      <button class="ghost small" type="button" onclick={discardShared}>Discard</button>
+    </div>
+  {/if}
+
   <div class="modes" role="group" aria-label="Capture mode">
     <button class="seg" type="button" aria-pressed={mode === 'note'} onclick={() => (mode = 'note')}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -526,7 +635,7 @@
       <ul class="rec-list">
         {#each history as rec (rec.id)}
           <li class="rec rec-{rec.status}">
-            <span class="rec-mode">{rec.mode === 'note' ? 'Note' : rec.mode === 'voice' ? 'Voice' : 'Image'}</span>
+            <span class="rec-mode">{rec.mode === 'note' ? 'Note' : rec.mode === 'voice' ? 'Voice' : rec.mode === 'file' ? 'File' : 'Image'}</span>
             <div class="rec-main">
               <p class="rec-preview">{rec.preview}</p>
               <p class="rec-meta">
@@ -678,6 +787,23 @@
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  .share-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.6rem 0.9rem;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface);
+  }
+  .share-banner span {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .modes {

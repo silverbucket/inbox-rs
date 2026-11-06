@@ -12,11 +12,13 @@ import {
   extractTokenFromRedirect,
   type RSConfig,
 } from '@inbox-rs/rs-module/runtime';
+import { buildDocumentItem } from '../lib/build-item';
 import { bookmarkUrlFromText, detectCaptureKind } from '../lib/capture-detect';
 import { generateThumbnail, THUMB_MIME_TYPE } from '../lib/thumbnail';
 
-/** The three ways to capture. Maps to inbox item types note / audio / image. */
-export type CaptureMode = 'note' | 'voice' | 'image';
+/** The three ways to capture, plus files received via share/open-with. Maps
+ *  to inbox item types note / audio / image / document. */
+export type CaptureMode = 'note' | 'voice' | 'image' | 'file';
 
 /** Delivery state of a captured item, surfaced in the history view. */
 export type DeliveryStatus = 'queued' | 'sending' | 'synced' | 'failed';
@@ -260,6 +262,32 @@ export async function captureImage(
   return withThumb;
 }
 
+/**
+ * Queue a file received from the share sheet or "Open with". Images go
+ * through captureImage; anything else through buildDocumentItem, the same
+ * builder the main app uses, so an `.ics` lands as a scheduled note.
+ */
+export async function captureSharedFile(file: File): Promise<CaptureRecord> {
+  if (file.type.startsWith('image/')) return captureImage(file);
+  const id = crypto.randomUUID();
+  const built = await buildDocumentItem(
+    { id, createdAt: new Date().toISOString() },
+    { title: '', description: '', file },
+  );
+  // buildDocumentItem only returns null without a file; we always pass one.
+  if (!built) throw new Error('Could not read the shared file');
+  if (built.fileData) await putBlob(id, file);
+  const record = newRecord(
+    id,
+    'file',
+    built.item.title || file.name || 'File',
+    built.item,
+    !!built.fileData,
+  );
+  prepend(record);
+  return record;
+}
+
 /** IndexedDB key for a capture's queued thumbnail bytes. */
 function thumbKey(id: string): string {
   return `${id}:thumb`;
@@ -314,7 +342,9 @@ export async function flushQueue(
   const pending = records.filter(isPending).reverse(); // oldest first
 
   for (const entry of pending) {
-    records = patch(records, entry.id, {
+    // Re-read before each patch: a capture queued while this flush awaits
+    // the network must not be overwritten by our earlier snapshot.
+    records = patch(getHistory(), entry.id, {
       status: 'sending',
       lastError: undefined,
     });
@@ -325,14 +355,15 @@ export async function flushQueue(
         ? await getBlobBytes(thumbKey(entry.id))
         : undefined;
       await rs.store(entry.item, fileData, thumbData);
-      records = patch(records, entry.id, {
+      if (entry.hasBlob) await deleteBlob(entry.id);
+      if (entry.hasThumb) await deleteBlob(thumbKey(entry.id));
+      // Patched after the last await, right before saveHistory.
+      records = patch(getHistory(), entry.id, {
         status: 'synced',
         lastError: undefined,
       });
-      if (entry.hasBlob) await deleteBlob(entry.id);
-      if (entry.hasThumb) await deleteBlob(thumbKey(entry.id));
     } catch (error) {
-      records = patch(records, entry.id, {
+      records = patch(getHistory(), entry.id, {
         status: 'failed',
         lastError: errorMessage(error),
       });

@@ -32,55 +32,37 @@ export default defineConfig(({ command }) => ({
         'icon-192-maskable.png',
         'icon-512-maskable.png',
       ],
-      workbox: {
-        clientsClaim: true,
+      // Custom worker (src/sw.ts) so it can receive POST share-target files.
+      // clientsClaim, SKIP_WAITING, the navigation fallback/denylist, URL
+      // param stripping, outdated-cache cleanup and the lazy-chunks runtime
+      // route all live in src/sw.ts now; only precache-manifest options stay.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: {
+        // app-loader.js registers /sw.js as a classic script.
+        rollupFormat: 'iife',
         additionalManifestEntries: [
           { url: '/', revision: version },
           { url: '/capture/', revision: version },
         ],
-        cleanupOutdatedCaches: true,
-        // Share-target and OAuth navigations hit /capture/?… — strip query
-        // params so they match the precached capture shell instead of missing
-        // the exact /capture/ key and falling through to the network.
-        ignoreURLParametersMatching: [/.*/],
-        navigateFallback: '/index.html',
-        // The quick-capture app is its own shell (capture/index.html). Without
-        // this, any /capture/ navigation that isn't an exact precache match
-        // (sub-paths) falls through to the MAIN app's index.html and boots the
-        // wrong app inside the capture PWA window.
-        navigateFallbackDenylist: [/^\/capture\//, /^\/privacy\//],
         globPatterns: ['**/*.{js,css,html,json,png,svg,webmanifest,wasm}'],
         globIgnores: [
           'ml/**/*',
           // Boot manifest must stay network-only: app-loader fetches it with
           // cache: no-store (?t=…) to detect new releases. Precaching it would
-          // let ignoreURLParametersMatching below serve a stale manifest.
+          // let ignoreURLParametersMatching (src/sw.ts) serve a stale manifest.
           'asset-manifest.json',
           // Lazy-only heavyweights (~1.4 MB minified combined). They're
           // dynamic-imported and most sessions never execute them, yet
           // precaching forces every visitor to download them on install and
           // re-download on every release (content hashes change). Excluding
           // them cuts the precache from ~2.2 MB to ~0.85 MB; the runtime
-          // CacheFirst route below still makes them offline-available after
+          // CacheFirst route in src/sw.ts still makes them offline-available after
           // first use (hashed filenames are immutable, so CacheFirst is safe).
           'assets/transformers-*.js',
           'assets/MarkdownEditor-*.js',
           'assets/MarkdownEditor-*.css',
-        ],
-        runtimeCaching: [
-          {
-            urlPattern:
-              /\/assets\/(transformers|MarkdownEditor)-[^/]*\.(js|css)$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'lazy-chunks',
-              expiration: {
-                maxEntries: 12,
-                maxAgeSeconds: 60 * 60 * 24 * 60, // 60 days
-              },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
         ],
       },
     }),
