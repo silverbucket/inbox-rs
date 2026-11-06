@@ -140,11 +140,13 @@
     const col = quickAddCollectionId
       ? collectionMap[quickAddCollectionId]
       : undefined;
-    if (!col) return { name: 'Unfiled', color: '#9ca3af', hidden: false };
+    if (!col)
+      return { name: 'Unfiled', color: '#9ca3af', hidden: false, set: false };
     return {
       name: col.name,
       color: col.color || '#6366f1',
       hidden: isOutOfView(col.id),
+      set: true,
     };
   });
 
@@ -326,13 +328,21 @@
     }}
   />
   {#if !fixedCollectionId}
+    <!-- One grid cell: the chip, plus a ✕ while it points at a collection.
+         The composer keeps the last pick (see todo-destination.ts), so the
+         chip is tinted to make that visible and the ✕ undoes it. -->
+    <span class="quick-add__dest">
     <button
       type="button"
       class="quick-add__collection"
       class:is-hidden-pick={chip.hidden}
+      class:is-set={chip.set}
+      style:--chip-color={chip.color}
       aria-label={chip.hidden
         ? `File into collection — ${chip.name} is hidden by your filter`
-        : 'File into collection'}
+        : chip.set
+          ? `File into collection — adding to ${chip.name}`
+          : 'File into collection'}
       aria-haspopup="dialog"
       aria-expanded={pickerOpen}
       disabled={quickSaving}
@@ -379,6 +389,19 @@
         <polyline points="6 9 12 15 18 9"></polyline>
       </svg>
     </button>
+    {#if chip.set}
+      <button
+        type="button"
+        class="quick-add__clear"
+        aria-label="Clear collection — add as Unfiled"
+        title="Add as Unfiled"
+        disabled={quickSaving}
+        onclick={() => handlePick(undefined)}
+      >
+        <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    {/if}
+    </span>
   {/if}
   <button
     type="button"
@@ -582,6 +605,41 @@
 
   /* A deliberate pick outside the filtered view reads muted, with the eye-off
      mark carrying the "hidden" meaning so the chip needs no extra words. */
+  .quick-add__dest {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  /* A remembered collection: tinted in its colour so it isn't missed. */
+  .quick-add button.quick-add__collection.is-set {
+    border-color: var(--chip-color);
+    background: color-mix(in srgb, var(--chip-color) 14%, var(--surface));
+  }
+
+  .quick-add button.quick-add__clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    min-height: 0;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .quick-add button.quick-add__clear:hover:not(:disabled) {
+    background: var(--surface-hover);
+    color: var(--text);
+    transform: none;
+    box-shadow: none;
+  }
+
   .quick-add button.quick-add__collection.is-hidden-pick {
     color: var(--text-muted);
     border-style: dashed;
