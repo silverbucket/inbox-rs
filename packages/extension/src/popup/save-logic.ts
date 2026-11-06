@@ -7,6 +7,7 @@ import {
 } from '@inbox-rs/rs-module';
 import browser from 'webextension-polyfill';
 import type { DirectRS } from '../lib/rs';
+import { recognisableTitle } from '../lib/title';
 
 const EXT_TO_MIME: Record<string, string> = {
   jpg: 'image/jpeg',
@@ -120,8 +121,14 @@ export async function saveAsBookmark(
     createdAt,
   } = params;
 
-  const desc =
-    [pageNote, pageDescription].filter(Boolean).join('\n\n') || undefined;
+  // The user's note goes in `body` (the web app's bookmark "Notes" field);
+  // `description` stays the page's own. Embedded content (tweet text,
+  // article excerpt) follows the note as a blockquote so the two stay distinct.
+  const note = pageNote.trim();
+  const body =
+    note && embeddedContent
+      ? `${note}\n\n${quote(embeddedContent)}`
+      : note || embeddedContent;
 
   // Download + store image via service worker.
   // For tweets: only save actual tweet images, not the generic Twitter og:image.
@@ -168,11 +175,11 @@ export async function saveAsBookmark(
   let item: BookmarkItem = {
     id,
     type: 'bookmark',
-    title: pageTitle || pageUrl,
+    title: recognisableTitle(pageUrl, pageTitle),
     url: pageUrl,
     createdAt,
-    ...(desc ? { description: desc } : {}),
-    ...(embeddedContent ? { body: embeddedContent } : {}),
+    ...(pageDescription ? { description: pageDescription } : {}),
+    ...(body ? { body } : {}),
     ...(filePath ? { filePath, mimeType } : {}),
     ...(isUsefulOgImage ? { ogImage } : {}),
     ...(favicon ? { favicon } : {}),
@@ -184,4 +191,12 @@ export async function saveAsBookmark(
   if (schedule) item = applySchedule(item, schedule);
   await rs.store(item);
   return item;
+}
+
+/** Markdown blockquote of `text`, every line prefixed. */
+function quote(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => (line ? `> ${line}` : '>'))
+    .join('\n');
 }

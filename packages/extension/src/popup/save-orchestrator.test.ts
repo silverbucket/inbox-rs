@@ -221,7 +221,7 @@ describe('runSavePage', () => {
     expect(bookmark.id).toBe('shared-id');
   });
 
-  it('persists pageNote into the saved bookmark description', async () => {
+  it('persists pageNote into the saved bookmark body', async () => {
     mockFetch.mockResolvedValue({ ok: true });
     const rs = makeRS();
 
@@ -233,8 +233,8 @@ describe('runSavePage', () => {
     });
 
     const stored = JSON.parse(mockFetch.mock.calls[0]?.[1].body);
-    expect(stored.description).toContain('My note');
-    expect(stored.description).toContain('OG description');
+    expect(stored.body).toBe('My note');
+    expect(stored.description).toBe('OG description');
   });
 
   it("schedules the bookmark from the page's event metadata", async () => {

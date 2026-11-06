@@ -2,6 +2,7 @@ import type { BookmarkItem, ImageItem, NoteItem } from '@inbox-rs/rs-module';
 import browser, { type Menus, type Tabs } from 'webextension-polyfill';
 import { DirectRS, type RSConfig } from '../lib/rs';
 import { getConfig } from '../lib/storage';
+import { recognisableTitle } from '../lib/title';
 
 // Register context menus on install
 browser.runtime.onInstalled.addListener(() => {
@@ -142,7 +143,7 @@ async function saveFromContextMenu(
     const item: BookmarkItem = {
       id,
       type: 'bookmark',
-      title: info.linkText || info.linkUrl,
+      title: recognisableTitle(info.linkUrl, info.linkText),
       url: info.linkUrl,
       createdAt,
     };

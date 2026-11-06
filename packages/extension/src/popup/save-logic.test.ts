@@ -358,7 +358,7 @@ describe('saveAsBookmark', () => {
     expect(result.ogImage).toBeUndefined();
   });
 
-  it('combines page note and og:description', async () => {
+  it('keeps the note in body, separate from the page description', async () => {
     mockFetch.mockResolvedValue({ ok: true });
 
     const rs = makeRS();
@@ -369,7 +369,35 @@ describe('saveAsBookmark', () => {
       pageDescription: 'OG description',
     });
 
-    expect(result.description).toBe('My note\n\nOG description');
+    expect(result.description).toBe('OG description');
+    expect(result.body).toBe('My note');
+  });
+
+  it('puts the note first and quotes embedded content after it', async () => {
+    mockFetch.mockResolvedValue({ ok: true });
+
+    const rs = makeRS();
+    const result = await saveAsBookmark({
+      rs,
+      ...baseParams,
+      pageNote: 'My note',
+      embeddedContent: 'Tweet line one\n\nline two',
+    });
+
+    expect(result.body).toBe('My note\n\n> Tweet line one\n>\n> line two');
+  });
+
+  it('falls back to host + path instead of the raw URL for a blank title', async () => {
+    mockFetch.mockResolvedValue({ ok: true });
+
+    const rs = makeRS();
+    const result = await saveAsBookmark({
+      rs,
+      ...baseParams,
+      pageTitle: '  ',
+    });
+
+    expect(result.title).toBe('example.com/article');
   });
 
   it('includes embedded content as body', async () => {
