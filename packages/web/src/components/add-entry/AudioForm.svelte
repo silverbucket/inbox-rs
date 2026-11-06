@@ -12,6 +12,7 @@
     describeTranscriptionError,
     type TranscriptionProgress,
     transcribeAudio,
+    transcriberLoaded,
   } from '../../lib/transcribe';
   import {
     TRANSCRIPTION_MODEL_SIZE_LABEL,
@@ -93,10 +94,16 @@
   async function runTranscription(blob: Blob) {
     const myId = ++transcriptionId;
     transcribeNotice = '';
-    // Offline before the model has ever been cached: don't start a run that
-    // can only fail. The note still saves; the item view offers Transcribe
-    // once the device is back online.
-    if (!$transcriptionModel.ready && !$browserOnline) {
+    // Offline with no cached model and no pipeline in memory: don't start a
+    // run that can only fail. The note still saves; the item view offers
+    // Transcribe once the device is back online. An unfinished status check
+    // never blocks: we only skip once we know the model is missing.
+    if (
+      $transcriptionModel.checked &&
+      !$transcriptionModel.ready &&
+      !$transcriberLoaded &&
+      !$browserOnline
+    ) {
       transcribeNotice = `Transcription needs a one-time ${TRANSCRIPTION_MODEL_SIZE_LABEL} download. Connect to the internet to transcribe this note later.`;
       return;
     }

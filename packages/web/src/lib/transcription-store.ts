@@ -5,6 +5,8 @@ import {
   downloadTranscriptionAssets,
   formatTranscriptionAssetBytes,
   getTranscriptionAssetStatus,
+  OFFLINE_TRANSCRIPTION_KEY,
+  offlineTranscriptionRetentionEnabled,
   TRANSCRIPTION_ASSETS,
   type TranscriptionAssetStatus,
 } from './transcription-assets';
@@ -19,8 +21,6 @@ import {
  * onboarding. A single switch in Settings reflects status and lets them opt
  * out, which also removes the cached files.
  */
-
-export const OFFLINE_TRANSCRIPTION_KEY = 'inbox-rs:offline-transcription';
 
 export const TRANSCRIPTION_MODEL_TOTAL_BYTES = TRANSCRIPTION_ASSETS.reduce(
   (sum, asset) => sum + asset.size,
@@ -51,14 +51,6 @@ export const transcriptionModel = writable<TranscriptionModelState>({
   checked: false,
 });
 
-function readLocal(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
 function writeLocal(key: string, value: string) {
   try {
     localStorage.setItem(key, value);
@@ -69,7 +61,7 @@ function writeLocal(key: string, value: string) {
 
 /** On unless the user turned it off in Settings. */
 export const offlineTranscriptionEnabled = writable(
-  readLocal(OFFLINE_TRANSCRIPTION_KEY) !== 'false',
+  offlineTranscriptionRetentionEnabled(),
 );
 
 function percentOf(status: TranscriptionAssetStatus): number {
@@ -78,21 +70,35 @@ function percentOf(status: TranscriptionAssetStatus): number {
     : 0;
 }
 
+/** Never rejects: a failing IndexedDB check is reported through the store. */
 export async function refreshTranscriptionModelStatus(): Promise<void> {
-  const status = await getTranscriptionAssetStatus();
-  transcriptionModel.update((s) => ({
-    ...s,
-    ready: status.ready,
-    percent: s.downloading ? s.percent : percentOf(status),
-    checked: true,
-  }));
+  try {
+    const status = await getTranscriptionAssetStatus();
+    transcriptionModel.update((s) => ({
+      ...s,
+      ready: status.ready,
+      percent: s.downloading ? s.percent : percentOf(status),
+      checked: true,
+    }));
+  } catch (e) {
+    console.warn('[transcription] status check failed:', e);
+    transcriptionModel.update((s) => ({
+      ...s,
+      ready: false,
+      checked: true,
+      error: s.error || 'Offline storage is not available in this browser.',
+    }));
+  }
 }
 
 let inFlight: Promise<void> | null = null;
+let inFlightController: AbortController | null = null;
 
 /** Download the model into the local cache, reporting progress via the store. */
 export function downloadTranscriptionModel(): Promise<void> {
   if (inFlight) return inFlight;
+  const controller = new AbortController();
+  inFlightController = controller;
   inFlight = (async () => {
     transcriptionModel.update((s) => ({
       ...s,
@@ -101,11 +107,13 @@ export function downloadTranscriptionModel(): Promise<void> {
     }));
     try {
       const status = await downloadTranscriptionAssets((progress) => {
+        if (controller.signal.aborted) return;
         transcriptionModel.update((s) => ({
           ...s,
           percent: percentOf(progress),
         }));
-      });
+      }, controller.signal);
+      if (controller.signal.aborted) return;
       transcriptionModel.update((s) => ({
         ...s,
         ready: status.ready,
@@ -114,12 +122,14 @@ export function downloadTranscriptionModel(): Promise<void> {
         checked: true,
       }));
     } catch (e) {
+      if (controller.signal.aborted) return;
       transcriptionModel.update((s) => ({
         ...s,
         downloading: false,
         error: describeDownloadError(e),
       }));
     } finally {
+      if (inFlightController === controller) inFlightController = null;
       inFlight = null;
     }
   })();
@@ -127,8 +137,13 @@ export function downloadTranscriptionModel(): Promise<void> {
 }
 
 function describeDownloadError(e: unknown): string {
-  const message = e instanceof Error ? e.message : '';
-  if (/enough browser storage/i.test(message)) {
+  const err = (e ?? {}) as { name?: unknown; message?: unknown };
+  const name = typeof err.name === 'string' ? err.name : '';
+  const message = typeof err.message === 'string' ? err.message : '';
+  if (
+    name === 'QuotaExceededError' ||
+    /enough browser storage/i.test(message)
+  ) {
     return `Not enough browser storage. The model needs ${TRANSCRIPTION_MODEL_SIZE_LABEL}.`;
   }
   if (/not available here/i.test(message)) {
@@ -137,21 +152,28 @@ function describeDownloadError(e: unknown): string {
   return "Couldn't download the model. It will retry next time you're online.";
 }
 
-/** Flip the Settings switch. Turning it off removes the cached model. */
+/**
+ * Flip the Settings switch. Turning it off aborts any download in flight
+ * (so nothing lands after the delete) and removes the cached model.
+ */
 export async function setOfflineTranscriptionEnabled(enabled: boolean) {
   offlineTranscriptionEnabled.set(enabled);
   writeLocal(OFFLINE_TRANSCRIPTION_KEY, enabled ? 'true' : 'false');
   if (enabled) {
     await downloadTranscriptionModel();
-  } else {
-    await deleteTranscriptionAssets();
-    transcriptionModel.update((s) => ({
-      ...s,
-      ready: false,
-      percent: 0,
-      error: '',
-    }));
+    return;
   }
+  const running = inFlight;
+  inFlightController?.abort();
+  await running?.catch(() => {});
+  await deleteTranscriptionAssets();
+  transcriptionModel.update((s) => ({
+    ...s,
+    ready: false,
+    downloading: false,
+    percent: 0,
+    error: '',
+  }));
 }
 
 type ConnectionInfo = { saveData?: boolean };

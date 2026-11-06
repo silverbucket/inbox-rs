@@ -7,12 +7,13 @@
     browserOnline,
     connected,
     loadFileBlobUrl,
-    storeItem,
+    updateItem,
   } from '../../lib/stores';
   import {
     describeTranscriptionError,
     type TranscriptionProgress,
     transcribeAudio,
+    transcriberLoaded,
   } from '../../lib/transcribe';
   import {
     TRANSCRIPTION_MODEL_SIZE_LABEL,
@@ -45,9 +46,12 @@
   const audioSrc = $derived($blobUrls[item.filePath] || null);
   const hasTranscript = $derived(!!item.body || !!item.transcribed);
   // The model downloads on demand, so the only blocking case is being
-  // offline before it has ever been cached on this device.
+  // offline with neither a cached copy nor a pipeline already in memory.
   const needsModelButOffline = $derived(
-    $transcriptionModel.checked && !$transcriptionModel.ready && !$browserOnline,
+    $transcriptionModel.checked &&
+      !$transcriptionModel.ready &&
+      !$transcriberLoaded &&
+      !$browserOnline,
   );
   const progressLabel = $derived(
     progress?.phase === 'downloading'
@@ -126,13 +130,23 @@
         },
       });
       if (myRun !== runId) return;
-      const updated: AudioItem = {
-        ...item,
-        body: text || undefined,
-        title: text && item.title === 'Audio' ? text.slice(0, 50) : item.title,
-        transcribed: true,
-      };
-      await storeItem(updated);
+      // Merge into the live item inside its write queue: a delete that
+      // landed while inference ran returns undefined and nothing is written,
+      // so transcription can never resurrect a removed card. Edits made
+      // meanwhile are kept; only the transcript fields change.
+      await updateItem(item.id, (current) => {
+        if (!current || current.type !== 'audio') return null;
+        const updated: AudioItem = {
+          ...current,
+          body: text || undefined,
+          title:
+            text && current.title === 'Audio'
+              ? text.slice(0, 50)
+              : current.title,
+          transcribed: true,
+        };
+        return updated;
+      });
       void refreshTranscriptionModelStatus();
     } catch (e) {
       if (myRun !== runId) return;

@@ -12,6 +12,8 @@ const {
   transcribeAudio,
   getFile,
   storeItem,
+  updateItem,
+  liveItems,
 } = vi.hoisted(() => {
   const CORRUPTED_BYTES = new Uint8Array([0x1a, 0x45, 0xfd, 0xfd, 0xfd, 0x00]);
   return {
@@ -33,6 +35,16 @@ const {
       mimeType: 'audio/webm',
     })),
     storeItem: vi.fn(async () => {}),
+    // Mirrors stores.updateItem: hand the live item to the callback, write
+    // what it returns, skip when it returns null.
+    updateItem: vi.fn(
+      async (id: string, update: (current: unknown) => unknown) => {
+        const next = update(liveItems.get(id));
+        if (next) storeItem(next);
+        return next;
+      },
+    ),
+    liveItems: new Map<string, unknown>(),
   };
 });
 
@@ -44,6 +56,7 @@ vi.mock('../../lib/stores', async () => {
     connected: writable(true),
     loadFileBlobUrl: vi.fn(),
     storeItem,
+    updateItem,
   };
 });
 vi.mock('../../lib/rs', () => ({
@@ -98,6 +111,8 @@ describe('AudioView transcribe', () => {
     host = document.createElement('div');
     document.body.appendChild(host);
     blobUrls.set({ 'files/a1.webm': PLAYER_URL });
+    liveItems.clear();
+    liveItems.set('a1', audio());
     browserOnline.set(true);
     transcriptionModel.set({
       ready: false,
@@ -153,6 +168,27 @@ describe('AudioView transcribe', () => {
       expect.objectContaining({ body: 'hello world', transcribed: true }),
     );
     expect(host.textContent).not.toContain('failed');
+  });
+
+  it('does not write a transcript for a card deleted while inference ran', async () => {
+    let finish: (text: string) => void = () => {};
+    transcribeAudio.mockImplementationOnce(
+      () => new Promise<string>((resolve) => (finish = resolve)),
+    );
+    component = mount(AudioView, {
+      target: host,
+      props: { item: audio(), titleId: 't' },
+    });
+    flushSync();
+    (host.querySelector('button.btn-action') as HTMLButtonElement).click();
+    await settle();
+
+    liveItems.delete('a1'); // deletion landed in the write queue first
+    finish('late words');
+    await settle();
+
+    expect(updateItem).toHaveBeenCalledWith('a1', expect.any(Function));
+    expect(storeItem).not.toHaveBeenCalled();
   });
 
   it('shows download progress, then transcribing, with a Cancel button', async () => {

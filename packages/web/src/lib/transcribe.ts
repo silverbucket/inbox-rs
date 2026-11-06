@@ -7,6 +7,7 @@ export {
   TRANSCRIPTION_WASM_FILES,
 } from './transcription-manifest';
 
+import { writable } from 'svelte/store';
 import {
   createStoredWasmPaths,
   createTranscriptionAssetCache,
@@ -62,6 +63,13 @@ type ProgressListener = (progress: TranscriptionProgress) => void;
 let transcriber: Transcriber | null = null;
 let loadPromise: Promise<Transcriber> | null = null;
 const progressListeners = new Set<ProgressListener>();
+
+/**
+ * True once the pipeline is in memory for this session. Distinct from the
+ * persisted-asset `ready` flag: with "keep for offline" off, the model is
+ * loaded but never written to IndexedDB, and it can still transcribe offline.
+ */
+export const transcriberLoaded = writable(false);
 
 type PipelineProgressEvent = {
   status?: string;
@@ -147,17 +155,18 @@ async function getTranscriber(onProgress?: ProgressListener) {
             quantized: true,
             progress_callback: (event: PipelineProgressEvent) => {
               const percent = track(event);
-              // Cached files still report a final 100% event, so at 100 the
-              // remaining wait is model initialisation, not a download.
-              if (percent === null) return;
-              emitProgress(
-                percent >= 100
-                  ? { phase: 'transcribing' }
-                  : { phase: 'downloading', percent },
-              );
+              // Only report a partial download. The tally covers files seen
+              // so far, so 100% can be reached before a later file starts
+              // (and cached files report a final 100% without downloading);
+              // the transcribing phase is announced once the pipeline is
+              // actually ready, in transcribeAudio.
+              if (percent !== null && percent < 100) {
+                emitProgress({ phase: 'downloading', percent });
+              }
             },
           },
         )) as unknown as Transcriber;
+        transcriberLoaded.set(true);
         return transcriber;
       } catch (e) {
         console.error('[transcribe] Failed to load pipeline:', e);
