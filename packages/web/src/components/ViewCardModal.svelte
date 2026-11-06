@@ -864,6 +864,7 @@
       <CollectionPicker
         {item}
         mode={pickerMode}
+        fileOnPick
         onpick={handlePick}
         onclose={() => (showPicker = false)}
       />
