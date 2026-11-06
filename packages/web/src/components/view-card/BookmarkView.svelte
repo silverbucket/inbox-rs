@@ -3,6 +3,7 @@
   import { convertBookmarkToImage } from '../../lib/bookmark-image';
   import {
     describeLinkPreviewError,
+    LINK_PREVIEW_ERROR,
     enrichBookmark,
     needsEnrichment,
   } from '../../lib/enrich';
@@ -143,10 +144,14 @@
   {#if fetchingPreview}
     <span class="status-text">Fetching preview…</span>
   {:else if previewError}
-    <span class="status-text error-text">{previewError}</span>
+    <span class="status-text error-text">{LINK_PREVIEW_ERROR}</span>
     <button type="button" class="btn-action" onclick={handleFetchPreview}
       >Retry</button
     >
+    <details class="error-details">
+      <summary>More details</summary>
+      <p>{previewError}</p>
+    </details>
   {:else if previewStatus === 'none'}
     <span class="status-text">No preview available</span>
   {:else if $userSettings.linkPreviews !== false && needsEnrichment(item)}
@@ -201,5 +206,24 @@
 
   .error-text {
     color: var(--danger-text);
+  }
+
+  /* The details wrap onto their own line under the message. */
+  .meta-row:has(.error-details) {
+    flex-wrap: wrap;
+  }
+
+  .error-details {
+    flex-basis: 100%;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .error-details summary {
+    cursor: pointer;
+  }
+
+  .error-details p {
+    margin: 0.25rem 0 0;
   }
 </style>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { AudioItem } from '@inbox-rs/rs-module';
+  import { type AudioItem, truncateTitle } from '@inbox-rs/rs-module';
   import 'highlight.js/styles/github-dark.min.css';
   import { renderMarkdown } from '../../lib/markdown';
   import { blobUrls, connected, loadFileBlobUrl, storeItem } from '../../lib/stores';
@@ -81,7 +81,7 @@
       const updated: AudioItem = {
         ...item,
         body: text || undefined,
-        title: text && item.title === 'Audio' ? text.slice(0, 50) : item.title,
+        title: text && item.title === 'Audio' ? truncateTitle(text) : item.title,
         transcribed: true,
       };
       await storeItem(updated);

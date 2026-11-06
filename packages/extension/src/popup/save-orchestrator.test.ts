@@ -317,7 +317,7 @@ describe('runSaveNote', () => {
     });
 
     const stored = JSON.parse(mockFetch.mock.calls[0]?.[1].body);
-    expect(stored.title).toBe(longBody.slice(0, 50));
+    expect(stored.title).toBe(`${longBody.slice(0, 50)}…`);
     expect(stored.body).toBe(longBody);
   });
 

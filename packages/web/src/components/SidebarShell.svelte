@@ -28,7 +28,6 @@
     toggleCollectionFilter,
     enableCollectionFilter,
     soloCollectionFilter,
-    moveItemToCollection,
     moveCollectionToGroup,
     createCollection,
     storeGroup,
@@ -47,6 +46,7 @@
     requestedCollectionMove,
   } from '../lib/drag';
   import { showToast } from '../lib/toast';
+  import { fileItem } from '../lib/triage-actions';
   import { randomPresetColor } from '../lib/constants';
 
   // bind:this on a Svelte 5 component yields its exports, not a class instance.
@@ -385,25 +385,12 @@
     dragOverColId = null;
     clearSpring();
     draggingItemId.set(null);
-    if (!id) return;
-    const previousCollectionId = get(items)[id]?.collectionId;
-    try {
-      await moveItemToCollection(id, col.id);
-      justFiledColId = col.id;
-      setTimeout(() => {
-        if (justFiledColId === col.id) justFiledColId = null;
-      }, 1000);
-      showToast(`Filed in ${col.name}`, {
-        label: 'Undo',
-        run: () => {
-          void moveItemToCollection(id, previousCollectionId).catch(() => {
-            showToast("Couldn't undo — open the item to move it.");
-          });
-        },
-      });
-    } catch (error) {
-      console.error('Failed to assign item to collection', error);
-    }
+    const item = id ? get(items)[id] : undefined;
+    if (!item || !(await fileItem(item, col))) return;
+    justFiledColId = col.id;
+    setTimeout(() => {
+      if (justFiledColId === col.id) justFiledColId = null;
+    }, 1000);
   }
 
   // ── Drag a collection onto a group to move it there ──────────────────────

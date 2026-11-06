@@ -51,6 +51,7 @@ import {
   enrichAllBookmarks,
   enrichBookmark,
   isSavedLink,
+  LINK_PREVIEW_ERROR,
   LOCAL_LINK_PREVIEWS_KEY,
   LOCAL_SOCKETHUB_URL_KEY,
   linkNoteUrl,
@@ -97,7 +98,11 @@ describe('local preview settings', () => {
     expect(fetchLinkMetadata).not.toHaveBeenCalled();
   });
 
-  it('turns network failures into an actionable message', () => {
+  it('keeps the card message plain; the diagnosis is the detail', () => {
+    expect(LINK_PREVIEW_ERROR).toBe('Couldn’t load a preview for this link.');
+  });
+
+  it('turns network failures into an actionable diagnosis', () => {
     expect(describeLinkPreviewError(new TypeError('Failed to fetch'))).toBe(
       'Couldn’t reach the preview service. Check its URL, CORS, and that it is running.',
     );
@@ -159,6 +164,15 @@ describe('saved link helpers', () => {
     });
 
     expect(noteToBookmark(linkNote(), url).title).toBe(url);
+  });
+
+  it('treats a cut-off derived title, with or without "…", as a fallback', () => {
+    const long = `https://example.com/${'a'.repeat(60)}`;
+    for (const title of [`${long.slice(0, 50)}…`, long.slice(0, 50)]) {
+      expect(noteToBookmark(linkNote({ title, body: long }), long).title).toBe(
+        long,
+      );
+    }
   });
 });
 
