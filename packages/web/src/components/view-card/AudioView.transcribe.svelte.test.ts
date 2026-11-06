@@ -229,6 +229,46 @@ describe('AudioView transcribe', () => {
     expect(host.textContent).toContain('edited while transcribing');
   });
 
+  it('appends a new transcript below a note the user typed instead of replacing it', async () => {
+    transcribeAudio.mockResolvedValueOnce('model words');
+    const existing = {
+      ...audio(),
+      body: 'call Sam re: invoice',
+      transcribed: true,
+    };
+    liveItems.set('a1', existing);
+    component = mount(AudioView, {
+      target: host,
+      props: { item: existing, titleId: 't' },
+    });
+    flushSync();
+    (host.querySelector('button.btn-link') as HTMLButtonElement).click();
+    await settle();
+
+    expect(storeItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: 'call Sam re: invoice\n\nmodel words',
+        transcribed: true,
+      }),
+    );
+  });
+
+  it('shows nothing offline for an item that already has a transcript', () => {
+    browserOnline.set(false);
+    component = mount(AudioView, {
+      target: host,
+      props: {
+        item: { ...audio(), body: 'old text', transcribed: true },
+        titleId: 't',
+      },
+    });
+    flushSync();
+    expect(host.textContent).not.toContain('one-time');
+    expect(host.querySelector('button.btn-link')?.textContent).toContain(
+      'Transcribe again',
+    );
+  });
+
   it('shows download progress, then transcribing, with a Cancel button', async () => {
     let resolveRun: (text: string) => void = () => {};
     transcribeAudio.mockImplementationOnce(

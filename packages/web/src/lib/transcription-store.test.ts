@@ -208,6 +208,28 @@ describe('scheduleAutoTranscriptionDownload', () => {
     expect(assets.downloadTranscriptionAssets).not.toHaveBeenCalled();
   });
 
+  it('clears a stale download error once every asset is present', async () => {
+    assets.downloadTranscriptionAssets.mockRejectedValueOnce(
+      new Error('offline'),
+    );
+    const mod = await import('./transcription-store');
+    await mod.downloadTranscriptionModel();
+    expect(get(mod.transcriptionModel).error).not.toBe('');
+
+    assets.getTranscriptionAssetStatus.mockResolvedValueOnce({
+      ready: true,
+      storedBytes: 100,
+      totalBytes: 100,
+      storedAssets: 1,
+      totalAssets: 1,
+    });
+    await mod.refreshTranscriptionModelStatus();
+    expect(get(mod.transcriptionModel)).toMatchObject({
+      ready: true,
+      error: '',
+    });
+  });
+
   it('reports a failed status check instead of rejecting', async () => {
     assets.getTranscriptionAssetStatus.mockRejectedValueOnce(
       new Error('idb closed'),

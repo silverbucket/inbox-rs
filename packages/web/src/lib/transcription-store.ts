@@ -78,6 +78,8 @@ export async function refreshTranscriptionModelStatus(): Promise<void> {
       ...s,
       ready: status.ready,
       percent: s.downloading ? s.percent : percentOf(status),
+      // A download error is moot once every asset is present.
+      error: status.ready ? '' : s.error,
       checked: true,
     }));
   } catch (e) {

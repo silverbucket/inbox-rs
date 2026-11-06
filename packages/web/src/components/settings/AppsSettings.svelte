@@ -7,6 +7,7 @@
   import { pluginArtifacts } from '../../lib/plugin-downloads.generated';
   import {
     TRANSCRIPTION_MODEL_SIZE_LABEL,
+    connectionPrefersSavingData,
     downloadTranscriptionModel,
     offlineTranscriptionEnabled,
     setOfflineTranscriptionEnabled,
@@ -72,7 +73,7 @@
       <div class="row-desc">{transcriptionSummary}</div>
     </div>
     <div class="row-ctl">
-      {#if $offlineTranscriptionEnabled && !$transcriptionModel.ready && !$transcriptionModel.downloading}
+      {#if $offlineTranscriptionEnabled && !$transcriptionModel.ready && !$transcriptionModel.downloading && (connectionPrefersSavingData() || $transcriptionModel.error)}
         <button type="button" class="btn" onclick={() => void downloadTranscriptionModel()}
           >Download ({TRANSCRIPTION_MODEL_SIZE_LABEL})</button
         >

@@ -151,9 +151,12 @@
           edited = true;
           return null;
         }
+        // The body may be a note the user typed rather than an old
+        // transcript, and we can't tell which. Never replace it: append the
+        // new transcript below, so nothing the user wrote is lost.
         const updated: AudioItem = {
           ...current,
-          body: text,
+          body: current.body ? `${current.body}\n\n${text}` : text,
           title:
             text && current.title === 'Audio'
               ? text.slice(0, 50)
@@ -224,7 +227,7 @@
     <button type="button" class="btn-action" onclick={handleTranscribe}
       >Retry</button
     >
-  {:else if audioSrc && needsModelButOffline}
+  {:else if audioSrc && !hasTranscript && needsModelButOffline}
     <p class="status-text">
       Transcription needs a one-time {TRANSCRIPTION_MODEL_SIZE_LABEL} download.
       Connect to the internet to transcribe.
