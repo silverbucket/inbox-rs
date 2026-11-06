@@ -43,7 +43,7 @@ npm run dev -w packages/web
 npm run build -w packages/web
 ```
 
-The web app header includes a `Plugins` page at `#/plugins`. Production builds package browser and Thunderbird artifacts into `packages/web/dist/downloads/` so a static deployment of the web `dist/` folder can serve the installers directly.
+The web app header includes an `Add-ons` page at `#/add-ons`. Production builds package browser and Thunderbird artifacts into `packages/web/dist/downloads/` so a static deployment of the web `dist/` folder can serve the installers directly.
 
 ### Connecting
 

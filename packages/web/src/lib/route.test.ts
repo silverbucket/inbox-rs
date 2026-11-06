@@ -12,6 +12,10 @@ describe('parseHash', () => {
   it('parses static routes', () => {
     expect(parseHash('#/todos')).toEqual({ page: 'todos' });
     expect(parseHash('#/collections')).toEqual({ page: 'collections' });
+    expect(parseHash('#/add-ons')).toEqual({ page: 'plugins' });
+  });
+
+  it('keeps the legacy #/plugins link landing on the Add-ons page', () => {
     expect(parseHash('#/plugins')).toEqual({ page: 'plugins' });
   });
 
@@ -105,13 +109,13 @@ describe('formatRoute', () => {
     expect(formatRoute({ page: 'inbox' })).toBe('#/');
     expect(formatRoute({ page: 'todos' })).toBe('#/todos');
     expect(formatRoute({ page: 'collections' })).toBe('#/collections');
-    expect(formatRoute({ page: 'plugins' })).toBe('#/plugins');
+    expect(formatRoute({ page: 'plugins' })).toBe('#/add-ons');
   });
 
   it('omits filter param on pages that do not use filters', () => {
     expect(formatRoute({ page: 'inbox', groupFilters: ['g1'] })).toBe('#/');
     expect(formatRoute({ page: 'plugins', groupFilters: ['g1'] })).toBe(
-      '#/plugins',
+      '#/add-ons',
     );
   });
 

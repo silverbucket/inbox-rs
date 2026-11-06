@@ -27,16 +27,30 @@ test('default route renders inbox empty state', async ({ page, webOrigin }) => {
   assertNoConsoleErrors(log);
 });
 
-test('plugins page loads when disconnected', async ({ page, webOrigin }) => {
-  // The Plugins page is the one route that should work *without* a
+test('add-ons page loads when disconnected', async ({ page, webOrigin }) => {
+  // The Add-ons page is the one route that should work *without* a
   // connection — it's how users get the extension.
+  await page.goto(`${webOrigin}/#/add-ons`);
+  await page.waitForLoadState('networkidle');
+
+  // The footer Add-ons link, when active, mirrors the route — confirm
+  // it's marked active so we know route parsing landed on the page.
+  const addOns = page.locator('.footer-link', { hasText: 'Add-ons' });
+  await expect(addOns).toHaveClass(/active/);
+  await expect(addOns).toHaveAttribute('href', '#/add-ons');
+});
+
+test('legacy #/plugins links still land on the Add-ons page', async ({
+  page,
+  webOrigin,
+}) => {
   await page.goto(`${webOrigin}/#/plugins`);
   await page.waitForLoadState('networkidle');
 
-  // The footer Plugins link, when active, mirrors the route — confirm
-  // it's marked active so we know route parsing landed on plugins.
-  const plugins = page.locator('.footer-link', { hasText: 'Plugins' });
-  await expect(plugins).toHaveClass(/active/);
+  await expect(
+    page.locator('.footer-link', { hasText: 'Add-ons' }),
+  ).toHaveClass(/active/);
+  await expect(page.locator('.plugins-page')).toBeVisible();
 });
 
 test('plugins page spans the full width in the sidebar layout', async ({
@@ -49,7 +63,7 @@ test('plugins page spans the full width in the sidebar layout', async ({
   await page.addInitScript(() =>
     localStorage.setItem('inbox-rs:layout', 'sidebar'),
   );
-  await page.goto(`${webOrigin}/#/plugins`);
+  await page.goto(`${webOrigin}/#/add-ons`);
   await page.waitForLoadState('networkidle');
 
   const viewport = page.viewportSize();

@@ -71,11 +71,11 @@ describe('AppFooter', () => {
     expect(host.querySelector('.footer-date')).toBeNull();
   });
 
-  it('highlights the Plugins link only on the plugins page', () => {
+  it('highlights the Add-ons link only on the Add-ons page', () => {
     render();
     const link = () =>
       Array.from(host.querySelectorAll('a.footer-link')).find((a) =>
-        a.textContent?.includes('Plugins'),
+        a.textContent?.includes('Add-ons'),
       );
     expect(link()?.classList.contains('active')).toBe(false);
 

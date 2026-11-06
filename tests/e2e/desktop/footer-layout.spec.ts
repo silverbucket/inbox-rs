@@ -57,7 +57,7 @@ async function expectFooterReadable(page: Page): Promise<void> {
   const targets: Array<[string, Locator]> = [
     ['brand', page.locator('.footer-brand')],
     ['version', page.locator('.footer-version')],
-    ['Plugins link', page.locator('.footer-link', { hasText: 'Plugins' })],
+    ['Add-ons link', page.locator('.footer-link', { hasText: 'Add-ons' })],
     ['GitHub link', page.locator('.footer-link', { hasText: 'GitHub' })],
   ];
   for (const [name, target] of targets) {
@@ -98,7 +98,7 @@ async function expectSingleRowFooter(page: Page): Promise<void> {
     page.locator('.footer-brand'),
     page.locator('.footer-version'),
     page.locator('.footer-date'),
-    page.locator('.footer-link', { hasText: 'Plugins' }),
+    page.locator('.footer-link', { hasText: 'Add-ons' }),
     page.locator('.footer-link', { hasText: 'GitHub' }),
   ]) {
     // The build date is only stamped by a real `vite build`.

@@ -117,7 +117,7 @@ A saved tweet still reads as the tweet a year later, after the account is gone.
 | **Browser extension** | Chrome MV3 + Firefox. Save the current page, jot a quick note, or right-click to save a link, an image (the actual binary, not the URL), or a text selection. Tweets capture their full text and attached images. |
 | **Thunderbird extension** | MailExtension for Thunderbird 128+. Saves an email with its subject, sender, and body, plus your own notes and a `mid:` link back to the original message. |
 
-The web app's **Plugins** page (`#/plugins`) serves the browser and Thunderbird
+The web app's **Add-ons** page (`#/add-ons`) serves the browser and Thunderbird
 builds as direct downloads.
 
 ## Architecture
