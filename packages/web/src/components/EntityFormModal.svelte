@@ -115,7 +115,7 @@
         {/if}
         {#if isEdit && ondelete}
           {#if confirmingDelete}
-            <span class="delete-confirm-text">Delete this {entityName.toLowerCase()}?</span>
+            <span class="delete-confirm-text">Delete this {entityName.toLowerCase()} permanently?</span>
             <button type="button" class="btn-delete-confirm" onclick={ondelete}>Delete</button>
             <button type="button" class="btn-cancel" onclick={() => confirmingDelete = false}>Cancel</button>
           {:else}

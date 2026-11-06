@@ -21,6 +21,7 @@
   import { compareByDueTime, isDueTodayOrOverdue } from '../lib/schedule';
   import { todayStart } from '../lib/now';
   import { slide, fade } from 'svelte/transition';
+  import { get } from 'svelte/store';
   import { createDndLeaveGuard } from '../lib/dnd-leave-guard';
   import { createReorderFade } from '../lib/reorder-fade';
   import { flip } from 'svelte/animate';
@@ -31,9 +32,10 @@
   import { COLLECTION_DRAG_MIME, draggingCollectionId, draggingItemId } from '../lib/drag';
   import {
     favoriteCollectionIds,
-    moveItemToCollection,
+    items as allItems,
     toggleFavoriteCollection,
   } from '../lib/stores';
+  import { fileItem } from '../lib/triage-actions';
   import { columnSets } from '../lib/board-actions';
   import { showToast } from '../lib/toast';
   import InboxCard from './InboxCard.svelte';
@@ -273,13 +275,8 @@
     filingDragOver = false;
     draggingItemId.set(null);
     if (!itemId || items.some(({ id }) => id === itemId)) return;
-    try {
-      await moveItemToCollection(itemId, collection.id);
-      showToast(`Filed in ${collection.name}`);
-    } catch (error) {
-      console.error('Failed to file item into collection', error);
-      showToast(`Couldn't file into ${collection.name}.`);
-    }
+    const item = get(allItems)[itemId];
+    if (item) await fileItem(item, collection);
   }
 
   async function toggleCompletedSection() {

@@ -26,6 +26,7 @@
     item,
     mode = 'move',
     hiddenCollectionIds = undefined,
+    fileOnPick = false,
     onpick,
     onclose,
   }: {
@@ -44,6 +45,11 @@
      * collection as in view.
      */
     hiddenCollectionIds?: Set<string>;
+    /**
+     * The caller files the stored `item` into the picked collection straight
+     * away, so a collection created here can be written with it already listed.
+     */
+    fileOnPick?: boolean;
     /** `undefined` collectionId = Inbox / Unfiled. */
     onpick: (collectionId: string | undefined) => void;
     onclose: () => void;
@@ -187,12 +193,16 @@
     creating = true;
     createError = '';
     try {
+      // Write the new group and collection already linked (to each other and
+      // to a stored card) so nothing is written twice in a row: a second PUT
+      // to the same path 412s and the link is lost.
+      const colId = crypto.randomUUID();
       let destinationGroupId = createGroupId;
       if (creatingNewGroup) {
         const group: CollectionGroup = {
           id: crypto.randomUUID(),
           name: groupName,
-          collectionIds: [],
+          collectionIds: [colId],
           createdAt: new Date().toISOString(),
           color: randomPresetColor(),
         };
@@ -200,9 +210,9 @@
         destinationGroupId = group.id;
       }
       const col: Collection = {
-        id: crypto.randomUUID(),
+        id: colId,
         name,
-        itemIds: [],
+        itemIds: fileOnPick && item.id && $items[item.id] ? [item.id] : [],
         createdAt: new Date().toISOString(),
         color: randomPresetColor(),
         groupId: destinationGroupId,

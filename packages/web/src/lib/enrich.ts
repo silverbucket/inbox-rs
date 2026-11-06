@@ -16,6 +16,7 @@ import {
   eventSchedule,
   type InboxItem,
   type NoteItem,
+  truncateTitle,
 } from '@inbox-rs/rs-module';
 import { get, writable } from 'svelte/store';
 import { bookmarkUrlFromNoteBody } from './capture-detect';
@@ -57,7 +58,13 @@ export function resolveSockethubEndpoint(): string {
   );
 }
 
-/** Turn low-level fetch failures into a short diagnosis with a next step. */
+/** What the card says when a link preview fetch fails. */
+export const LINK_PREVIEW_ERROR = 'Couldn’t load a preview for this link.';
+
+/**
+ * Turn low-level fetch failures into a technical diagnosis with a next step,
+ * shown behind "More details" under {@link LINK_PREVIEW_ERROR}.
+ */
 export function describeLinkPreviewError(error: unknown): string {
   if (error instanceof DOMException && error.name === 'TimeoutError') {
     return 'Preview service timed out. Check the Sockethub URL.';
@@ -112,19 +119,19 @@ export function needsLinkPreview(item: InboxItem): boolean {
  * their own — i.e. it is neither the body- nor URL-derived fallback.
  */
 export function noteToBookmark(note: NoteItem, url: string): BookmarkItem {
-  const bodyFallbackTitle = note.body.slice(0, 50);
-  const urlFallbackTitle = url.slice(0, 50);
+  // Derived titles end in "…" when cut; older ones were cut without it.
+  const fallbackTitles = new Set(
+    [note.body, url].flatMap((text) => [
+      truncateTitle(text),
+      text.slice(0, 50),
+    ]),
+  );
   const { body: _body, ...rest } = note;
   return {
     ...rest,
     type: 'bookmark',
     url,
-    title:
-      !note.title ||
-      note.title === bodyFallbackTitle ||
-      note.title === urlFallbackTitle
-        ? url
-        : note.title,
+    title: !note.title || fallbackTitles.has(note.title) ? url : note.title,
   };
 }
 

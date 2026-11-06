@@ -14,10 +14,12 @@ import {
 import { showToast } from './toast';
 
 /**
- * Inbox triage actions shared by the Process inbox panel and the cards'
- * "File to …?" hint. Each one confirms with a toast that can undo it, and
- * reports failure with a toast rather than throwing, so callers only need
- * the returned success flag. `onundo` runs once an undo has landed.
+ * Organize actions shared by every surface that files or archives a card:
+ * the Process inbox panel, the cards' "File to …?" hint, the card modal,
+ * and the collection drop targets. Each one confirms with a toast that can
+ * undo it, and reports failure with a toast rather than throwing, so
+ * callers only need the returned success flag. `onundo` runs once an undo
+ * has landed.
  */
 
 /** The toast's Undo: revert the change, then let the caller catch up. */
@@ -45,42 +47,71 @@ function fresh(item: InboxItem): InboxItem {
   return get(items)[item.id] ?? item;
 }
 
-/** File an inbox card into a collection. */
-export async function fileFromInbox(
+/**
+ * File a card into a collection, or back to the inbox when `collection` is
+ * undefined.
+ */
+export async function fileItem(
   item: InboxItem,
-  collection: Collection,
+  collection: Collection | undefined,
   onundo?: () => void,
 ): Promise<boolean> {
   const before = fresh(item);
   try {
-    await moveItemToCollection(item.id, collection.id);
-    recordCollectionUse(collection.id);
+    await moveItemToCollection(item.id, collection?.id);
+    if (collection) recordCollectionUse(collection.id);
     const after = get(items)[item.id] ?? before;
-    showToast(`Filed to ${collection.name}`, undoTo({ before, after }, onundo));
+    showToast(
+      collection ? `Filed to ${collection.name}` : 'Moved to Inbox',
+      undoTo({ before, after }, onundo),
+    );
     return true;
   } catch (error) {
-    console.error('Failed to file inbox item', error);
+    console.error('Failed to file item', error);
     showToast('Couldn’t file that card');
     return false;
   }
 }
 
-/** Archive an inbox card. */
-export async function archiveFromInbox(
+/** Archive a card, or restore it from the archive. */
+export async function setArchived(
   item: InboxItem,
+  archived: boolean,
   onundo?: () => void,
 ): Promise<boolean> {
   const before = fresh(item);
   try {
-    await setItemArchived(item.id, true);
+    await setItemArchived(item.id, archived);
     const after = get(items)[item.id] ?? before;
-    showToast('Archived', undoTo({ before, after }, onundo));
+    showToast(
+      archived ? 'Archived' : 'Restored',
+      undoTo({ before, after }, onundo),
+    );
     return true;
   } catch (error) {
-    console.error('Failed to archive inbox item', error);
-    showToast('Couldn’t archive that card');
+    console.error('Failed to change archive state', error);
+    showToast(
+      archived ? 'Couldn’t archive that card' : 'Couldn’t restore that card',
+    );
     return false;
   }
+}
+
+/** File an inbox card into a collection. */
+export function fileFromInbox(
+  item: InboxItem,
+  collection: Collection,
+  onundo?: () => void,
+): Promise<boolean> {
+  return fileItem(item, collection, onundo);
+}
+
+/** Archive an inbox card. */
+export function archiveFromInbox(
+  item: InboxItem,
+  onundo?: () => void,
+): Promise<boolean> {
+  return setArchived(item, true, onundo);
 }
 
 /**

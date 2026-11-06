@@ -271,7 +271,7 @@ describe('edit preservation of type-agnostic fields', () => {
 });
 
 describe('buildNoteItem', () => {
-  it('falls back to first 50 chars of body when title is empty', () => {
+  it('falls back to the first 50 chars of body, marked as cut, when title is empty', () => {
     const longBody = 'a'.repeat(80);
     const result = buildNoteItem(ctx(), {
       title: '',
@@ -279,7 +279,7 @@ describe('buildNoteItem', () => {
       description: '',
     });
 
-    expect(result.item.title).toBe('a'.repeat(50));
+    expect(result.item.title).toBe(`${'a'.repeat(50)}…`);
     expect((result.item as { body: string }).body).toBe(longBody);
   });
 

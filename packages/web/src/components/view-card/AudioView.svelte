@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { AudioItem } from '@inbox-rs/rs-module';
+  import { type AudioItem, truncateTitle } from '@inbox-rs/rs-module';
   import 'highlight.js/styles/github-dark.min.css';
   import { renderMarkdown } from '../../lib/markdown';
   import {
@@ -165,7 +165,7 @@
           body: current.body ? `${current.body}\n\n${text}` : text,
           title:
             text && current.title === 'Audio'
-              ? text.slice(0, 50)
+              ? truncateTitle(text)
               : current.title,
           transcribed: true,
         };

@@ -40,7 +40,7 @@ export {
   normalizeMetadata,
 } from './link-metadata.js';
 export { migrator, wrapCodeBlock } from './migrations.js';
-export { noteTitleFromBody } from './note-title.js';
+export { noteTitleFromBody, truncateTitle } from './note-title.js';
 export type {
   BrowserStorageArea,
   ConfigStore,

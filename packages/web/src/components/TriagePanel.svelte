@@ -290,7 +290,7 @@
 </section>
 
 {#if picking && current}
-  <CollectionPicker item={current} onpick={onpick} onclose={() => (picking = false)} />
+  <CollectionPicker item={current} fileOnPick onpick={onpick} onclose={() => (picking = false)} />
 {/if}
 
 <style>

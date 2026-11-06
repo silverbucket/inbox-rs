@@ -8,11 +8,11 @@
     deleteItem,
     groups,
     moveItemToCollection,
-    setItemArchived,
     storeItem,
   } from '../lib/stores';
   import { recordCollectionUse } from '../lib/collection-suggest';
   import { showToast } from '../lib/toast';
+  import { fileItem, setArchived } from '../lib/triage-actions';
   import ShareButton from './ShareButton.svelte';
   import CollectionPicker from './CollectionPicker.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
@@ -118,9 +118,7 @@
     changingArchiveState = true;
     try {
       await prepareAction();
-      await setItemArchived(item.id, willArchive);
-      showToast(willArchive ? 'Card archived' : 'Card restored');
-      onclose();
+      if (await setArchived(item, willArchive)) onclose();
     } catch (error) {
       console.error('Failed to change archive state', error);
       showToast('Could not change archive state');
@@ -299,13 +297,17 @@
     // The write is a local-first IndexedDB store, so the await is cheap.
     try {
       await prepareAction();
-      await moveItemToCollection(item.id, collectionId);
-      if (collectionId) recordCollectionUse(collectionId);
-      onclose();
     } catch (e) {
       console.error('Move failed:', e);
       showToast('Move failed');
+      return;
     }
+    const target = collectionId ? $collections[collectionId] : undefined;
+    if (collectionId && !target) {
+      showToast('That collection is gone');
+      return;
+    }
+    if (await fileItem(item, target)) onclose();
   }
 
   function formatDate(iso: string): string {
@@ -862,6 +864,7 @@
       <CollectionPicker
         {item}
         mode={pickerMode}
+        fileOnPick
         onpick={handlePick}
         onclose={() => (showPicker = false)}
       />

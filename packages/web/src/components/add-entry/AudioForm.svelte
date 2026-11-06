@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import type { InboxItem } from '@inbox-rs/rs-module';
+  import { type InboxItem, truncateTitle } from '@inbox-rs/rs-module';
   import { autofocus } from '../../lib/actions';
   import {
     type BuildItemFn,
@@ -118,7 +118,7 @@
       if (myId !== transcriptionId) return; // discarded
       transcript = result;
       if (transcript && !body) body = transcript;
-      if (transcript && !title) title = transcript.slice(0, 50);
+      if (transcript && !title) title = truncateTitle(transcript);
       void refreshTranscriptionModelStatus();
     } catch (e) {
       if (myId !== transcriptionId) return;

@@ -7,7 +7,7 @@
 
   const sections = [
     {
-      title: 'Available anywhere',
+      title: 'Anywhere outside a dialog',
       shortcuts: [
         { keys: [`${mod} K`], label: 'Search everything' },
         { keys: [`${mod} ⇧ P`], label: 'Open command palette' },
@@ -95,7 +95,7 @@
         </section>
       {/each}
     </div>
-    <p class="note">Shortcuts work while a quick-entry field is focused.</p>
+    <p class="note">These work even while you’re typing in a quick-entry field.</p>
   </div>
 </div>
 

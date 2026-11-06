@@ -1,5 +1,5 @@
 <script lang="ts">
-  let { onConfirm, onCancel, deleting = false, message = 'Delete this item?' }: {
+  let { onConfirm, onCancel, deleting = false, message = 'Delete permanently? This can’t be undone.' }: {
     onConfirm: () => void;
     onCancel: () => void;
     deleting?: boolean;
