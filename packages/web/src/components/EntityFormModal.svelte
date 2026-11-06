@@ -20,6 +20,7 @@
     onarchive = undefined,
     extraFields = undefined,
     canSubmit = true,
+    submitHint = '',
   }: {
     entityName: string;
     title?: string;
@@ -44,6 +45,10 @@
         base check and the consumer's gate pass. Defaults to `true` so
         forms without extra fields behave as before. */
     canSubmit?: boolean;
+    /** Why the consumer's gate is closed, shown beside the disabled submit
+        button so a greyed-out Create is never a dead end. Rendered
+        whenever `canSubmit` is false. */
+    submitHint?: string;
   } = $props();
 
   const submitDisabled = $derived(!name.trim() || !canSubmit);
@@ -125,6 +130,9 @@
             <button type="submit" class="btn-save" disabled={submitDisabled}>Save</button>
           {/if}
         {:else}
+          {#if submitHint && !canSubmit}
+            <span class="submit-hint" role="status">{submitHint}</span>
+          {/if}
           <button type="button" class="btn-cancel" onclick={onclose}>Cancel</button>
           <button type="submit" class="btn-save" disabled={submitDisabled}>
             {isEdit ? 'Save' : 'Create'}
@@ -339,5 +347,12 @@
 
   .actions-spacer {
     flex: 1;
+  }
+
+  .submit-hint {
+    flex: 1;
+    align-self: center;
+    font-size: 0.8rem;
+    color: var(--text-muted);
   }
 </style>

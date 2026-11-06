@@ -15,6 +15,17 @@ const CALLBACK_KEYS = new Set([
   'remotestorage',
 ]);
 
+/** Set when this page load carries a trusted OAuth callback — i.e. the user
+ * just authorized, as opposed to a page load that resumes a stored session. */
+let freshAuthorization = false;
+
+/** True once, for the first `connected` after a trusted callback. */
+export function consumeFreshAuthorization(): boolean {
+  const fresh = freshAuthorization;
+  freshAuthorization = false;
+  return fresh;
+}
+
 type PendingAuthorization = {
   state: string;
   returnState: string;
@@ -87,6 +98,7 @@ export function guardOAuthCallback(): void {
     }
   }
   if (trusted && pending) {
+    freshAuthorization = params.has('access_token') || params.has('code');
     // remoteStorage uses state to restore the hash, so never pass our nonce
     // through as an application route. Its state parser also treats any
     // embedded rsDiscovery= text as storage configuration, so drop such routes.

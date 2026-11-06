@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { Collection } from '@inbox-rs/rs-module';
+  import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
   import { get } from 'svelte/store';
-  import { sortedGroups, groups, appConfig, updateConfig } from '../lib/stores';
+  import { appConfig, groups, sortedGroups, storeGroup, updateConfig } from '../lib/stores';
   import EntityFormModal from './EntityFormModal.svelte';
   import { randomPresetColor } from '../lib/constants';
 
@@ -34,8 +34,8 @@
    *      last save, in which case we ignore it and fall through.
    *   4. First group in display order — a sensible default so the picker is
    *      never empty when groups exist.
-   *   5. Empty string — only when there are no groups at all; the submit
-   *      button stays disabled until the user creates a group first.
+   *   5. Empty string — only when there are no groups at all; the form
+   *      then asks for a new group name instead (see `creatingNewGroup`).
    *
    * Resolved once at mount time via `get()`; reactive re-evaluation would
    * fight the user's subsequent manual selection.
@@ -53,22 +53,66 @@
   let selectedGroupId = $state<string>(pickInitialGroupId());
 
   const hasGroups = $derived($sortedGroups.length > 0);
-  const canSubmit = $derived(
+  // Every collection belongs to a group, so with none yet the form creates
+  // one inline (same pattern as CollectionPicker) rather than sending the
+  // user elsewhere. With groups, the user can opt into a new one.
+  let wantsNewGroup = $state(false);
+  let newGroupName = $state('');
+  let saving = $state(false);
+  let saveError = $state('');
+  const creatingNewGroup = $derived(!isEdit && (!hasGroups || wantsNewGroup));
+  const groupValid = $derived(
     !!selectedGroupId &&
       !!$groups[selectedGroupId] &&
       !$groups[selectedGroupId].archived,
   );
+  const canSubmit = $derived(
+    !saving && (creatingNewGroup ? !!newGroupName.trim() : groupValid),
+  );
+  const submitHint = $derived(
+    saving
+      ? ''
+      : creatingNewGroup
+        ? 'Name the new group to create this collection in.'
+        : groupValid
+          ? ''
+          : 'Choose a group for this collection.',
+  );
 
   async function handleSubmit() {
-    if (!name.trim()) return;
-    if (!selectedGroupId) return;
-    if (!$groups[selectedGroupId] || $groups[selectedGroupId].archived) return;
+    if (!name.trim() || !canSubmit) return;
+    let destinationGroupId = selectedGroupId;
+    if (creatingNewGroup) {
+      saving = true;
+      saveError = '';
+      const group: CollectionGroup = {
+        id: crypto.randomUUID(),
+        name: newGroupName.trim(),
+        collectionIds: [],
+        createdAt: new Date().toISOString(),
+        color: randomPresetColor(),
+      };
+      try {
+        await storeGroup(group);
+      } catch (e) {
+        console.error('Failed to create group', e);
+        saveError = e instanceof Error ? e.message : 'Failed to create group';
+        saving = false;
+        return;
+      }
+      destinationGroupId = group.id;
+      // A retry after a failed collection save must not make a second group.
+      selectedGroupId = group.id;
+      wantsNewGroup = false;
+      newGroupName = '';
+      saving = false;
+    }
     // Persist the picked group as the next default before the parent's
     // onsave runs. Best-effort: if the write fails the user's creation
     // still succeeds, they just lose the preference memory this once.
     if (!isEdit) {
       try {
-        await updateConfig({ lastSelectedGroupId: selectedGroupId });
+        await updateConfig({ lastSelectedGroupId: destinationGroupId });
       } catch (e) {
         console.error('Failed to persist lastSelectedGroupId', e);
       }
@@ -83,7 +127,7 @@
       itemIds: collection?.itemIds ?? [],
       createdAt: collection?.createdAt ?? new Date().toISOString(),
       color,
-      groupId: selectedGroupId,
+      groupId: destinationGroupId,
     } as Collection;
     if (offPlan) saved.offPlan = true;
     else {
@@ -110,24 +154,44 @@
   {onarchive}
   extraFields={groupField}
   {canSubmit}
+  {submitHint}
 />
 
 {#snippet groupField()}
-  <label class="field">
-    <span class="label">Group</span>
-    <select bind:value={selectedGroupId} required>
-      {#if !hasGroups}
-        <!-- First-run / all-groups-deleted: there's nowhere to put a new
-             collection. The placeholder stays disabled so the user can't
-             submit, mirroring the page-level "No groups yet" message. -->
-        <option value="" disabled>No groups yet — create one in the filter bar</option>
-      {:else}
+  <div class="field">
+    {#if creatingNewGroup}
+      <label class="label" for="collection-new-group">
+        {hasGroups ? 'New group' : 'Group — every collection lives in one'}
+      </label>
+      <input
+        id="collection-new-group"
+        type="text"
+        bind:value={newGroupName}
+        placeholder="e.g. Personal"
+        aria-label="New group name"
+      />
+      {#if hasGroups}
+        <button type="button" class="group-switch" onclick={() => (wantsNewGroup = false)}>
+          Choose an existing group
+        </button>
+      {/if}
+    {:else}
+      <label class="label" for="collection-group">Group</label>
+      <select id="collection-group" bind:value={selectedGroupId} required>
         {#each $sortedGroups as g (g.id)}
           <option value={g.id}>{g.name}</option>
         {/each}
+      </select>
+      {#if !isEdit}
+        <button type="button" class="group-switch" onclick={() => (wantsNewGroup = true)}>
+          Create a new group
+        </button>
       {/if}
-    </select>
-  </label>
+    {/if}
+    {#if saveError}
+      <p class="error" role="status">{saveError}</p>
+    {/if}
+  </div>
   <label class="check">
     <input type="checkbox" bind:checked={offPlan} />
     <span>
@@ -158,8 +222,10 @@
     margin-bottom: 0.3rem;
   }
 
-  select {
+  select,
+  input[type='text'] {
     width: 100%;
+    box-sizing: border-box;
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
@@ -196,6 +262,28 @@
     color: var(--text-muted);
   }
 
+  .group-switch {
+    margin-top: 0.35rem;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent-text);
+    font: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+
+  .error {
+    margin: 0.35rem 0 0;
+    font-size: 0.8rem;
+    color: var(--danger-text);
+  }
+
+  input[type='text'] {
+    cursor: text;
+  }
+
+  input[type='text']:focus,
   select:focus {
     outline: none;
     border-color: var(--accent);

@@ -140,6 +140,9 @@ describe('AccountSettings Sockethub status', () => {
     await settleProbe();
     expect(statusPill()?.textContent).toBe('Unavailable');
     expect(statusPill()?.classList.contains('ok')).toBe(false);
+    expect(host.querySelector('.server-problem')?.textContent).toContain(
+      "Can't reach the default service",
+    );
   });
 
   it('shows Unavailable for a blank custom endpoint without probing', async () => {
@@ -155,6 +158,9 @@ describe('AccountSettings Sockethub status', () => {
     await settleProbe();
     expect(fetchSockethubInfo).not.toHaveBeenCalled();
     expect(statusPill()?.textContent).toBe('Unavailable');
+    expect(host.querySelector('.server-problem')?.textContent).toContain(
+      'or use the default',
+    );
   });
 
   it('re-probes when the custom endpoint changes', async () => {

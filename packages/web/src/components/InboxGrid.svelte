@@ -136,7 +136,20 @@
 
 <!-- While Process inbox is open it stays mounted even once the last card
      is handled, so its summary and Close button still show. -->
-{#if inboxItems.length === 0 && !triageQueue}
+{#if inboxItems.length === 0 && !triageQueue && !$connected}
+  <!-- First run (or signed out): nothing has been "caught up" yet, so explain
+       where the inbox lives instead of celebrating an empty one. -->
+  <div class="inbox-zero first-run">
+    <div class="zero-glow"></div>
+    <h2 class="zero-heading">Your inbox, on your own storage</h2>
+    <p class="zero-sub">
+      Capture links, notes and files here. Connect a remoteStorage account to
+      keep them in sync across your devices — Inbox RS never holds a copy.
+    </p>
+    <button class="connect-cta" type="button" onclick={onconnect}>Connect storage</button>
+    <p class="zero-hint">Or start capturing now — it stays in this browser until you connect.</p>
+  </div>
+{:else if inboxItems.length === 0 && !triageQueue}
   <div class="inbox-zero">
     <div class="zero-glow"></div>
     <div class="zero-icon">
@@ -145,14 +158,11 @@
       </svg>
     </div>
     <h2 class="zero-heading">Inbox zero</h2>
-    {#if $connected}
-      <p class="zero-sub">You're all caught up. Nothing to process.</p>
-    {:else}
-      <p class="zero-sub">
-        <button class="connect-link" type="button" onclick={onconnect}>Connect to your remoteStorage</button>
-        to sync your inbox across devices.
-      </p>
-    {/if}
+    <p class="zero-sub">
+      {archived.length > 0
+        ? "You're all caught up. Archived cards are tucked away below."
+        : "You're all caught up. Nothing to process."}
+    </p>
   </div>
 {:else}
   {#if inboxItems.length > 0}
@@ -486,28 +496,37 @@
     animation: fade-in 0.6s ease-out 0.2s both;
   }
 
-  .connect-link {
-    display: inline;
-    border: 0;
-    background: none;
-    color: var(--accent-text);
+  .first-run .zero-sub {
+    max-width: 28rem;
+  }
+
+  .connect-cta {
+    margin-top: 0.75rem;
+    min-height: 2.5rem;
+    padding: 0 1.25rem;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: white;
     font: inherit;
     font-weight: 600;
-    padding: 0;
     cursor: pointer;
-    text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 0.16em;
+    animation: fade-in 0.6s ease-out 0.3s both;
   }
 
-  .connect-link:hover {
-    color: var(--accent-text-hover);
+  .connect-cta:hover {
+    opacity: 0.9;
   }
 
-  .connect-link:focus-visible {
+  .connect-cta:focus-visible {
     outline: 2px solid var(--accent-text);
     outline-offset: 3px;
-    border-radius: 2px;
+  }
+
+  .zero-hint {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    animation: fade-in 0.6s ease-out 0.35s both;
   }
 
   @keyframes fade-in {

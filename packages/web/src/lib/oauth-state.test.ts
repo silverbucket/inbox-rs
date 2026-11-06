@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { beginOAuthAuthorization, guardOAuthCallback } from './oauth-state';
+import {
+  beginOAuthAuthorization,
+  consumeFreshAuthorization,
+  guardOAuthCallback,
+} from './oauth-state';
 
 const key = 'inbox-rs:pending-oauth';
 
@@ -128,6 +132,26 @@ describe('OAuth callback state validation', () => {
     expect(params.get('access_token')).toBe('valid-token');
     expect(params.get('state')).toBe('/collection/abc');
     expect(sessionStorage.getItem(key)).toBeNull();
+  });
+
+  it('flags a trusted token callback as a fresh authorization, once', () => {
+    consumeFreshAuthorization();
+    const state = beginOAuthAuthorization('');
+    window.history.replaceState(null, '', `/#access_token=t&state=${state}`);
+    guardOAuthCallback();
+    expect(consumeFreshAuthorization()).toBe(true);
+    expect(consumeFreshAuthorization()).toBe(false);
+  });
+
+  it('does not flag forged callbacks or ordinary loads as fresh', () => {
+    consumeFreshAuthorization();
+    beginOAuthAuthorization('');
+    window.history.replaceState(null, '', '/#access_token=t&state=forged');
+    guardOAuthCallback();
+    expect(consumeFreshAuthorization()).toBe(false);
+    window.history.replaceState(null, '', '/#/inbox');
+    guardOAuthCallback();
+    expect(consumeFreshAuthorization()).toBe(false);
   });
 
   it('accepts a matching authorization code and restores the app route', () => {

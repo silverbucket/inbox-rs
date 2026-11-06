@@ -10,7 +10,7 @@
     appConfig, updateConfig, reorderGroupCollections, setExpandedCollections,
     collectionItems, groups, orphanCollections,
     archivedCollections, archivedGroups, setCollectionArchived, setGroupArchived,
-    favoriteCollections, collections,
+    favoriteCollections, collections, setActiveGroupFilters,
   } from '../lib/stores';
   import { now } from '../lib/now';
   import { placeTodo } from '../lib/plan';
@@ -150,6 +150,14 @@
   }
 
   const sections = $derived($visibleGroupedCollections);
+
+  /** Clear the group filter from the empty state itself, so recovering
+      doesn't depend on finding whichever control set it. */
+  function showAllGroups() {
+    void setActiveGroupFilters($sortedGroups.map((g) => g.id)).catch((e) => {
+      console.error('Failed to show all groups', e);
+    });
+  }
   const orphans = $derived($orphanCollections);
 
   // Collection ids currently shown on the page — used for expand/collapse all.
@@ -571,11 +579,12 @@
     <!-- Filter results above stand in for the groups. -->
   {:else if $sortedGroups.length === 0 && sections.length === 0 && orphans.length === 0}
     <p class="page-empty">
-      No groups yet. Create one from the filter bar above to organise your collections.
+      No collections yet. Use New collection to make your first one — you can create its group right there.
     </p>
   {:else if sections.length === 0 && orphans.length === 0}
     <p class="page-empty">
-      All groups are filtered out. Toggle one on in the filter bar to see collections.
+      Every group is filtered out, so no collections show.
+      <button type="button" class="page-empty-action" onclick={showAllGroups}>Show all groups</button>
     </p>
   {/if}
 
@@ -822,6 +831,15 @@
     color: var(--text-muted);
     text-align: center;
     margin-top: 1rem;
+  }
+
+  .page-empty-action {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent-text);
+    font: inherit;
+    cursor: pointer;
   }
 
   /* Advisory section for orphan collections. Visually distinct from real
