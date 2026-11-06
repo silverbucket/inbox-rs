@@ -14,6 +14,14 @@ const assets = vi.hoisted(() => ({
   })),
 }));
 
+// The store only needs the browser's online flag from stores.ts. Mocking the
+// module keeps remoteStorage (and its timers) out of the module graph, which
+// matters because the scheduler tests reset modules per case.
+vi.mock('./stores', async () => {
+  const { writable } = await import('svelte/store');
+  return { browserOnline: writable(true) };
+});
+
 vi.mock('./transcription-assets', async () => {
   const actual = await vi.importActual<typeof import('./transcription-assets')>(
     './transcription-assets',

@@ -130,6 +130,13 @@
         },
       });
       if (myRun !== runId) return;
+      // Whisper returns an empty string for silence or noise. Writing that
+      // would wipe an existing transcript or note on "Transcribe again", so
+      // say what happened and leave the item untouched.
+      if (!text) {
+        transcriptionError = 'No speech detected. Nothing was changed.';
+        return;
+      }
       // Merge into the live item inside its write queue: a delete that
       // landed while inference ran returns undefined and nothing is written,
       // so transcription can never resurrect a removed card. Edits made
@@ -138,7 +145,7 @@
         if (!current || current.type !== 'audio') return null;
         const updated: AudioItem = {
           ...current,
-          body: text || undefined,
+          body: text,
           title:
             text && current.title === 'Audio'
               ? text.slice(0, 50)

@@ -191,6 +191,23 @@ describe('AudioView transcribe', () => {
     expect(storeItem).not.toHaveBeenCalled();
   });
 
+  it('leaves an existing note alone when transcription returns nothing', async () => {
+    transcribeAudio.mockResolvedValueOnce('');
+    const existing = { ...audio(), body: 'my typed notes', transcribed: true };
+    liveItems.set('a1', existing);
+    component = mount(AudioView, {
+      target: host,
+      props: { item: existing, titleId: 't' },
+    });
+    flushSync();
+    (host.querySelector('button.btn-link') as HTMLButtonElement).click();
+    await settle();
+
+    expect(updateItem).not.toHaveBeenCalled();
+    expect(storeItem).not.toHaveBeenCalled();
+    expect(host.textContent).toContain('No speech detected');
+  });
+
   it('shows download progress, then transcribing, with a Cancel button', async () => {
     let resolveRun: (text: string) => void = () => {};
     transcribeAudio.mockImplementationOnce(
