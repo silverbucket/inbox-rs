@@ -23,7 +23,7 @@
 
 import { putInboxItem } from '../helpers/armadietto';
 import { expect, test } from '../helpers/fixtures';
-import { seedRsSession } from '../helpers/pwa';
+import { seedRsSession, waitForServiceWorkerController } from '../helpers/pwa';
 
 test('offline → online → connect with a brand-new account', async ({
   page,
@@ -41,6 +41,9 @@ test('offline → online → connect with a brand-new account', async ({
   await expect(
     page.getByRole('button', { name: 'Connect to your remoteStorage' }),
   ).toBeVisible();
+  // networkidle ignores the worker's precache fetches; go offline too early
+  // and the lazy Collections chunk is never cached.
+  await waitForServiceWorkerController(page);
   await page.context().setOffline(true);
 
   // Disconnected UI must keep working with no network — the empty state
@@ -112,6 +115,7 @@ test('offline → online → connect with an existing account that has data', as
   await expect(
     page.getByRole('button', { name: 'Connect to your remoteStorage' }),
   ).toBeVisible();
+  await waitForServiceWorkerController(page);
   await context.setOffline(true);
 
   // Hash navigation must keep working offline.
