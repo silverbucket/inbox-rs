@@ -196,6 +196,26 @@ describe('AccountSettings Sockethub status', () => {
     expect(statusPill()?.textContent).toBe('API v6');
   });
 
+  it('says to check the address when a custom endpoint is unreachable', async () => {
+    render();
+    await settleProbe();
+    Array.from(host.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('My own server'))
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    flushSync();
+    const input = host.querySelector('#sockethub-endpoint') as HTMLInputElement;
+    input.value = 'https://relay.example/sockethub-http';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+
+    fetchSockethubInfo.mockRejectedValue(new Error('network down'));
+    await settleProbe();
+    expect(statusPill()?.textContent).toBe('Unavailable');
+    expect(host.querySelector('.server-problem')?.textContent).toContain(
+      "Can't reach the service — check the address",
+    );
+  });
+
   it('shows reconnect required state while keeping the connected account visible', () => {
     w<boolean>(connected).set(true);
     w<string>(userAddress).set('alice@example.com');
