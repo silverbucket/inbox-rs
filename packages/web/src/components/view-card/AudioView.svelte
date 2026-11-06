@@ -2,10 +2,24 @@
   import type { AudioItem } from '@inbox-rs/rs-module';
   import 'highlight.js/styles/github-dark.min.css';
   import { renderMarkdown } from '../../lib/markdown';
-  import { blobUrls, connected, loadFileBlobUrl, storeItem } from '../../lib/stores';
-  import rs from '../../lib/rs';
-  import { transcribeAudio } from '../../lib/transcribe';
-  import OfflineTranscriptionAssets from '../OfflineTranscriptionAssets.svelte';
+  import {
+    blobUrls,
+    browserOnline,
+    connected,
+    loadFileBlobUrl,
+    updateItem,
+  } from '../../lib/stores';
+  import {
+    describeTranscriptionError,
+    type TranscriptionProgress,
+    transcribeAudio,
+    transcriberLoaded,
+  } from '../../lib/transcribe';
+  import {
+    TRANSCRIPTION_MODEL_SIZE_LABEL,
+    refreshTranscriptionModelStatus,
+    transcriptionModel,
+  } from '../../lib/transcription-store';
 
   let {
     item,
@@ -23,10 +37,31 @@
 
   let audioError = $state(false);
   let transcribing = $state(false);
-  let transcriptionError = $state(false);
+  let transcriptionError = $state('');
+  let progress = $state<TranscriptionProgress | null>(null);
   let renderedBody = $state('');
+  // Bumped on Cancel so a late result from an abandoned run is ignored.
+  let runId = 0;
 
   const audioSrc = $derived($blobUrls[item.filePath] || null);
+  const hasTranscript = $derived(!!item.body || !!item.transcribed);
+  // The model downloads on demand, so the only blocking case is being
+  // offline with neither a cached copy nor a pipeline already in memory.
+  const needsModelButOffline = $derived(
+    $transcriptionModel.checked &&
+      !$transcriptionModel.ready &&
+      !$transcriberLoaded &&
+      !$browserOnline,
+  );
+  const progressLabel = $derived(
+    progress?.phase === 'downloading'
+      ? `Downloading transcription model ${progress.percent}%`
+      : 'Transcribing...',
+  );
+
+  $effect(() => {
+    void refreshTranscriptionModelStatus();
+  });
 
   // The parent shell wraps the per-type view in `{#key item.id}`, so
   // navigating between audios remounts this component — `audioError` and
@@ -71,26 +106,101 @@
     // any UI updates from the in-flight promise — Svelte simply stops
     // applying state writes from a destroyed component. So we don't need
     // an explicit id-guard around the finally block.
+    const myRun = ++runId;
+    // The body the user saw when they clicked. If it changes while the
+    // model runs (an edit saved meanwhile), the result must not replace it.
+    const bodyAtStart = item.body;
     transcribing = true;
-    transcriptionError = false;
+    transcriptionError = '';
+    progress = null;
     try {
-      const file = await rs.inbox.getFile(item.filePath);
-      if (!file?.data) throw new Error('Could not load audio file');
-      const blob = new Blob([file.data], { type: item.mimeType });
-      const text = await transcribeAudio(blob);
-      const updated: AudioItem = {
-        ...item,
-        body: text || undefined,
-        title: text && item.title === 'Audio' ? text.slice(0, 50) : item.title,
-        transcribed: true,
-      };
-      await storeItem(updated);
+      // Read the bytes from the player's blob URL rather than
+      // `rs.inbox.getFile`. On any device other than the one that captured
+      // the recording, the local remoteStorage cache holds a copy that the
+      // sync layer ran through a lossy UTF-8 decode (see resolveFileBlobUrl
+      // in stores.ts), and decodeAudioData rejects it with EncodingError.
+      // The blob URL was built from the raw HTTP response (or, offline,
+      // from the bytes we wrote ourselves), so it is always faithful.
+      if (!audioSrc) throw new Error('Could not load audio file');
+      const resp = await fetch(audioSrc);
+      if (!resp.ok) throw new Error('Could not load audio file');
+      const blob = new Blob([await resp.arrayBuffer()], {
+        type: item.mimeType,
+      });
+      const text = await transcribeAudio(blob, {
+        onProgress: (p) => {
+          if (myRun === runId) progress = p;
+        },
+      });
+      if (myRun !== runId) return;
+      // Whisper returns an empty string for silence or noise. Writing that
+      // would wipe an existing transcript or note on "Transcribe again", so
+      // say what happened and leave the item untouched.
+      if (!text) {
+        transcriptionError = 'No speech detected. Nothing was changed.';
+        return;
+      }
+      // Merge into the live item inside its write queue: a delete that
+      // landed while inference ran returns undefined and nothing is written,
+      // so transcription can never resurrect a removed card. Edits made
+      // meanwhile are kept; only the transcript fields change.
+      let edited = false;
+      let unchanged = false;
+      await updateItem(item.id, (current) => {
+        if (!current || current.type !== 'audio') return null;
+        if (current.body !== bodyAtStart) {
+          edited = true;
+          return null;
+        }
+        // Same recording, same words: a repeat tap must not stack copies.
+        if (current.body?.includes(text)) {
+          unchanged = true;
+          return null;
+        }
+        // The body may be a note the user typed rather than an old
+        // transcript, and we can't tell which. Never replace it: append the
+        // new transcript below, so nothing the user wrote is lost.
+        const updated: AudioItem = {
+          ...current,
+          body: current.body ? `${current.body}\n\n${text}` : text,
+          title:
+            text && current.title === 'Audio'
+              ? text.slice(0, 50)
+              : current.title,
+          transcribed: true,
+        };
+        return updated;
+      });
+      if (edited) {
+        transcriptionError =
+          'The note was edited while transcribing, so the transcript was not applied.';
+      } else if (unchanged) {
+        transcriptionError = 'Transcript unchanged.';
+      }
+      void refreshTranscriptionModelStatus();
     } catch (e) {
+      if (myRun !== runId) return;
       console.warn('Transcription failed:', e);
-      transcriptionError = true;
+      transcriptionError = describeTranscriptionError(e, {
+        online: $browserOnline,
+        modelReady: $transcriptionModel.ready,
+      });
     } finally {
-      transcribing = false;
+      if (myRun === runId) {
+        transcribing = false;
+        progress = null;
+      }
     }
+  }
+
+  // Cancel stops waiting and resets the UI. A model download already in
+  // flight keeps streaming into the local cache, so the next attempt is
+  // faster rather than starting over.
+  function cancelTranscribe() {
+    runId++;
+    transcribing = false;
+    progress = null;
+    transcriptionError = '';
   }
 </script>
 
@@ -116,18 +226,29 @@
     <span class="duration">{formatDuration(item.duration)}</span>
   {/if}
   {#if transcribing}
-    <p class="status-text">Transcribing...</p>
+    <p class="status-text" role="status">{progressLabel}</p>
+    <button type="button" class="btn-action" onclick={cancelTranscribe}
+      >Cancel</button
+    >
   {:else if transcriptionError}
-    <p class="status-text">Transcription failed</p>
+    <p class="status-text" role="alert">{transcriptionError}</p>
     <button type="button" class="btn-action" onclick={handleTranscribe}
       >Retry</button
     >
-  {:else if audioSrc && !item.transcribed && !item.body}
+  {:else if audioSrc && !hasTranscript && needsModelButOffline}
+    <p class="status-text">
+      Transcription needs a one-time {TRANSCRIPTION_MODEL_SIZE_LABEL} download.
+      Connect to the internet to transcribe.
+    </p>
+  {:else if audioSrc && !hasTranscript}
     <button type="button" class="btn-action" onclick={handleTranscribe}
       >Transcribe</button
     >
+  {:else if audioSrc}
+    <button type="button" class="btn-link" onclick={handleTranscribe}
+      >Transcribe again</button
+    >
   {/if}
-  <OfflineTranscriptionAssets />
 </div>
 
 {#if showBody && item.body}

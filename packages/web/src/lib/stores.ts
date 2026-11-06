@@ -72,7 +72,8 @@ export const connected = writable(false);
 export const syncing = writable(false);
 // Keep the account and local data intact while authorization needs renewal.
 export const authorizationRequired = writable(false);
-const browserOnline = writable(
+/** The browser's own online/offline signal, independent of the RS connection. */
+export const browserOnline = writable(
   typeof navigator === 'undefined' || navigator.onLine,
 );
 const storageReachable = writable(true);
