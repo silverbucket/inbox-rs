@@ -16,11 +16,27 @@ vi.mock('../lib/stores', () => ({
   updateConfig,
 }));
 
+import { groups, sortedGroups } from '../lib/stores';
 import CollectionFormModal from './CollectionFormModal.svelte';
+
+function fill(selector: string, value: string) {
+  const el = document.querySelector(selector) as HTMLInputElement;
+  el.value = value;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  flushSync();
+}
+const submit = () =>
+  document.querySelector('button[type="submit"]') as HTMLButtonElement;
+const cancel = () =>
+  [...document.querySelectorAll('button')].find(
+    (b) => b.textContent?.trim() === 'Cancel',
+  ) as HTMLButtonElement;
 
 describe('CollectionFormModal', () => {
   let component: ReturnType<typeof mount> | undefined;
   afterEach(() => {
+    groups.set({});
+    sortedGroups.set([]);
     if (component) unmount(component);
     component = undefined;
     document.body.innerHTML = '';
@@ -37,36 +53,51 @@ describe('CollectionFormModal', () => {
     });
     flushSync();
 
-    const fill = (el: HTMLInputElement, value: string) => {
-      el.value = value;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-    };
-    fill(
-      document.querySelector(
-        'input[placeholder="e.g. Reading List"]',
-      ) as HTMLInputElement,
-      'Reading list',
-    );
-    fill(
-      document.querySelector(
-        'input[aria-label="New group name"]',
-      ) as HTMLInputElement,
-      'Reading',
-    );
-    flushSync();
-    (
-      document.querySelector('button[type="submit"]') as HTMLButtonElement
-    ).click();
+    fill('input[placeholder="e.g. Reading List"]', 'Reading list');
+    fill('input[aria-label="New group name"]', 'Reading');
+    submit().click();
     flushSync();
 
-    const cancel = [...document.querySelectorAll('button')].find(
-      (b) => b.textContent?.trim() === 'Cancel',
-    );
-    cancel?.click();
+    cancel().click();
     expect(onclose).not.toHaveBeenCalled();
 
     finishGroup();
     await vi.waitFor(() => expect(onsave).toHaveBeenCalledTimes(1));
     expect(onsave.mock.calls[0][0]).toMatchObject({ name: 'Reading list' });
+  });
+
+  it('stays open until the collection is stored, and shows a failure to retry', async () => {
+    // Like the real store: the stored group becomes pickable.
+    storeGroup.mockImplementation(async (g) => {
+      groups.set({ [g.id]: g });
+      sortedGroups.set([g]);
+    });
+    let failSave = (_e: Error) => {};
+    const onclose = vi.fn();
+    const onsave = vi.fn(
+      () => new Promise<void>((_resolve, reject) => (failSave = reject)),
+    );
+    component = mount(CollectionFormModal, {
+      target: document.body,
+      props: { onclose, onsave },
+    });
+    flushSync();
+    fill('input[placeholder="e.g. Reading List"]', 'Reading list');
+    fill('input[aria-label="New group name"]', 'Reading');
+    submit().click();
+    await vi.waitFor(() => expect(onsave).toHaveBeenCalledTimes(1));
+
+    // The collection write is still pending: no closing, no second submit.
+    cancel().click();
+    expect(onclose).not.toHaveBeenCalled();
+    expect(submit().disabled).toBe(true);
+
+    failSave(new Error('Store failed: 503'));
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain('Store failed: 503'),
+    );
+    expect(submit().disabled).toBe(false);
+    cancel().click();
+    expect(onclose).toHaveBeenCalledTimes(1);
   });
 });

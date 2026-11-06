@@ -8,6 +8,8 @@
  *   the group too, so nothing depends on the classic-only filter bar.
  */
 
+import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
+import { getInboxFolder } from '../helpers/armadietto';
 import { expect, test } from '../helpers/fixtures';
 import {
   assertNoConsoleErrors,
@@ -103,13 +105,28 @@ for (const layout of ['sidebar', 'classic'] as const) {
       main.getByText('Reading', { exact: true }).first(),
     ).toBeVisible();
 
-    // The group and collection each land in one write: a second PUT right
-    // after the first 412s and the collection drops out of its group.
-    await page.waitForLoadState('networkidle');
-    await page.reload();
-    await page.waitForLoadState('networkidle');
-    await expect(main.getByText('Reading list').first()).toBeVisible();
-    await expect(page.locator('.page-empty')).toHaveCount(0);
+    // On the server the collection is listed in its group: each is written
+    // once, already linked, so no second PUT can 412 and drop the link.
+    await expect
+      .poll(async () => {
+        const [group] = await getInboxFolder<CollectionGroup>(
+          freshRsUser,
+          freshRsToken,
+          'groups',
+        );
+        const [col] = await getInboxFolder<Collection>(
+          freshRsUser,
+          freshRsToken,
+          'collections',
+        );
+        return (
+          group &&
+          col &&
+          group.collectionIds.includes(col.id) &&
+          col.groupId === group.id
+        );
+      })
+      .toBe(true);
     assertNoConsoleErrors(log);
   });
 }

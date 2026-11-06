@@ -77,6 +77,7 @@
       editing = false;
     } catch (error) {
       console.error('Failed to update collection', error);
+      throw error; // the form shows it and stays open to retry
     }
   }
 

@@ -12,7 +12,8 @@
         (the collection's own groupId is authoritative there). */
     groupId?: string;
     onclose: () => void;
-    onsave: (col: Collection) => void;
+    /** Resolves once the collection is stored; a rejection keeps the form open to retry. */
+    onsave: (col: Collection) => void | Promise<void>;
     ondelete?: () => void;
     onarchive?: () => void;
   } = $props();
@@ -86,11 +87,11 @@
   async function handleSubmit() {
     if (!name.trim() || !canSubmit) return;
     let destinationGroupId = selectedGroupId;
-    // Stays set until onsave so Cancel can't close the form mid-write and
-    // leave the remaining writes creating a collection anyway.
+    // Stays set until onsave settles so Cancel can't close the form mid-write
+    // and leave the remaining writes creating a collection anyway.
     saving = true;
+    saveError = '';
     if (creatingNewGroup) {
-      saveError = '';
       const group: CollectionGroup = {
         id: crypto.randomUUID(),
         name: newGroupName.trim(),
@@ -139,8 +140,13 @@
       delete saved.offPlan;
       delete saved.planColumnId;
     }
-    saving = false;
-    onsave(saved);
+    try {
+      await onsave(saved);
+    } catch (e) {
+      saveError = e instanceof Error ? e.message : 'Failed to save collection';
+    } finally {
+      saving = false;
+    }
   }
 
   /** Ignored while a submit is still writing (see handleSubmit). */
