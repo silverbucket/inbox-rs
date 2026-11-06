@@ -97,12 +97,18 @@ async function getPageMetadata(tabId: number) {
 }
 
 /** Flash a ✓ or ! on the toolbar icon so a right-click save never passes silently. */
+let badgeTimer: ReturnType<typeof setTimeout> | undefined;
 async function flashBadge(ok: boolean) {
+  // A newer result restarts the clock, so an older save can't clear it early.
+  clearTimeout(badgeTimer);
   await browser.action.setBadgeBackgroundColor({
     color: ok ? '#2e7d32' : '#c62828',
   });
   await browser.action.setBadgeText({ text: ok ? '✓' : '!' });
-  setTimeout(() => void browser.action.setBadgeText({ text: '' }), 4000);
+  badgeTimer = setTimeout(
+    () => void browser.action.setBadgeText({ text: '' }),
+    4000,
+  );
 }
 
 // Handle context menu clicks

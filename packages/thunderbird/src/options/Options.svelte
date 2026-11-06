@@ -112,7 +112,7 @@
             <p class="step-title">Get a remoteStorage account</p>
             <p class="step-detail">
               Sign up for free at <a href="https://5apps.com/storage" target="_blank" rel="noopener">5apps</a>,
-              pick another <a href="https://remotestorage.io/get/" target="_blank" rel="noopener">remoteStorage provider</a>,
+              pick another <a href="https://remotestorage.io/get" target="_blank" rel="noopener">remoteStorage provider</a>,
               or run your own server.
               {#if import.meta.env.DEV}
                 For local development, visit <a href="http://localhost:8000/signup" target="_blank">localhost:8000/signup</a>.

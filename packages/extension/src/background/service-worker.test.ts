@@ -233,6 +233,30 @@ describe('service-worker', () => {
       expect(mockSetBadgeText).toHaveBeenCalledWith({ text: '!' });
     });
 
+    it('keeps a later result up for its full time', async () => {
+      vi.useFakeTimers();
+      try {
+        mockFetch.mockResolvedValue({ ok: true });
+        const click = {
+          menuItemId: 'save-link',
+          linkUrl: 'https://example.com',
+        };
+        await onClickedListeners[0](click, { id: 1 });
+        await vi.advanceTimersByTimeAsync(3000);
+        mockFetch.mockResolvedValue({ ok: false, status: 500 });
+        await onClickedListeners[0](click, { id: 1 });
+        mockSetBadgeText.mockClear();
+        // The first save's timer would have fired here and wiped the '!'.
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(mockSetBadgeText).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(mockSetBadgeText).toHaveBeenCalledWith({ text: '' });
+      } finally {
+        mockFetch.mockReset();
+        vi.useRealTimers();
+      }
+    });
+
     it('opens setup instead of saving when not connected', async () => {
       mockStorageGet.mockResolvedValue({});
       await onClickedListeners[0](
