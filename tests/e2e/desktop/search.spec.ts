@@ -318,14 +318,18 @@ test.describe('search', () => {
     const capture = connectedPage.getByPlaceholder(
       'Paste a link, jot a note, or drop a file…',
     );
-    await capture.fill('draft stays here');
-
+    // On an empty bar the todo shortcut opens an empty editor (typed text
+    // goes into it instead — see capture-todo-shortcut.spec.ts).
+    await capture.fill('');
     await connectedPage.keyboard.press('ControlOrMeta+Shift+Enter');
     await expect(
       connectedPage.getByRole('heading', { name: 'Add Todo' }),
     ).toBeVisible();
     await connectedPage.keyboard.press('Escape');
-    await expect(capture).toHaveValue('draft stays here');
+
+    // Unfocused, so this exercises the global shortcut, not the bar's own.
+    await capture.fill('draft stays here');
+    await capture.blur();
 
     await connectedPage.keyboard.press('ControlOrMeta+Enter');
     await expect(

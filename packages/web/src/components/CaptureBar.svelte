@@ -11,6 +11,7 @@
     onfilecapture,
     onextrafiles,
     onrecord,
+    onopentodo,
     focusOnMount = false,
     value = $bindable(''),
   }: {
@@ -25,6 +26,10 @@
         captured; the parent surfaces "ignored the rest". */
     onextrafiles?: (ignored: number) => void;
     onrecord: () => void;
+    /** ⌘/Ctrl-Shift-Enter on typed text: open the todo editor with it, as
+        ⌘↵ does for the card editor. Without it (or on an empty bar) the key
+        bubbles to the global Add-todo shortcut, which opens an empty one. */
+    onopentodo?: (title: string) => Promise<boolean>;
     /** Focus the input on mount (the inbox does; the collection view doesn't,
         to avoid stealing focus when a collection is expanded). */
     focusOnMount?: boolean;
@@ -38,6 +43,7 @@
   // A file dropped or pasted onto the bar, staged as a chip until Enter
   // confirms it (Escape or the chip's ✕ discards).
   let pendingFile = $state<File | null>(null);
+  let openingTodo = false;
   let dragOver = $state(false);
   const mod = modLabel();
 
@@ -61,6 +67,10 @@
       return;
     }
     if (e.key !== 'Enter') return;
+    if (openingTodo) {
+      e.preventDefault();
+      return;
+    }
     // A staged file takes precedence over text detection: Enter stores it,
     // using whatever's typed as the caption.
     if (pendingFile) {
@@ -69,9 +79,20 @@
       return;
     }
     if (e.metaKey || e.ctrlKey) {
-      // The global handler owns modified Shift-Enter (Add todo). Leave the
-      // event untouched so it can bubble there instead of quick-saving.
-      if (e.shiftKey && !e.altKey) return;
+      if (e.shiftKey && !e.altKey) {
+        // Typed text goes into the todo editor; otherwise leave the event
+        // untouched so it bubbles to the global Add-todo shortcut.
+        if (!onopentodo || !value.trim()) return;
+        e.preventDefault();
+        const draft = value;
+        openingTodo = true;
+        void onopentodo(draft.trim())
+          .then((opened) => {
+            if (opened && value === draft) value = '';
+          })
+          .finally(() => (openingTodo = false));
+        return;
+      }
       e.preventDefault();
       onopeneditor(value);
       value = '';
@@ -214,6 +235,10 @@
       <span>↵ {enterHint}</span>
       <span class="sep">·</span>
       <span>{mod}↵ Open editor</span>
+      {#if onopentodo}
+        <span class="sep">·</span>
+        <span>{mod}⇧↵ Open as todo</span>
+      {/if}
     {/if}
   </div>
 </div>

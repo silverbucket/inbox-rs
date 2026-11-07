@@ -28,7 +28,9 @@ describe('CaptureBar', () => {
     host.remove();
   });
 
-  function render() {
+  function render(
+    extra: { onopentodo?: (title: string) => Promise<boolean> } = {},
+  ) {
     component = mount(CaptureBar, {
       target: host,
       props: {
@@ -38,6 +40,7 @@ describe('CaptureBar', () => {
         onfilecapture,
         onextrafiles,
         onrecord,
+        ...extra,
       },
     });
     flushSync();
@@ -101,6 +104,85 @@ describe('CaptureBar', () => {
     typeAndKey('a todo draft', { metaKey: true, shiftKey: true });
     expect(oncapture).not.toHaveBeenCalled();
     expect(onopeneditor).not.toHaveBeenCalled();
+  });
+
+  it('opens the todo editor with typed text on modified Shift-Enter when onopentodo is given', async () => {
+    const onopentodo = vi.fn().mockResolvedValue(true);
+    render({ onopentodo });
+    const input = host.querySelector('.text-input') as HTMLInputElement;
+    type('  buy milk  ');
+    const e = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      ctrlKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    input.dispatchEvent(e);
+    await Promise.resolve();
+    flushSync();
+    expect(onopentodo).toHaveBeenCalledWith('buy milk');
+    // Claimed, so the global handler doesn't open a second, empty todo editor.
+    expect(e.defaultPrevented).toBe(true);
+    expect(input.value).toBe('');
+    expect(oncapture).not.toHaveBeenCalled();
+  });
+
+  it('keeps the draft when the todo editor cannot open', async () => {
+    render({ onopentodo: vi.fn().mockResolvedValue(false) });
+    typeAndKey('buy milk', { ctrlKey: true, shiftKey: true });
+    await Promise.resolve();
+    flushSync();
+    expect((host.querySelector('.text-input') as HTMLInputElement).value).toBe(
+      'buy milk',
+    );
+  });
+
+  it('ignores Enter while the todo editor is loading', async () => {
+    let finish!: (opened: boolean) => void;
+    const onopentodo = vi.fn(
+      () => new Promise<boolean>((resolve) => (finish = resolve)),
+    );
+    render({ onopentodo });
+    typeAndKey('buy milk', { ctrlKey: true, shiftKey: true });
+    key({});
+    key({ ctrlKey: true, shiftKey: true });
+    expect(oncapture).not.toHaveBeenCalled();
+    expect(onopentodo).toHaveBeenCalledTimes(1);
+    finish(false);
+    await Promise.resolve();
+    flushSync();
+    expect((host.querySelector('.text-input') as HTMLInputElement).value).toBe(
+      'buy milk',
+    );
+  });
+
+  it('leaves modified Shift-Enter on an empty bar for the global shortcut', () => {
+    const onopentodo = vi.fn();
+    render({ onopentodo });
+    typeAndKey('   ', { metaKey: true, shiftKey: true });
+    expect(onopentodo).not.toHaveBeenCalled();
+  });
+
+  it('hints the Open-as-todo shortcut only while focused with text', () => {
+    render({ onopentodo: vi.fn() });
+    const input = host.querySelector('.text-input') as HTMLInputElement;
+    const hint = () => host.querySelector('.hint')?.textContent ?? '';
+    input.dispatchEvent(new FocusEvent('focus'));
+    flushSync();
+    expect(hint()).not.toContain('Open as todo');
+    type('buy milk');
+    expect(hint()).toMatch(/(⌘|Ctrl)⇧↵ Open as todo/);
+  });
+
+  it('omits the Open-as-todo hint without onopentodo', () => {
+    render();
+    const input = host.querySelector('.text-input') as HTMLInputElement;
+    input.dispatchEvent(new FocusEvent('focus'));
+    type('buy milk');
+    expect(host.querySelector('.hint')?.textContent).not.toContain(
+      'Open as todo',
+    );
   });
 
   it('preserves Alt-modified Shift-Enter as an editor shortcut', () => {

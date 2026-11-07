@@ -538,7 +538,7 @@
     if (files.length > 1) notifyExtraFiles(files.length - 1);
   }
 
-  async function handleOpenEditor(text: string) {
+  async function handleOpenEditor(text: string, kind: 'note' | 'todo' = 'note') {
     // The sidebar can still have a route update settling when the newly
     // mounted inbox capture bar receives its first shortcut. Do not expose
     // activeModal until the lazy component is ready: the route cleanup effect
@@ -549,10 +549,11 @@
     await loadAddEntryModal();
     if (
       !AddEntryModalComponent ||
+      activeModal !== null ||
       routePage !== openingRoute ||
       navigationGeneration !== openingNavigation
     )
-      return;
+      return false;
 
     editingItem = undefined;
     // Cmd/Ctrl-Enter is a global quick-key entry, so it deliberately starts
@@ -560,9 +561,11 @@
     preselectedCollectionId = null;
     prefillFile = undefined;
     captureSheetOpen = false;
-    // The typed text becomes the note title; the editor focuses the body.
+    // The typed text becomes the title; the note editor focuses the body.
     notePrefillTitle = text;
-    activeModal = 'note';
+    todoPrefillPlan = null;
+    activeModal = kind;
+    return true;
   }
 
   // The ⊕ file picker routes by the chosen file's type: images open the image
@@ -736,6 +739,7 @@
               onfilecapture={handleFileCapture}
               onextrafiles={notifyExtraFiles}
               onrecord={handleRecord}
+              onopentodo={(title) => handleOpenEditor(title, 'todo')}
             />
           {/if}
         </div>
