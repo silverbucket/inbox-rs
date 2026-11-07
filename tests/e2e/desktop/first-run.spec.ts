@@ -8,8 +8,16 @@
  *   the group too, so nothing depends on the classic-only filter bar.
  */
 
-import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
-import { getInboxFolder } from '../helpers/armadietto';
+import type {
+  Collection,
+  CollectionGroup,
+  InboxItem,
+} from '@inbox-rs/rs-module';
+import {
+  ARMADIETTO_ORIGIN,
+  getInboxFolder,
+  putInboxItem,
+} from '../helpers/armadietto';
 import { expect, test } from '../helpers/fixtures';
 import {
   assertNoConsoleErrors,
@@ -137,3 +145,93 @@ for (const layout of ['sidebar', 'classic'] as const) {
     assertNoConsoleErrors(log);
   });
 }
+
+test('a stored session never flashes the first-run state on reload', async ({
+  context,
+  page,
+  freshRsUser,
+  freshRsToken,
+  webOrigin,
+}) => {
+  await seedRsSession(context, freshRsUser, freshRsToken, {
+    clientOrigin: webOrigin,
+  });
+  // Record from navigation start whether the first-run screen ever renders,
+  // however briefly — a final-state assertion would miss a flash.
+  await context.addInitScript(() => {
+    const w = window as unknown as { __sawFirstRun?: boolean };
+    w.__sawFirstRun = false;
+    const check = () => {
+      if (document.querySelector('.first-run, .connect-cta'))
+        w.__sawFirstRun = true;
+    };
+    new MutationObserver(check).observe(document, {
+      childList: true,
+      subtree: true,
+    });
+  });
+  // Slow storage requests so the restore takes a while.
+  await context.route(`${ARMADIETTO_ORIGIN}/**`, async (route) => {
+    await new Promise((r) => setTimeout(r, 800));
+    await route.continue();
+  });
+
+  for (const nav of [() => page.goto(webOrigin), () => page.reload()]) {
+    await nav();
+    await expect(
+      page.getByRole('heading', { name: 'Inbox zero' }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { __sawFirstRun?: boolean }).__sawFirstRun,
+      ),
+    ).toBe(false);
+  }
+});
+
+test('a stored session with an empty local cache waits for its first sync', async ({
+  context,
+  page,
+  freshRsUser,
+  freshRsToken,
+  webOrigin,
+}) => {
+  // The item exists only on the server; this browser has never synced it.
+  const title = `waiting for sync ${Date.now()}`;
+  await putInboxItem(freshRsUser, freshRsToken, {
+    item: {
+      id: `sync-wait-${Date.now()}`,
+      type: 'note',
+      title,
+      body: 'from another device',
+      createdAt: new Date().toISOString(),
+    } as InboxItem,
+  });
+  await seedRsSession(context, freshRsUser, freshRsToken, {
+    clientOrigin: webOrigin,
+  });
+  await context.addInitScript(() => {
+    const w = window as unknown as { __sawEmpty?: boolean };
+    w.__sawEmpty = false;
+    const check = () => {
+      const heading = document.querySelector('.zero-heading');
+      if (heading?.textContent?.includes('Inbox zero')) w.__sawEmpty = true;
+    };
+    new MutationObserver(check).observe(document, {
+      childList: true,
+      subtree: true,
+    });
+  });
+  await context.route(`${ARMADIETTO_ORIGIN}/**`, async (route) => {
+    await new Promise((r) => setTimeout(r, 800));
+    await route.continue();
+  });
+
+  await page.goto(webOrigin);
+  await expect(page.getByText(title)).toBeVisible({ timeout: 15_000 });
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { __sawEmpty?: boolean }).__sawEmpty,
+    ),
+  ).toBe(false);
+});

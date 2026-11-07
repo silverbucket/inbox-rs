@@ -3,7 +3,7 @@
   import { tick, untrack } from 'svelte';
   import { inview } from '../lib/actions';
   import { now } from '../lib/now';
-  import { archivedItems, collections, connected, items, sortedItems } from '../lib/stores';
+  import { archivedItems, collections, connected, items, restoring, sortedItems } from '../lib/stores';
   import {
     ageBucket,
     buildSiteIndex,
@@ -136,7 +136,11 @@
 
 <!-- While Process inbox is open it stays mounted even once the last card
      is handled, so its summary and Close button still show. -->
-{#if inboxItems.length === 0 && !triageQueue && !$connected}
+{#if inboxItems.length === 0 && !triageQueue && $restoring}
+  <!-- Local data or a stored session is still loading: show neither empty
+       state yet, so a returning user doesn't flash first-run. -->
+  <div class="inbox-zero" aria-busy="true"></div>
+{:else if inboxItems.length === 0 && !triageQueue && !$connected}
   <!-- First run (or signed out): nothing has been "caught up" yet, so explain
        where the inbox lives instead of celebrating an empty one. -->
   <div class="inbox-zero first-run">
