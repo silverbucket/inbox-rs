@@ -28,7 +28,9 @@ describe('CaptureBar', () => {
     host.remove();
   });
 
-  function render(extra: { onopentodo?: (title: string) => void } = {}) {
+  function render(
+    extra: { onopentodo?: (title: string) => Promise<boolean> } = {},
+  ) {
     component = mount(CaptureBar, {
       target: host,
       props: {
@@ -104,8 +106,8 @@ describe('CaptureBar', () => {
     expect(onopeneditor).not.toHaveBeenCalled();
   });
 
-  it('opens the todo editor with typed text on modified Shift-Enter when onopentodo is given', () => {
-    const onopentodo = vi.fn();
+  it('opens the todo editor with typed text on modified Shift-Enter when onopentodo is given', async () => {
+    const onopentodo = vi.fn().mockResolvedValue(true);
     render({ onopentodo });
     const input = host.querySelector('.text-input') as HTMLInputElement;
     type('  buy milk  ');
@@ -117,12 +119,23 @@ describe('CaptureBar', () => {
       cancelable: true,
     });
     input.dispatchEvent(e);
+    await Promise.resolve();
     flushSync();
     expect(onopentodo).toHaveBeenCalledWith('buy milk');
     // Claimed, so the global handler doesn't open a second, empty todo editor.
     expect(e.defaultPrevented).toBe(true);
     expect(input.value).toBe('');
     expect(oncapture).not.toHaveBeenCalled();
+  });
+
+  it('keeps the draft when the todo editor cannot open', async () => {
+    render({ onopentodo: vi.fn().mockResolvedValue(false) });
+    typeAndKey('buy milk', { ctrlKey: true, shiftKey: true });
+    await Promise.resolve();
+    flushSync();
+    expect((host.querySelector('.text-input') as HTMLInputElement).value).toBe(
+      'buy milk',
+    );
   });
 
   it('leaves modified Shift-Enter on an empty bar for the global shortcut', () => {

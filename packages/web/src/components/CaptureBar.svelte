@@ -29,7 +29,7 @@
     /** ⌘/Ctrl-Shift-Enter on typed text: open the todo editor with it, as
         ⌘↵ does for the card editor. Without it (or on an empty bar) the key
         bubbles to the global Add-todo shortcut, which opens an empty one. */
-    onopentodo?: (title: string) => void;
+    onopentodo?: (title: string) => Promise<boolean>;
     /** Focus the input on mount (the inbox does; the collection view doesn't,
         to avoid stealing focus when a collection is expanded). */
     focusOnMount?: boolean;
@@ -79,8 +79,10 @@
         // untouched so it bubbles to the global Add-todo shortcut.
         if (!onopentodo || !value.trim()) return;
         e.preventDefault();
-        onopentodo(value.trim());
-        value = '';
+        const draft = value;
+        void onopentodo(draft.trim()).then((opened) => {
+          if (opened && value === draft) value = '';
+        });
         return;
       }
       e.preventDefault();

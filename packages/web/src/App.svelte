@@ -552,7 +552,7 @@
       routePage !== openingRoute ||
       navigationGeneration !== openingNavigation
     )
-      return;
+      return false;
 
     editingItem = undefined;
     // Cmd/Ctrl-Enter is a global quick-key entry, so it deliberately starts
@@ -564,6 +564,7 @@
     notePrefillTitle = text;
     todoPrefillPlan = null;
     activeModal = kind;
+    return true;
   }
 
   // The ⊕ file picker routes by the chosen file's type: images open the image
