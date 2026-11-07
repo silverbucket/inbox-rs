@@ -581,7 +581,7 @@
     <!-- Filter results above stand in for the groups. -->
   {:else if $sortedGroups.length === 0 && sections.length === 0 && orphans.length === 0}
     <p class="page-empty">
-      No collections yet. Use New collection to make your first one — you can create its group right there.
+      No collections yet. Collections hold your cards; groups hold related collections, like Work or Home. Use New collection to make your first one — you can create its group right there.
     </p>
   {:else if sections.length === 0 && orphans.length === 0}
     <p class="page-empty">

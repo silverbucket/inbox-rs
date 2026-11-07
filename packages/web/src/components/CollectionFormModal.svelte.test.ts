@@ -42,6 +42,20 @@ describe('CollectionFormModal', () => {
     document.body.innerHTML = '';
   });
 
+  it('explains what a group is when asking for a new one', () => {
+    component = mount(CollectionFormModal, {
+      target: document.body,
+      props: { onclose: vi.fn(), onsave: vi.fn() },
+    });
+    flushSync();
+
+    const input = document.querySelector('input[aria-label="New group name"]');
+    const hint = document.getElementById(
+      input?.getAttribute('aria-describedby') ?? '',
+    );
+    expect(hint?.textContent).toContain('Groups hold related collections');
+  });
+
   it('ignores Cancel while the new group is still being written', async () => {
     let finishGroup = () => {};
     storeGroup.mockReturnValue(new Promise<void>((r) => (finishGroup = r)));
