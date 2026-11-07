@@ -45,6 +45,10 @@ describe.each(variants)('extension manifest — %s', (_label, manifest) => {
     it('declares identity so OAuth via launchWebAuthFlow works', () => {
       expect(manifest.permissions).toContain('identity');
     });
+
+    it('declares notifications so a failed right-click save is reported even when the icon is unpinned', () => {
+      expect(manifest.permissions).toContain('notifications');
+    });
   });
 
   /**

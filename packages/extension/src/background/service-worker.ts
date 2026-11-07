@@ -112,6 +112,27 @@ async function flashBadge(ok: boolean) {
   );
 }
 
+/** The badge hides in Chrome's puzzle menu when the icon is unpinned, so a
+ *  failed save also raises a system notification. Success stays badge-only. */
+async function notifySaveFailed() {
+  try {
+    await browser.notifications.create({
+      type: 'basic',
+      iconUrl: browser.runtime.getURL('icons/icon-128.png'),
+      title: 'Inbox RS',
+      message: "Couldn't save to your inbox. Open the extension to try again.",
+    });
+  } catch (error) {
+    // Notifications can be unavailable (e.g. Firefox for Android); the badge still shows.
+    console.error('Failure notification failed', error);
+  }
+}
+
+async function reportSave(ok: boolean) {
+  await flashBadge(ok);
+  if (!ok) await notifySaveFailed();
+}
+
 // Handle context menu clicks
 browser.contextMenus.onClicked.addListener(async (info, tab) => {
   const config = await getConfig();
@@ -121,10 +142,10 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
     return;
   }
   try {
-    await flashBadge(await saveFromContextMenu(config, info, tab));
+    await reportSave(await saveFromContextMenu(config, info, tab));
   } catch (error) {
     console.error('Context menu save failed', error);
-    await flashBadge(false);
+    await reportSave(false);
   }
 });
 
