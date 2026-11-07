@@ -549,6 +549,7 @@
     await loadAddEntryModal();
     if (
       !AddEntryModalComponent ||
+      activeModal !== null ||
       routePage !== openingRoute ||
       navigationGeneration !== openingNavigation
     )

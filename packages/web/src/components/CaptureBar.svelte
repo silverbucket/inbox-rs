@@ -43,6 +43,7 @@
   // A file dropped or pasted onto the bar, staged as a chip until Enter
   // confirms it (Escape or the chip's ✕ discards).
   let pendingFile = $state<File | null>(null);
+  let openingTodo = false;
   let dragOver = $state(false);
   const mod = modLabel();
 
@@ -66,6 +67,10 @@
       return;
     }
     if (e.key !== 'Enter') return;
+    if (openingTodo) {
+      e.preventDefault();
+      return;
+    }
     // A staged file takes precedence over text detection: Enter stores it,
     // using whatever's typed as the caption.
     if (pendingFile) {
@@ -80,9 +85,12 @@
         if (!onopentodo || !value.trim()) return;
         e.preventDefault();
         const draft = value;
-        void onopentodo(draft.trim()).then((opened) => {
-          if (opened && value === draft) value = '';
-        });
+        openingTodo = true;
+        void onopentodo(draft.trim())
+          .then((opened) => {
+            if (opened && value === draft) value = '';
+          })
+          .finally(() => (openingTodo = false));
         return;
       }
       e.preventDefault();

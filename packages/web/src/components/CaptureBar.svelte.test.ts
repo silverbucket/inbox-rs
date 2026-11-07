@@ -138,6 +138,25 @@ describe('CaptureBar', () => {
     );
   });
 
+  it('ignores Enter while the todo editor is loading', async () => {
+    let finish!: (opened: boolean) => void;
+    const onopentodo = vi.fn(
+      () => new Promise<boolean>((resolve) => (finish = resolve)),
+    );
+    render({ onopentodo });
+    typeAndKey('buy milk', { ctrlKey: true, shiftKey: true });
+    key({});
+    key({ ctrlKey: true, shiftKey: true });
+    expect(oncapture).not.toHaveBeenCalled();
+    expect(onopentodo).toHaveBeenCalledTimes(1);
+    finish(false);
+    await Promise.resolve();
+    flushSync();
+    expect((host.querySelector('.text-input') as HTMLInputElement).value).toBe(
+      'buy milk',
+    );
+  });
+
   it('leaves modified Shift-Enter on an empty bar for the global shortcut', () => {
     const onopentodo = vi.fn();
     render({ onopentodo });
