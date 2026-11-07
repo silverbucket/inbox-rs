@@ -228,7 +228,8 @@ try {
       assert.equal(bookmark.type, 'bookmark');
       assert.equal(bookmark.url, `${base}/article`);
       assert.equal(bookmark.title, 'Weekend reading');
-      assert.match(bookmark.description, /Read this over the weekend/);
+      assert.match(bookmark.body, /Read this over the weekend/);
+      assert.doesNotMatch(bookmark.description ?? '', /Read this/);
       await browser.goto(popupUrl);
       await browser.click('.tabs button:nth-child(2)');
       await browser.fill('input', 'An idea to revisit');

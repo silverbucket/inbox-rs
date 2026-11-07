@@ -19,6 +19,7 @@
 
   // Page mode fields
   let pageTitle = $state('');
+  let tabTitle = '';
   let pageUrl = $state('');
   let ogImage = $state('');
   let favicon = $state('');
@@ -42,7 +43,7 @@
     const tabs = await browser.tabs.query({ active: true, currentWindow: true });
     if (tabs[0]) {
       pageUrl = tabs[0].url || '';
-      pageTitle = tabs[0].title || '';
+      pageTitle = tabTitle = tabs[0].title || '';
       tabId = tabs[0].id ?? null;
     }
 
@@ -100,7 +101,7 @@
     try {
       applyFetchedMetadata(await fetchPageMetadataForSave(rs, pageUrl));
       const result = await runSavePage({
-        rs, pageUrl, pageTitle, pageNote, pageDescription,
+        rs, pageUrl, pageTitle: pageTitle.trim() || tabTitle, pageNote, pageDescription,
         embeddedContent, tweetImages, ogImage, favicon, siteName, isDirectImage,
         event: pageEvent,
       });
