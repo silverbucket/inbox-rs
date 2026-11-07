@@ -74,7 +74,7 @@ for (const layout of ['sidebar', 'classic']) {
     webOrigin,
   }) => {
     // On a phone the footer is two flush-left rows: "Inbox RS · version ·
-    // build date", then "Plugins · GitHub". The date must stay on one line —
+    // build date", then "Add-ons · GitHub". The date must stay on one line —
     // it used to break after the time and leave "UTC" orphaned — and nothing
     // may push the page wider than the viewport.
     await page.addInitScript(
@@ -97,7 +97,7 @@ for (const layout of ['sidebar', 'classic']) {
     };
     const brand = await box('.footer-brand');
     const version = await box('.footer-version');
-    const plugins = await box('.footer-link', 'Plugins');
+    const plugins = await box('.footer-link', 'Add-ons');
     const github = await box('.footer-link', 'GitHub');
 
     const centre = (b: { y: number; height: number }) => b.y + b.height / 2;

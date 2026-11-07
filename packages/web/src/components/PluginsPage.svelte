@@ -59,7 +59,7 @@
 <section class="plugins-page">
   <div class="hero-panel">
     <div class="hero-copy">
-      <p class="eyebrow">Extensions</p>
+      <p class="eyebrow">Add-ons</p>
       <h2>Clip anything to your inbox.</h2>
       <p class="lede">
         Save web pages, emails, and quick notes to your remoteStorage account

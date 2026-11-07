@@ -5,7 +5,8 @@
  * typical URL looks like:
  *   https://example.com/#/todos?g=workId,personalId
  *
- * Pages: inbox (default), todos, collections, plugins, search,
+ * Pages: inbox (default), todos, collections, plugins (Add-ons, at
+ * `#/add-ons`; legacy `#/plugins` still resolves), search,
  * collection (focus mode for one collection: `#/collection/:id`), and
  * groupBoard (one group's items as a board: `#/group-board/:id`).
  * Query params:
@@ -89,7 +90,8 @@ function pageFromPath(clean: string): Page {
       return 'todos';
     case 'collections':
       return 'collections';
-    case 'plugins':
+    case 'add-ons':
+    case 'plugins': // legacy path, kept so old links still work
       return 'plugins';
     case 'search':
       return 'search';
@@ -164,7 +166,7 @@ function pathFromPage(
     case 'collections':
       return '/collections';
     case 'plugins':
-      return '/plugins';
+      return '/add-ons';
   }
 }
 

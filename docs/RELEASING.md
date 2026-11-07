@@ -193,7 +193,7 @@ Apply the policy table to the second list. For mechanical confirmation:
 
 - `git fetch --tags && git tag --list 'v*' | tail -3` — new tag visible.
 - `curl -I https://inbox.5apps.com/` — 200.
-- Visit `inbox.5apps.com/plugins`, click each download — files exist.
+- Visit `inbox.5apps.com/#/add-ons`, click each download — files exist.
 - `unzip -p inbox-rs-chromium-X.Y.Z.zip manifest.json | grep version` —
   matches the filename.
 

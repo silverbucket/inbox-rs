@@ -62,7 +62,7 @@
       case 'notifications': return 'Alerts when a todo is due';
       case 'columns': return 'Shared columns for item boards';
       case 'data': return 'Export or restore a backup';
-      case 'apps': return 'Apps and add-ons';
+      case 'apps': return 'Add-ons';
       case 'account': return $userAddress || 'Connect storage';
       case 'about': return "What's new · Source";
     }
