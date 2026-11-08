@@ -462,7 +462,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 50vh;
+    min-height: min(50vh, 24rem);
     text-align: center;
     gap: 0.5rem;
     position: relative;

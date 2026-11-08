@@ -312,6 +312,8 @@ async function steppedDrag(
 }
 
 async function boxOf(locator: Locator, what: string) {
+  // Collections slide open on navigation; wait for layout before measuring a drag.
+  await locator.scrollIntoViewIfNeeded();
   const box = await locator.boundingBox();
   if (!box) throw new Error(`${what} must be laid out to be dragged`);
   return box;

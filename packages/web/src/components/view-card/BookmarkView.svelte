@@ -15,6 +15,7 @@
   } from '../../lib/stores';
   import { renderMarkdown } from '../../lib/markdown';
   import Lightbox from '../Lightbox.svelte';
+  import { metadataReportUrl } from '../../lib/metadata-report';
 
   let {
     item,
@@ -29,6 +30,7 @@
   } = $props();
 
   let showLightbox = $state(false);
+  const reportUrl = $derived(metadataReportUrl(item));
   let fetchingPreview = $state(false);
   let previewStatus = $state<'' | 'none'>('');
   let previewError = $state('');
@@ -160,6 +162,9 @@
     >
   {/if}
 </div>
+{#if reportUrl && !fetchingPreview}
+  <p class="report-preview"><a href={reportUrl} target="_blank" rel="noopener noreferrer">Report preview issue to Sockethub ↗</a><span>Opens a public GitHub issue draft. Review the page URL before posting.</span></p>
+{/if}
 
 {#if imageSrc}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -198,6 +203,9 @@
 </section>
 
 <style>
+  .report-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.65rem; margin: 0.5rem 0; font-size: 0.8rem; color: var(--text-muted); }
+  .report-preview a { min-height: 44px; display: inline-flex; align-items: center; }
+
   .bookmark-preview {
     display: flex;
     min-width: 0;
