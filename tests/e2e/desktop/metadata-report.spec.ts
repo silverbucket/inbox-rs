@@ -37,7 +37,7 @@ test('incomplete previews offer an editable upstream issue without private notes
   expect(issue.searchParams.get('body')).not.toContain(
     'Private bookmark notes',
   );
-  await card.locator('.card-select').click();
+  await card.locator('.card-select').press('Enter');
   await expect(
     connectedPage.getByRole('link', {
       name: 'Report preview issue to Sockethub ↗',
