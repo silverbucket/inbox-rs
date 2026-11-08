@@ -554,7 +554,7 @@
 
     <div class="view-switch" role="group" aria-label="Todos view">
       {#each VIEWS as v (v.id)}
-        <button type="button" class="view-btn" aria-pressed={view === v.id} onclick={() => setView(v.id)}>
+        <button type="button" class="view-btn" class:phone-primary={v.id === 'today' || v.id === 'horizon'} aria-pressed={view === v.id} onclick={() => setView(v.id)}>
           {v.label}
         </button>
       {/each}
@@ -768,7 +768,7 @@
   }
 
   @media (max-width: 600px) {
-    .page-toolbar { display: none; }
+    .page-toolbar, .view-btn.phone-primary { display: none; }
   }
 
   .todo-list {

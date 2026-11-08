@@ -409,7 +409,7 @@
         {anyExpanded ? 'Collapse all' : 'Expand all'}
       </button>
     {/if}
-    <Fab onclick={() => openAddCollection(undefined)} label="New collection" />
+    <span class="collection-create"><Fab onclick={() => openAddCollection(undefined)} label="New collection" /></span>
   </div>
 
   {#if favorites.length > 0 && !query}
@@ -946,6 +946,9 @@
   }
 
   @media (max-width: 600px) {
+    .collection-create { display: none; }
+    .page-title { font-size: 1.5rem; letter-spacing: -0.03em; }
+    .page-filter { flex-basis: 100%; width: 100%; }
     .collections-page {
       /* Tighter bottom padding on mobile — the FAB sits closer to the edge
          and the list should feel dense. */

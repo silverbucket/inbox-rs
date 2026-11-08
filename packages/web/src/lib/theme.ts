@@ -154,7 +154,7 @@ export const PALETTE_PREVIEWS: Record<
   },
   paper: {
     light: {
-      bg: '#f3efe7',
+      bg: '#f7f6f2',
       sidebar: '#ebe6dc',
       surface: '#fbf9f4',
       text: '#2b2925',
@@ -225,7 +225,7 @@ export const PALETTE_THEME_COLORS: Record<
 > = {
   classic: { light: '#f8f9fb', dark: '#0f1117' },
   frost: { light: '#eceff4', dark: '#2e3440' },
-  paper: { light: '#f3efe7', dark: '#1b1917' },
+  paper: { light: '#f7f6f2', dark: '#1b1917' },
   solarized: { light: '#f6efdc', dark: '#002b36' },
   hearth: { light: '#fbf1c7', dark: '#282828' },
   dusk: { light: '#faf4ed', dark: '#191724' },

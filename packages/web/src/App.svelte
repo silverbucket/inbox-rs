@@ -776,7 +776,7 @@
         {/if}
       {:else if bodyPage === 'todos'}
         <div class="page-heading">
-          <div><h1>Todos</h1></div>
+          <div><h1>{isTouch ? ({ today: 'Today', horizon: 'Plan', board: 'Board', calendar: 'Calendar' }[$appConfig.todosView ?? 'today']) : 'Todos'}</h1></div>
           <p class="page-description">A little focus for what’s next.</p>
         </div>
         {#if TodosPageComponent}
@@ -814,7 +814,7 @@
   </ClassicShell>
 {/if}
 
-<MobileTabBar page={bodyPage} planCount={viewTodoCount} {navTo} oncapture={() => bodyPage === 'todos' ? openAddTodo('') : (captureSheetOpen = true)} />
+<MobileTabBar page={bodyPage} planCount={viewTodoCount} {navTo} oncapture={() => bodyPage === 'todos' ? openAddTodo('') : bodyPage === 'collections' ? (showCollectionForm = true) : (captureSheetOpen = true)} />
 
 <!-- Focus mode: a route-driven popup (#/collection/:id) over the page the
      user was on. Rendered here, not in the shell body, so the backdrop can

@@ -167,6 +167,23 @@ describe('CollectionView header keyboard handling', () => {
     flushSync();
   }
 
+  it('reveals collection actions without expanding the collection', () => {
+    const ontoggle = vi.fn();
+    renderWith({ ontoggle });
+    const actions = host.querySelector('.actions-toggle') as HTMLButtonElement;
+    expect(actions.getAttribute('aria-expanded')).toBe('false');
+    actions.click();
+    flushSync();
+    expect(actions.getAttribute('aria-expanded')).toBe('true');
+    expect(
+      host.querySelector('.header-actions')?.classList.contains('actions-open'),
+    ).toBe(true);
+    expect(ontoggle).not.toHaveBeenCalled();
+    actions.click();
+    flushSync();
+    expect(actions.getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('toggles on Enter when the header itself is focused', () => {
     const ontoggle = vi.fn();
     renderWith({ ontoggle });

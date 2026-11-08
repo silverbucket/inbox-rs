@@ -59,6 +59,6 @@ test('light color scheme picks the light theme color', async ({
   ).toBeTruthy();
   expect(
     activeColor?.toLowerCase(),
-    `Light theme-color should be #f3efe7, got ${activeColor}`,
-  ).toBe('#f3efe7');
+    `Light theme-color should be #f7f6f2, got ${activeColor}`,
+  ).toBe('#f7f6f2');
 });

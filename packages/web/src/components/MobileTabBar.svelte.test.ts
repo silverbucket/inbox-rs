@@ -86,7 +86,7 @@ describe('MobileTabBar', () => {
   });
 
   it('opens capture', () => {
-    const props = render('collections');
+    const props = render('inbox');
     button('Capture').click();
     expect(props.oncapture).toHaveBeenCalled();
   });
