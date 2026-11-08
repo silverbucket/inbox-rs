@@ -1,6 +1,56 @@
 import { putInboxItem } from '../helpers/armadietto';
 import { expect, test } from '../helpers/fixtures';
 
+test('long detail titles wrap completely on phones and desktop', async ({
+  connectedPage,
+  webOrigin,
+  rsUser,
+  rsToken,
+}) => {
+  const title =
+    'GitHub — a detailed reference about collecting ideas, organizing useful links, and keeping a clear plan for the projects that matter most';
+  await putInboxItem(rsUser, rsToken, {
+    item: {
+      id: 'long-title',
+      type: 'bookmark',
+      title,
+      url: 'https://example.com/reference',
+      description: 'A complete preview.',
+      createdAt: new Date().toISOString(),
+    },
+  });
+  await connectedPage.goto(webOrigin);
+  await connectedPage
+    .locator('[data-item-id="long-title"] .card-select')
+    .press('Enter');
+  const field = connectedPage.getByRole('textbox', {
+    name: 'Title',
+    exact: true,
+  });
+  for (const width of [390, 1280]) {
+    await connectedPage.setViewportSize({ width, height: 844 });
+    await expect(field).toHaveValue(title);
+    await expect
+      .poll(() =>
+        field.evaluate(
+          (el) =>
+            el.scrollWidth <= el.clientWidth + 1 &&
+            el.scrollHeight <= el.clientHeight + 2,
+        ),
+      )
+      .toBe(true);
+    if (width === 390) {
+      const titleBox = await field.boundingBox();
+      const linkBox = await connectedPage
+        .getByRole('link', { name: 'Open link ↗', exact: true })
+        .boundingBox();
+      if (!titleBox || !linkBox)
+        throw new Error('Title and source link must be visible');
+      expect(linkBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
+    }
+  }
+});
+
 test('incomplete previews offer an editable upstream issue without private notes or URL tokens', async ({
   connectedPage,
   webOrigin,
