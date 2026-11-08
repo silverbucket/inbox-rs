@@ -142,6 +142,8 @@ export interface ImageFormData {
   title: string;
   description: string;
   file: File | null;
+  /** Markdown notes kept with the image. Omitted leaves an edit's notes as-is. */
+  body?: string;
 }
 
 export async function buildImageItem(
@@ -185,6 +187,10 @@ export async function buildImageItem(
       description: data.description || undefined,
       createdAt: ctx.createdAt,
     };
+    const body =
+      data.body ??
+      (ctx.editItem?.type === 'image' ? ctx.editItem.body : undefined);
+    if (body) item.body = body;
     return {
       item: preserveCollection(ctx, item),
       fileData,
@@ -198,9 +204,38 @@ export async function buildImageItem(
       title: data.title || ctx.editItem.title,
       description: data.description || undefined,
     };
+    if (data.body !== undefined) item.body = data.body || undefined;
     return { item };
   }
   return null;
+}
+
+/**
+ * Turn a note into an image item that keeps the note's id, title, notes and
+ * placement, so dropping a picture onto a note joins the two in one card.
+ */
+export async function noteToImage(
+  note: NoteItem,
+  file: File,
+): Promise<BuildItemResult | null> {
+  const built = await buildImageItem(
+    { id: note.id, createdAt: note.createdAt, editItem: note },
+    {
+      title: note.title,
+      description: note.description ?? '',
+      body: note.body,
+      file,
+    },
+  );
+  if (!built) return null;
+  const item = built.item as ImageItem;
+  if (note.pinned) item.pinned = true;
+  if (note.isTodo) {
+    item.isTodo = true;
+    if (note.completed) item.completed = true;
+    if (note.completedAt) item.completedAt = note.completedAt;
+  }
+  return built;
 }
 
 export interface AudioFormData {

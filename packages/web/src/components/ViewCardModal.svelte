@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
   import { tick } from 'svelte';
+  import { noteToImage } from '../lib/build-item';
   import { clearCardDraft } from '../lib/card-draft';
   import { enrichBookmark, linkNoteUrl, noteToBookmark } from '../lib/enrich';
   import {
@@ -57,10 +58,13 @@
   let convertingTodo = $state(false);
   let convertingRef = $state(false);
   let convertingBookmark = $state(false);
+  let imageDragOver = $state(false);
+  let attachingImage = $state(false);
   let saveStatus = $state<SaveStatus>('saved');
   let flushEdits = $state<() => Promise<void>>(async () => {});
   let retrySave = $state<() => void>(() => {});
   let discardEdits = $state<() => void>(() => {});
+  let takeEdits = $state<() => Promise<InboxItem>>(async () => item);
   let closing = $state(false);
 
   const saveLabel = $derived(
@@ -258,6 +262,58 @@
       showToast('Could not convert this note to a bookmark');
     } finally {
       convertingBookmark = false;
+    }
+  }
+
+  // Dropping a picture onto a note makes it an image card that keeps the
+  // note's text as its notes. Capture phase, so the visual editor never sees
+  // the file (it can't hold one, and the browser would open it instead).
+  const acceptsImageDrop = $derived(item.type === 'note');
+
+  function handleImageDragOver(e: DragEvent) {
+    if (!acceptsImageDrop || !e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
+    imageDragOver = true;
+  }
+
+  function handleImageDragLeave(e: DragEvent) {
+    if ((e.currentTarget as Node).contains(e.relatedTarget as Node | null)) return;
+    imageDragOver = false;
+  }
+
+  async function handleImageDrop(e: DragEvent) {
+    imageDragOver = false;
+    if (!acceptsImageDrop || !e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const file = Array.from(e.dataTransfer.files).find((f) =>
+      f.type.startsWith('image/'),
+    );
+    if (!file) {
+      showToast('Only an image can be added to a note');
+      return;
+    }
+    if (attachingImage) return;
+    attachingImage = true;
+    // One write: the note's unsaved edits ride along on the image instead of
+    // being autosaved first (a second quick write to the path can be lost).
+    let written = false;
+    try {
+      const current = await takeEdits();
+      if (current.type !== 'note') return;
+      const built = await noteToImage(current, file);
+      if (!built) return;
+      await storeItem(built.item, built.fileData, built.thumbData);
+      written = true;
+      clearCardDraft(current.id, localStorage);
+    } catch (error) {
+      console.error('Failed to add image to note', error);
+      showToast('Could not add the image to this note');
+    } finally {
+      if (!written) retrySave();
+      attachingImage = false;
     }
   }
 
@@ -498,7 +554,12 @@
     tabindex="-1"
     aria-modal="true"
     aria-labelledby={TITLE_ID}
+    class:image-drag-over={imageDragOver}
+    aria-busy={attachingImage}
     onclick={handleModalClick}
+    ondragovercapture={handleImageDragOver}
+    ondragleave={handleImageDragLeave}
+    ondropcapture={handleImageDrop}
   >
     <div class="sticky-card-controls">
       <div class="modal-header">
@@ -643,6 +704,9 @@
       <p class="report-preview"><button type="button" onclick={() => { if (reportItem) reportPreview(reportItem); }}>Report preview issue to Sockethub ↗</button><span>Public GitHub issue draft — review the page URL before posting.</span></p>
     {/if}
     <h2 class="sr-only" id={TITLE_ID}>{item.title || 'Untitled card'}</h2>
+    <!-- Locked while a dropped image is attached: the conversion writes the
+         edits taken at the drop, so later typing would be lost. -->
+    <div class="editor-lock" inert={attachingImage}>
     {#key `${item.id}:${item.type}`}
       <CardInlineEditor
         {item}
@@ -650,6 +714,7 @@
         bind:flush={flushEdits}
         bind:retry={retrySave}
         bind:discard={discardEdits}
+        bind:takeEdits
         onfetchurlpreview={noteBookmarkUrl ? convertNoteToBookmark : undefined}
         fetchingUrlPreview={convertingBookmark}
       >
@@ -666,6 +731,7 @@
         {/if}
       </CardInlineEditor>
     {/key}
+    </div>
 
     {#if hasFile}
       <div class="share-row">
@@ -935,6 +1001,16 @@
     overflow: hidden;
     overscroll-behavior: contain;
     padding: 1.25rem;
+  }
+
+  .editor-lock {
+    display: contents;
+  }
+
+  /* A note under a dragged image: same dashed accent cue as the inbox feed. */
+  .modal.image-drag-over {
+    outline: 2px dashed var(--accent);
+    outline-offset: -6px;
   }
 
   .modal {

@@ -112,6 +112,24 @@ describe('card drafts', () => {
     });
   });
 
+  it('edits notes on an image that has none yet', () => {
+    const image: InboxItem = {
+      id: 'image-2',
+      type: 'image',
+      title: 'Image',
+      filePath: 'files/image-2.jpg',
+      mimeType: 'image/jpeg',
+      createdAt: note.createdAt,
+    };
+    const draft = createCardDraft(image);
+    expect(draft.body).toBe('');
+
+    draft.body = '## About this picture';
+    expect(applyCardDraft(image, draft)).toMatchObject({
+      body: '## About this picture',
+    });
+  });
+
   it('clears bookmark notes only when body is explicitly empty', () => {
     const bookmark: InboxItem = {
       id: 'bm-1',
