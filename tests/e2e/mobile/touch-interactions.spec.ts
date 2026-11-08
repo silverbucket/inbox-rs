@@ -71,7 +71,7 @@ test('tap navigates between pages', async ({
   await expect(todayBtn).not.toHaveAttribute('aria-current', 'page');
   await expect(
     views.getByRole('button', {
-      name: 'Plan',
+      name: 'Plan view',
       exact: true,
       includeHidden: true,
     }),
