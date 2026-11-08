@@ -15,6 +15,7 @@ vi.mock('../lib/stores', async () => {
     connected: writable(false),
     collections: writable({}),
     groups: writable({}),
+    userSettings: writable({}),
     deleteItem: vi.fn().mockResolvedValue(undefined),
     moveItemToCollection,
     loadFileBlobUrl: vi.fn(),
@@ -58,6 +59,21 @@ describe('ViewCardModal actions menu', () => {
     });
     flushSync();
   }
+
+  it.each([
+    true,
+    false,
+  ])('offers preview reporting only for incomplete metadata: %s', (incomplete) => {
+    render({
+      id: 'bookmark-report',
+      type: 'bookmark',
+      url: 'https://example.com/article',
+      title: incomplete ? 'https://example.com/article' : 'A useful article',
+      description: 'An informative description.',
+      createdAt: item.createdAt,
+    });
+    expect(host.querySelector('.report-preview') !== null).toBe(incomplete);
+  });
 
   it('supports keyboard opening, navigation, and focus restoration', async () => {
     render();

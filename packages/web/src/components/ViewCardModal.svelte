@@ -14,7 +14,7 @@
   import { showToast } from '../lib/toast';
   import { fileItem, setArchived } from '../lib/triage-actions';
   import ShareButton from './ShareButton.svelte';
-  import { metadataReportUrl } from '../lib/metadata-report';
+  import { hasIncompletePreview, metadataReportUrl } from '../lib/metadata-report';
   import CollectionPicker from './CollectionPicker.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
   import ScheduleSheet from './ScheduleSheet.svelte';
@@ -37,7 +37,7 @@
   } = $props();
 
   const TITLE_ID = 'view-modal-title';
-  const reportUrl = $derived(item.type === 'bookmark' ? metadataReportUrl(item) : null);
+  const reportUrl = $derived(item.type === 'bookmark' && hasIncompletePreview(item) ? metadataReportUrl(item) : null);
 
   let showActions = $state(false);
   let actionsTrigger = $state<HTMLButtonElement>();
