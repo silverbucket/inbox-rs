@@ -32,6 +32,27 @@ export interface LinkMetadata {
   event?: LinkEvent;
 }
 
+/**
+ * True for preview images that stand in for a page rather than show it: a
+ * generic fallback (`/default/`, `placeholder`), Reddit's generated share
+ * card, or Amazon's generic share icon. Such an image is treated as missing,
+ * so the post's real image can replace it.
+ */
+export function isPlaceholderImage(url: string | undefined): boolean {
+  if (!url) return false;
+  if (url.includes('/default/') || url.includes('placeholder')) return true;
+  try {
+    const { hostname, pathname } = new URL(url);
+    return (
+      hostname === 'share.redd.it' ||
+      (hostname === 'm.media-amazon.com' &&
+        pathname.startsWith('/images/G/01/share-icons/'))
+    );
+  } catch {
+    return false;
+  }
+}
+
 export interface SockethubInfo {
   name: 'sockethub';
   apiVersion: number;

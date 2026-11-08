@@ -3,6 +3,7 @@ import {
   type BookmarkItem,
   eventSchedule,
   type ImageItem,
+  isPlaceholderImage,
   type LinkEvent,
 } from '@inbox-rs/rs-module';
 import browser from 'webextension-polyfill';
@@ -141,7 +142,14 @@ export async function saveAsBookmark(
     }
   })();
   const isTweetPage = pageHost === 'twitter.com' || pageHost === 'x.com';
-  const imageToSave = isTweetPage ? tweetImages[0] || '' : ogImage || '';
+  // A generic share card (Reddit's share.redd.it, Amazon's share icon) is
+  // not the page's image: neither keep a copy nor link it.
+  const isUsefulOgImage = !!ogImage && !isPlaceholderImage(ogImage);
+  const imageToSave = isTweetPage
+    ? tweetImages[0] || ''
+    : isUsefulOgImage
+      ? ogImage
+      : '';
   let filePath: string | undefined;
   let mimeType: string | undefined;
 
@@ -166,11 +174,6 @@ export async function saveAsBookmark(
       // Image save failed, bookmark will still be saved without local image
     }
   }
-
-  const isUsefulOgImage =
-    ogImage &&
-    !ogImage.includes('/default/') &&
-    !ogImage.includes('placeholder');
 
   let item: BookmarkItem = {
     id,

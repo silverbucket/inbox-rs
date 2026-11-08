@@ -37,6 +37,7 @@ export {
   DEFAULT_SOCKETHUB_ENDPOINT,
   fetchLinkMetadata,
   fetchSockethubInfo,
+  isPlaceholderImage,
   normalizeMetadata,
 } from './link-metadata.js';
 export { migrator, wrapCodeBlock } from './migrations.js';

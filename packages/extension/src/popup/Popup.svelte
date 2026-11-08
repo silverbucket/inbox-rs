@@ -1,9 +1,13 @@
 <script lang="ts">
-  import type { LinkEvent, LinkMetadata } from '@inbox-rs/rs-module';
+  import {
+    isPlaceholderImage,
+    type LinkEvent,
+    type LinkMetadata,
+  } from '@inbox-rs/rs-module';
   import browser from 'webextension-polyfill';
   import { DirectRS } from '../lib/rs';
   import { getConfig } from '../lib/storage';
-  import { fetchPageMetadataForSave } from './page-metadata';
+  import { fetchPageMetadataForSave, pickPreviewImage } from './page-metadata';
   import { isImageUrl } from './save-logic';
   import { runSavePage, runSaveNote } from './save-orchestrator';
 
@@ -83,7 +87,7 @@
     const title = meta.title || meta.event?.name;
     if (title && (!pageTitle || pageTitle === pageUrl)) pageTitle = title;
     if (meta.description && !pageDescription) pageDescription = meta.description;
-    if (meta.image && !ogImage) ogImage = meta.image;
+    ogImage = pickPreviewImage(ogImage, meta.image);
     if (meta.favicon && !favicon) favicon = meta.favicon;
     if (meta.siteName && !siteName) siteName = meta.siteName;
     pageEvent = meta.event;
@@ -170,7 +174,7 @@
           <img class="preview-image" src={pageUrl} alt="" />
         {:else if tweetImages[0]}
           <img class="preview-image" src={tweetImages[0]} alt="" />
-        {:else if ogImage && !ogImage.includes('/default/') && !ogImage.includes('placeholder')}
+        {:else if ogImage && !isPlaceholderImage(ogImage)}
           <img class="preview-image" src={ogImage} alt="" />
         {/if}
         <input type="text" bind:value={pageTitle} placeholder="Title" />

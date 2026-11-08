@@ -15,6 +15,7 @@ import {
   type BookmarkItem,
   eventSchedule,
   type InboxItem,
+  isPlaceholderImage,
   type NoteItem,
   truncateTitle,
 } from '@inbox-rs/rs-module';
@@ -25,7 +26,7 @@ import {
   fetchLinkMetadata,
   type LinkMetadata,
 } from './link-metadata';
-import { items, updateItem, userSettings } from './stores';
+import { items, removeFile, updateItem, userSettings } from './stores';
 import { showToast } from './toast';
 
 export const LOCAL_LINK_PREVIEWS_KEY = 'inbox-rs:link-previews';
@@ -85,6 +86,7 @@ export function needsEnrichment(item: BookmarkItem): boolean {
     item.title === item.url ||
     !item.description ||
     !item.ogImage ||
+    isPlaceholderImage(item.ogImage) ||
     !item.siteName
   );
 }
@@ -165,8 +167,21 @@ export function applyLinkMetadata(
     updated.description = meta.description;
     changed = true;
   }
-  if (meta.image && !item.ogImage && !item.filePath) {
+  // A stored share card (share.redd.it, Amazon's share icon) counts as no
+  // image, so the page's real one replaces it. The extension kept a local
+  // copy of whatever og:image it saw, so a placeholder ogImage means the
+  // local file is that same card: drop it too (enrichBookmark deletes it).
+  const placeholder = isPlaceholderImage(item.ogImage);
+  if (
+    meta.image &&
+    !isPlaceholderImage(meta.image) &&
+    (placeholder || (!item.ogImage && !item.filePath))
+  ) {
     updated.ogImage = meta.image;
+    if (placeholder) {
+      delete updated.filePath;
+      delete updated.mimeType;
+    }
     changed = true;
   }
   if (meta.siteName && !item.siteName) {
@@ -207,6 +222,8 @@ export async function enrichBookmark(
     return applyLinkMetadata(current, meta);
   });
   if (!updated) return 'none';
+  // The local copy of a replaced share card is now unreferenced.
+  if (before?.filePath && !updated.filePath) void removeFile(before.filePath);
   // Background enrichment is otherwise silent; a date appearing on its own
   // would read as a glitch.
   if (updated.startsAt && !before?.startsAt) {

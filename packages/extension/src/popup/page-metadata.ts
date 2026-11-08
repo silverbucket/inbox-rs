@@ -1,6 +1,7 @@
 import {
   DEFAULT_SOCKETHUB_ENDPOINT,
   fetchLinkMetadata,
+  isPlaceholderImage,
   type LinkMetadata,
   type UserSettings,
 } from '@inbox-rs/rs-module';
@@ -82,4 +83,20 @@ export async function fetchPageMetadataForSave(
     if (timer) clearTimeout(timer);
     controller.abort();
   }
+}
+
+/**
+ * The preview image to save: the page's own unless it is missing or only a
+ * share card (Reddit's share.redd.it, Amazon's share icon), in which case
+ * the image Sockethub fetched replaces it.
+ */
+export function pickPreviewImage(
+  pageImage: string,
+  fetchedImage: string | undefined,
+): string {
+  return fetchedImage &&
+    !isPlaceholderImage(fetchedImage) &&
+    (!pageImage || isPlaceholderImage(pageImage))
+    ? fetchedImage
+    : pageImage;
 }

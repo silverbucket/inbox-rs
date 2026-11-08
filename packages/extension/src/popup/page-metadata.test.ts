@@ -1,6 +1,6 @@
 import type { LinkMetadata, UserSettings } from '@inbox-rs/rs-module';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchPageMetadataForSave } from './page-metadata';
+import { fetchPageMetadataForSave, pickPreviewImage } from './page-metadata';
 
 function reader(settings: UserSettings = {}) {
   return { getUserSettings: vi.fn().mockResolvedValue(settings) };
@@ -112,5 +112,26 @@ describe('fetchPageMetadataForSave', () => {
     await vi.advanceTimersByTimeAsync(3_000);
     await expect(result).resolves.toBeNull();
     expect(requestSignal?.aborted).toBe(true);
+  });
+});
+
+describe('pickPreviewImage', () => {
+  const real = 'https://i.redd.it/g6oz7p3e14zh1.jpeg';
+
+  it('replaces a missing image or a share card with the fetched one', () => {
+    expect(pickPreviewImage('', real)).toBe(real);
+    expect(
+      pickPreviewImage('https://share.redd.it/preview/post/1xlli1q', real),
+    ).toBe(real);
+  });
+
+  it('keeps the page image otherwise', () => {
+    expect(pickPreviewImage('https://x/og.png', real)).toBe('https://x/og.png');
+    expect(pickPreviewImage('https://x/og.png', undefined)).toBe(
+      'https://x/og.png',
+    );
+    expect(pickPreviewImage('', 'https://share.redd.it/preview/post/1')).toBe(
+      '',
+    );
   });
 });

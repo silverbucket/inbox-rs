@@ -358,6 +358,24 @@ describe('saveAsBookmark', () => {
     expect(result.ogImage).toBeUndefined();
   });
 
+  it('neither links nor downloads a Reddit share card', async () => {
+    mockFetch.mockResolvedValue({ ok: true });
+
+    const rs = makeRS();
+    const result = await saveAsBookmark({
+      rs,
+      ...baseParams,
+      pageUrl: 'https://www.reddit.com/r/test/comments/abc/post/',
+      ogImage: 'https://share.redd.it/preview/post/abc',
+    });
+
+    expect(result.ogImage).toBeUndefined();
+    expect(result.filePath).toBeUndefined();
+    expect(mockSendMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'download-and-store-image' }),
+    );
+  });
+
   it('keeps the note in body, separate from the page description', async () => {
     mockFetch.mockResolvedValue({ ok: true });
 
