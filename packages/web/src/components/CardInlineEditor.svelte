@@ -22,6 +22,7 @@
     flush = $bindable<() => Promise<void>>(async () => {}),
     retry = $bindable<() => void>(() => {}),
     discard = $bindable<() => void>(() => {}),
+    takeEdits = $bindable<() => Promise<InboxItem>>(async () => item),
     onfetchurlpreview = undefined,
     fetchingUrlPreview = false,
     children,
@@ -35,6 +36,13 @@
      * (deleted) so teardown doesn't write it back into existence.
      */
     discard?: () => void;
+    /**
+     * The card with any unsaved edits applied, without writing it. Holds the
+     * pending autosave so the caller can fold the edits into its own single
+     * write (a second quick write to the same path can 412 and be dropped).
+     * Call `retry` if that write fails.
+     */
+    takeEdits?: () => Promise<InboxItem>;
     onfetchurlpreview?: () => void;
     fetchingUrlPreview?: boolean;
     children?: Snippet;
@@ -131,11 +139,24 @@
   }
 
   flush = persist;
-  retry = () => void persist().catch(() => {});
+  retry = () => {
+    discarded = false;
+    void persist().catch(() => {});
+  };
   discard = () => {
     discarded = true;
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = undefined;
+  };
+
+  takeEdits = async () => {
+    if (savePromise) await savePromise.catch(() => {});
+    // The caller owns these edits now: no debounce, and no save on teardown
+    // (its own write re-keys this editor away). `retry` hands them back.
+    discarded = true;
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = undefined;
+    return applyCardDraft(currentItem, $state.snapshot(draft));
   };
 
   if (recovered) {
@@ -210,9 +231,11 @@
     });
   });
 
-  const hasBody = $derived(item.type === 'bookmark' || 'body' in item);
+  const hasBody = $derived(
+    item.type === 'bookmark' || item.type === 'image' || 'body' in item,
+  );
   const bodyLabel = $derived(
-    item.type === 'bookmark'
+    item.type === 'bookmark' || item.type === 'image'
       ? 'Notes'
       : item.type === 'todo'
       ? 'Details'
@@ -223,6 +246,8 @@
   const bodyPlaceholder = $derived(
     item.type === 'bookmark'
       ? 'Add personal notes about this bookmark…'
+      : item.type === 'image'
+      ? 'Add notes about this image…'
       : item.type === 'todo'
       ? 'Add details…'
       : item.type === 'email'
@@ -300,6 +325,11 @@
     </label>
   {/if}
 
+  <!-- An image leads its card; long notes would otherwise bury it. -->
+  {#if item.type === 'image'}
+    {@render children?.()}
+  {/if}
+
   {#if hasBody}
     <MarkdownContentField
       bind:value={draft.body}
@@ -316,7 +346,9 @@
     </label>
   {/if}
 
-  {@render children?.()}
+  {#if item.type !== 'image'}
+    {@render children?.()}
+  {/if}
 
   {#if descriptionIsPrimary}
     <label class="text-field description-primary">

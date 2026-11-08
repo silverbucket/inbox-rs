@@ -18,6 +18,7 @@ import {
   buildImageItem,
   buildNoteItem,
   buildTodoItem,
+  noteToImage,
 } from './build-item';
 import { buildIcs } from './ics';
 
@@ -1073,5 +1074,71 @@ describe('buildTodoItem', () => {
     });
 
     expect((result.item as TodoItem).collectionId).toBe('col-42');
+  });
+});
+
+describe('noteToImage', () => {
+  it('keeps the note id, title, notes and placement on the new image', async () => {
+    const note: NoteItem = {
+      id: 'note-1',
+      type: 'note',
+      title: 'Bridge sketch',
+      body: '# Notes\n\nA **long** write-up.',
+      description: 'Field trip',
+      collectionId: 'col-1',
+      pinned: true,
+      isTodo: true,
+      startsAt: '2026-11-10T09:00:00.000Z',
+      createdAt: '2026-04-29T08:00:00.000Z',
+    };
+    const file = new File(['png'], 'bridge.png', { type: 'image/png' });
+
+    const result = await noteToImage(note, file);
+
+    expect(result?.fileData?.byteLength).toBe(3);
+    expect(result?.item).toEqual({
+      id: 'note-1',
+      type: 'image',
+      title: 'Bridge sketch',
+      body: '# Notes\n\nA **long** write-up.',
+      description: 'Field trip',
+      filePath: 'files/note-1.png',
+      mimeType: 'image/png',
+      thumbPath: undefined,
+      thumbMimeType: undefined,
+      collectionId: 'col-1',
+      pinned: true,
+      isTodo: true,
+      startsAt: '2026-11-10T09:00:00.000Z',
+      createdAt: '2026-04-29T08:00:00.000Z',
+    });
+  });
+
+  it('falls back to the file name for an untitled note', async () => {
+    const note: NoteItem = {
+      id: 'note-2',
+      type: 'note',
+      title: '',
+      body: 'notes',
+      createdAt: '2026-04-29T08:00:00.000Z',
+    };
+    const file = new File(['x'], 'photo.jpg', { type: 'image/jpeg' });
+
+    const result = await noteToImage(note, file);
+
+    expect(result?.item.title).toBe('photo.jpg');
+  });
+});
+
+describe('buildImageItem notes', () => {
+  it('stores markdown notes with a new image', async () => {
+    const file = new File(['x'], 'p.png', { type: 'image/png' });
+    const result = await buildImageItem(ctx({ id: 'img-9' }), {
+      title: '',
+      description: '',
+      file,
+      body: '- one\n- two',
+    });
+    expect((result?.item as ImageItem).body).toBe('- one\n- two');
   });
 });
