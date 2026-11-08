@@ -353,7 +353,7 @@
     margin: 0;
   }
 
-  /* Mirrors InboxGrid's "N things waiting" bar. */
+  /* Mirrors InboxGrid's "N items to sort" bar. */
   .status-bar {
     display: flex;
     align-items: center;

@@ -171,7 +171,7 @@
 {:else}
   {#if inboxItems.length > 0}
   <div class="status-bar">
-    <span>You've got <span class="status-count">{inboxItems.length}</span> {inboxItems.length === 1 ? 'thing' : 'things'} waiting</span>
+    <span><span class="status-count">{inboxItems.length}</span> {inboxItems.length === 1 ? 'item' : 'items'} to sort</span>
     {#if !triageQueue}
       <button type="button" class="process" onclick={openTriage}>Process inbox</button>
     {/if}
@@ -194,7 +194,7 @@
         <section class="group" aria-labelledby="inbox-group-{g.key}">
           <div class="group-head">
             <h2 id="inbox-group-{g.key}">{g.label}</h2>
-            <span class="group-hint">{g.hint}</span>
+            {#if visibleGroups.length > 1}<span class="group-hint">{g.hint}</span>{/if}
           </div>
           <div class="grid-wrap">
             <div class="grid">
@@ -278,7 +278,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 0.5rem 0.9rem;
     font-size: 0.9rem;
     color: var(--text-muted);
@@ -286,12 +286,12 @@
   }
 
   .process {
-    min-height: 2rem;
+    min-height: 2.75rem;
     padding: 0 0.85rem;
-    border: 1px solid var(--accent-subtle-strong);
-    border-radius: 999px;
-    background: var(--accent-subtler);
-    color: var(--accent-text);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: white;
     font: inherit;
     font-size: 0.85rem;
     font-weight: 700;
@@ -299,7 +299,7 @@
   }
 
   .process:hover {
-    background: var(--accent-subtle);
+    background: var(--accent-hover);
   }
 
   .process:focus-visible {

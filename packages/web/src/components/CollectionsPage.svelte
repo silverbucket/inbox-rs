@@ -665,7 +665,10 @@
 
   .page-title {
     margin: 0;
-    font-size: 1.35rem;
+    font-size: clamp(1.8rem, 3vw, 2.35rem);
+    font-weight: 650;
+    letter-spacing: -0.045em;
+    line-height: 1.2;
   }
 
   .page-summary {

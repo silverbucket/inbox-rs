@@ -226,6 +226,7 @@
         {/if}
       </span>
       <span class="kind-label">{kindLabel}</span>
+      <time class="date" datetime={item.createdAt} title={formatDate(item.createdAt)}>{age}</time>
     </div>
 
     {#if item.type === 'bookmark'}
@@ -263,9 +264,8 @@
     {/if}
   </div>
 
+  {#if scheduledLabel}
   <footer class="card-footer">
-    <time class="date" datetime={item.createdAt} title={formatDate(item.createdAt)}>{age}</time>
-    {#if scheduledLabel}
       <span
         class="sched-chip"
         class:overdue={scheduleOverdue}
@@ -283,8 +283,8 @@
       {#if item.cancelled}
         <span class="sched-chip overdue cancelled">Cancelled</span>
       {/if}
-    {/if}
   </footer>
+  {/if}
 </article>
 
 <style>
@@ -293,6 +293,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     overflow: hidden;
+    box-shadow: 0 2px 5px color-mix(in srgb, var(--shadow) 25%, transparent);
     transition: border-color 0.15s, box-shadow 0.15s;
     position: relative;
     cursor: pointer;
@@ -505,6 +506,9 @@
   }
 
   .date {
+    margin-left: auto;
+    font-size: 0.72rem;
+    font-weight: 400;
     color: var(--text-muted);
   }
 

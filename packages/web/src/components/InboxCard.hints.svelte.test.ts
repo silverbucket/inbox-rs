@@ -62,9 +62,7 @@ describe('InboxCard hints', () => {
 
   it('dates the card relatively and drops the repeated type tag', () => {
     const el = render({});
-    expect(el.querySelector('.card-footer .date')?.textContent).toBe(
-      'yesterday',
-    );
+    expect(el.querySelector('.card-kind .date')?.textContent).toBe('yesterday');
     expect(el.querySelector('.type-tag')).toBeNull();
     expect(el.querySelector('.kind-label')?.textContent).toBe('Note');
   });

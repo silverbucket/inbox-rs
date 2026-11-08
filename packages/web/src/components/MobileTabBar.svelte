@@ -127,7 +127,7 @@
     min-height: 3.1rem;
     padding: 0.3rem 0.2rem;
     border: 0;
-    border-radius: var(--radius-sm);
+    border-radius: 1rem;
     background: none;
     color: var(--text-muted);
     font: inherit;
@@ -150,7 +150,8 @@
   }
 
   .tab.active {
-    color: var(--accent);
+    color: var(--accent-text);
+    background: var(--accent-subtler);
   }
 
   .count {
@@ -174,7 +175,7 @@
     width: 3.25rem;
     height: 3.25rem;
     margin: -1.3rem 0.35rem 0;
-    border: 4px solid var(--surface);
+    border: 2px solid var(--surface);
     border-radius: 50%;
     background: var(--accent);
     color: #fff;

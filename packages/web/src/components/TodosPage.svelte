@@ -337,7 +337,7 @@
   type TodosView = 'today' | 'horizon' | 'board' | 'calendar';
   const VIEWS: Array<{ id: TodosView; label: string }> = [
     { id: 'today', label: 'Today' },
-    { id: 'horizon', label: 'Horizon' },
+    { id: 'horizon', label: 'Plan' },
     { id: 'board', label: 'Board' },
     { id: 'calendar', label: 'Calendar' },
   ];

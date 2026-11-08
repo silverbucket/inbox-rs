@@ -80,11 +80,11 @@
    tokens are accent-mixed-with-transparent in :root, so they hold in both modes. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --bg: #f3efe7;
-    --sidebar-bg: #ebe6dc;
-    --surface: #fbf9f4;
-    --surface-hover: #f0ece3;
-    --border: #d6d0c3;
+    --bg: #f7f6f2;
+    --sidebar-bg: #efeee8;
+    --surface: #ffffff;
+    --surface-hover: #f2f1eb;
+    --border: #e0dfd7;
     --text: #2b2925;
     --text-muted: #6b655b;
     --danger: #c9302c;
@@ -105,11 +105,11 @@
 }
 
 :root[data-theme="light"] {
-  --bg: #f3efe7;
-  --sidebar-bg: #ebe6dc;
-  --surface: #fbf9f4;
-  --surface-hover: #f0ece3;
-  --border: #d6d0c3;
+  --bg: #f7f6f2;
+  --sidebar-bg: #efeee8;
+  --surface: #ffffff;
+  --surface-hover: #f2f1eb;
+  --border: #e0dfd7;
   --text: #2b2925;
   --text-muted: #6b655b;
   --danger: #c9302c;
@@ -232,5 +232,20 @@ a:hover {
   [contenteditable="true"] {
     /* biome-ignore lint/complexity/noImportantStyles: Required to beat Svelte scoped selectors (.svelte-xxx) so the iOS zoom prevention floor is effective. See comment above. */
     font-size: 16px !important;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
