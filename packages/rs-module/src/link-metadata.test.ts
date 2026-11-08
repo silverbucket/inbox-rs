@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeMetadata } from './link-metadata';
+import { isPlaceholderImage, normalizeMetadata } from './link-metadata';
 
 describe('normalizeMetadata event', () => {
   it('keeps a well-formed page event', () => {
@@ -58,5 +58,31 @@ describe('normalizeMetadata event', () => {
       endDate: undefined,
       location: undefined,
     });
+  });
+});
+
+describe('isPlaceholderImage', () => {
+  it('flags generic share cards and fallbacks', () => {
+    expect(
+      isPlaceholderImage('https://share.redd.it/preview/post/1xlli1q'),
+    ).toBe(true);
+    expect(
+      isPlaceholderImage(
+        'https://m.media-amazon.com/images/G/01/share-icons/previewdoh/amazon.png',
+      ),
+    ).toBe(true);
+    expect(isPlaceholderImage('https://x.com/default/og.png')).toBe(true);
+    expect(isPlaceholderImage('https://x.com/placeholder.png')).toBe(true);
+  });
+
+  it('keeps real images', () => {
+    expect(isPlaceholderImage('https://i.redd.it/g6oz7p3e14zh1.jpeg')).toBe(
+      false,
+    );
+    expect(
+      isPlaceholderImage('https://m.media-amazon.com/images/I/81abc.jpg'),
+    ).toBe(false);
+    expect(isPlaceholderImage(undefined)).toBe(false);
+    expect(isPlaceholderImage('not a url')).toBe(false);
   });
 });

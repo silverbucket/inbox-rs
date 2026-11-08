@@ -34,10 +34,12 @@ function getMetadata() {
   return {
     title: getMeta('og:title') || document.title || '',
     description: getMeta('og:description') || getMeta('description') || '',
+    // Reddit's og:image is a generated share card (share.redd.it), not the
+    // post's image, so the post's own image comes first there.
     ogImage:
+      redditImage ||
       getMeta('og:image') ||
       getMeta('twitter:image') ||
-      redditImage ||
       undefined,
     siteName: getMeta('og:site_name') || undefined,
     contentType: document.contentType,

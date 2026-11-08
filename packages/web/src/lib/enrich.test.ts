@@ -3,15 +3,17 @@ import type { BookmarkItem } from '@inbox-rs/rs-module';
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { fetchLinkMetadata, storeItem, itemsMap, settings } = vi.hoisted(() => {
-  const map: Record<string, unknown> = {};
-  return {
-    fetchLinkMetadata: vi.fn(),
-    storeItem: vi.fn().mockResolvedValue(undefined),
-    itemsMap: map,
-    settings: {} as Record<string, unknown>,
-  };
-});
+const { fetchLinkMetadata, storeItem, removeFile, itemsMap, settings } =
+  vi.hoisted(() => {
+    const map: Record<string, unknown> = {};
+    return {
+      fetchLinkMetadata: vi.fn(),
+      removeFile: vi.fn().mockResolvedValue(undefined),
+      storeItem: vi.fn().mockResolvedValue(undefined),
+      itemsMap: map,
+      settings: {} as Record<string, unknown>,
+    };
+  });
 vi.mock('./link-metadata', async (importOriginal) => ({
   // Keep the real DEFAULT_SOCKETHUB_ENDPOINT so endpoint-resolution
   // assertions run against the actual default.
@@ -29,6 +31,7 @@ vi.mock('./stores', () => ({
     return next;
   },
   storeItem,
+  removeFile,
   items: {
     subscribe: (run: (value: unknown) => void) => {
       run(itemsMap);
@@ -182,6 +185,19 @@ describe('needsEnrichment', () => {
     expect(needsEnrichment(bookmark({ title: 'Real title' }))).toBe(true);
   });
 
+  it('is true while the image is only a share card', () => {
+    expect(
+      needsEnrichment(
+        bookmark({
+          title: 'T',
+          description: 'D',
+          ogImage: 'https://share.redd.it/preview/post/1xlli1q',
+          siteName: 'reddit',
+        }),
+      ),
+    ).toBe(true);
+  });
+
   it('is false once title, description, image and site name are set', () => {
     expect(
       needsEnrichment(
@@ -241,6 +257,43 @@ describe('applyLinkMetadata', () => {
       filePath: 'files/b1.png',
     });
     expect(applyLinkMetadata(item, { image: 'https://x/i.png' })).toBeNull();
+  });
+
+  it('replaces a stored Reddit share card and its local copy', () => {
+    const item = bookmark({
+      title: 'T',
+      description: 'D',
+      siteName: 'reddit',
+      ogImage: 'https://share.redd.it/preview/post/1xlli1q',
+      filePath: 'files/b1.jpg',
+      mimeType: 'image/png',
+    });
+    const updated = applyLinkMetadata(item, {
+      image: 'https://i.redd.it/g6oz7p3e14zh1.jpeg',
+    });
+    expect(updated?.ogImage).toBe('https://i.redd.it/g6oz7p3e14zh1.jpeg');
+    expect(updated?.filePath).toBeUndefined();
+    expect(updated?.mimeType).toBeUndefined();
+  });
+
+  it('replaces a stored Amazon share icon', () => {
+    const item = bookmark({
+      ogImage:
+        'https://m.media-amazon.com/images/G/01/share-icons/previewdoh/amazon.png',
+    });
+    expect(
+      applyLinkMetadata(item, {
+        image: 'https://m.media-amazon.com/images/I/81abc.jpg',
+      })?.ogImage,
+    ).toBe('https://m.media-amazon.com/images/I/81abc.jpg');
+  });
+
+  it('never stores a fetched placeholder image', () => {
+    expect(
+      applyLinkMetadata(bookmark(), {
+        image: 'https://share.redd.it/preview/post/1xlli1q',
+      }),
+    ).toBeNull();
   });
 
   it('returns null when the metadata adds nothing', () => {
@@ -326,6 +379,21 @@ describe('enrichBookmark', () => {
       title: 'Example',
       description: 'd',
     });
+  });
+
+  it('deletes the local copy of a replaced share card', async () => {
+    const item = bookmark({
+      ogImage: 'https://share.redd.it/preview/post/1xlli1q',
+      filePath: 'files/b1.jpg',
+      mimeType: 'image/png',
+    });
+    itemsMap[item.id] = item;
+    fetchLinkMetadata.mockResolvedValue({
+      image: 'https://i.redd.it/g6oz7p3e14zh1.jpeg',
+    });
+
+    await expect(enrichBookmark(item)).resolves.toBe('updated');
+    expect(removeFile).toHaveBeenCalledWith('files/b1.jpg');
   });
 
   it('is a no-op when the user disabled link previews', async () => {
