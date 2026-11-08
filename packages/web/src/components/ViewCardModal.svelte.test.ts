@@ -123,6 +123,26 @@ describe('ViewCardModal actions menu', () => {
     expect(onclose).not.toHaveBeenCalled();
   });
 
+  it('keeps Shift+Tab on the actions trigger instead of traversing twice', async () => {
+    render();
+    const trigger = host.querySelector(
+      '[aria-label="Card actions"]',
+    ) as HTMLButtonElement;
+    trigger.click();
+    await tick();
+    const event = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    host.querySelector('[role="menuitem"]')?.dispatchEvent(event);
+    flushSync();
+    expect(event.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(trigger);
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+  });
+
   it('converts and fetches when an existing note contains only a URL', async () => {
     const url =
       'https://x.com/vivistac/status/2086480928591819162?s=46&t=UTd7gPLSy4yZR518MK49Qg';

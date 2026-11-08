@@ -146,7 +146,7 @@ describe('SidebarShell drag reorder', () => {
     expect(host.querySelector('.sidebar.collapsed')).toBeNull();
     (scope?.querySelector('.scope-reset') as HTMLButtonElement).click();
     expect(storeFns.updateConfig).toHaveBeenCalledWith({
-      activeGroupFilters: ['g1', 'g2'],
+      activeGroupFilters: undefined,
       inactiveCollectionFilters: [],
     });
   });

@@ -14,7 +14,7 @@
   import { showToast } from '../lib/toast';
   import { fileItem, setArchived } from '../lib/triage-actions';
   import ShareButton from './ShareButton.svelte';
-  import { hasIncompletePreview, metadataReportUrl } from '../lib/metadata-report';
+  import { hasIncompletePreview, reportPreview } from '../lib/metadata-report';
   import CollectionPicker from './CollectionPicker.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
   import ScheduleSheet from './ScheduleSheet.svelte';
@@ -37,7 +37,7 @@
   } = $props();
 
   const TITLE_ID = 'view-modal-title';
-  const reportUrl = $derived(item.type === 'bookmark' && hasIncompletePreview(item) ? metadataReportUrl(item) : null);
+  const reportItem = $derived(item.type === 'bookmark' && hasIncompletePreview(item) ? item : null);
 
   let showActions = $state(false);
   let actionsTrigger = $state<HTMLButtonElement>();
@@ -448,6 +448,7 @@
       else next = current > 0 ? current - 1 : items.length - 1;
       items[next].focus();
     } else if (e.key === 'Tab') {
+      if (e.shiftKey) e.preventDefault();
       closeActions(true);
     }
   }
@@ -638,8 +639,8 @@
       </div>
     </div>
 
-    {#if reportUrl}
-      <p class="report-preview"><a href={reportUrl} target="_blank" rel="noopener noreferrer">Report preview issue to Sockethub ↗</a><span>Public GitHub issue draft — review the page URL before posting.</span></p>
+    {#if reportItem}
+      <p class="report-preview"><button type="button" onclick={() => { if (reportItem) reportPreview(reportItem); }}>Report preview issue to Sockethub ↗</button><span>Public GitHub issue draft — review the page URL before posting.</span></p>
     {/if}
     <h2 class="sr-only" id={TITLE_ID}>{item.title || 'Untitled card'}</h2>
     {#key `${item.id}:${item.type}`}
@@ -1382,6 +1383,8 @@
     top: calc(100% + 0.35rem);
     right: 0;
     min-width: 168px;
+    max-height: max(44px, calc(100dvh - 13rem));
+    overflow-y: auto;
     padding: 0.3rem;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
@@ -1528,7 +1531,7 @@
     flex-shrink: 0;
   }
   .report-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.65rem; margin: 0; font-size: 0.8rem; color: var(--text-muted); }
-  .report-preview a { min-height: 44px; display: inline-flex; align-items: center; }
+  .report-preview button { border: 0; padding: 0; background: transparent; color: var(--accent-text); font: inherit; cursor: pointer; min-height: 44px; display: inline-flex; align-items: center; }
   @media (max-width: 600px) { .modal-header .date { display: none; } }
   .sticky-card-controls { position: sticky; top: -1.5rem; z-index: 20; margin: -1.5rem -1.5rem 0; padding: 1rem 1.5rem; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.65rem; }
   .organize-toolbar { display: flex; align-items: center; gap: 0.5rem; }

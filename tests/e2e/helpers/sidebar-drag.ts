@@ -280,11 +280,14 @@ type Point = { x: number; y: number };
 async function steppedDrag(
   page: Page,
   from: Point,
-  to: Point,
+  target: Point | (() => Promise<Point>),
   whileHeld?: () => Promise<void>,
 ): Promise<void> {
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
+  // Activate the drag before revealing a target that may scroll its source.
+  await page.mouse.move(from.x + 6, from.y + 6);
+  const to = typeof target === 'function' ? await target() : target;
 
   const steps = 16;
   for (let step = 1; step <= steps; step++) {
@@ -347,11 +350,14 @@ export async function dragGripOntoGroup(
     collectionRow.locator('.reorder-grip'),
     'the collection grip',
   );
-  const to = await boxOf(groupRow, 'the destination group row');
-  const target = { x: to.x + to.width / 2, y: to.y + to.height / 2 };
-
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
+  await page.mouse.move(
+    from.x + from.width / 2 + 6,
+    from.y + from.height / 2 + 6,
+  );
+  const to = await boxOf(groupRow, 'the destination group row');
+  const target = { x: to.x + to.width / 2, y: to.y + to.height / 2 };
 
   const steps = 20;
   const start = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
@@ -386,12 +392,17 @@ export async function dragItemOnto(
   { aimFraction = 0.5 }: { aimFraction?: number } = {},
 ): Promise<void> {
   const source = await boxOf(item, 'the dragged item');
-  const dest = await boxOf(target, 'the drop target');
   await steppedDrag(
     page,
     // Low on the card body, clear of the title link and action buttons.
     { x: source.x + source.width / 2, y: source.y + source.height - 12 },
-    { x: dest.x + dest.width * aimFraction, y: dest.y + dest.height / 2 },
+    async () => {
+      const dest = await boxOf(target, 'the drop target');
+      return {
+        x: dest.x + dest.width * aimFraction,
+        y: dest.y + dest.height / 2,
+      };
+    },
   );
 }
 
@@ -412,11 +423,13 @@ export async function dragCollectionOntoGroup(
     collectionRow.locator('.collection-move-btn'),
     'the dragged collection',
   );
-  const to = await boxOf(groupRow, 'the destination group row');
   await steppedDrag(
     page,
     { x: from.x + from.width / 2, y: from.y + from.height / 2 },
-    { x: to.x + to.width / 2, y: to.y + to.height / 2 },
+    async () => {
+      const to = await boxOf(groupRow, 'the destination group row');
+      return { x: to.x + to.width / 2, y: to.y + to.height / 2 };
+    },
   );
 }
 
@@ -457,19 +470,21 @@ export async function dragGripPast(
   } = {},
 ): Promise<void> {
   const from = await boxOf(handle, 'the drag handle');
-  const to = await boxOf(target, 'the reorder target');
-  let y = to.y + to.height / 2;
-  if (overshootPx) y = to.y + to.height + overshootPx;
-  else if (overshootAbovePx) y = to.y - overshootAbovePx;
   await steppedDrag(
     page,
     { x: from.x + from.width / 2, y: from.y + from.height / 2 },
-    {
-      x:
-        aimFraction === undefined
-          ? from.x + from.width / 2
-          : to.x + to.width * aimFraction,
-      y,
+    async () => {
+      const to = await boxOf(target, 'the reorder target');
+      let y = to.y + to.height / 2;
+      if (overshootPx) y = to.y + to.height + overshootPx;
+      else if (overshootAbovePx) y = to.y - overshootAbovePx;
+      return {
+        x:
+          aimFraction === undefined
+            ? from.x + from.width / 2
+            : to.x + to.width * aimFraction,
+        y,
+      };
     },
     whileHeld,
   );

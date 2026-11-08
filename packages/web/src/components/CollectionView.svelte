@@ -336,6 +336,7 @@
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ontoggle(); }
     }}
     aria-expanded={expanded}
+    aria-describedby={`collection-counts-${collection.id}`}
     aria-label="{expanded ? 'Collapse' : 'Expand'} {collection.name}"
     use:collectionDropTarget={{
       ondrop: (itemId) => void fileItemHere(itemId),
@@ -372,7 +373,7 @@
         <span class="col-description">{collection.description}</span>
       {/if}
     </div>
-    <div class="header-badges">
+    <div class="header-badges" id={`collection-counts-${collection.id}`}>
       {#if openTodos.length > 0}
         <span class="badge badge-todos" aria-label="{openTodos.length} open todos" title="{openTodos.length} open {openTodos.length === 1 ? 'todo' : 'todos'}">
           {openTodos.length} {openTodos.length === 1 ? 'todo' : 'todos'}

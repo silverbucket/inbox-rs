@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import { get } from 'svelte/store';
   import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
   import AppFooter from './AppFooter.svelte';
@@ -129,11 +129,17 @@
   const filtered = $derived(activeGroups.size < groups.length || hiddenCollectionCount > 0);
   async function clearFilters() {
     try {
-      await updateConfig({ activeGroupFilters: groups.map(g => g.id), inactiveCollectionFilters: [] });
+      await updateConfig({ activeGroupFilters: undefined, inactiveCollectionFilters: [] });
     } catch (error) {
       console.error('Failed to clear filters', error);
       showToast('Couldn’t clear filters. Try again.');
     }
+  }
+  let filterControls = $state<HTMLElement>();
+  async function openFilters() {
+    collapsed = false;
+    await tick();
+    if (window.innerWidth <= 768) filterControls?.scrollIntoView({ block: 'start' });
   }
   const dragging = $derived($draggingItemId !== null);
   const movingCollection = $derived($draggingCollectionId !== null);
@@ -624,7 +630,7 @@
       class:dragging
       aria-label="Groups and collections"
     >
-    <div class="sidebar-scroll">
+    <div class="sidebar-scroll" bind:this={filterControls}>
       {#if collapsed}
         <div class="rail">
           <button
@@ -1025,7 +1031,7 @@
   <main>
     {#if pageUsesFilters(route.page) && filtered}
       <div class="filter-scope" role="group" aria-label="Current filters">
-        <button type="button" class="scope-change" onclick={() => { collapsed = false; }} aria-label="Change filters">
+        <button type="button" class="scope-change" onclick={openFilters} aria-label="Change filters">
           Filtered · {activeGroups.size} of {groups.length} groups{hiddenCollectionCount ? ` · ${hiddenCollectionCount} collections hidden` : ''} ▾
         </button>
         <button type="button" class="scope-reset" onclick={clearFilters}>Show all</button>

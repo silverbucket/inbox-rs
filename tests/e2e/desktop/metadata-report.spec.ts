@@ -49,6 +49,25 @@ test('long detail titles wrap completely on phones and desktop', async ({
       expect(linkBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
     }
   }
+  await connectedPage.setViewportSize({ width: 844, height: 260 });
+  await connectedPage
+    .locator('.modal')
+    .first()
+    .evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+  await connectedPage
+    .getByRole('button', { name: 'Card actions', exact: true })
+    .click();
+  const deletion = connectedPage.getByRole('menuitem', {
+    name: 'Delete card',
+    exact: true,
+  });
+  await deletion.scrollIntoViewIfNeeded();
+  await deletion.click();
+  await expect(
+    connectedPage.getByText('Delete permanently? This can’t be undone.'),
+  ).toBeVisible();
 });
 
 test('incomplete previews offer an editable upstream issue without private notes or URL tokens', async ({
@@ -71,25 +90,40 @@ test('incomplete previews offer an editable upstream issue without private notes
   });
   await connectedPage.goto(webOrigin);
   const card = connectedPage.locator('[data-item-id="metadata-report"]');
-  const link = card.getByRole('link', {
+  const link = card.getByRole('button', {
     name: 'Report preview issue (public) ↗',
     exact: true,
   });
   await expect(link).toBeVisible();
-  const issue = new URL((await link.getAttribute('href')) ?? '');
+  await connectedPage.evaluate(() => {
+    window.open = ((url: string | URL) => {
+      (window as unknown as { reportDraft: string }).reportDraft = String(url);
+      return null;
+    }) as typeof window.open;
+  });
+  connectedPage.once('dialog', (dialog) =>
+    dialog.accept('https://public-report.example/reproduce'),
+  );
+  await link.click();
+  const issue = new URL(
+    await connectedPage.evaluate(
+      () => (window as unknown as { reportDraft: string }).reportDraft,
+    ),
+  );
   expect(issue.origin + issue.pathname).toBe(
     'https://github.com/sockethub/sockethub/issues/new',
   );
   expect(issue.searchParams.get('body')).toContain(
-    'https://metadata-report.invalid/article',
+    'https://public-report.example/reproduce',
   );
+  expect(issue.href).not.toContain('metadata-report.invalid');
   expect(issue.searchParams.get('body')).not.toContain('private-token');
   expect(issue.searchParams.get('body')).not.toContain(
     'Private bookmark notes',
   );
   await connectedPage.setViewportSize({ width: 390, height: 844 });
   await card.locator('.card-select').press('Enter');
-  const detailReport = connectedPage.getByRole('link', {
+  const detailReport = connectedPage.getByRole('button', {
     name: 'Report preview issue to Sockethub ↗',
     exact: true,
   });

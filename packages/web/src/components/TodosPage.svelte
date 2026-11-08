@@ -398,7 +398,7 @@
 
 <div class="todos-page">
   <header class="page-heading">
-    <div><h1>{narrow ? VIEWS.find(v => v.id === view)?.label : 'Todos'}</h1><p class="page-description">A little focus for what’s next.</p></div>
+    <div><h1>{narrow ? (VIEWS.find(v => v.id === view)?.label ?? 'Plan') : 'Todos'}</h1><p class="page-description">A little focus for what’s next.</p></div>
     {#if openTodos.length || completedTodos.length || onCalendarTodos.length}
     <div class="view-switch" role="group" aria-label="Todos view">
       {#each VIEWS as v (v.id)}

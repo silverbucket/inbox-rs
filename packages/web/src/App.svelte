@@ -205,12 +205,11 @@
   $effect(() => {
     if (!pageUsesFilters(route.page)) return;
     const config = $appConfig;
-    if (config.activeGroupFilters === undefined) return; // default-all → no param
     const expected = formatRoute({ page: route.page, groupFilters: config.activeGroupFilters });
     if (window.location.hash !== expected) {
       window.history.replaceState(null, '', expected);
       route = { page: route.page, groupFilters: config.activeGroupFilters };
-      lastAppliedFilterHash = `${route.page}::${config.activeGroupFilters.join(',')}`;
+      lastAppliedFilterHash = config.activeGroupFilters === undefined ? undefined : `${route.page}::${config.activeGroupFilters.join(',')}`;
     }
   });
 

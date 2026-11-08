@@ -13,7 +13,7 @@
   import { kindOf } from '../lib/kinds';
   import { setItemPinned } from '../lib/stores';
   import { type CardHints, relativeAge } from '../lib/triage';
-  import { hasIncompletePreview, metadataReportUrl } from '../lib/metadata-report';
+  import { hasIncompletePreview, reportPreview } from '../lib/metadata-report';
 
   let {
     item,
@@ -73,7 +73,7 @@
   }
 
   const kind = $derived(kindOf(item.type));
-  const reportUrl = $derived(item.type === 'bookmark' && hasIncompletePreview(item) ? metadataReportUrl(item) : null);
+  const reportItem = $derived(item.type === 'bookmark' && hasIncompletePreview(item) ? item : null);
 
   // Bookmarks identify by their source domain rather than the generic label.
   const bookmarkDomain = $derived.by(() => {
@@ -250,8 +250,8 @@
     {#if hints?.flag}
       <p class="hint-flag">{hints.flag}</p>
     {/if}
-    {#if reportUrl}
-      <a class="report-preview" href={reportUrl} target="_blank" rel="noopener noreferrer" title="Review a public Sockethub issue draft on GitHub">Report preview issue (public) ↗</a>
+    {#if reportItem}
+      <button type="button" class="report-preview" onclick={(e) => { e.stopPropagation(); if (reportItem) reportPreview(reportItem); }}>Report preview issue (public) ↗</button>
     {/if}
     {#if hints?.suggest && onfile}
       {@const target = hints.suggest}
@@ -444,7 +444,7 @@
     min-width: 0;
   }
 
-  .report-preview { margin-top: 0.25rem; min-height: 44px; display: flex; align-items: center; width: fit-content; font-size: 0.78rem; }
+  .report-preview { border: 0; padding: 0; background: transparent; color: var(--accent-text); cursor: pointer; margin-top: 0.25rem; min-height: 44px; display: flex; align-items: center; width: fit-content; font-size: 0.78rem; }
 
   .hint-flag {
     margin: 0.55rem 0 0;
