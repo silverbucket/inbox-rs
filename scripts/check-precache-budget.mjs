@@ -13,13 +13,15 @@
  * the phone tab bar add ~0.1 MB of ordinary app code (no new dependency),
  * which an offline-first app should precache. 1.35 MB restores a margin for
  * normal growth while a heavyweight regression (a library pulled into the
- * eager graph is typically 300 KB+) still fails.
+ * eager graph is typically 300 KB+) still fails. Image notes (drop a picture
+ * onto a note) then landed it a few KB over; 1.4 MB is the same margin, still
+ * well under one heavyweight regression.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const BUDGET_BYTES = 1.35 * 1024 * 1024;
+const BUDGET_BYTES = 1.4 * 1024 * 1024;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const swPath = path.resolve(__dirname, '../packages/web/dist/sw.js');
