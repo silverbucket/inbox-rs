@@ -374,16 +374,16 @@
     </div>
     <div class="header-badges">
       {#if openTodos.length > 0}
-        <span class="badge badge-todos" title="{openTodos.length} open {openTodos.length === 1 ? 'todo' : 'todos'}">
+        <span class="badge badge-todos" aria-label="{openTodos.length} open todos" title="{openTodos.length} open {openTodos.length === 1 ? 'todo' : 'todos'}">
           {openTodos.length}
         </span>
       {/if}
       {#if referenceItems.length > 0}
-        <span class="badge badge-ref" title="{referenceItems.length} {referenceItems.length === 1 ? 'item' : 'items'}">
+        <span class="badge badge-ref" aria-label="{referenceItems.length} reference items" title="{referenceItems.length} reference items">
           {referenceItems.length}
         </span>
       {:else if openTodos.length === 0}
-        <span class="badge badge-ref">0</span>
+        <span class="badge badge-ref" aria-label="0 reference items" title="0 reference items">0</span>
       {/if}
     </div>
     <button
@@ -842,7 +842,7 @@
     display: flex;
     gap: 0.15rem;
     flex-shrink: 0;
-    opacity: 0;
+    opacity: 1;
     transition: opacity 150ms;
   }
 
@@ -862,6 +862,7 @@
 
   .collection-header {
     --row-action-color: var(--_col, var(--accent));
+    --row-action-opacity: 1;
   }
 
   @media (hover: none) {

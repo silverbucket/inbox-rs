@@ -42,7 +42,7 @@
     const n = liveCollections.length;
     const g = $sortedGroups.length;
     const itemsTotal = liveCollections.reduce((sum, c) => sum + ($collectionItems[c.id]?.length ?? 0), 0);
-    return `${n} ${n === 1 ? 'collection' : 'collections'} in ${g} ${g === 1 ? 'group' : 'groups'} · ${itemsTotal} items`;
+    return `Total: ${n} ${n === 1 ? 'collection' : 'collections'} in ${g} ${g === 1 ? 'group' : 'groups'} · ${itemsTotal} items`;
   });
   const matches = (c: Collection) => !query || c.name.toLowerCase().includes(query);
   const found = $derived(query ? liveCollections.filter(matches) : []);

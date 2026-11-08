@@ -8,7 +8,7 @@
   import SearchButton from './SearchButton.svelte';
   import LogoShield from './LogoShield.svelte';
   import ShortcutHelpButton from './ShortcutHelpButton.svelte';
-  import type { Page, Route } from '../lib/route';
+  import { pageUsesFilters, type Page, type Route } from '../lib/route';
   import { autofocus, autofocusIf } from '../lib/actions';
   import {
     collectionDropTarget,
@@ -36,6 +36,7 @@
     reorderGroupCollections,
     favoriteCollections,
     toggleFavoriteCollection,
+    updateConfig,
   } from '../lib/stores';
   import { isSoloModifier, soloHint, soloModifierHeld } from '../lib/solo-modifier';
   import {
@@ -124,6 +125,16 @@
   const grouped = $derived($groupCollections);
   const activeGroups = $derived($activeGroupIds);
   const inactiveCols = $derived($inactiveCollectionIds);
+  const hiddenCollectionCount = $derived(groups.reduce((n, g) => n + (grouped[g.id] ?? []).filter(c => activeGroups.has(g.id) && inactiveCols.has(c.id)).length, 0));
+  const filtered = $derived(activeGroups.size < groups.length || hiddenCollectionCount > 0);
+  async function clearFilters() {
+    try {
+      await updateConfig({ activeGroupFilters: groups.map(g => g.id), inactiveCollectionFilters: [] });
+    } catch (error) {
+      console.error('Failed to clear filters', error);
+      showToast('Couldn’t clear filters. Try again.');
+    }
+  }
   const dragging = $derived($draggingItemId !== null);
   const movingCollection = $derived($draggingCollectionId !== null);
   // The plugins page has no groups to filter — the sidebar is
@@ -223,11 +234,12 @@
   });
 
   function readCollapsed(): boolean {
+    const mobile = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 768px)').matches;
     try {
       const stored = localStorage.getItem('inbox-rs:sidebar-collapsed');
-      return stored === null ? window.matchMedia('(max-width: 768px)').matches : stored === '1';
+      return stored === null ? !!mobile : stored === '1';
     } catch {
-      return false;
+      return !!mobile;
     }
   }
 
@@ -583,10 +595,10 @@
       >
         Todos
         {#if viewTodoCount > 0}
-          <span class="nav-badge">{viewTodoCount}</span>
+          <span class="nav-badge" title="{viewTodoCount} open todos in this view" aria-label="{viewTodoCount} open todos in this view">{viewTodoCount}</span>
         {/if}
         {#if totalTodoCount > viewTodoCount}
-          <span class="nav-badge-total" title="{totalTodoCount} incomplete todos in total">{totalTodoCount}</span>
+          <span class="nav-badge-total" title="{totalTodoCount} incomplete todos in total" aria-label="{totalTodoCount} incomplete todos in total">/ {totalTodoCount}</span>
         {/if}
       </button>
       <button
@@ -1011,6 +1023,14 @@
   {/if}
 
   <main>
+    {#if pageUsesFilters(route.page) && filtered}
+      <div class="filter-scope" role="group" aria-label="Current filters">
+        <button type="button" class="scope-change" onclick={() => { collapsed = false; }} aria-label="Change filters">
+          Filtered · {activeGroups.size} of {groups.length} groups{hiddenCollectionCount ? ` · ${hiddenCollectionCount} collections hidden` : ''} ▾
+        </button>
+        <button type="button" class="scope-reset" onclick={clearFilters}>Show all</button>
+      </div>
+    {/if}
     {@render children()}
 
     <!-- Inside <main>, not below the grid: the sidebar rail must run to the
@@ -1541,7 +1561,7 @@
   }
 
   .dot-toggle.inactive {
-    opacity: 0.55;
+    opacity: 1;
   }
 
   /* Reveals on the same rule as the grip beside it, so a resting collection
@@ -1620,7 +1640,7 @@
   }
 
   .entity.inactive {
-    opacity: 0.42;
+    color: var(--text-muted);
   }
 
   .dot {
@@ -1666,8 +1686,8 @@
   }
 
   .rail-dot.inactive .dot {
-    opacity: 0.35;
-    box-shadow: none;
+    background: transparent;
+    box-shadow: inset 0 0 0 2px var(--entity-color);
   }
 
   .entity-name {
@@ -1883,6 +1903,11 @@
     border-color: var(--accent);
   }
 
+  .filter-scope { display: flex; align-items: center; flex-wrap: wrap; gap: 0.25rem 0.75rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+  .filter-scope button { min-height: 44px; border: 0; border-radius: var(--radius-sm); background: transparent; font: inherit; font-size: 0.82rem; }
+  .filter-scope .scope-change { color: var(--accent-text); text-align: left; background: var(--accent-subtler); padding-inline: 0.65rem; }
+  .scope-reset { color: var(--accent-text); font-weight: 600; }
+
   /* ── Main ── */
   main {
     /* No bottom padding: the footer supplies the bottom edge. Stretched so
@@ -2094,4 +2119,5 @@
       grid-template-rows: auto;
     }
   }
+  .entity.inactive .dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--entity-color); }
 </style>

@@ -194,7 +194,7 @@
         <section class="group" aria-labelledby="inbox-group-{g.key}">
           <div class="group-head">
             <h2 id="inbox-group-{g.key}">{g.label}</h2>
-            {#if visibleGroups.length > 1}<span class="group-hint">{g.hint}</span>{/if}
+            {#if groups.length > 1}<span class="group-hint">{g.hint}{g.key === 'new' || g.key === 'earlier' ? ` ${g.items.length === 1 ? 'item' : 'items'}` : ''}</span>{/if}
           </div>
           <div class="grid-wrap">
             <div class="grid">
@@ -299,7 +299,7 @@
   }
 
   .process:hover {
-    background: var(--accent-hover);
+    background: color-mix(in srgb, var(--accent) 85%, black);
   }
 
   .process:focus-visible {

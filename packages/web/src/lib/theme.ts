@@ -155,8 +155,8 @@ export const PALETTE_PREVIEWS: Record<
   paper: {
     light: {
       bg: '#f7f6f2',
-      sidebar: '#ebe6dc',
-      surface: '#fbf9f4',
+      sidebar: '#efeee8',
+      surface: '#ffffff',
       text: '#2b2925',
     },
     dark: {

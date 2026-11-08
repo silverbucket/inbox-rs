@@ -555,7 +555,7 @@
     <div class="view-switch" role="group" aria-label="Todos view">
       {#each VIEWS as v (v.id)}
         <button type="button" class="view-btn" class:phone-primary={v.id === 'today' || v.id === 'horizon'} aria-pressed={view === v.id} onclick={() => setView(v.id)}>
-          {v.label}
+          {narrow && (v.id === 'board' || v.id === 'calendar') ? `${v.label} view` : v.label}
         </button>
       {/each}
     </div>
@@ -1208,5 +1208,9 @@
     .tray {
       flex-basis: 200px;
     }
+  }
+  @media (max-width: 600px) {
+    .view-switch { background: transparent; border: 0; padding: 0; gap: 0.5rem; }
+    .view-btn { border: 1px solid var(--border); background: var(--surface); min-height: 44px; }
   }
 </style>

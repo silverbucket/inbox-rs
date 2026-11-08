@@ -244,8 +244,11 @@ a:hover {
   *,
   *::before,
   *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: Respect reduced motion despite component animation rules. */
     animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: Respect reduced motion despite component transition rules. */
     transition-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: User motion preference takes precedence over smooth scrolling. */
     scroll-behavior: auto !important;
   }
 }

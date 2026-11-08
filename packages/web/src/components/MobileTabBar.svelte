@@ -24,12 +24,12 @@
   // Phones default the Todos page to Today (see TodosPage).
   const todosView = $derived($appConfig.todosView ?? 'today');
   const onToday = $derived(page === 'todos' && todosView === 'today');
-  const onPlan = $derived(page === 'todos' && todosView !== 'today');
+  const onPlan = $derived(page === 'todos' && todosView === 'horizon');
   const inboxCount = $derived($sortedItems.length);
 
   async function openTodos(view: 'today' | 'horizon') {
     navTo('todos');
-    if (todosView === view || (view === 'horizon' && todosView !== 'today')) return;
+    if (todosView === view) return;
     try {
       await updateConfig({ todosView: view });
     } catch (error) {

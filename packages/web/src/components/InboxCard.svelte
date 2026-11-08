@@ -396,6 +396,7 @@
      each card type reads distinctly at a glance. */
   .card-kind {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
     margin-bottom: 0.7rem;
@@ -427,12 +428,12 @@
   }
 
   .kind-label {
+    flex: 1 1 8rem;
+    overflow-wrap: anywhere;
     font-size: 0.8rem;
     color: var(--text-muted);
     font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
     min-width: 0;
   }
 
@@ -506,6 +507,7 @@
   }
 
   .date {
+    flex-shrink: 0;
     margin-left: auto;
     font-size: 0.72rem;
     font-weight: 400;
