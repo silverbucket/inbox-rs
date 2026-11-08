@@ -814,7 +814,7 @@
   </ClassicShell>
 {/if}
 
-<MobileTabBar page={bodyPage} planCount={viewTodoCount} {navTo} oncapture={() => (captureSheetOpen = true)} />
+<MobileTabBar page={bodyPage} planCount={viewTodoCount} {navTo} oncapture={() => bodyPage === 'todos' ? openAddTodo('') : (captureSheetOpen = true)} />
 
 <!-- Focus mode: a route-driven popup (#/collection/:id) over the page the
      user was on. Rendered here, not in the shell body, so the backdrop can

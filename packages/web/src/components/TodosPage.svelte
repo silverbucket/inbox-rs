@@ -767,6 +767,10 @@
     }
   }
 
+  @media (max-width: 600px) {
+    .page-toolbar { display: none; }
+  }
+
   .todo-list {
     list-style: none;
     padding: 0;

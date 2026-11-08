@@ -79,6 +79,12 @@ describe('MobileTabBar', () => {
     expect(stores.updateConfig).toHaveBeenCalledWith({ todosView: 'today' });
   });
 
+  it('names the central action for adding a todo on Todos', () => {
+    const props = render('todos');
+    button('New todo').click();
+    expect(props.oncapture).toHaveBeenCalledOnce();
+  });
+
   it('opens capture', () => {
     const props = render('collections');
     button('Capture').click();
