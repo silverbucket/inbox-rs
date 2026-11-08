@@ -466,7 +466,7 @@
         {/if}
 
         {#each filteredGroups as { group, cols } (group.id)}
-          <div class="group-label" style="color: {group.color || 'var(--text-muted)'}">
+          <div class="group-label" style="border-left: 3px solid {group.color || 'var(--text-muted)'}; padding-left: 0.5rem">
             {group.name}
           </div>
           {#each cols as col (col.id)}

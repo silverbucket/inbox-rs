@@ -99,4 +99,7 @@
   .title a:hover :global(.link-icon) {
     opacity: 1;
   }
+  @media (max-width: 600px) {
+    .og-image { max-height: 140px; }
+  }
 </style>

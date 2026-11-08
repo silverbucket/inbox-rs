@@ -59,6 +59,21 @@ test('light color scheme picks the light theme color', async ({
   ).toBeTruthy();
   expect(
     activeColor?.toLowerCase(),
-    `Light theme-color should be #f3efe7, got ${activeColor}`,
-  ).toBe('#f3efe7');
+    `Light theme-color should be #f7f6f2, got ${activeColor}`,
+  ).toBe('#f7f6f2');
+  await page.getByRole('button', { name: /^User menu/ }).tap();
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+  await settings.getByRole('button', { name: /^Appearance/ }).tap();
+  const palettes = settings.getByRole('radiogroup', {
+    name: 'Palette',
+    exact: true,
+  });
+  await palettes.getByRole('radio', { name: /^Classic/ }).tap();
+  await expect
+    .poll(() => page.evaluate(PICK_ACTIVE_THEME_COLOR))
+    .toBe('#f8f9fb');
+  await palettes.getByRole('radio', { name: /^Paper/ }).tap();
+  await expect
+    .poll(() => page.evaluate(PICK_ACTIVE_THEME_COLOR))
+    .toBe('#f7f6f2');
 });

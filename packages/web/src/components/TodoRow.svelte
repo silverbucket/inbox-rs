@@ -368,8 +368,6 @@
     />
   {/if}
 
-  <span class="title">{todo.title}</span>
-
   {#if !readonly && !todo.completed}
     <button
       type="button"
@@ -387,6 +385,8 @@
     </button>
   {/if}
 
+  <span class="title">{todo.title}</span>
+
   <!-- The meta block collapses to line 2 on narrow screens via CSS;
        on desktop it sits inline on the right side of the row. -->
   <div class="meta">
@@ -398,7 +398,7 @@
           <line x1="8" y1="2" x2="8" y2="6"></line>
           <line x1="3" y1="10" x2="21" y2="10"></line>
         </svg>
-        {scheduledLabel}
+        {todo.scheduleKind === 'event' ? 'Scheduled' : 'Due'} {scheduledLabel}
       </span>
     {/if}
     {#if planTag && !todo.completed}
@@ -420,7 +420,7 @@
       </span>
     {/if}
     {#if createdLabel}
-      <span class="date" title={createdTitle}>{createdLabel}</span>
+      <span class="date" title={createdTitle}>Added {createdLabel}</span>
     {/if}
   </div>
 

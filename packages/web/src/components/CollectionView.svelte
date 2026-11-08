@@ -44,6 +44,8 @@
   import TodoQuickAdd from './TodoQuickAdd.svelte';
   import TodoRow from './TodoRow.svelte';
 
+  let showActions = $state(false);
+
   let { collection, expanded = false, onselect, onedit, ontoggle, onfocus, isTouchDevice = false, reorderable = false }: {
     collection: Collection;
     expanded?: boolean;
@@ -334,6 +336,7 @@
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ontoggle(); }
     }}
     aria-expanded={expanded}
+    aria-describedby={`collection-counts-${collection.id}`}
     aria-label="{expanded ? 'Collapse' : 'Expand'} {collection.name}"
     use:collectionDropTarget={{
       ondrop: (itemId) => void fileItemHere(itemId),
@@ -370,21 +373,31 @@
         <span class="col-description">{collection.description}</span>
       {/if}
     </div>
-    <div class="header-badges">
+    <div class="header-badges" id={`collection-counts-${collection.id}`}>
       {#if openTodos.length > 0}
-        <span class="badge badge-todos" title="{openTodos.length} open {openTodos.length === 1 ? 'todo' : 'todos'}">
-          {openTodos.length}
+        <span class="badge badge-todos" aria-label="{openTodos.length} open todos" title="{openTodos.length} open {openTodos.length === 1 ? 'todo' : 'todos'}">
+          {openTodos.length} {openTodos.length === 1 ? 'todo' : 'todos'}
         </span>
       {/if}
       {#if referenceItems.length > 0}
-        <span class="badge badge-ref" title="{referenceItems.length} {referenceItems.length === 1 ? 'item' : 'items'}">
-          {referenceItems.length}
+        <span class="badge badge-ref" aria-label="{referenceItems.length} reference items" title="{referenceItems.length} reference items">
+          {referenceItems.length} {referenceItems.length === 1 ? 'reference' : 'references'}
         </span>
       {:else if openTodos.length === 0}
-        <span class="badge badge-ref">0</span>
+        <span class="badge badge-ref" aria-label="0 reference items" title="0 reference items">0 references</span>
       {/if}
     </div>
-    <div class="header-actions">
+    <button
+      type="button"
+      class="actions-toggle"
+      aria-label="Actions for {collection.name}"
+      aria-expanded={showActions}
+      aria-controls="collection-actions-{collection.id}"
+      onclick={(e) => { e.stopPropagation(); showActions = !showActions; }}
+    >
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+    </button>
+    <div class="header-actions" class:actions-open={showActions} id="collection-actions-{collection.id}">
       {#if !collection.archived && !group?.archived}
       <button
         type="button"
@@ -820,15 +833,17 @@
   }
 
   .badge-todos {
-    color: white;
-    background: var(--_col);
+    color: var(--text);
+    background: color-mix(in srgb, var(--_col) 18%, var(--surface));
   }
+
+  .actions-toggle { display: none; }
 
   .header-actions {
     display: flex;
     gap: 0.15rem;
     flex-shrink: 0;
-    opacity: 0;
+    opacity: 1;
     transition: opacity 150ms;
   }
 
@@ -848,6 +863,7 @@
 
   .collection-header {
     --row-action-color: var(--_col, var(--accent));
+    --row-action-opacity: 1;
   }
 
   @media (hover: none) {
@@ -1182,6 +1198,35 @@
     .col-description {
       display: none;
     }
+  }
+
+  @media (max-width: 600px) {
+    .collection-header {
+      display: grid;
+      grid-template-columns: 24px 4px 16px minmax(0, 1fr) auto 44px;
+      gap: 0.35rem;
+    }
+    .color-indicator { grid-column: 2; grid-row: 1 / 3; }
+    .chevron { grid-column: 3; grid-row: 1 / 3; }
+    .header-info { grid-column: 4 / 6; grid-row: 1; }
+    .header-info h3 { white-space: normal; overflow-wrap: anywhere; }
+    .actions-toggle {
+      grid-column: 6;
+      grid-row: 1 / 3;
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border: 0;
+      border-radius: var(--radius-sm);
+      background: var(--surface-tint);
+      color: var(--text-muted);
+    }
+    .header-actions { display: none; grid-column: 2 / -1; grid-row: 3; justify-content: flex-end; opacity: 1; }
+    .header-actions.actions-open { display: flex; }
+    .btn-header { width: 44px; height: 44px; }
+    .header-badges { grid-column: 4 / 6; grid-row: 2; }
+    .collection-header :global(.reorder-grip) { grid-column: 1; grid-row: 1 / 3; min-height: 44px; }
   }
 
   @media (max-width: 550px) {

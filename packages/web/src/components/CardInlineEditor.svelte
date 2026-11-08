@@ -61,6 +61,30 @@
 
   const hasPendingEdit = () => revision > persistedRevision && !discarded;
 
+  function growTitle(node: HTMLTextAreaElement, _title: string) {
+    if (typeof CSS !== 'undefined' && CSS.supports?.('field-sizing', 'content')) return;
+    const resize = () => {
+      node.style.height = 'auto';
+      node.style.height = `${node.scrollHeight}px`;
+    };
+    let width = 0;
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(() => {
+      if (node.clientWidth === width) return;
+      width = node.clientWidth;
+      resize();
+    });
+    observer?.observe(node);
+    window.addEventListener('resize', resize);
+    resize();
+    return {
+      update: resize,
+      destroy() {
+        observer?.disconnect();
+        window.removeEventListener('resize', resize);
+      },
+    };
+  }
+
   function scheduleSave() {
     revision += 1;
     status = 'pending';
@@ -235,13 +259,15 @@
         <span class="sr-only">Completed</span>
       </label>
     {/if}
-    <input
+    <textarea
       class="title-input"
       bind:value={draft.title}
+      use:growTitle={draft.title}
+      rows="1"
       oninput={scheduleSave}
       aria-label="Title"
       placeholder="Untitled"
-    />
+    ></textarea>
     {#if hasUrl && safeLinkUrl}
       <a class="source-link" href={safeLinkUrl} target="_blank" rel="noopener noreferrer">Open link ↗</a>
     {:else if item.type === 'email' && item.messageUrl}
@@ -369,7 +395,11 @@
     font-size: clamp(1.45rem, 3vw, 2.15rem);
     font-weight: 650;
     line-height: 1.2;
-    padding: 0.35rem 0.45rem;
+    padding: 0.35rem 0;
+    field-sizing: content;
+    resize: none;
+    overflow: hidden;
+    overflow-wrap: anywhere;
   }
 
   .title-input:hover {
@@ -499,7 +529,8 @@
     }
 
     .source-link {
-      margin-left: 2.75rem;
+      flex-basis: 100%;
+      margin-left: 0;
     }
   }
 </style>

@@ -42,7 +42,7 @@
     const n = liveCollections.length;
     const g = $sortedGroups.length;
     const itemsTotal = liveCollections.reduce((sum, c) => sum + ($collectionItems[c.id]?.length ?? 0), 0);
-    return `${n} ${n === 1 ? 'collection' : 'collections'} in ${g} ${g === 1 ? 'group' : 'groups'} · ${itemsTotal} items`;
+    return `Total: ${n} ${n === 1 ? 'collection' : 'collections'} in ${g} ${g === 1 ? 'group' : 'groups'} · ${itemsTotal} items`;
   });
   const matches = (c: Collection) => !query || c.name.toLowerCase().includes(query);
   const found = $derived(query ? liveCollections.filter(matches) : []);
@@ -409,7 +409,7 @@
         {anyExpanded ? 'Collapse all' : 'Expand all'}
       </button>
     {/if}
-    <Fab onclick={() => openAddCollection(undefined)} label="New collection" />
+    <span class="collection-create"><Fab onclick={() => openAddCollection(undefined)} label="New collection" /></span>
   </div>
 
   {#if favorites.length > 0 && !query}
@@ -665,7 +665,10 @@
 
   .page-title {
     margin: 0;
-    font-size: 1.35rem;
+    font-size: clamp(1.8rem, 3vw, 2.35rem);
+    font-weight: 650;
+    letter-spacing: -0.045em;
+    line-height: 1.2;
   }
 
   .page-summary {
@@ -943,6 +946,9 @@
   }
 
   @media (max-width: 600px) {
+    .collection-create { display: none; }
+    .page-title { font-size: 1.5rem; letter-spacing: -0.03em; }
+    .page-filter { flex-basis: 100%; width: 100%; }
     .collections-page {
       /* Tighter bottom padding on mobile — the FAB sits closer to the edge
          and the list should feel dense. */

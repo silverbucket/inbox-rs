@@ -51,6 +51,7 @@ const fixtures = vi.hoisted(() => {
 });
 
 const storeFns = vi.hoisted(() => ({
+  updateConfig: vi.fn().mockResolvedValue(undefined),
   reorderGroups: vi.fn().mockResolvedValue(undefined),
   reorderGroupCollections: vi.fn().mockResolvedValue(undefined),
   moveItemToCollection: vi.fn().mockResolvedValue(undefined),
@@ -87,6 +88,7 @@ vi.mock('../lib/stores', async () => {
 vi.mock('../lib/toast', () => ({ showToast: vi.fn() }));
 vi.mock('./UserMenu.svelte', () => import('./__mocks__/UserMenuStub.svelte'));
 
+import { activeGroupIds, inactiveCollectionIds } from '../lib/stores';
 import SidebarShellTestHost from '../test/SidebarShell.test-host.svelte';
 
 describe('SidebarShell drag reorder', () => {
@@ -95,6 +97,8 @@ describe('SidebarShell drag reorder', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    activeGroupIds.set(new Set(['g1', 'g2']));
+    inactiveCollectionIds.set(new Set());
     stubMatchMedia();
     host = document.createElement('div');
     document.body.appendChild(host);
@@ -104,15 +108,16 @@ describe('SidebarShell drag reorder', () => {
     if (component) unmount(component);
     component = undefined;
     host.remove();
+    localStorage.clear();
   });
 
   const navToCollection = vi.fn();
 
-  function render() {
+  function render(page: 'inbox' | 'todos' = 'inbox') {
     component = mount(SidebarShellTestHost, {
       target: host,
       props: {
-        route: { page: 'inbox' },
+        route: { page },
         navTo: vi.fn(),
         navToCollection,
         viewTodoCount: 0,
@@ -128,6 +133,23 @@ describe('SidebarShell drag reorder', () => {
     }
     flushSync();
   }
+
+  it('shows hidden filter scope and offers existing controls and reset', () => {
+    activeGroupIds.set(new Set(['g1']));
+    inactiveCollectionIds.set(new Set(['c1']));
+    localStorage.setItem('inbox-rs:sidebar-collapsed', '1');
+    render('todos');
+    const scope = host.querySelector('.filter-scope');
+    expect(scope?.textContent).toContain('1 of 2 groups');
+    (scope?.querySelector('.scope-change') as HTMLButtonElement).click();
+    flushSync();
+    expect(host.querySelector('.sidebar.collapsed')).toBeNull();
+    (scope?.querySelector('.scope-reset') as HTMLButtonElement).click();
+    expect(storeFns.updateConfig).toHaveBeenCalledWith({
+      activeGroupFilters: undefined,
+      inactiveCollectionFilters: [],
+    });
+  });
 
   it('exposes grip handles for reordering groups and collections', () => {
     render();

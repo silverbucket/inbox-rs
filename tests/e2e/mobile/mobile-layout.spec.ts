@@ -134,3 +134,53 @@ for (const layout of ['sidebar', 'classic']) {
     expect(overflow, 'footer must not widen the page').toBe(0);
   });
 }
+
+test('new mobile sessions keep groups collapsed and content inside the viewport', async ({
+  page,
+  webOrigin,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.removeItem('inbox-rs:sidebar-collapsed');
+    localStorage.setItem('inbox-rs:layout', 'sidebar');
+  });
+  await page.goto(webOrigin);
+  await expect(
+    page.getByRole('button', { name: 'Expand sidebar', exact: true }).first(),
+  ).toBeVisible();
+  await expect(page.locator('main h1')).toHaveText('Inbox');
+  await expect(page.locator('.page-toolbar')).toBeHidden();
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - innerWidth,
+  );
+  expect(overflow).toBe(0);
+});
+
+test('Todos has one mobile add action that opens the todo editor', async ({
+  page,
+  webOrigin,
+}) => {
+  await page.goto(`${webOrigin}/#/todos`);
+  const nav = page.getByRole('navigation', { name: 'Primary (mobile)' });
+  await expect(
+    nav.getByRole('button', { name: 'New todo', exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('.todos-page .page-toolbar')).toBeHidden();
+  await nav.getByRole('button', { name: 'New todo', exact: true }).click();
+  await expect(
+    page.getByRole('dialog', { name: 'Add Todo', exact: true }),
+  ).toBeVisible();
+});
+
+test('Collections uses the bottom add action for creating a collection', async ({
+  page,
+  webOrigin,
+}) => {
+  await page.goto(`${webOrigin}/#/collections`);
+  const nav = page.getByRole('navigation', { name: 'Primary (mobile)' });
+  await nav
+    .getByRole('button', { name: 'New collection', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'New Collection', exact: true }),
+  ).toBeVisible();
+});

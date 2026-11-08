@@ -17,10 +17,13 @@ test('opening a modal locks body scroll', async ({
   await connectedPage.goto(webOrigin);
   await connectedPage.waitForLoadState('networkidle');
 
-  // On mobile the inbox capture bar is a trigger that opens the fullscreen
+  // On mobile the bottom Capture action opens the fullscreen
   // capture sheet — a `role="dialog"` overlay that, like the other modals,
   // pins the body so iOS can't rubber-band the page behind it.
-  await connectedPage.locator('.capture-trigger').tap();
+  await connectedPage
+    .getByRole('navigation', { name: 'Primary (mobile)' })
+    .getByRole('button', { name: 'Capture', exact: true })
+    .tap();
 
   // Once the modal is open, App.svelte should have pinned the body.
   const bodyPos = await connectedPage.evaluate(
@@ -50,7 +53,10 @@ test('closing a modal restores scroll position', async ({
   // stays scrollable. We don't have enough cards in a fresh account to
   // produce a long scroll, but the *style restoration* is what we care
   // about; the saved-scrollY logic is exercised by the same code path.
-  await connectedPage.locator('.capture-trigger').tap();
+  await connectedPage
+    .getByRole('navigation', { name: 'Primary (mobile)' })
+    .getByRole('button', { name: 'Capture', exact: true })
+    .tap();
   await expect(connectedPage.locator(".modal, [role='dialog']")).toBeVisible();
 
   await connectedPage.keyboard.press('Escape');

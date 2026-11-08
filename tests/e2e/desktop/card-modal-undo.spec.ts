@@ -49,9 +49,9 @@ test('archiving a card from its modal offers Undo that brings it back', async ({
   const title = 'modal archive undo note';
   await captureNote(page, title);
   await openCard(page, title);
+  await page.getByRole('button', { name: 'Card actions', exact: true }).click();
   await page
-    .getByRole('dialog')
-    .getByRole('button', { name: 'Archive card' })
+    .getByRole('menuitem', { name: 'Archive card', exact: true })
     .click();
 
   const toast = page.getByRole('status').filter({ hasText: 'Archived' });

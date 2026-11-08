@@ -58,11 +58,14 @@ describe('MobileTabBar', () => {
     expect(button('Inbox').getAttribute('aria-current')).toBe('page');
   });
 
-  it('marks Today on the Todos page by default, Plan for other views', () => {
+  it('marks only the matching Today or Plan destination', () => {
     render('todos');
     expect(button('Today').getAttribute('aria-current')).toBe('page');
     expect(button('Plan').hasAttribute('aria-current')).toBe(false);
     stores.appConfig.set({ todosView: 'board' });
+    flushSync();
+    expect(button('Plan').hasAttribute('aria-current')).toBe(false);
+    stores.appConfig.set({ todosView: 'horizon' });
     flushSync();
     expect(button('Plan').getAttribute('aria-current')).toBe('page');
   });
@@ -79,8 +82,21 @@ describe('MobileTabBar', () => {
     expect(stores.updateConfig).toHaveBeenCalledWith({ todosView: 'today' });
   });
 
+  it('returns from Board to Plan when Plan is chosen', () => {
+    stores.appConfig.set({ todosView: 'board' });
+    render('todos');
+    button('Plan').click();
+    expect(stores.updateConfig).toHaveBeenCalledWith({ todosView: 'horizon' });
+  });
+
+  it('names the central action for adding a todo on Todos', () => {
+    const props = render('todos');
+    button('New todo').click();
+    expect(props.oncapture).toHaveBeenCalledOnce();
+  });
+
   it('opens capture', () => {
-    const props = render('collections');
+    const props = render('inbox');
     button('Capture').click();
     expect(props.oncapture).toHaveBeenCalled();
   });

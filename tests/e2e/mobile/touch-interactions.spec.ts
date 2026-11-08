@@ -61,18 +61,23 @@ test('tap navigates between pages', async ({
   await expect(connectedPage).toHaveURL(/#\/todos/);
 
   const views = connectedPage.getByRole('group', { name: 'Todos view' });
-  await expect(views.getByRole('button', { name: 'Today' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-    { timeout: 15_000 },
-  );
+  await expect(
+    views.getByRole('button', { name: 'Today', includeHidden: true }),
+  ).toHaveAttribute('aria-pressed', 'true', { timeout: 15_000 });
 
   const planBtn = tabbar.getByRole('button', { name: 'Plan' });
   await planBtn.tap();
   await expect(planBtn).toHaveAttribute('aria-current', 'page');
   await expect(todayBtn).not.toHaveAttribute('aria-current', 'page');
-  await expect(views.getByRole('button', { name: 'Horizon' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(
+    views.getByRole('button', {
+      name: 'Plan view',
+      exact: true,
+      includeHidden: true,
+    }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await views.getByRole('button', { name: 'Board view', exact: true }).tap();
+  await expect(connectedPage.locator('main h1')).toHaveText('Board');
+  await planBtn.tap();
+  await expect(connectedPage.locator('main h1')).toHaveText('Plan');
 });

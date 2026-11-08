@@ -13,6 +13,7 @@
   import { kindOf } from '../lib/kinds';
   import { setItemPinned } from '../lib/stores';
   import { type CardHints, relativeAge } from '../lib/triage';
+  import { hasIncompletePreview, reportPreview } from '../lib/metadata-report';
 
   let {
     item,
@@ -72,6 +73,7 @@
   }
 
   const kind = $derived(kindOf(item.type));
+  const reportItem = $derived(item.type === 'bookmark' && hasIncompletePreview(item) ? item : null);
 
   // Bookmarks identify by their source domain rather than the generic label.
   const bookmarkDomain = $derived.by(() => {
@@ -226,6 +228,7 @@
         {/if}
       </span>
       <span class="kind-label">{kindLabel}</span>
+      <time class="date" datetime={item.createdAt} title={formatDate(item.createdAt)}>{age}</time>
     </div>
 
     {#if item.type === 'bookmark'}
@@ -247,6 +250,9 @@
     {#if hints?.flag}
       <p class="hint-flag">{hints.flag}</p>
     {/if}
+    {#if reportItem}
+      <button type="button" class="report-preview" onclick={(e) => { e.stopPropagation(); if (reportItem) reportPreview(reportItem); }}>Report preview issue (public) ↗</button>
+    {/if}
     {#if hints?.suggest && onfile}
       {@const target = hints.suggest}
       <button
@@ -263,9 +269,8 @@
     {/if}
   </div>
 
+  {#if scheduledLabel}
   <footer class="card-footer">
-    <time class="date" datetime={item.createdAt} title={formatDate(item.createdAt)}>{age}</time>
-    {#if scheduledLabel}
       <span
         class="sched-chip"
         class:overdue={scheduleOverdue}
@@ -283,8 +288,8 @@
       {#if item.cancelled}
         <span class="sched-chip overdue cancelled">Cancelled</span>
       {/if}
-    {/if}
   </footer>
+  {/if}
 </article>
 
 <style>
@@ -293,6 +298,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     overflow: hidden;
+    box-shadow: 0 2px 5px color-mix(in srgb, var(--shadow) 25%, transparent);
     transition: border-color 0.15s, box-shadow 0.15s;
     position: relative;
     cursor: pointer;
@@ -395,6 +401,7 @@
      each card type reads distinctly at a glance. */
   .card-kind {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
     margin-bottom: 0.7rem;
@@ -419,21 +426,25 @@
   }
 
   .kind-ic .kind-favicon {
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     border-radius: 3px;
+    padding: 1px;
+    background: white;
     object-fit: contain;
   }
 
   .kind-label {
+    flex: 1 1 8rem;
+    overflow-wrap: anywhere;
     font-size: 0.8rem;
     color: var(--text-muted);
     font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
     min-width: 0;
   }
+
+  .report-preview { border: 0; padding: 0; background: transparent; color: var(--accent-text); cursor: pointer; margin-top: 0.25rem; min-height: 44px; display: flex; align-items: center; width: fit-content; font-size: 0.78rem; }
 
   .hint-flag {
     margin: 0.55rem 0 0;
@@ -505,6 +516,10 @@
   }
 
   .date {
+    flex-shrink: 0;
+    margin-left: auto;
+    font-size: 0.72rem;
+    font-weight: 400;
     color: var(--text-muted);
   }
 
@@ -551,5 +566,8 @@
     -webkit-line-clamp: 4;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+  @media (max-width: 600px) {
+    .card-notes { -webkit-line-clamp: 3; }
   }
 </style>

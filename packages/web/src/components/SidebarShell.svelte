@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import { get } from 'svelte/store';
   import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
   import AppFooter from './AppFooter.svelte';
@@ -8,7 +8,7 @@
   import SearchButton from './SearchButton.svelte';
   import LogoShield from './LogoShield.svelte';
   import ShortcutHelpButton from './ShortcutHelpButton.svelte';
-  import type { Page, Route } from '../lib/route';
+  import { pageUsesFilters, type Page, type Route } from '../lib/route';
   import { autofocus, autofocusIf } from '../lib/actions';
   import {
     collectionDropTarget,
@@ -36,6 +36,7 @@
     reorderGroupCollections,
     favoriteCollections,
     toggleFavoriteCollection,
+    updateConfig,
   } from '../lib/stores';
   import { isSoloModifier, soloHint, soloModifierHeld } from '../lib/solo-modifier';
   import {
@@ -124,6 +125,22 @@
   const grouped = $derived($groupCollections);
   const activeGroups = $derived($activeGroupIds);
   const inactiveCols = $derived($inactiveCollectionIds);
+  const hiddenCollectionCount = $derived(groups.reduce((n, g) => n + (grouped[g.id] ?? []).filter(c => activeGroups.has(g.id) && inactiveCols.has(c.id)).length, 0));
+  const filtered = $derived(activeGroups.size < groups.length || hiddenCollectionCount > 0);
+  async function clearFilters() {
+    try {
+      await updateConfig({ activeGroupFilters: undefined, inactiveCollectionFilters: [] });
+    } catch (error) {
+      console.error('Failed to clear filters', error);
+      showToast('Couldn’t clear filters. Try again.');
+    }
+  }
+  let filterControls = $state<HTMLElement>();
+  async function openFilters() {
+    collapsed = false;
+    await tick();
+    if (window.innerWidth <= 768) filterControls?.scrollIntoView({ block: 'start' });
+  }
   const dragging = $derived($draggingItemId !== null);
   const movingCollection = $derived($draggingCollectionId !== null);
   // The plugins page has no groups to filter — the sidebar is
@@ -223,10 +240,12 @@
   });
 
   function readCollapsed(): boolean {
+    const mobile = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 768px)').matches;
     try {
-      return localStorage.getItem('inbox-rs:sidebar-collapsed') === '1';
+      const stored = localStorage.getItem('inbox-rs:sidebar-collapsed');
+      return stored === null ? !!mobile : stored === '1';
     } catch {
-      return false;
+      return !!mobile;
     }
   }
 
@@ -582,10 +601,10 @@
       >
         Todos
         {#if viewTodoCount > 0}
-          <span class="nav-badge">{viewTodoCount}</span>
+          <span class="nav-badge" title="{viewTodoCount} open todos in this view" aria-label="{viewTodoCount} open todos in this view">{viewTodoCount}</span>
         {/if}
         {#if totalTodoCount > viewTodoCount}
-          <span class="nav-badge-total" title="{totalTodoCount} incomplete todos in total">{totalTodoCount}</span>
+          <span class="nav-badge-total" title="{totalTodoCount} incomplete todos in total" aria-label="{totalTodoCount} incomplete todos in total">/ {totalTodoCount}</span>
         {/if}
       </button>
       <button
@@ -611,7 +630,7 @@
       class:dragging
       aria-label="Groups and collections"
     >
-    <div class="sidebar-scroll">
+    <div class="sidebar-scroll" bind:this={filterControls}>
       {#if collapsed}
         <div class="rail">
           <button
@@ -699,6 +718,7 @@
           {/if}
           <button
             class="add-group-btn"
+            hidden={groups.length === 0}
             type="button"
             onclick={startAddGroup}
             title="New group"
@@ -709,6 +729,7 @@
         </div>
 
         {#if groups.length === 0 && !addingGroup}
+          <p class="sidebar-empty-hint">Keep related collections together with groups for work, home, or anything else.</p>
           <button type="button" class="empty-cta" onclick={startAddGroup}>
             <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Create your first group
@@ -929,6 +950,7 @@
                             {#if keyboardMoveCollectionId === col.id}
                               <div
                                 class="collection-move-menu"
+                                role="group"
                                 aria-label={`Move ${col.name} to group`}
                                 onkeydown={(e) => {
                                   if (e.key === 'Escape') {
@@ -1007,6 +1029,14 @@
   {/if}
 
   <main>
+    {#if pageUsesFilters(route.page) && filtered}
+      <div class="filter-scope" role="group" aria-label="Current filters">
+        <button type="button" class="scope-change" onclick={openFilters} aria-label="Change filters">
+          Filtered · {activeGroups.size} of {groups.length} groups{hiddenCollectionCount ? ` · ${hiddenCollectionCount} collections hidden` : ''} ▾
+        </button>
+        <button type="button" class="scope-reset" onclick={clearFilters}>Show all</button>
+      </div>
+    {/if}
     {@render children()}
 
     <!-- Inside <main>, not below the grid: the sidebar rail must run to the
@@ -1042,7 +1072,7 @@
   }
 
   .header-inner {
-    padding: 1rem 1.5rem;
+    padding: 1.1rem 1.5rem;
     display: flex;
     align-items: center;
     gap: 1rem;
@@ -1052,11 +1082,11 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     flex-shrink: 0;
     border: 1px solid var(--border);
-    border-radius: 0.6rem;
+    border-radius: 50%;
     background: var(--surface);
     color: var(--text-muted);
     cursor: pointer;
@@ -1098,7 +1128,7 @@
     padding: 0.25rem;
     border: 1px solid var(--border);
     border-radius: 1rem;
-    background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+    background: var(--surface);
     flex-shrink: 0;
   }
 
@@ -1106,8 +1136,8 @@
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    min-height: 2rem;
-    padding: 0 0.9rem;
+    min-height: 2.75rem;
+    padding: 0 1.1rem;
     border-radius: 999px;
     background: none;
     border: none;
@@ -1124,8 +1154,8 @@
   }
 
   .header-nav button.active {
-    color: var(--text);
-    background: color-mix(in srgb, var(--accent) 18%, var(--surface) 82%);
+    color: var(--accent-text);
+    background: var(--accent-subtle);
   }
 
   .nav-badge {
@@ -1321,6 +1351,13 @@
     flex-shrink: 0;
   }
 
+  .sidebar-empty-hint {
+    padding: 0.5rem 0.25rem 1rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+  .add-group-btn[hidden] { display: none; }
   .sidebar-title {
     font-size: 0.68rem;
     font-weight: 800;
@@ -1530,7 +1567,7 @@
   }
 
   .dot-toggle.inactive {
-    opacity: 0.55;
+    opacity: 1;
   }
 
   /* Reveals on the same rule as the grip beside it, so a resting collection
@@ -1609,7 +1646,7 @@
   }
 
   .entity.inactive {
-    opacity: 0.42;
+    color: var(--text-muted);
   }
 
   .dot {
@@ -1655,8 +1692,8 @@
   }
 
   .rail-dot.inactive .dot {
-    opacity: 0.35;
-    box-shadow: none;
+    background: transparent;
+    box-shadow: inset 0 0 0 2px var(--entity-color);
   }
 
   .entity-name {
@@ -1872,18 +1909,30 @@
     border-color: var(--accent);
   }
 
+  .filter-scope { display: flex; align-items: center; flex-wrap: wrap; gap: 0.25rem 0.75rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+  .filter-scope button { min-height: 44px; border: 0; border-radius: var(--radius-sm); background: transparent; font: inherit; font-size: 0.82rem; }
+  .filter-scope .scope-change { color: var(--accent-text); text-align: left; background: var(--accent-subtler); padding-inline: 0.65rem; }
+  .scope-reset { color: var(--accent-text); font-weight: 600; }
+
   /* ── Main ── */
   main {
     /* No bottom padding: the footer supplies the bottom edge. Stretched so
        the footer's `margin-top: auto` has a full column to push against on
        short pages (the body grid aligns items to start). */
     align-self: stretch;
-    padding: 1.5rem 1.5rem 0;
+    padding: 2rem 2rem 0;
     width: 100%;
+
     min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 1rem;
+  }
+
+  main > :global(*:not(.app-footer)) {
+    width: 100%;
+    max-width: 1040px;
+    align-self: center;
   }
 
   /* Mobile: the sidebar stacks above the content and collapses *vertically* —
@@ -1897,7 +1946,7 @@
       display: grid;
       grid-template-columns: auto 1fr auto;
       grid-template-rows: auto auto;
-      gap: 0.5rem 0.75rem;
+      gap: 0.5rem;
       align-items: center;
       padding: 0.75rem 1rem;
     }
@@ -1945,6 +1994,7 @@
     }
 
     .sidebar {
+      width: 100%;
       flex-shrink: 0;
       min-height: 0;
       border-right: none;
@@ -2000,7 +2050,7 @@
        (`.app-footer-inner`) should keep showing the sidebar's own background
        underneath it — a flat colour on this outer box would paint over that
        gap with the wrong colour and look like the sidebar stopped short. */
-    margin: auto -1.5rem 0;
+    margin: auto -2rem 0;
     padding-top: 2.5rem;
   }
 
@@ -2052,16 +2102,21 @@
     }
 
     .body:not(.sidebar-collapsed):not(.no-sidebar) .app-footer {
-      margin-left: calc(-1.5rem - 268px);
+      margin-left: calc(-2rem - 268px);
     }
 
     .body.sidebar-collapsed:not(.no-sidebar) .app-footer {
-      margin-left: calc(-1.5rem - 60px);
+      margin-left: calc(-2rem - 60px);
     }
+  }
+
+  @media (max-width: 768px) {
+    .app-footer { margin-inline: -1rem; }
   }
 
   /* Phones navigate with the bottom tab bar (MobileTabBar) instead. */
   @media (max-width: 600px) {
+    .sidebar.collapsed { display: none; }
     .header-nav {
       display: none;
     }
@@ -2070,4 +2125,5 @@
       grid-template-rows: auto;
     }
   }
+  .entity.inactive .dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--entity-color); }
 </style>

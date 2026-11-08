@@ -24,12 +24,12 @@
   // Phones default the Todos page to Today (see TodosPage).
   const todosView = $derived($appConfig.todosView ?? 'today');
   const onToday = $derived(page === 'todos' && todosView === 'today');
-  const onPlan = $derived(page === 'todos' && todosView !== 'today');
+  const onPlan = $derived(page === 'todos' && todosView === 'horizon');
   const inboxCount = $derived($sortedItems.length);
 
   async function openTodos(view: 'today' | 'horizon') {
     navTo('todos');
-    if (todosView === view || (view === 'horizon' && todosView !== 'today')) return;
+    if (todosView === view) return;
     try {
       await updateConfig({ todosView: view });
     } catch (error) {
@@ -62,7 +62,7 @@
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
     <span class="label">Today</span>
   </button>
-  <button type="button" class="capture" aria-label="Capture" title="Capture" onclick={oncapture}>
+  <button type="button" class="capture" aria-label={page === 'todos' ? 'New todo' : page === 'collections' ? 'New collection' : 'Capture'} title={page === 'todos' ? 'New todo' : page === 'collections' ? 'New collection' : 'Capture'} onclick={oncapture}>
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
   </button>
   <button
@@ -127,7 +127,7 @@
     min-height: 3.1rem;
     padding: 0.3rem 0.2rem;
     border: 0;
-    border-radius: var(--radius-sm);
+    border-radius: 1rem;
     background: none;
     color: var(--text-muted);
     font: inherit;
@@ -150,7 +150,8 @@
   }
 
   .tab.active {
-    color: var(--accent);
+    color: var(--accent-text);
+    background: var(--accent-subtler);
   }
 
   .count {
@@ -174,7 +175,7 @@
     width: 3.25rem;
     height: 3.25rem;
     margin: -1.3rem 0.35rem 0;
-    border: 4px solid var(--surface);
+    border: 2px solid var(--surface);
     border-radius: 50%;
     background: var(--accent);
     color: #fff;

@@ -15,6 +15,7 @@ vi.mock('../lib/stores', async () => {
     connected: writable(false),
     collections: writable({}),
     groups: writable({}),
+    userSettings: writable({}),
     deleteItem: vi.fn().mockResolvedValue(undefined),
     moveItemToCollection,
     loadFileBlobUrl: vi.fn(),
@@ -59,6 +60,21 @@ describe('ViewCardModal actions menu', () => {
     flushSync();
   }
 
+  it.each([
+    true,
+    false,
+  ])('offers preview reporting only for incomplete metadata: %s', (incomplete) => {
+    render({
+      id: 'bookmark-report',
+      type: 'bookmark',
+      url: 'https://example.com/article',
+      title: incomplete ? 'https://example.com/article' : 'A useful article',
+      description: 'An informative description.',
+      createdAt: item.createdAt,
+    });
+    expect(host.querySelector('.report-preview') !== null).toBe(incomplete);
+  });
+
   it('supports keyboard opening, navigation, and focus restoration', async () => {
     render();
     const trigger = host.querySelector(
@@ -71,18 +87,32 @@ describe('ViewCardModal actions menu', () => {
     );
     await tick();
 
-    const deleteAction = host.querySelector(
-      '[role="menuitem"]',
-    ) as HTMLButtonElement;
+    const items = Array.from(
+      host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
+    );
+    const first = items[0];
+    const last = items[items.length - 1];
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
-    expect(document.activeElement).toBe(deleteAction);
-
-    deleteAction.dispatchEvent(
+    expect(first.textContent).toContain('Archive card');
+    expect(last.textContent).toContain('Delete card');
+    expect(document.activeElement).toBe(first);
+    first.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }),
     );
-    expect(document.activeElement).toBe(deleteAction);
-
-    deleteAction.dispatchEvent(
+    expect(document.activeElement).toBe(last);
+    last.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }),
+    );
+    expect(document.activeElement).toBe(first);
+    first.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'End', bubbles: true }),
+    );
+    expect(document.activeElement).toBe(last);
+    last.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Home', bubbles: true }),
+    );
+    expect(document.activeElement).toBe(first);
+    first.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
     );
     flushSync();
@@ -91,6 +121,26 @@ describe('ViewCardModal actions menu', () => {
     expect(host.querySelector('[role="menu"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
     expect(onclose).not.toHaveBeenCalled();
+  });
+
+  it('keeps Shift+Tab on the actions trigger instead of traversing twice', async () => {
+    render();
+    const trigger = host.querySelector(
+      '[aria-label="Card actions"]',
+    ) as HTMLButtonElement;
+    trigger.click();
+    await tick();
+    const event = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    host.querySelector('[role="menuitem"]')?.dispatchEvent(event);
+    flushSync();
+    expect(event.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(trigger);
+    expect(host.querySelector('[role="menu"]')).toBeNull();
   });
 
   it('converts and fetches when an existing note contains only a URL', async () => {

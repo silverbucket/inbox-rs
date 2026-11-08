@@ -168,11 +168,9 @@
   {/if}
 
   <section class="group" style="--h: var(--horizon-due)" aria-labelledby="today-due">
-    <h2 class="label" id="today-due"><span class="swatch"></span>Due today<span class="count">{dueToday.length}</span></h2>
+    <h2 class="label" id="today-due"><span class="swatch"></span>Due today{#if dueToday.length}<span class="count">{dueToday.length}</span>{:else}<span class="empty-inline">Nothing due</span>{/if}</h2>
     {#if dueToday.length > 0}
       {@render list(dueToday)}
-    {:else}
-      <p class="empty">Nothing due today.</p>
     {/if}
   </section>
 
@@ -199,6 +197,8 @@
 </div>
 
 <style>
+  .empty-inline { color: var(--text-muted); font-size: 0.82rem; font-weight: 400; }
+
   .today {
     display: flex;
     flex-direction: column;

@@ -69,6 +69,25 @@ describe('TodoRow sidebar filing drag', () => {
     draggingItemId.set(null);
   });
 
+  it.each([
+    'event',
+    'task',
+  ] as const)('labels %s schedules accurately', (scheduleKind) => {
+    component = mount(TodoRow, {
+      target: host,
+      props: {
+        todo: todo({ scheduleKind, startsAt: '2027-01-01T12:00:00Z' }),
+        collection: null,
+        group: null,
+        onselect: vi.fn(),
+      },
+    });
+    flushSync();
+    expect(host.querySelector('.sched-chip')?.textContent?.trim()).toMatch(
+      scheduleKind === 'event' ? /^Scheduled / : /^Due /,
+    );
+  });
+
   it('sets the sidebar filing drag payload when the row is dragged', () => {
     const item = todo();
     component = mount(TodoRow, {

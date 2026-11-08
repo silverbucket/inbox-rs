@@ -337,7 +337,7 @@
   type TodosView = 'today' | 'horizon' | 'board' | 'calendar';
   const VIEWS: Array<{ id: TodosView; label: string }> = [
     { id: 'today', label: 'Today' },
-    { id: 'horizon', label: 'Horizon' },
+    { id: 'horizon', label: 'Plan' },
     { id: 'board', label: 'Board' },
     { id: 'calendar', label: 'Calendar' },
   ];
@@ -397,6 +397,18 @@
 </script>
 
 <div class="todos-page">
+  <header class="page-heading">
+    <div><h1>{narrow ? (VIEWS.find(v => v.id === view)?.label ?? 'Plan') : 'Todos'}</h1><p class="page-description">A little focus for what’s next.</p></div>
+    {#if openTodos.length || completedTodos.length || onCalendarTodos.length}
+    <div class="view-switch" role="group" aria-label="Todos view">
+      {#each VIEWS as v (v.id)}
+        <button type="button" class="view-btn" class:phone-primary={v.id === 'today' || v.id === 'horizon'} aria-label={`${v.label} view`} aria-pressed={view === v.id} onclick={() => setView(v.id)}>
+          {v.label}
+        </button>
+      {/each}
+    </div>
+    {/if}
+  </header>
   <AlertsPermissionBanner />
   <!--
     Toolbar: count + Fab (the Fab is an inline pill on desktop, position:fixed
@@ -552,13 +564,7 @@
     <TodoQuickAdd hideOnMobile compact focusOnMount bind:quickTitle={quickDraft} onopenmodal={(t, c, p) => onaddtodo(t, c, p)} />
     {@render todoToolbar()}
 
-    <div class="view-switch" role="group" aria-label="Todos view">
-      {#each VIEWS as v (v.id)}
-        <button type="button" class="view-btn" aria-pressed={view === v.id} onclick={() => setView(v.id)}>
-          {v.label}
-        </button>
-      {/each}
-    </div>
+
     <!-- Hidden while the On-calendar receipts are open: those rows ignore swipes. -->
     {#if !(showsReceipts && onCalendarExpanded)}<p class="swipe-hint">Swipe right to complete · left to re-plan</p>{/if}
 
@@ -745,6 +751,15 @@
 </div>
 
 <style>
+  .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.5rem 0; }
+  .page-heading h1 { font-size: clamp(1.8rem, 3vw, 2.35rem); font-weight: 650; letter-spacing: -0.045em; line-height: 1.2; }
+  .page-description { margin-top: 0.3rem; color: var(--text-muted); font-size: 0.85rem; }
+  @media (max-width: 600px) {
+    .page-heading { gap: 0.5rem; padding: 0; }
+    .page-heading h1 { font-size: 1.5rem; letter-spacing: -0.03em; }
+    .page-description { display: none; }
+  }
+
   .todos-page {
     display: flex;
     flex-direction: column;
@@ -765,6 +780,10 @@
     .page-toolbar {
       display: none;
     }
+  }
+
+  @media (max-width: 600px) {
+    .page-toolbar, .view-btn.phone-primary { display: none; }
   }
 
   .todo-list {
@@ -1204,5 +1223,9 @@
     .tray {
       flex-basis: 200px;
     }
+  }
+  @media (max-width: 600px) {
+    .view-switch { background: transparent; border: 0; padding: 0; gap: 0.5rem; }
+    .view-btn { border: 1px solid var(--border); background: var(--surface); min-height: 44px; }
   }
 </style>

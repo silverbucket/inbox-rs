@@ -250,9 +250,10 @@
     align-items: center;
     gap: 0.6rem;
     background: var(--surface);
-    border: 1px solid var(--border);
+    border: 1px solid color-mix(in srgb, var(--text-muted) 65%, var(--border));
     border-radius: 0.85rem;
-    padding: 0.5rem 0.75rem;
+    padding: 0.8rem 0.9rem;
+    box-shadow: 0 3px 12px color-mix(in srgb, var(--shadow) 35%, transparent);
   }
   .bar:focus-within { border-color: var(--accent); }
   /* Drop target: a dashed accent outline that reads as "release here" without

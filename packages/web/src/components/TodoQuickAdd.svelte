@@ -441,7 +441,7 @@
 </form>
 <p class="quick-error" role="status" aria-live="polite">{quickError}</p>
 <!-- Always rendered with a fixed height so the hint never shifts content. -->
-<div class="quick-hint">
+<div class="quick-hint" class:quick-add--hide-mobile={hideOnMobile}>
   {#if quickFocused && quickTitle.trim()}
     <span>↵ {fixedCollectionId ? 'Add todo' : `Add to ${destinationLabel}`}</span>
     <span class="sep">·</span>

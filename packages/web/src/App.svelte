@@ -205,12 +205,11 @@
   $effect(() => {
     if (!pageUsesFilters(route.page)) return;
     const config = $appConfig;
-    if (config.activeGroupFilters === undefined) return; // default-all → no param
     const expected = formatRoute({ page: route.page, groupFilters: config.activeGroupFilters });
     if (window.location.hash !== expected) {
       window.history.replaceState(null, '', expected);
       route = { page: route.page, groupFilters: config.activeGroupFilters };
-      lastAppliedFilterHash = `${route.page}::${config.activeGroupFilters.join(',')}`;
+      lastAppliedFilterHash = config.activeGroupFilters === undefined ? undefined : `${route.page}::${config.activeGroupFilters.join(',')}`;
     }
   });
 
@@ -719,6 +718,10 @@
       {/if}
 
       {#if bodyPage === 'inbox'}
+        <div class="page-heading">
+          <div><h1>Inbox</h1></div>
+          <p class="page-description">A home for everything you want to keep.</p>
+        </div>
         <div class="page-toolbar">
           <!-- Inbox is a refs-only staging area for unprocessed thoughts.
                Todos are captured from the dedicated Todos surface so they can
@@ -806,7 +809,7 @@
   </ClassicShell>
 {/if}
 
-<MobileTabBar page={bodyPage} planCount={viewTodoCount} {navTo} oncapture={() => (captureSheetOpen = true)} />
+<MobileTabBar page={bodyPage} planCount={viewTodoCount} {navTo} oncapture={() => bodyPage === 'todos' ? openAddTodo('') : bodyPage === 'collections' ? (showCollectionForm = true) : (captureSheetOpen = true)} />
 
 <!-- Focus mode: a route-driven popup (#/collection/:id) over the page the
      user was on. Rendered here, not in the shell body, so the backdrop can
@@ -906,6 +909,30 @@
     outline-color: var(--accent-text);
   }
 
+  .page-heading {
+    display: flex;
+    align-items: start;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.5rem 0 0.5rem;
+  }
+  .page-heading h1 {
+    font-size: clamp(1.8rem, 3vw, 2.35rem);
+    font-weight: 650;
+    letter-spacing: -0.045em;
+    line-height: 1.2;
+  }
+  .page-description {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    padding-bottom: 0.25rem;
+  }
+  @media (max-width: 600px) {
+    .page-heading { padding: 0; }
+    .page-toolbar.page-toolbar { display: none; }
+    .page-heading h1 { font-size: 1.5rem; letter-spacing: -0.03em; }
+    .page-description { display: none; }
+  }
   .page-toolbar {
     display: flex;
     align-items: center;
