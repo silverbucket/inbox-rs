@@ -7,6 +7,7 @@ const { enrichAllBookmarks, showToast } = vi.hoisted(() => ({
   enrichAllBookmarks: vi.fn(),
   showToast: vi.fn(),
 }));
+const writeText = vi.fn();
 
 vi.mock('../../lib/enrich', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/enrich')>()),
@@ -47,6 +48,11 @@ describe('LinkSettings bulk fetch toast', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    writeText.mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
     localStorage.clear();
     (items as Writable<Record<string, BookmarkItem>>).set({
       b1: bookmark('b1'),
@@ -67,7 +73,7 @@ describe('LinkSettings bulk fetch toast', () => {
   }
 
   const fetchButton = () =>
-    host.querySelector('button.btn') as HTMLButtonElement;
+    host.querySelector('button.btn:not(.secondary)') as HTMLButtonElement;
 
   it('counts link-only notes among the previews still to fetch', () => {
     (items as Writable<Record<string, unknown>>).set({
@@ -83,6 +89,39 @@ describe('LinkSettings bulk fetch toast', () => {
     render();
     expect(host.textContent).toContain('2 of 2 saved links have no preview');
     expect(fetchButton().textContent).toBe('Fetch 2 previews');
+  });
+
+  it('copies the missing bookmark and link-note URLs one per line', async () => {
+    (items as Writable<Record<string, unknown>>).set({
+      b1: bookmark('b1', { url: 'https://example.com\n/path' }),
+      n1: {
+        id: 'n1',
+        type: 'note',
+        title: 'https://x.com/jack',
+        body: 'https://x.com/jack',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    render();
+    (host.querySelector('button.secondary') as HTMLButtonElement).click();
+    await vi.waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        'https://example.com/path\nhttps://x.com/jack',
+      );
+      expect(showToast).toHaveBeenCalledWith('Copied 2 URLs');
+    });
+  });
+
+  it('does not overwrite the clipboard when no usable URLs remain', async () => {
+    (items as Writable<Record<string, unknown>>).set({
+      b1: bookmark('b1', { title: '', url: '' }),
+    });
+    render();
+    (host.querySelector('button.secondary') as HTMLButtonElement).click();
+    await vi.waitFor(() => {
+      expect(writeText).not.toHaveBeenCalled();
+      expect(showToast).toHaveBeenCalledWith('No URLs to copy');
+    });
   });
 
   it('shows the unchanged success toast when no fetches failed', async () => {
