@@ -71,18 +71,32 @@ describe('ViewCardModal actions menu', () => {
     );
     await tick();
 
-    const deleteAction = host.querySelector(
-      '[role="menuitem"]',
-    ) as HTMLButtonElement;
+    const items = Array.from(
+      host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
+    );
+    const first = items[0];
+    const last = items[items.length - 1];
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
-    expect(document.activeElement).toBe(deleteAction);
-
-    deleteAction.dispatchEvent(
+    expect(first.textContent).toContain('Archive card');
+    expect(last.textContent).toContain('Delete card');
+    expect(document.activeElement).toBe(first);
+    first.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }),
     );
-    expect(document.activeElement).toBe(deleteAction);
-
-    deleteAction.dispatchEvent(
+    expect(document.activeElement).toBe(last);
+    last.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }),
+    );
+    expect(document.activeElement).toBe(first);
+    first.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'End', bubbles: true }),
+    );
+    expect(document.activeElement).toBe(last);
+    last.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Home', bubbles: true }),
+    );
+    expect(document.activeElement).toBe(first);
+    first.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
     );
     flushSync();

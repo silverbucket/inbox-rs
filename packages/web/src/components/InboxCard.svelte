@@ -251,7 +251,7 @@
       <p class="hint-flag">{hints.flag}</p>
     {/if}
     {#if reportUrl}
-      <a class="report-preview" href={reportUrl} target="_blank" rel="noopener noreferrer" title="Review a public Sockethub issue draft on GitHub">Report preview issue ↗</a>
+      <a class="report-preview" href={reportUrl} target="_blank" rel="noopener noreferrer" title="Review a public Sockethub issue draft on GitHub">Report preview issue (public) ↗</a>
     {/if}
     {#if hints?.suggest && onfile}
       {@const target = hints.suggest}
@@ -426,9 +426,11 @@
   }
 
   .kind-ic .kind-favicon {
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     border-radius: 3px;
+    padding: 1px;
+    background: white;
     object-fit: contain;
   }
 

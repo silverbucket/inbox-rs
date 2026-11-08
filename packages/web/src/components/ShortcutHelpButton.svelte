@@ -16,8 +16,8 @@
   .help-trigger {
     display: grid;
     place-items: center;
-    width: 38px;
-    height: 38px;
+    width: 44px;
+    height: 44px;
     padding: 0;
     border: 1px solid var(--border);
     border-radius: 999px;

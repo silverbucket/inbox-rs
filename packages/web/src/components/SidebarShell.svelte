@@ -1940,7 +1940,7 @@
       display: grid;
       grid-template-columns: auto 1fr auto;
       grid-template-rows: auto auto;
-      gap: 0.5rem 0.75rem;
+      gap: 0.5rem;
       align-items: center;
       padding: 0.75rem 1rem;
     }

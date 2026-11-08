@@ -397,6 +397,18 @@
 </script>
 
 <div class="todos-page">
+  <header class="page-heading">
+    <div><h1>{narrow ? VIEWS.find(v => v.id === view)?.label : 'Todos'}</h1><p class="page-description">A little focus for what’s next.</p></div>
+    {#if openTodos.length || completedTodos.length || onCalendarTodos.length}
+    <div class="view-switch" role="group" aria-label="Todos view">
+      {#each VIEWS as v (v.id)}
+        <button type="button" class="view-btn" class:phone-primary={v.id === 'today' || v.id === 'horizon'} aria-label={`${v.label} view`} aria-pressed={view === v.id} onclick={() => setView(v.id)}>
+          {v.label}
+        </button>
+      {/each}
+    </div>
+    {/if}
+  </header>
   <AlertsPermissionBanner />
   <!--
     Toolbar: count + Fab (the Fab is an inline pill on desktop, position:fixed
@@ -552,13 +564,7 @@
     <TodoQuickAdd hideOnMobile compact focusOnMount bind:quickTitle={quickDraft} onopenmodal={(t, c, p) => onaddtodo(t, c, p)} />
     {@render todoToolbar()}
 
-    <div class="view-switch" role="group" aria-label="Todos view">
-      {#each VIEWS as v (v.id)}
-        <button type="button" class="view-btn" class:phone-primary={v.id === 'today' || v.id === 'horizon'} aria-pressed={view === v.id} onclick={() => setView(v.id)}>
-          {narrow && (v.id === 'board' || v.id === 'calendar') ? `${v.label} view` : v.label}
-        </button>
-      {/each}
-    </div>
+
     <!-- Hidden while the On-calendar receipts are open: those rows ignore swipes. -->
     {#if !(showsReceipts && onCalendarExpanded)}<p class="swipe-hint">Swipe right to complete · left to re-plan</p>{/if}
 
@@ -745,6 +751,15 @@
 </div>
 
 <style>
+  .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.5rem 0; }
+  .page-heading h1 { font-size: clamp(1.8rem, 3vw, 2.35rem); font-weight: 650; letter-spacing: -0.045em; line-height: 1.2; }
+  .page-description { margin-top: 0.3rem; color: var(--text-muted); font-size: 0.85rem; }
+  @media (max-width: 600px) {
+    .page-heading { gap: 0.5rem; padding: 0; }
+    .page-heading h1 { font-size: 1.5rem; letter-spacing: -0.03em; }
+    .page-description { display: none; }
+  }
+
   .todos-page {
     display: flex;
     flex-direction: column;

@@ -375,15 +375,15 @@
     <div class="header-badges">
       {#if openTodos.length > 0}
         <span class="badge badge-todos" aria-label="{openTodos.length} open todos" title="{openTodos.length} open {openTodos.length === 1 ? 'todo' : 'todos'}">
-          {openTodos.length}
+          {openTodos.length} {openTodos.length === 1 ? 'todo' : 'todos'}
         </span>
       {/if}
       {#if referenceItems.length > 0}
         <span class="badge badge-ref" aria-label="{referenceItems.length} reference items" title="{referenceItems.length} reference items">
-          {referenceItems.length}
+          {referenceItems.length} {referenceItems.length === 1 ? 'reference' : 'references'}
         </span>
       {:else if openTodos.length === 0}
-        <span class="badge badge-ref" aria-label="0 reference items" title="0 reference items">0</span>
+        <span class="badge badge-ref" aria-label="0 reference items" title="0 reference items">0 references</span>
       {/if}
     </div>
     <button
@@ -832,8 +832,8 @@
   }
 
   .badge-todos {
-    color: white;
-    background: var(--_col);
+    color: var(--text);
+    background: color-mix(in srgb, var(--_col) 18%, var(--surface));
   }
 
   .actions-toggle { display: none; }
@@ -1205,13 +1205,13 @@
       grid-template-columns: 24px 4px 16px minmax(0, 1fr) auto 44px;
       gap: 0.35rem;
     }
-    .color-indicator { grid-column: 2; grid-row: 1; }
-    .chevron { grid-column: 3; grid-row: 1; }
-    .header-info { grid-column: 4; grid-row: 1; }
+    .color-indicator { grid-column: 2; grid-row: 1 / 3; }
+    .chevron { grid-column: 3; grid-row: 1 / 3; }
+    .header-info { grid-column: 4 / 6; grid-row: 1; }
     .header-info h3 { white-space: normal; overflow-wrap: anywhere; }
     .actions-toggle {
       grid-column: 6;
-      grid-row: 1;
+      grid-row: 1 / 3;
       display: grid;
       place-items: center;
       width: 44px;
@@ -1221,11 +1221,11 @@
       background: var(--surface-tint);
       color: var(--text-muted);
     }
-    .header-actions { display: none; grid-column: 2 / -1; grid-row: 2; justify-content: flex-end; opacity: 1; }
+    .header-actions { display: none; grid-column: 2 / -1; grid-row: 3; justify-content: flex-end; opacity: 1; }
     .header-actions.actions-open { display: flex; }
     .btn-header { width: 44px; height: 44px; }
-    .header-badges { grid-column: 5; grid-row: 1; }
-    .collection-header :global(.reorder-grip) { grid-column: 1; grid-row: 1; min-height: 44px; }
+    .header-badges { grid-column: 4 / 6; grid-row: 2; }
+    .collection-header :global(.reorder-grip) { grid-column: 1; grid-row: 1 / 3; min-height: 44px; }
   }
 
   @media (max-width: 550px) {

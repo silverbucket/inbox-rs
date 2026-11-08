@@ -14,6 +14,7 @@
   import { showToast } from '../lib/toast';
   import { fileItem, setArchived } from '../lib/triage-actions';
   import ShareButton from './ShareButton.svelte';
+  import { metadataReportUrl } from '../lib/metadata-report';
   import CollectionPicker from './CollectionPicker.svelte';
   import DeleteConfirm from './DeleteConfirm.svelte';
   import ScheduleSheet from './ScheduleSheet.svelte';
@@ -36,10 +37,11 @@
   } = $props();
 
   const TITLE_ID = 'view-modal-title';
+  const reportUrl = $derived(item.type === 'bookmark' ? metadataReportUrl(item) : null);
 
   let showActions = $state(false);
   let actionsTrigger = $state<HTMLButtonElement>();
-  let deleteAction = $state<HTMLButtonElement>();
+  let actionsMenu = $state<HTMLDivElement>();
   let showDelete = $state(false);
   let deleting = $state(false);
   let changingArchiveState = $state(false);
@@ -404,10 +406,11 @@
     void requestClose();
   }
 
-  async function openActions() {
+  async function openActions(last = false) {
     showActions = true;
     await tick();
-    deleteAction?.focus();
+    const items = actionsMenu?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)');
+    if (items?.length) items[last ? items.length - 1 : 0].focus();
   }
 
   function closeActions(restoreFocus = false) {
@@ -418,7 +421,7 @@
   function handleActionsTriggerKeydown(e: KeyboardEvent) {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     e.preventDefault();
-    void openActions();
+    void openActions(e.key === 'ArrowUp');
   }
 
   function handleActionsMenuKeydown(e: KeyboardEvent) {
@@ -435,9 +438,17 @@
       e.key === 'End'
     ) {
       e.preventDefault();
-      deleteAction?.focus();
+      const items = Array.from(actionsMenu?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ?? []);
+      if (!items.length) return;
+      const current = items.indexOf(document.activeElement as HTMLButtonElement);
+      let next = current;
+      if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = items.length - 1;
+      else if (e.key === 'ArrowDown') next = (current + 1) % items.length;
+      else next = current > 0 ? current - 1 : items.length - 1;
+      items[next].focus();
     } else if (e.key === 'Tab') {
-      closeActions();
+      closeActions(true);
     }
   }
 
@@ -488,100 +499,148 @@
     aria-labelledby={TITLE_ID}
     onclick={handleModalClick}
   >
-    <div class="modal-header">
-      <!-- Same control as the collection focus page's exit: a labelled Back
-           button on the leading edge is easier to hit and reads the same on
-           desktop and mobile as the focus overlay it often sits above. -->
-      <button
-        type="button"
-        class="btn-back"
-        title="Back (Esc)"
-        onclick={() => void requestClose()}
-      >
-        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="19" y1="12" x2="5" y2="12"></line>
-          <polyline points="12 19 5 12 12 5"></polyline>
-        </svg>
-        Back
-      </button>
-      <span class="type-badge">{item.type}</span>
-      <time class="date">{formatDate(item.createdAt)}</time>
-      <button
-        type="button"
-        class="save-status"
-        class:error={saveStatus === 'error'}
-        onclick={() => saveStatus === 'error' && retrySave()}
-        disabled={saveStatus !== 'error'}
-        aria-live="polite"
-      >
-        <span class="save-dot" aria-hidden="true"></span>{saveLabel}
-      </button>
-      <div class="header-actions">
+    <div class="sticky-card-controls">
+      <div class="modal-header">
+        <!-- Same control as the collection focus page's exit: a labelled Back
+             button on the leading edge is easier to hit and reads the same on
+             desktop and mobile as the focus overlay it often sits above. -->
         <button
-          bind:this={actionsTrigger}
           type="button"
-          class="icon-btn"
-          title="Card actions"
-          aria-label="Card actions"
-          aria-haspopup="menu"
-          aria-expanded={showActions}
-          onclick={() =>
-            showActions ? closeActions() : void openActions()}
-          onkeydown={handleActionsTriggerKeydown}
+          class="btn-back"
+          title="Back (Esc)"
+          onclick={() => void requestClose()}
         >
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+          Back
+        </button>
+        <span class="type-badge">{item.type}</span>
+        <time class="date">{formatDate(item.createdAt)}</time>
+        <button
+          type="button"
+          class="save-status"
+          class:error={saveStatus === 'error'}
+          onclick={() => saveStatus === 'error' && retrySave()}
+          disabled={saveStatus !== 'error'}
+          aria-live="polite"
+        >
+          <span class="save-dot" aria-hidden="true"></span>{saveLabel}
+        </button>
+
+      </div>
+      <div class="organize-toolbar">
+        <button type="button" class="btn-file" aria-label={item.collectionId ? 'Move to collection…' : 'File into collection…'} title="Choose a collection" onclick={openMovePicker}>
           <svg
             aria-hidden="true"
-            width="18"
-            height="18"
+            width="16"
+            height="16"
             viewBox="0 0 24 24"
-            fill="currentColor"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
           >
-            <circle cx="5" cy="12" r="1.75"></circle>
-            <circle cx="12" cy="12" r="1.75"></circle>
-            <circle cx="19" cy="12" r="1.75"></circle>
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+            ></path>
           </svg>
+          {item.collectionId ? 'Move to…' : 'File to…'}
         </button>
-        {#if showActions}
-          <div
-            class="actions-menu"
-            role="menu"
+        <button type="button" class="schedule-trigger" aria-label="Schedule item" title="Plan or schedule this item" onclick={() => void openSchedule()}>
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>When…
+        </button>
+        <div class="header-actions">
+          <button
+            bind:this={actionsTrigger}
+            type="button"
+            class="icon-btn"
+            title="Card actions"
             aria-label="Card actions"
-            tabindex="-1"
-            onkeydown={handleActionsMenuKeydown}
+            aria-haspopup="menu"
+            aria-expanded={showActions}
+            onclick={() =>
+              showActions ? closeActions() : void openActions()}
+            onkeydown={handleActionsTriggerKeydown}
           >
-            <button
-              bind:this={deleteAction}
-              type="button"
-              class="actions-menu-item actions-menu-danger"
-              role="menuitem"
-              onclick={() => {
-                closeActions();
-                showDelete = true;
-              }}
+            <svg
+              aria-hidden="true"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="currentColor"
             >
-              <svg
-                aria-hidden="true"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+              <circle cx="5" cy="12" r="1.75"></circle>
+              <circle cx="12" cy="12" r="1.75"></circle>
+              <circle cx="19" cy="12" r="1.75"></circle>
+            </svg>
+          </button>
+          {#if showActions}
+            <div
+              class="actions-menu"
+              bind:this={actionsMenu}
+              role="menu"
+              aria-label="Card actions"
+              tabindex="-1"
+              onkeydown={handleActionsMenuKeydown}
+            >
+              <button type="button" class="actions-menu-item" role="menuitem" disabled={changingArchiveState} onclick={() => { closeActions(true); void toggleArchived(); }}>
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8h18v13H3zM1 3h22v5H1zM10 12h4"/></svg>
+                {item.archived ? 'Restore from archive' : 'Archive card'}
+              </button>
+              {#if canMakeTodo}
+                <button type="button" class="actions-menu-item" role="menuitem" disabled={convertingTodo} onclick={() => { closeActions(true); makeTodo(); }}>
+                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 12 5 5L21 5"/></svg>Make a todo
+                </button>
+              {/if}
+              {#if canMakeRef}
+                <button type="button" class="actions-menu-item" role="menuitem" disabled={convertingRef} onclick={() => { closeActions(true); void convertToReference(); }}>
+                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h15v18H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 14h15"/></svg>Make a reference
+                </button>
+              {/if}
+              {#if item.startsAt}
+                <button type="button" class="actions-menu-item" role="menuitem" onclick={() => { closeActions(true); void openCalendar(); }}>
+                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg>
+                  {item.eventUrl ? 'On calendar — manage…' : 'Add to calendar…'}
+                </button>
+              {/if}
+              <button
+                type="button"
+                class="actions-menu-item actions-menu-danger"
+                role="menuitem"
+                onclick={() => {
+                  closeActions();
+                  showDelete = true;
+                }}
               >
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path
-                  d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                ></path>
-              </svg>
-              Delete card
-            </button>
-          </div>
-        {/if}
+                <svg
+                  aria-hidden="true"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path
+                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                  ></path>
+                </svg>
+                Delete card
+              </button>
+            </div>
+          {/if}
+        </div>
       </div>
     </div>
 
+    {#if reportUrl}
+      <p class="report-preview"><a href={reportUrl} target="_blank" rel="noopener noreferrer">Report preview issue to Sockethub ↗</a><span>Public GitHub issue draft — review the page URL before posting.</span></p>
+    {/if}
     <h2 class="sr-only" id={TITLE_ID}>{item.title || 'Untitled card'}</h2>
     {#key `${item.id}:${item.type}`}
       <CardInlineEditor
@@ -719,23 +778,7 @@
       {/if}
     </div>
 
-    <button type="button" class="btn-file" onclick={openMovePicker}>
-      <svg
-        aria-hidden="true"
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
-        ></path>
-      </svg>
-      {item.collectionId ? 'Move to collection…' : 'File into collection…'}
-    </button>
+
 
     <div class="action-list">
       <button type="button" class="action-row" disabled={changingArchiveState} onclick={() => void toggleArchived()}>
@@ -1483,5 +1526,23 @@
   .action-row svg {
     color: var(--text-muted);
     flex-shrink: 0;
+  }
+  .report-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.65rem; margin: 0; font-size: 0.8rem; color: var(--text-muted); }
+  .report-preview a { min-height: 44px; display: inline-flex; align-items: center; }
+  @media (max-width: 600px) { .modal-header .date { display: none; } }
+  .sticky-card-controls { position: sticky; top: -1.5rem; z-index: 20; margin: -1.5rem -1.5rem 0; padding: 1rem 1.5rem; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.65rem; }
+  .organize-toolbar { display: flex; align-items: center; gap: 0.5rem; }
+  .organize-toolbar .btn-file { width: auto; flex: 1; min-height: 44px; background: var(--accent); color: white; border-color: var(--accent); }
+  .organize-toolbar .btn-file:hover { opacity: 1; background: color-mix(in srgb, var(--accent) 85%, black); }
+  .schedule-trigger { min-height: 44px; display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font: inherit; font-size: 0.9rem; }
+  .organize-toolbar .icon-btn { width: 44px; height: 44px; border: 1px solid var(--border); background: var(--surface); }
+  .actions-menu-item:hover, .actions-menu-item:focus-visible { background: var(--surface-hover); }
+  @media (min-width: 1000px) {
+    .sticky-card-controls { flex-direction: row; align-items: center; gap: 1rem; }
+    .modal-header { flex: 1; min-width: 0; }
+    .organize-toolbar .btn-file { min-width: 140px; }
+  }
+  @media (max-width: 600px), (display-mode: standalone) {
+    .sticky-card-controls { top: -1rem; margin: -1rem -1rem 0; padding: 0.75rem 1rem; }
   }
 </style>

@@ -775,10 +775,6 @@
           </div>
         {/if}
       {:else if bodyPage === 'todos'}
-        <div class="page-heading">
-          <div><h1>{isTouch ? ({ today: 'Today', horizon: 'Plan', board: 'Board', calendar: 'Calendar' }[$appConfig.todosView ?? 'today']) : 'Todos'}</h1></div>
-          <p class="page-description">A little focus for what’s next.</p>
-        </div>
         {#if TodosPageComponent}
           <TodosPageComponent bind:quickDraft={todoQuickDraft} onselect={openView} onaddtodo={openAddTodo} onaddtodoincollection={openAddTodoInCollection} />
         {/if}

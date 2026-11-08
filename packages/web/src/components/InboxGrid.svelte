@@ -83,7 +83,7 @@
     const flag = dup
       ? `Same as “${clip(dup.title || 'another card')}” — archive one?`
       : lacksTitle(item)
-        ? 'No title came through — add one?'
+        ? 'Preview title looks incomplete — improve it?'
         : undefined;
     return {
       flag,
