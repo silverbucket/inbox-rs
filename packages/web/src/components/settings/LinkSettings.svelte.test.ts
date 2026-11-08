@@ -93,7 +93,7 @@ describe('LinkSettings bulk fetch toast', () => {
 
   it('copies the missing bookmark and link-note URLs one per line', async () => {
     (items as Writable<Record<string, unknown>>).set({
-      b1: bookmark('b1'),
+      b1: bookmark('b1', { url: 'https://example.com\n/path' }),
       n1: {
         id: 'n1',
         type: 'note',
@@ -106,9 +106,21 @@ describe('LinkSettings bulk fetch toast', () => {
     (host.querySelector('button.secondary') as HTMLButtonElement).click();
     await vi.waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(
-        'https://example.com\nhttps://x.com/jack',
+        'https://example.com/path\nhttps://x.com/jack',
       );
       expect(showToast).toHaveBeenCalledWith('Copied 2 URLs');
+    });
+  });
+
+  it('does not overwrite the clipboard when no usable URLs remain', async () => {
+    (items as Writable<Record<string, unknown>>).set({
+      b1: bookmark('b1', { title: '', url: '' }),
+    });
+    render();
+    (host.querySelector('button.secondary') as HTMLButtonElement).click();
+    await vi.waitFor(() => {
+      expect(writeText).not.toHaveBeenCalled();
+      expect(showToast).toHaveBeenCalledWith('No URLs to copy');
     });
   });
 
