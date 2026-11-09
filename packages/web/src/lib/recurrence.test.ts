@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { nextOccurrence } from './recurrence';
 
 const local = (y: number, m: number, d: number, h = 9) =>
@@ -42,5 +42,52 @@ describe('nextOccurrence', () => {
         local(2026, 1, 10),
       ),
     ).toBeUndefined();
+  });
+});
+
+describe("nextOccurrence in the event's own time zone (on a UTC device)", () => {
+  const tz = process.env.TZ;
+  beforeAll(() => {
+    process.env.TZ = 'UTC';
+  });
+  afterAll(() => {
+    if (tz === undefined) delete process.env.TZ;
+    else process.env.TZ = tz;
+  });
+
+  it('keeps a 09:00 Prague meeting at 09:00 across the October DST change', () => {
+    // 09:00 CEST is 07:00Z; after Oct 25, 09:00 CET is 08:00Z.
+    const next = nextOccurrence(
+      new Date('2026-10-01T07:00:00Z'),
+      { frequency: 'weekly' },
+      new Date('2026-10-26T00:00:00Z'),
+      0,
+      'Europe/Prague',
+    );
+    expect(next?.toISOString()).toBe('2026-10-29T08:00:00.000Z');
+  });
+
+  it("picks BYDAY weekdays in the event's zone, not the device's", () => {
+    // Mon Nov 2 00:30 in Prague is still Sunday in UTC.
+    const next = nextOccurrence(
+      new Date('2026-11-01T23:30:00Z'),
+      { frequency: 'weekly', byDay: ['MO', 'WE'] },
+      new Date('2026-11-03T12:00:00Z'),
+      0,
+      'Europe/Prague',
+    );
+    // Wed Nov 4 00:30 Prague.
+    expect(next?.toISOString()).toBe('2026-11-03T23:30:00.000Z');
+  });
+
+  it('falls back to device time for a zone Intl does not know', () => {
+    const next = nextOccurrence(
+      new Date('2026-10-01T07:00:00Z'),
+      { frequency: 'weekly' },
+      new Date('2026-10-26T00:00:00Z'),
+      0,
+      'Not/AZone',
+    );
+    expect(next?.toISOString()).toBe('2026-10-29T07:00:00.000Z');
   });
 });

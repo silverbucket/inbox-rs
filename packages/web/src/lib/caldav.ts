@@ -257,8 +257,8 @@ export async function createEntry(
   item: InboxItem,
   endpoint: string,
   kind?: 'event' | 'task',
+  object = itemToCalendarObject(item, kind),
 ): Promise<PostedEntry> {
-  const object = itemToCalendarObject(item, kind);
   if (!object) throw new CaldavError('item has no schedule');
   const result = await send(
     creds,

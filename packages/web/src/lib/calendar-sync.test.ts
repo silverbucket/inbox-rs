@@ -64,6 +64,7 @@ import {
   deleteSyncedEntry,
   entryIsCurrent,
   forgetEntry,
+  itemFieldsFromEntry,
   keepInSync,
   linkCollection,
   previewLink,
@@ -640,8 +641,18 @@ describe('push and create', () => {
       ...all,
       [card().id]: { ...card(), collectionId: 'home' },
     }));
+    const id = card().id;
     await runCalendarSync();
     expect(vi.mocked(createEntry).mock.calls[0][1]).toBe(CAL2);
+    // Built from the server's copy: its reminders come along.
+    const copy = vi.mocked(createEntry).mock.calls[0][5];
+    expect(copy).toMatchObject({
+      uid: `${id}@inbox-rs`,
+      name: 'Pay rent',
+      reminders: [{ trigger: '-PT15M' }],
+    });
+    expect(copy).not.toHaveProperty('id');
+    expect(copy).not.toHaveProperty('etag');
     expect(deleteEntry).toHaveBeenCalledWith(
       expect.anything(),
       CAL,
@@ -649,6 +660,79 @@ describe('push and create', () => {
       expect.any(String),
     );
     expect(card(`${CAL2}moved.ics`).calendarSync).toBe(true);
+  });
+
+  it('retries removing the old entry when the move could not delete it', async () => {
+    cols().update((all) => ({
+      ...all,
+      home: {
+        id: 'home',
+        name: 'Home',
+        itemIds: [],
+        createdAt: '2026-01-01T00:00:00Z',
+        calendar: { url: CAL2, name: 'Home' },
+      },
+    }));
+    vi.mocked(createEntry).mockResolvedValueOnce({
+      eventUrl: `${CAL2}moved.ics`,
+      eventEtag: '"5"',
+    });
+    vi.mocked(deleteEntry).mockRejectedValueOnce(
+      new CaldavError('caldav:connection-failed'),
+    );
+    items().update((all) => ({
+      ...all,
+      [card().id]: { ...card(), collectionId: 'home' },
+    }));
+    await runCalendarSync();
+    expect(showToast).toHaveBeenCalledWith(
+      expect.stringContaining('will retry'),
+    );
+    vi.mocked(deleteEntry).mockClear();
+    await runCalendarSync();
+    expect(deleteEntry).toHaveBeenCalledWith(
+      expect.anything(),
+      CAL,
+      { id: HREF, type: 'task', etag: '"1"' },
+      expect.any(String),
+    );
+    vi.mocked(deleteEntry).mockClear();
+    await runCalendarSync();
+    expect(deleteEntry).not.toHaveBeenCalled();
+    expect(createEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it("pushes a synced bookmark's new URL", async () => {
+    vi.mocked(createEntry).mockResolvedValueOnce({
+      eventUrl: `${CAL}b1.ics`,
+      eventEtag: '"1"',
+    });
+    vi.mocked(updateEntry).mockResolvedValueOnce({
+      eventUrl: `${CAL}b1.ics`,
+      eventEtag: '"2"',
+    });
+    items().update((all) => ({
+      ...all,
+      b1: {
+        id: 'b1',
+        type: 'bookmark',
+        title: 'Docs',
+        url: 'https://old.example.org/',
+        createdAt: '2026-01-01T00:00:00Z',
+        collectionId: 'work',
+        startsAt: '2099-03-04T14:00:00.000Z',
+      } as InboxItem,
+    }));
+    await runCalendarSync();
+    expect(updateEntry).not.toHaveBeenCalled();
+    items().update((all) => ({
+      ...all,
+      b1: { ...all.b1, url: 'https://new.example.org/' } as InboxItem,
+    }));
+    await runCalendarSync();
+    expect(vi.mocked(updateEntry).mock.calls[0][2]).toMatchObject({
+      url: 'https://new.example.org/',
+    });
   });
 
   it('keeps an edit made while the entry was being created as a pending push', async () => {
@@ -941,6 +1025,60 @@ describe('linking', () => {
 });
 
 describe('field mapping', () => {
+  it("keeps a foreign entry's own link when the card has none", () => {
+    const item = {
+      id: 'x',
+      type: 'todo',
+      title: 'Renamed',
+      createdAt: '2026-11-01T00:00:00Z',
+      completed: false,
+    } as InboxItem;
+    const sent = taskUpdateObject(
+      remote({ url: 'https://planify.example/task/1' }),
+      item,
+    );
+    expect(sent.url).toBe('https://planify.example/task/1');
+  });
+
+  it("keeps a moved foreign entry's link through a later rename", () => {
+    // After a move the copy carries our UID, but the link is still the calendar's.
+    const item = {
+      id: 'x',
+      type: 'note',
+      title: 'Renamed',
+      body: '',
+      createdAt: '2026-11-01T00:00:00Z',
+      startsAt: '2099-03-04T14:00:00.000Z',
+    } as InboxItem;
+    const sent = taskUpdateObject(
+      event({ uid: 'x@inbox-rs', url: 'https://planify.example/ev/1' }),
+      item,
+    );
+    expect(sent.url).toBe('https://planify.example/ev/1');
+  });
+
+  it('advances a zoned repeating event in its own zone, on a UTC device', () => {
+    const tz = process.env.TZ;
+    process.env.TZ = 'UTC';
+    try {
+      const fields = itemFieldsFromEntry(
+        event({
+          startTime: '2026-10-01T09:00:00',
+          endTime: '2026-10-01T10:00:00',
+          timeZone: 'Europe/Prague',
+          recurrence: { frequency: 'weekly' },
+        }),
+        new Date('2026-10-27T12:00:00Z'),
+      );
+      // 09:00 CET after the Oct 25 DST change.
+      expect(fields.startsAt).toBe('2026-10-29T08:00:00.000Z');
+      expect(fields.endsAt).toBe('2026-10-29T09:00:00.000Z');
+    } finally {
+      if (tz === undefined) delete process.env.TZ;
+      else process.env.TZ = tz;
+    }
+  });
+
   it('treats ended events as history and open tasks as current', () => {
     expect(entryIsCurrent(event())).toBe(true);
     expect(

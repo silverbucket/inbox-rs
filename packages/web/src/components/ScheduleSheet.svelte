@@ -13,6 +13,7 @@
     toTimeInputValue,
   } from '../lib/schedule';
   import { showToast } from '../lib/toast';
+  import { lockText } from '../lib/calendar-sync';
   import { setItemPlan, storeItem } from '../lib/stores';
   import { todayStart } from '../lib/now';
   import {
@@ -63,6 +64,8 @@
   } = $props();
 
   const pickMode = !!onpick;
+  // Read-only calendar entries: a local time edit would be overwritten.
+  const locked = item ? lockText(item) : '';
   const displayTitle = item?.title ?? subject?.title ?? '';
   const isTodoish = item
     ? item.isTodo || item.type === 'todo'
@@ -269,6 +272,10 @@
     </h3>
     <p class="ctx">{displayTitle || 'Untitled'}</p>
 
+    {#if locked}
+      <p class="ctx lock">{locked}</p>
+      <button type="button" class="btn-primary" onclick={onclose}>Close</button>
+    {:else}
     {#if showPlans}
       <span class="flabel">Plan it — no deadline</span>
       <div class="plan-grid" role="group" aria-label="Plan without a date">
@@ -424,6 +431,7 @@
             : 'Remove time'}
       </button>
     {/if}
+    {/if}
   </div>
 </div>
 
@@ -463,6 +471,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .ctx.lock {
+    white-space: normal;
   }
 
   /* Event / Task segmented control */

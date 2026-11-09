@@ -42,6 +42,7 @@ import {
   type RemoteEntry,
   type SyncResult,
   syncCalendar,
+  uidFor,
   updateEntry,
 } from './caldav';
 import {
@@ -54,6 +55,7 @@ import {
   entryInCalendar,
   updateCalendarAccount,
 } from './calendar-accounts';
+import { entryUrl } from './ics';
 import { describeRecurrence, nextOccurrence } from './recurrence';
 import { clearPostedEntry, toDateInputValue } from './schedule';
 import {
@@ -76,6 +78,8 @@ interface Baseline {
   fp: string;
   /** The server's copy, the base for updates. */
   remote: RemoteEntry;
+  /** Moved to another calendar; this copy still needs deleting. */
+  leftover?: true;
 }
 
 interface CalendarSyncState {
@@ -249,9 +253,11 @@ export function entryFields(
   item: InboxItem,
   kind: 'event' | 'task',
 ): Record<string, unknown> {
+  const url = entryUrl(item);
   const common = {
     name: item.title || 'Untitled',
     ...(item.description ? { content: item.description } : {}),
+    ...(url ? { url } : {}),
   };
   if (kind === 'event') {
     let end: string | undefined;
@@ -353,6 +359,7 @@ function entryTimes(
       entry.recurrence,
       windowStart(now),
       allDay ? duration + 86_399_999 : duration,
+      allDay ? undefined : entry.timeZone,
     );
     if (next) {
       start = next;
@@ -513,6 +520,23 @@ export function readOnlyReason(
 ): ReadOnlyReason | undefined {
   const base = baselineFor(item.eventUrl);
   return base ? readOnlyReasonOf(base.remote) : undefined;
+}
+
+/** Why a read-only synced card can't be edited here, or '' when it can. */
+export function lockText(
+  item: Pick<InboxItem, 'eventUrl' | 'calendarSync'>,
+): string {
+  const reason = item.calendarSync ? readOnlyReason(item) : undefined;
+  if (reason === 'repeating') {
+    return `${recurrenceLabel(item) ?? 'Repeating'} · edit it in your calendar app. Showing the next date.`;
+  }
+  if (reason === 'attendees') {
+    return 'Has attendees · edit it in your calendar app, so they get the update.';
+  }
+  if (reason === 'unsupported') {
+    return 'This entry can only be changed in your calendar app.';
+  }
+  return '';
 }
 
 /** "Repeats weekly" for a synced repeating entry. */
@@ -1029,17 +1053,26 @@ async function moveEntry(
   if (!to.calendar.components.includes(kind)) {
     throw new CaldavError('caldav:unsupported-component');
   }
-  const object = itemToCalendarObject(item, kind);
+  // From the server's copy, so reminders and attachments come along.
+  const object = base
+    ? { ...entryUpdateObject(base.remote, item), uid: uidFor(item) }
+    : itemToCalendarObject(item, kind);
   if (!object) throw new CaldavError('item has no schedule');
+  if (base) {
+    delete object.id;
+    delete object.etag;
+  }
   const receipt = await createEntry(
     to.account,
     to.calendar.id,
     item,
     accountEndpoint(to.account),
     kind,
+    object,
   );
   if (href && from) {
     const etag = item.eventEtag || base?.remote.etag;
+    let removed = !etag;
     if (etag) {
       try {
         await deleteEntry(
@@ -1048,14 +1081,22 @@ async function moveEntry(
           { id: href, type: kind, etag },
           accountEndpoint(from.account),
         );
+        removed = true;
       } catch (err) {
         console.error('Failed to remove the moved entry', err);
         showToast(
-          `Copied to ${to.calendar.name}, but couldn’t remove it from ${from.calendar.name}`,
+          `Copied to ${to.calendar.name}, but couldn’t remove it from ${from.calendar.name} — will retry`,
         );
       }
     }
-    if (fromCal) delete fromCal.entries[href];
+    if (fromCal && removed) delete fromCal.entries[href];
+    else if (fromCal && base) {
+      fromCal.entries[href] = {
+        ...base,
+        remote: { ...base.remote, etag },
+        leftover: true,
+      };
+    }
   }
   const next = await updateItem(item.id, (current) =>
     current
@@ -1074,6 +1115,34 @@ async function moveEntry(
     } as RemoteEntry,
   };
   return next;
+}
+
+/** Retry deleting entries a move copied elsewhere but couldn't remove. */
+async function removeLeftovers(state: SyncState) {
+  for (const cal of Object.values(state)) {
+    for (const [href, base] of Object.entries(cal.entries)) {
+      if (!base.leftover) continue;
+      const from = choiceForEventUrl(href);
+      if (!from) continue; // account gone from this device
+      try {
+        if (base.remote.etag) {
+          await deleteEntry(
+            from.account,
+            from.calendar.id,
+            { id: href, type: base.remote.type, etag: base.remote.etag },
+            accountEndpoint(from.account),
+          );
+        }
+        delete cal.entries[href];
+      } catch (err) {
+        // Gone already, or edited in the calendar app since: theirs now.
+        const code = err instanceof CaldavError ? err.code : undefined;
+        if (code === 'caldav:not-found' || code === 'caldav:conflict') {
+          delete cal.entries[href];
+        } else console.error('Failed to remove the moved entry', err);
+      }
+    }
+  }
 }
 
 /** Synced cards filed under another calendar's link follow the link. */
@@ -1107,6 +1176,7 @@ async function syncAll(): Promise<void> {
   lastRun = Date.now();
   flushItemChanges();
   const state = loadState();
+  await removeLeftovers(state);
   await followLinks(state);
   saveState(state);
   const targets = syncTargets();

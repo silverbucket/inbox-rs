@@ -11,8 +11,8 @@
     calendarSyncStatus,
     cardSyncErrors,
     keepInSync,
+    lockText,
     readOnlyReason,
-    recurrenceLabel,
     removeFromCalendar,
     runCalendarSync,
     stopSyncing,
@@ -54,22 +54,13 @@
     item.collectionId ? $collections[item.collectionId] : undefined,
   );
   const lockReason = $derived(item.calendarSync ? readOnlyReason(item) : undefined);
-  const repeats = $derived(item.calendarSync ? recurrenceLabel(item) : undefined);
   const kind = $derived<'event' | 'task'>(
     item.isTodo || item.type === 'todo' || item.scheduleKind === 'task'
       ? 'task'
       : 'event',
   );
 
-  const lockText = $derived(
-    lockReason === 'repeating'
-      ? `${repeats ?? 'Repeating'} · edit it in your calendar app. Showing the next date.`
-      : lockReason === 'attendees'
-        ? 'Has attendees · edit it in your calendar app, so they get the update.'
-        : lockReason === 'unsupported'
-          ? 'This entry can only be changed in your calendar app.'
-          : '',
-  );
+  const lockLine = $derived(lockText(item));
 
   const origin = $derived.by(() => {
     const parts: string[] = [];
@@ -200,10 +191,10 @@
       {/if}
     </div>
 
-    {#if lockText}
+    {#if lockLine}
       <p class="line lock">
         <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>
-        {lockText}
+        {lockLine}
       </p>
     {/if}
 

@@ -13,6 +13,7 @@
   import { todayStart } from '../lib/now';
   import { type PlanChoice, planFor } from '../lib/plan';
   import { setItemCompleted } from '../lib/schedule-sync';
+  import { lockText } from '../lib/calendar-sync';
   import { moveStoredItemToDay, setItemPlan } from '../lib/stores';
   import { showToast } from '../lib/toast';
   import ScheduleSheet from './ScheduleSheet.svelte';
@@ -84,7 +85,7 @@
 {#snippet actions(todo: InboxItem, isOverdue: boolean)}
   <div class="actions" role="group" aria-label="What to do with {todo.title}">
     {#if isOverdue}
-      <button type="button" class="act primary" disabled={busyId !== null} onclick={() => dueToday(todo)}>Today</button>
+      <button type="button" class="act primary" disabled={busyId !== null || !!lockText(todo)} title={lockText(todo) || undefined} onclick={() => dueToday(todo)}>Today</button>
     {/if}
     <button type="button" class="act" class:primary={!isOverdue} disabled={busyId !== null} onclick={() => plan(todo, 'week')}>This week</button>
     <button type="button" class="act" disabled={busyId !== null} onclick={() => plan(todo, 'nextWeek')}>Next week</button>

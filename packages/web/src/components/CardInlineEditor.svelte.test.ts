@@ -278,3 +278,65 @@ describe('CardInlineEditor autosave', () => {
     });
   });
 });
+
+describe('CardInlineEditor on a read-only calendar entry', () => {
+  it('locks the title, since the next sync would overwrite a rename', () => {
+    const href = 'https://cal.example.org/work/series.ics';
+    localStorage.setItem(
+      'inbox-rs:task-sync',
+      JSON.stringify({
+        'https://cal.example.org/work/': {
+          entries: {
+            [href]: {
+              fp: '',
+              remote: {
+                id: href,
+                type: 'event',
+                uid: 'series',
+                name: 'Standup',
+                attendees: [{ email: 'a@example.org' }],
+              },
+            },
+          },
+        },
+      }),
+    );
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const component = mount(CardInlineEditor, {
+      target: host,
+      props: { item: { ...item, eventUrl: href, calendarSync: true } },
+    });
+    try {
+      flushSync();
+      const title = host.querySelector(
+        '[aria-label="Title"]',
+      ) as HTMLTextAreaElement;
+      expect(title.readOnly).toBe(true);
+      expect(title.title).toContain('Has attendees');
+    } finally {
+      unmount(component);
+      host.remove();
+      localStorage.clear();
+    }
+  });
+
+  it('leaves the title editable on an ordinary card', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const component = mount(CardInlineEditor, {
+      target: host,
+      props: { item },
+    });
+    try {
+      flushSync();
+      const title = host.querySelector(
+        '[aria-label="Title"]',
+      ) as HTMLTextAreaElement;
+      expect(title.readOnly).toBe(false);
+    } finally {
+      unmount(component);
+      host.remove();
+    }
+  });
+});
