@@ -209,7 +209,7 @@
 
     {#if origin.length}
       <p class="line muted origin">
-        {#each origin as part, i}<span class="part">{i > 0 ? '· ' : ''}{part}</span>{' '}{/each}
+        {#each origin as part, i}<span class="part">{part}{i < origin.length - 1 ? ' ·' : ''}</span>{' '}{/each}
       </p>
     {/if}
 

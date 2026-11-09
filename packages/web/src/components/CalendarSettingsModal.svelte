@@ -278,7 +278,7 @@
                 aria-label="Make {cal.name} the default calendar"
                 aria-pressed={account.defaultCalendarId === cal.id}
                 onclick={() => toggleDefault(account, cal.id)}
-              >★ <span class="star-label">Default</span></button>
+              >{account.defaultCalendarId === cal.id ? '★' : '☆'} <span class="star-label">{account.defaultCalendarId === cal.id ? 'Default' : 'Make default'}</span></button>
               <label class="vis-label">
                 <input
                   type="checkbox"
@@ -623,7 +623,11 @@
 
   .star-label {
     font-size: 0.68rem;
-    font-weight: 600;
+    font-weight: 500;
+  }
+
+  .star-btn.on .star-label {
+    font-weight: 650;
   }
 
   .link-status {
