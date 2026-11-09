@@ -306,7 +306,7 @@
                   {:else if calStatus?.syncing}
                     Syncing…
                   {:else if linked || count > 0}
-                    {count} {count === 1 ? 'card' : 'cards'}{#if linked && calStatus?.lastSync}<span class="sep"> · </span><span class="ok-dot" aria-hidden="true"></span> In sync · {relativeTime(calStatus.lastSync, $now.getTime())}{/if}
+                    {count} {count === 1 ? 'card' : 'cards'}{#if linked && calStatus?.lastSync}{' · '}<span class="ok-dot" aria-hidden="true"></span>{' '}In sync · {relativeTime(calStatus.lastSync, $now.getTime())}{/if}
                   {/if}
                 </span>
                 {#if linked}

@@ -46,7 +46,7 @@
       </label>
       <p class="also-hint">
         {alsoCalendar
-          ? 'The entry is removed there too.'
+          ? 'Gone from both places. This can’t be undone.'
           : mayReturn
             ? `It stays in the ${calendarName} calendar, and only comes back here if it changes there.`
             : `It stays in the ${calendarName} calendar.`}
