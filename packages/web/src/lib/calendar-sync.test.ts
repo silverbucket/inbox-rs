@@ -63,6 +63,7 @@ import { calendarAccounts } from './calendar-accounts';
 import {
   deleteSyncedEntry,
   entryIsCurrent,
+  forgetEntry,
   keepInSync,
   linkCollection,
   previewLink,
@@ -306,6 +307,39 @@ describe('pull', () => {
     }
   });
 
+  it('still offers Undo when a local edit to an advanced repeating event meets a remote change', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-11-09T12:00:00Z'));
+      const series = (extra: Partial<RemoteEntry> = {}) =>
+        event({
+          startTime: '2020-01-06T09:00:00Z',
+          endTime: '2020-01-06T09:30:00Z',
+          recurrence: { frequency: 'weekly' },
+          ...extra,
+        });
+      vi.mocked(syncCalendar).mockResolvedValueOnce(page([series()]));
+      await runCalendarSync();
+      const c = card(`${CAL}ev-1.ics`);
+      items().update((all) => ({
+        ...all,
+        [c.id]: { ...c, title: 'My local title' },
+      }));
+      vi.setSystemTime(new Date('2026-11-16T12:00:00Z'));
+      await runCalendarSync(); // advances the date while the local edit is pending
+      vi.mocked(syncCalendar).mockResolvedValueOnce(
+        page([series({ etag: '"2"', name: 'Renamed remotely' })]),
+      );
+      await runCalendarSync();
+      expect(showToast).toHaveBeenCalledWith(
+        expect.stringContaining('changed in Work too'),
+        expect.objectContaining({ label: 'Undo' }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('applies changes and unlinks entries removed in the calendar, keeping the card', async () => {
     vi.mocked(syncCalendar).mockResolvedValueOnce(page([remote()], [], 't1'));
     await runCalendarSync();
@@ -432,6 +466,30 @@ describe('pull', () => {
     const all = Object.values(get(items()));
     expect(all).toHaveLength(1);
     expect(all[0].title).toBe('Mine, renamed');
+  });
+
+  it('in snapshot mode, a card deleted with its entry kept stays deleted', async () => {
+    localStorage.clear();
+    vi.mocked(currentSyncToken).mockRejectedValueOnce(
+      new CaldavError('caldav:sync-unsupported'),
+    );
+    await runCalendarSync();
+    vi.mocked(queryEntries).mockImplementation(async (_a, _c, q) => ({
+      items: q.type === 'task' ? [remote()] : [],
+      removed: [],
+    }));
+    await runCalendarSync();
+    const c = card();
+    forgetEntry(c);
+    items().update((all) => {
+      const next = { ...all };
+      delete next[c.id];
+      return next;
+    });
+    await runCalendarSync(); // same snapshot, entry unchanged
+    expect(Object.values(get(items())).some((i) => i.eventUrl === HREF)).toBe(
+      false,
+    );
   });
 
   it('falls back to "today onward" queries when the server has no WebDAV Sync', async () => {
@@ -767,6 +825,39 @@ describe('push and create', () => {
     await expect(keepInSync(card(), choice)).rejects.toThrow(
       /follows its collection/,
     );
+    expect(createEntry).not.toHaveBeenCalled();
+  });
+
+  it('no pass adds cards to a calendar while its collection is being unlinked', async () => {
+    let release!: () => void;
+    vi.mocked(storeCollection).mockImplementationOnce(
+      (c: Collection) =>
+        new Promise<void>((resolve) => {
+          release = () => {
+            cols().update((all) => ({ ...all, [c.id]: c }));
+            resolve();
+          };
+        }),
+    );
+    items().update((all) => ({
+      ...all,
+      n9: {
+        id: 'n9',
+        type: 'todo',
+        title: 'New',
+        createdAt: '2026-01-01T00:00:00Z',
+        completed: false,
+        collectionId: 'work',
+      } as InboxItem,
+    }));
+    const unlink = unlinkCollection(get(cols()).work);
+    await Promise.resolve();
+    const pass = runCalendarSync();
+    // Hold the collection write long enough for a pass to reach creation.
+    await new Promise((r) => setTimeout(r, 20));
+    release();
+    await unlink;
+    await pass;
     expect(createEntry).not.toHaveBeenCalled();
   });
 

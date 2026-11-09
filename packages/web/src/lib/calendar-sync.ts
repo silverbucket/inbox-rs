@@ -864,7 +864,16 @@ async function advanceRepeating(cal: CalendarSyncState) {
     const next = await updateItem(item.id, (current) =>
       current?.eventUrl === href ? { ...current, startsAt, endsAt } : null,
     );
-    if (next) cal.entries[href] = { ...base, fp: fingerprint(next, 'event') };
+    // The baseline is what the calendar holds (at its new date), so a local
+    // edit still reads as one when a remote change arrives.
+    if (next)
+      cal.entries[href] = {
+        ...base,
+        fp: fingerprint(
+          { ...next, ...itemFieldsFromEntry(base.remote) } as InboxItem,
+          'event',
+        ),
+      };
   }
 }
 
@@ -1150,6 +1159,7 @@ async function syncAll(): Promise<void> {
 }
 
 let running: Promise<void> | null = null;
+let currentPass: Promise<void> | null = null;
 let again = false;
 
 /** Run a sync pass now; a call during a pass queues one more after it. */
@@ -1161,7 +1171,10 @@ export function runCalendarSync(): Promise<void> {
   running = (async () => {
     do {
       again = false;
-      await syncAll();
+      // A pass must not see a link that is being removed.
+      if (unlinking) await unlinking.catch(() => {});
+      currentPass = syncAll();
+      await currentPass;
     } while (again);
   })().finally(() => {
     running = null;
@@ -1381,11 +1394,22 @@ export async function linkCollection(
  * Unlink a collection from its calendar. Cards stay in the collection and
  * entries stay in the calendar; they just stop syncing.
  */
-export async function unlinkCollection(collection: Collection): Promise<void> {
+let unlinking: Promise<void> | null = null;
+
+export function unlinkCollection(collection: Collection): Promise<void> {
+  const run = unlinkNow(collection).finally(() => {
+    if (unlinking === run) unlinking = null;
+  });
+  unlinking = run;
+  return run;
+}
+
+async function unlinkNow(collection: Collection): Promise<void> {
   const url = collection.calendar?.url;
   if (!url) return;
-  // A pass in flight could otherwise add or re-link cards after this.
-  if (running) await running;
+  // A pass in flight could otherwise add or re-link cards after this. Wait
+  // for that one pass only: the loop itself waits for this unlink.
+  if (currentPass) await currentPass.catch(() => {});
   // The live copy: that pass may have filed cards into it.
   const live = get(collections)[collection.id] ?? collection;
   const { calendar: _drop, ...rest } = live;
@@ -1477,7 +1501,18 @@ export async function keepInSync(
 
 /** Card deleted with "only from Inbox RS": the entry stays, untracked. */
 export function forgetEntry(item: Pick<InboxItem, 'eventUrl'>): void {
-  forgetBaseline(item.eventUrl);
+  const href = item.eventUrl;
+  forgetBaseline(href);
+  if (!href) return;
+  // Snapshot servers report every entry each pass, changed or not; without
+  // this, a kept entry would come straight back.
+  const state = loadState();
+  for (const [calendarId, cal] of Object.entries(state)) {
+    if (cal.snapshot && entryInCalendar(href, calendarId)) {
+      cal.ignored = [...new Set([...(cal.ignored ?? []), href])];
+    }
+  }
+  saveState(state);
 }
 
 function forgetBaseline(href: string | undefined) {
