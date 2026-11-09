@@ -11,6 +11,7 @@
     writeCardDraft,
     type CardDraft,
   } from '../lib/card-draft';
+  import { lockText } from '../lib/calendar-sync';
   import { storeItem } from '../lib/stores';
   import MarkdownContentField from './add-entry/MarkdownContentField.svelte';
 
@@ -47,6 +48,9 @@
     fetchingUrlPreview?: boolean;
     children?: Snippet;
   } = $props();
+
+  // A read-only calendar entry would overwrite a local rename next sync.
+  const titleLocked = $derived(!!lockText(item));
 
   const initialItem = untrack(() => item);
   // The latest item we've been handed, held outside the reactive graph. The
@@ -290,6 +294,8 @@
       use:growTitle={draft.title}
       rows="1"
       oninput={scheduleSave}
+      readonly={titleLocked}
+      title={titleLocked ? lockText(item) : undefined}
       aria-label="Title"
       placeholder="Untitled"
     ></textarea>

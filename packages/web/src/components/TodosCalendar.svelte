@@ -22,6 +22,7 @@
     weekStart,
   } from '../lib/plan';
   import { compareByDueTime } from '../lib/schedule';
+  import { lockText } from '../lib/calendar-sync';
   import { moveStoredItemToDay } from '../lib/stores';
   import { showToast } from '../lib/toast';
 
@@ -193,7 +194,7 @@
   <button
     type="button"
     class="chip"
-    draggable="true"
+    draggable={!lockText(t)}
     title={t.title}
     ondragstart={(e) => startDrag(e, t)}
     onclick={() => onselect(t)}
@@ -232,7 +233,7 @@
     <button
       type="button"
       class="side-item"
-      draggable="true"
+      draggable={!lockText(t)}
       ondragstart={(e) => startDrag(e, t)}
       onclick={() => onselect(t)}
     >

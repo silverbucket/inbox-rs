@@ -285,7 +285,7 @@ function fieldsExist(
  * 02:30 on the gap day lands at 03:30 DST rather than an hour early. Throws
  * RangeError for a zone Intl doesn't know.
  */
-function zonedToUtc(
+export function zonedToUtc(
   y: number,
   mo: number,
   d: number,

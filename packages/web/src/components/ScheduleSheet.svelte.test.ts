@@ -88,3 +88,42 @@ describe('ScheduleSheet all-day end', () => {
     expect(open({ ...conf, allDay: undefined, endsAt: undefined })).toBeNull();
   });
 });
+
+describe('ScheduleSheet on a read-only calendar entry', () => {
+  it('shows why instead of time fields that the next sync would undo', () => {
+    const href = 'https://cal.example.org/work/series.ics';
+    localStorage.setItem(
+      'inbox-rs:task-sync',
+      JSON.stringify({
+        'https://cal.example.org/work/': {
+          entries: {
+            [href]: {
+              fp: '',
+              remote: {
+                id: href,
+                type: 'event',
+                uid: 'series',
+                name: 'Standup',
+                recurrence: { frequency: 'weekly' },
+              },
+            },
+          },
+        },
+      }),
+    );
+    try {
+      open({ ...conf, eventUrl: href, calendarSync: true });
+      expect(document.body.textContent).toContain(
+        'Repeats weekly · edit it in your calendar app',
+      );
+      expect(document.querySelector('input[type="date"]')).toBeNull();
+      expect(
+        [...document.querySelectorAll('button')].some(
+          (b) => b.textContent?.trim() === 'Update time',
+        ),
+      ).toBe(false);
+    } finally {
+      localStorage.clear();
+    }
+  });
+});
