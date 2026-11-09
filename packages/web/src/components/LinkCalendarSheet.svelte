@@ -236,16 +236,15 @@
 
   /** Exactly what "Link calendar" will do, in one line. */
   const summary = $derived.by(() => {
-    const parts: string[] = [];
-    if (chosenCount > 0)
-      parts.push(`Bring in ${chosenCount} ${chosenCount === 1 ? 'entry' : 'entries'}`);
-    if (addExisting && ownCards.length > 0)
-      parts.push(
-        `add ${ownCards.length} ${ownCards.length === 1 ? 'card' : 'cards'} to the ${preview?.choice.calendar.name ?? ''} calendar`,
-      );
-    if (parts.length === 0) return 'Link only — new entries will arrive from now on.';
-    const text = `${parts.join(' · ')}. New entries keep arriving.`;
-    return text.charAt(0).toUpperCase() + text.slice(1);
+    const n = chosenCount;
+    const own = addExisting ? ownCards.length : 0;
+    const cal = preview?.choice.calendar.name ?? '';
+    const entries = `${n} ${n === 1 ? 'entry' : 'entries'}`;
+    const cards = `${own} ${own === 1 ? 'card' : 'cards'}`;
+    if (n && own) return `Brings in ${entries} and adds ${cards} to the ${cal} calendar. New ones keep arriving.`;
+    if (n) return `Brings in ${entries}. New ones keep arriving.`;
+    if (own) return `Adds ${cards} to the ${cal} calendar. New entries arrive from now on.`;
+    return 'Links only. New entries arrive from now on.';
   });
 
   function isEntryOverdue(entry: RemoteEntry): boolean {

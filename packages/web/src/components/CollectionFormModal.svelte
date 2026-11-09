@@ -176,6 +176,7 @@
   extraFields={groupField}
   {canSubmit}
   {submitHint}
+  concealed={showLink}
 />
 
 {#snippet groupField()}

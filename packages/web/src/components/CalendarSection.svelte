@@ -326,7 +326,7 @@
   @media (max-width: 600px) {
     .state {
       flex-basis: 100%;
-      margin-left: calc(15px + 0.55rem);
+      margin-left: 0;
     }
   }
 

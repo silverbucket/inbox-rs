@@ -987,6 +987,10 @@
       <DeleteConfirm
         onConfirm={handleDelete}
         calendarName={syncedCalendarName}
+        mayReturn={!!calendarInfo?.viaCollection}
+        message={syncedCalendarName
+          ? `Delete “${item.title || 'Untitled'}” permanently?`
+          : undefined}
         onCancel={() => (showDelete = false)}
         {deleting}
       />

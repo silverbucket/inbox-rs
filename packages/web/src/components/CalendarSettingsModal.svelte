@@ -306,7 +306,7 @@
                   {:else if calStatus?.syncing}
                     Syncing…
                   {:else if linked || count > 0}
-                    {count} {count === 1 ? 'card' : 'cards'}{calStatus?.lastSync ? ` · synced ${relativeTime(calStatus.lastSync, $now.getTime())}` : ''}
+                    {count} {count === 1 ? 'card' : 'cards'}{#if linked && calStatus?.lastSync}<span class="sep"> · </span><span class="ok-dot" aria-hidden="true"></span> In sync · {relativeTime(calStatus.lastSync, $now.getTime())}{/if}
                   {/if}
                 </span>
                 {#if linked}
@@ -628,6 +628,15 @@
 
   .star-btn.on .star-label {
     font-weight: 650;
+  }
+
+  .ok-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin: 0 0.15rem 0.05rem 0;
+    border-radius: 50%;
+    background: #22a06b;
   }
 
   .link-status {

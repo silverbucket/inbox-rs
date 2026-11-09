@@ -5,7 +5,11 @@
     deleting = false,
     message = 'Delete permanently? This can’t be undone.',
     calendarName,
+    mayReturn = false,
   }: {
+    /** The card follows a collection link, so a later change to the kept
+        entry brings it back. */
+    mayReturn?: boolean;
     /** `alsoCalendar`: also delete the synced calendar entry. */
     onConfirm: (options: { alsoCalendar: boolean }) => void;
     onCancel: () => void;
@@ -40,6 +44,13 @@
         <input type="checkbox" bind:checked={alsoCalendar} disabled={deleting} />
         <span>Also delete it from the <strong>{calendarName}</strong> calendar</span>
       </label>
+      <p class="also-hint">
+        {alsoCalendar
+          ? 'The entry is removed there too.'
+          : mayReturn
+            ? `It stays in the ${calendarName} calendar, and only comes back here if it changes there.`
+            : `It stays in the ${calendarName} calendar.`}
+      </p>
     {/if}
     <div class="actions">
       <button type="button" class="btn-cancel" onclick={onCancel} disabled={deleting}>Cancel</button>
@@ -91,6 +102,13 @@
     color: var(--text-muted);
     cursor: pointer;
     min-height: 44px;
+  }
+
+  .also-hint {
+    margin: -0.85rem 0 1rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.4;
   }
 
   .also input {
