@@ -6,7 +6,10 @@
     message = 'Delete permanently? This can’t be undone.',
     calendarName,
     mayReturn = false,
+    keptIn,
   }: {
+    /** A read-only entry (repeating, attendees) the delete keeps, by calendar. */
+    keptIn?: string;
     /** The card follows a collection link, so a later change to the kept
         entry brings it back. */
     mayReturn?: boolean;
@@ -50,6 +53,10 @@
           : mayReturn
             ? `It stays in the ${calendarName} calendar, and only comes back here if it changes there.`
             : `It stays in the ${calendarName} calendar.`}
+      </p>
+    {:else if keptIn}
+      <p class="also-hint kept">
+        It stays in the {keptIn} calendar (change it there){mayReturn ? ', and comes back here if it changes there' : ''}.
       </p>
     {/if}
     <div class="actions">
@@ -102,6 +109,10 @@
     color: var(--text-muted);
     cursor: pointer;
     min-height: 44px;
+  }
+
+  .also-hint.kept {
+    margin-top: 0;
   }
 
   .also-hint {

@@ -457,7 +457,7 @@
       </span>
     {/if}
     {#if createdLabel}
-      <span class="date" title={createdTitle}>{todo.importedAt ? 'Created' : 'Added'} {createdLabel}</span>
+      <span class="date" title={createdTitle}>{todo.importedAt ? (todo.calendarCreatedAt ? 'Created' : 'Imported') : 'Added'} {createdLabel}</span>
     {/if}
   </div>
 
@@ -694,6 +694,9 @@
 
   .pill-cal-name {
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
   }
 
   .pill-cal {

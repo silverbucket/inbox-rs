@@ -390,6 +390,13 @@ describe('TodoRow touch swipes', () => {
     expect(row.tagName).toBe('DIV');
   });
 
+  it('labels an import date as Imported when the calendar gave no creation date', () => {
+    const { row } = render({
+      todo: { ...todo(), importedAt: '2026-11-09T10:00:00.000Z' },
+    });
+    expect(row.querySelector('.date')?.textContent).toMatch(/^Imported /);
+  });
+
   it('reserves the handle column without a drag handle when aligning', () => {
     const { row } = render({ alignHandle: true });
     const spacer = row.querySelector('.handle-spacer');

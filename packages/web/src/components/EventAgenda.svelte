@@ -37,9 +37,9 @@
     };
   }
 
+  // Local calendar days, not a 24-hour window (DST days aren't 24 hours).
   function isToday(iso: string, start: number) {
-    const t = new Date(iso).getTime();
-    return t >= start && t < start + 86_400_000;
+    return new Date(iso).toDateString() === new Date(start).toDateString();
   }
 
   // Rows file onto sidebar collections by drag, like the cards they replace.
