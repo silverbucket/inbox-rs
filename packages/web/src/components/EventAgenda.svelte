@@ -2,6 +2,7 @@
   import type { Collection, InboxItem } from '@inbox-rs/rs-module';
   import { todayStart } from '../lib/now';
   import { recurrenceLabel } from '../lib/calendar-sync';
+  import { DRAG_MIME, draggingItemId } from '../lib/drag';
   import CalendarChip from './CalendarChip.svelte';
 
   /**
@@ -41,6 +42,41 @@
     return t >= start && t < start + 86_400_000;
   }
 
+  // Rows file onto sidebar collections by drag, like the cards they replace.
+  function onDragStart(e: DragEvent, item: InboxItem) {
+    if (!e.dataTransfer) return;
+    e.stopPropagation(); // see InboxCard: drop-zone parents cancel bubbling drags
+    e.dataTransfer.setData(DRAG_MIME, item.id);
+    e.dataTransfer.setData('text/plain', item.title || item.id);
+    e.dataTransfer.effectAllowed = 'move';
+    draggingItemId.set(item.id);
+  }
+
+  function onDragEnd() {
+    draggingItemId.set(null);
+  }
+
+  /** Everything the row shows, for screen readers (the visuals are hidden). */
+  function spokenLabel(item: InboxItem, today: boolean): string {
+    const when = item.startsAt
+      ? new Date(item.startsAt).toLocaleDateString(undefined, {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+        })
+      : '';
+    return [
+      `Open ${item.title || 'Untitled'}`,
+      today ? 'today' : when,
+      timeRange(item),
+      item.location,
+      item.cancelled ? 'cancelled' : '',
+      item.calendarSync ? recurrenceLabel(item) : '',
+    ]
+      .filter(Boolean)
+      .join(', ');
+  }
+
   function timeRange(item: InboxItem): string {
     if (!item.startsAt) return '';
     if (item.allDay) {
@@ -68,7 +104,10 @@
         class="row"
         class:today
         class:cancelled={item.cancelled}
-        aria-label="Open {item.title}"
+        aria-label={spokenLabel(item, today)}
+        draggable="true"
+        ondragstart={(e) => onDragStart(e, item)}
+        ondragend={onDragEnd}
         onclick={() => onselect(item)}
       >
         <span class="date" aria-hidden="true">
