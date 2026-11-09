@@ -6,6 +6,7 @@
   import AudioCard from './AudioCard.svelte';
   import DocumentCard from './DocumentCard.svelte';
   import EmailCard from './EmailCard.svelte';
+  import CalendarChip from './CalendarChip.svelte';
   import { draggingItemId, DRAG_MIME } from '../lib/drag';
   import { now } from '../lib/now';
   import { animatePriorityChange } from '../lib/priority-motion';
@@ -20,8 +21,11 @@
     onselect,
     hints,
     onfile,
+    viewing = null,
   }: {
     item: InboxItem;
+    /** The collection page this card is shown on — see CalendarChip. */
+    viewing?: Collection | null;
     onselect: (item: InboxItem) => void;
     /** Inbox-only extras: a warning line, a filing suggestion, emphasis. */
     hints?: CardHints;
@@ -228,6 +232,7 @@
         {/if}
       </span>
       <span class="kind-label">{kindLabel}</span>
+      <CalendarChip {item} context={viewing} />
       <time class="date" datetime={item.createdAt} title={formatDate(item.createdAt)}>{age}</time>
     </div>
 

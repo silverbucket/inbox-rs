@@ -17,9 +17,8 @@
  * - client-supplied UIDs are allowed — we always use `<itemId>@inbox-rs`
  * - failures arrive as machine-readable `caldav:*` codes
  *
- * Publishing is one-shot (create only). Updates, deletes and incremental
- * sync exist solely for calendars the user opted into two-way task sync
- * (see task-sync.ts).
+ * Entries a card sends once are create-only. Updates, deletes and
+ * incremental sync serve cards kept in sync (see calendar-sync.ts).
  */
 import type { InboxItem } from '@inbox-rs/rs-module';
 import { entryUrl } from './ics';
@@ -196,15 +195,19 @@ export function uidFor(item: Pick<InboxItem, 'id'>): string {
  */
 export function itemToCalendarObject(
   item: InboxItem,
+  kind: 'event' | 'task' | undefined = item.scheduleKind,
 ): Record<string, unknown> | null {
-  if (!item.startsAt) return null;
-  const isTask = item.scheduleKind === 'task';
-  const allDay = item.allDay === true;
+  const isTask = kind === 'task';
+  // A task may have no due date; an event needs a start.
+  if (!item.startsAt && !isTask) return null;
+  const allDay = item.allDay === true && !!item.startsAt;
   // All-day entries are calendar dates in the user's local day; timed
   // entries are instants (our stored ISO strings end in Z — a UTC offset).
-  const when = allDay
-    ? toDateInputValue(new Date(item.startsAt))
-    : item.startsAt;
+  const when = !item.startsAt
+    ? undefined
+    : allDay
+      ? toDateInputValue(new Date(item.startsAt))
+      : item.startsAt;
   const base: Record<string, unknown> = {
     type: isTask ? 'task' : 'event',
     uid: uidFor(item),
@@ -215,15 +218,14 @@ export function itemToCalendarObject(
     ...(entryUrl(item) ? { url: entryUrl(item) } : {}),
   };
   if (isTask) {
-    base.due = when;
+    if (when) base.due = when;
     if (item.completed) {
       base.status = 'completed';
       base.completedTime = item.completedAt ?? new Date().toISOString();
     }
     return base;
   }
-  // `cancelled` isn't sent: platform-caldav takes no event status yet
-  // (sockethub/sockethub#1364).
+  if (item.cancelled) base.status = 'cancelled';
   base.startTime = when;
   if (!allDay && item.endsAt) base.endTime = item.endsAt;
   if (allDay && item.endsAt) {
@@ -252,8 +254,9 @@ export async function createEntry(
   calendarId: string,
   item: InboxItem,
   endpoint: string,
+  kind?: 'event' | 'task',
 ): Promise<PostedEntry> {
-  const object = itemToCalendarObject(item);
+  const object = itemToCalendarObject(item, kind);
   if (!object) throw new CaldavError('item has no schedule');
   const result = await send(
     creds,
@@ -268,14 +271,20 @@ export async function createEntry(
   return mutationResult(result);
 }
 
-/** A task as the platform returns it from `sync` / `query`. */
-export interface RemoteTask {
+/** An event or task as the platform returns it from `sync` / `query`. */
+export interface RemoteEntry {
   id: string;
-  type: 'task';
+  type: 'event' | 'task';
   uid: string;
   etag?: string;
   name: string;
   content?: string;
+  location?: string;
+  url?: string;
+  /** Events. */
+  startTime?: string;
+  endTime?: string;
+  /** Tasks. */
   due?: string;
   allDay?: boolean;
   timeZone?: string;
@@ -283,10 +292,26 @@ export interface RemoteTask {
   completedTime?: string;
   percentComplete?: number;
   sequence?: number;
-  recurrence?: unknown;
+  recurrence?: RemoteRecurrence;
+  attendees?: unknown[];
+  organizer?: unknown;
   updateSupported?: boolean;
+  /** Output only: the entry's CREATED / LAST-MODIFIED stamps (UTC). */
+  created?: string;
+  lastModified?: string;
   [key: string]: unknown;
 }
+
+export interface RemoteRecurrence {
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  interval?: number;
+  count?: number;
+  until?: string;
+  byDay?: string[];
+  byMonthDay?: number[];
+}
+
+export type RemoteTask = RemoteEntry & { type: 'task' };
 
 export interface SyncResult {
   items: Array<{ id: string; type: string } & Record<string, unknown>>;
@@ -307,7 +332,11 @@ function toSyncResult(result: Record<string, unknown>): SyncResult {
   };
 }
 
-/** RFC 6578 sync of one calendar: everything without a token, else changes. */
+/**
+ * RFC 6578 sync of one calendar: the changes since `syncToken`. Without a
+ * token it returns everything — callers start from `currentSyncToken`
+ * instead, so a calendar's history is never downloaded.
+ */
 export async function syncCalendar(
   creds: CaldavCredentials,
   calendarId: string,
@@ -327,10 +356,35 @@ export async function syncCalendar(
   return toSyncResult(result);
 }
 
-/** Full task snapshot — the fallback for servers without WebDAV Sync. */
-export async function queryTasks(
+/** The calendar's current sync token, without any of its entries. */
+export async function currentSyncToken(
   creds: CaldavCredentials,
   calendarId: string,
+  endpoint: string,
+): Promise<string> {
+  const result = await send(
+    creds,
+    {
+      type: 'sync',
+      target: { id: calendarId, type: 'calendar' },
+      object: { tokenOnly: true },
+    },
+    ['collection'],
+    endpoint,
+  );
+  const token = toSyncResult(result).syncToken;
+  if (!token) throw new CaldavError('caldav:sync-unsupported');
+  return token;
+}
+
+/**
+ * A snapshot of one kind of entry. `startTime` limits it to entries that
+ * haven't ended before then (CalDAV time-range rules).
+ */
+export async function queryEntries(
+  creds: CaldavCredentials,
+  calendarId: string,
+  query: { type: 'event' | 'task'; startTime?: string },
   endpoint: string,
 ): Promise<SyncResult> {
   const result = await send(
@@ -338,12 +392,21 @@ export async function queryTasks(
     {
       type: 'query',
       target: { id: calendarId, type: 'calendar' },
-      object: { type: 'task' },
+      object: query,
     },
     ['collection'],
     endpoint,
   );
   return toSyncResult(result);
+}
+
+/** Full task snapshot — the fallback for servers without WebDAV Sync. */
+export function queryTasks(
+  creds: CaldavCredentials,
+  calendarId: string,
+  endpoint: string,
+): Promise<SyncResult> {
+  return queryEntries(creds, calendarId, { type: 'task' }, endpoint);
 }
 
 /** Replace an entry; rejects with `caldav:conflict` when its ETag moved on. */

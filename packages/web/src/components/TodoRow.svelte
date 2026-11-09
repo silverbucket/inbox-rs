@@ -11,6 +11,7 @@
   import { portal } from '../lib/actions';
   import { swipeAction, swipeAxis, swipeOffset } from '../lib/swipe';
   import ScheduleSheet from './ScheduleSheet.svelte';
+  import CalendarChip from './CalendarChip.svelte';
 
   let {
     todo,
@@ -23,6 +24,7 @@
     planTag,
     stacked = false,
     as = 'li',
+    viewing = null,
   }: {
     todo: InboxItem;
     /** The collection this todo belongs to, or null when unfiled. */
@@ -51,6 +53,9 @@
     /** Root element. Lists whose items are wrapped (for animate:flip in a
         drag-and-drop zone) supply the <li> themselves and pass 'div'. */
     as?: 'li' | 'div';
+    /** The collection page this row is shown on, if any — the calendar
+        chip hides there when that collection's link already says it. */
+    viewing?: Collection | null;
   } = $props();
 
   // Show the underlying item type as an icon for items that are "todos by flag"
@@ -412,6 +417,7 @@
       <span class="pill-dot"></span>
       <span class="pill-name">{collectionName}</span>
     </span>
+    <CalendarChip item={todo} context={viewing} />
     {#if showTypeIcon}
       <span class="type-pill" title={typeLabel} aria-label={typeLabel}>
         <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

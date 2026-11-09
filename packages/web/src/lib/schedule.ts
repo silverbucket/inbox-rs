@@ -6,7 +6,6 @@
  * conversion to UTC happens only at .ics/CalDAV serialization (see ics.ts).
  */
 import type { InboxItem, ScheduleInput } from '@inbox-rs/rs-module';
-import { isSyncedEntry } from './calendar-accounts';
 
 export type { ScheduleKind } from '@inbox-rs/rs-module';
 
@@ -163,7 +162,7 @@ export function clearSchedule<T extends InboxItem>(item: T): T {
     allDay: undefined,
     scheduleKind: undefined,
     cancelled: undefined,
-    ...(item.scheduleKind === 'task' && isSyncedEntry(item.eventUrl)
+    ...(item.scheduleKind === 'task' && item.calendarSync
       ? {}
       : clearPostedEntryFields()),
   };
@@ -182,6 +181,7 @@ function clearPostedEntryFields() {
   return {
     eventUrl: undefined,
     eventEtag: undefined,
+    calendarSync: undefined,
     archived: undefined,
     archivedAt: undefined,
     archiveReason: undefined,

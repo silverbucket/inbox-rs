@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
   import { get } from 'svelte/store';
-  import { appConfig, groups, sortedGroups, storeGroup, updateConfig } from '../lib/stores';
+  import { appConfig, collections, groups, sortedGroups, storeGroup, updateConfig } from '../lib/stores';
+  import LinkCalendarSheet from './LinkCalendarSheet.svelte';
   import EntityFormModal from './EntityFormModal.svelte';
   import { randomPresetColor } from '../lib/constants';
 
@@ -24,6 +25,8 @@
   let description = $state(collection?.description ?? '');
   let color = $state(collection?.color ?? randomPresetColor());
   let offPlan = $state(!!collection?.offPlan);
+  let showLink = $state(false);
+  const calendarLink = $derived(collection ? $collections[collection.id]?.calendar : undefined);
 
   /**
    * Pick the initial group selection for the picker. Resolution order:
@@ -125,8 +128,9 @@
     }
     // Start from the existing collection so fields this form doesn't edit
     // (board set, plan column, archive state) survive an edit.
+    // The live copy: the calendar link can change while the form is open.
     const saved: Collection = {
-      ...(collection ?? {}),
+      ...(get(collections)[collectionId] ?? collection ?? {}),
       id: collectionId,
       name: name.trim(),
       description: description.trim() || undefined,
@@ -220,7 +224,28 @@
       <span class="check-hint">Like Movies or a reading list: its todos stay off the Todos plan.</span>
     </span>
   </label>
+  {#if isEdit && collection}
+    <div class="field">
+      <span class="label">Calendar</span>
+      <button type="button" class="cal-link" onclick={() => (showLink = true)}>
+        {#if calendarLink}
+          <span class="cal-dot" style="background: {calendarLink.color || 'var(--accent)'}"></span>
+          <span class="cal-text"><strong>{calendarLink.name}</strong> · kept in sync</span>
+          <span class="cal-go">Manage</span>
+        {:else}
+          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+          <span class="cal-text">Not linked</span>
+          <span class="cal-go">Link a calendar…</span>
+        {/if}
+      </button>
+      <p class="field-hint">A linked calendar's events and tasks arrive here, and this collection's todos and dated cards sync to it.</p>
+    </div>
+  {/if}
 {/snippet}
+
+{#if showLink && collection}
+  <LinkCalendarSheet collection={$collections[collection.id] ?? collection} onclose={() => (showLink = false)} />
+{/if}
 
 <style>
   /* Mirror the input styling from EntityFormModal so the select blends in
@@ -256,6 +281,54 @@
     font-size: 1rem;
     font-family: inherit;
     cursor: pointer;
+  }
+
+  .cal-link {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    width: 100%;
+    min-height: 44px;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.88rem;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .cal-link:hover {
+    border-color: var(--text-muted);
+  }
+
+  .cal-link svg {
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .cal-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .cal-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cal-go {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent-text);
+    white-space: nowrap;
   }
 
   .check {

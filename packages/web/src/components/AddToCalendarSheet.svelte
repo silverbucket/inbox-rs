@@ -48,12 +48,13 @@
 
   // Move vs copy — initialized once from the synced preference; toggling
   // persists so the next sheet opens on the same choice.
-  let postMode = $state<'move' | 'copy'>(
-    $userSettings.calendarPostMode ?? 'move',
-  );
+  // "Keep in sync" is the default; the send-once modes remember which of
+  // move / copy the user prefers.
+  let postMode = $state<'sync' | 'move' | 'copy'>('sync');
 
-  function setPostMode(mode: 'move' | 'copy') {
+  function setPostMode(mode: 'sync' | 'move' | 'copy') {
     postMode = mode;
+    if (mode === 'sync') return;
     updateUserSettings({ calendarPostMode: mode }).catch((err) => {
       console.error('Failed to save calendar post mode', err);
     });
@@ -140,7 +141,9 @@
         postMode,
       );
       recordCalendarUse(kind, selectedChoice.calendar.id);
-      if (posted.archived) {
+      if (posted.calendarSync) {
+        showToast(`Added to ${selectedChoice.calendar.name} — kept in sync`);
+      } else if (posted.archived) {
         showToast(
           isTodoish
             ? 'Added to calendar — todo moved to the On-calendar section'
@@ -264,11 +267,32 @@
       <div class="mode-switcher" role="group" aria-label="After adding to calendar">
         <button type="button"
           class="mode-option"
+          class:active={postMode === 'sync'}
+          aria-pressed={postMode === 'sync'}
+          onclick={() => setPostMode('sync')}
+        >
+          Keep in sync
+        </button>
+        <button type="button"
+          class="mode-option"
+          class:active={postMode === 'move'}
+          aria-pressed={postMode === 'move'}
+          onclick={() => setPostMode($userSettings.calendarPostMode === 'copy' ? 'copy' : 'move')}
+        >
+          Send once
+        </button>
+      </div>
+      {#if postMode === 'sync'}
+        <p class="note">Edits flow both ways, and the card stays here.</p>
+      {:else}
+      <div class="mode-switcher sub" role="group" aria-label="After sending">
+        <button type="button"
+          class="mode-option"
           class:active={postMode === 'move'}
           aria-pressed={postMode === 'move'}
           onclick={() => setPostMode('move')}
         >
-          Move
+          Move it there
         </button>
         <button type="button"
           class="mode-option"
@@ -276,11 +300,12 @@
           aria-pressed={postMode === 'copy'}
           onclick={() => setPostMode('copy')}
         >
-          Keep a copy
+          Keep a copy here
         </button>
       </div>
       {#if willArchive}
         <p class="note">{archiveNote}</p>
+      {/if}
       {/if}
 
       <button type="button" class="btn-primary" disabled={!canPost} onclick={post}>

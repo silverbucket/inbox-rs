@@ -80,6 +80,7 @@ export type {
   BoardColumn,
   BookmarkItem,
   Collection,
+  CollectionCalendarLink,
   CollectionGroup,
   CollectionViewMode,
   ColumnSet,

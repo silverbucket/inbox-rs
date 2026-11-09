@@ -10,6 +10,7 @@ const { storeGroup, updateConfig } = vi.hoisted(() => ({
 
 vi.mock('../lib/stores', () => ({
   appConfig: writable({}),
+  collections: writable({}),
   groups: writable({}),
   sortedGroups: writable([]),
   storeGroup,

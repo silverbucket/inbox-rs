@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CalendarChip from './CalendarChip.svelte';
   import type { InboxItem, InboxItemType, Collection } from '@inbox-rs/rs-module';
   import { dndzone } from 'svelte-dnd-action';
   import { slide } from 'svelte/transition';
@@ -162,10 +163,11 @@
               />
               <div class="todo-content">
                 <span class="todo-title">{item.title}</span>
-                {#if badge || note}
+                {#if badge || note || item.eventUrl || collection.calendar}
                   <div class="todo-meta">
                     {#if badge}<span class="type-badge">{badge}</span>{/if}
                     {#if note}<span class="todo-note">{note}</span>{/if}
+                    <CalendarChip {item} context={collection} />
                   </div>
                 {/if}
               </div>

@@ -13,7 +13,15 @@
     type CalendarAccount,
   } from '../lib/calendar-accounts';
   import { trapFocusWhen } from '../lib/actions';
-  import { setCalendarSynced } from '../lib/task-sync';
+  import {
+    calendarSyncStatus,
+    linkedCollection,
+    runCalendarSync,
+  } from '../lib/calendar-sync';
+  import { relativeTime } from '../lib/calendar-card';
+  import { now } from '../lib/now';
+  import { collections, items } from '../lib/stores';
+  import LinkCalendarSheet from './LinkCalendarSheet.svelte';
   import { resolveSockethubEndpoint } from '../lib/enrich';
   import { DEFAULT_SOCKETHUB_ENDPOINT } from '../lib/link-metadata';
   import { showToast } from '../lib/toast';
@@ -42,6 +50,22 @@
   let connectError = $state('');
   let refreshingId = $state<string | null>(null);
   let confirmRemoveId = $state<string | null>(null);
+  /** The calendar whose link sheet is open (Settings → link to collection). */
+  let linkCalendarId = $state<string | null>(null);
+  let linkCollectionId = $state<string | null>(null);
+
+  function openLink(calendarId: string) {
+    const col = linkedCollection(calendarId, $collections);
+    linkCollectionId = col?.id ?? null;
+    linkCalendarId = calendarId;
+  }
+
+  /** Legacy "sync into unfiled todos" calendars waiting for a collection. */
+  function dismissLegacy(account: CalendarAccount, calendarId: string) {
+    updateCalendarAccount(account.id, {
+      syncCalendarIds: (account.syncCalendarIds ?? []).filter((id) => id !== calendarId),
+    });
+  }
 
   const canConnect = $derived(
     !!serverUrl.trim() && !!username.trim() && !!password && !connecting,
@@ -163,7 +187,7 @@
   }
 
   function handleEscape(e: KeyboardEvent) {
-    if (e.key !== 'Escape') return;
+    if (e.key !== 'Escape' || linkCalendarId) return;
     if (showAdd) {
       showAdd = false;
       return;
@@ -173,6 +197,14 @@
 </script>
 
 <svelte:window onkeydown={handleEscape} />
+
+{#if linkCalendarId}
+  <LinkCalendarSheet
+    calendarId={linkCalendarId}
+    collection={linkCollectionId ? $collections[linkCollectionId] : undefined}
+    onclose={() => { linkCalendarId = null; linkCollectionId = null; }}
+  />
+{/if}
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -196,11 +228,10 @@
       </button>
     </div>
     <p class="sub">
-      Scheduled cards can post straight to your calendar over CalDAV, relayed
-      through <a href="https://sockethub.org" target="_blank" rel="noreferrer">Sockethub</a>'s
-      <code>caldav</code> platform (see Settings → Account for details on
-      the relay). Credentials stay on this device and are relayed
-      per-request — no server stores them.
+      Link a calendar to a collection: its events and tasks from today on
+      arrive there, and edits sync both ways. Connected over CalDAV through
+      <a href="https://sockethub.org" target="_blank" rel="noreferrer">Sockethub</a>;
+      your app password stays on this device.
     </p>
 
     {#each $calendarAccounts as account (account.id)}
@@ -227,6 +258,11 @@
         </div>
         {#each account.calendars as cal (cal.id)}
           {@const hidden = account.hiddenCalendarIds?.includes(cal.id)}
+          {@const linked = linkedCollection(cal.id, $collections)}
+          {@const calStatus = $calendarSyncStatus[cal.id]}
+          {@const count = Object.values($items).filter((i) => i.calendarSync && i.eventUrl?.startsWith(cal.id)).length}
+          {@const legacy = !linked && account.syncCalendarIds?.includes(cal.id)}
+          {@const legacyCount = legacy ? Object.values($items).filter((i) => !i.collectionId && i.calendarSync && i.eventUrl?.startsWith(cal.id)).length : 0}
           <div class="cal-line" class:hidden>
             <span class="dot" style="background: {cal.color || 'var(--accent)'}"></span>
             <span class="cal-name">{cal.name}</span>
@@ -254,22 +290,41 @@
                 />
                 show
               </label>
-              {#if cal.components.includes('task')}
-                <label
-                  class="vis-label"
-                  title="Two-way sync: tasks from this calendar show up as todos, and edits flow both ways (this device)"
-                >
-                  <input
-                    type="checkbox"
-                    checked={account.syncCalendarIds?.includes(cal.id) ?? false}
-                    aria-label="Sync tasks with {cal.name}"
-                    onchange={(e) =>
-                      setCalendarSynced(account, cal.id, e.currentTarget.checked)}
-                  />
-                  sync
-                </label>
-              {/if}
             </span>
+            {#if !hidden || linked}
+              <div class="link-line">
+                {#if linked}
+                  <button type="button" class="link-pill" onclick={() => openLink(cal.id)}>
+                    <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 2 21 6 17 10"></polyline><path d="M3 11V9a3 3 0 0 1 3-3h15"></path><polyline points="7 22 3 18 7 14"></polyline><path d="M21 13v2a3 3 0 0 1-3 3H3"></path></svg>
+                    {linked.name}
+                  </button>
+                {:else}
+                  <button type="button" class="link-add" onclick={() => openLink(cal.id)}>Link to a collection…</button>
+                {/if}
+                <span class="link-status" class:error={!!calStatus?.error}>
+                  {#if calStatus?.error}
+                    {calStatus.error}
+                    <button type="button" class="retry" onclick={() => void runCalendarSync()}>Retry</button>
+                  {:else if calStatus?.syncing}
+                    Syncing…
+                  {:else if linked || count > 0}
+                    {count} {count === 1 ? 'card' : 'cards'}{calStatus?.lastSync ? ` · synced ${relativeTime(calStatus.lastSync, $now.getTime())}` : ''}
+                  {/if}
+                </span>
+              </div>
+            {/if}
+            {#if legacy}
+              <div class="legacy">
+                <p>
+                  {cal.name} used to sync every task into unfiled todos.
+                  Link it to a collection to choose where its tasks go{legacyCount ? ` — the ${legacyCount} already here can move there` : ''}.
+                </p>
+                <div class="legacy-actions">
+                  <button type="button" class="mini-btn primary" onclick={() => openLink(cal.id)}>Link to a collection…</button>
+                  <button type="button" class="mini-btn" onclick={() => dismissLegacy(account, cal.id)}>Keep as is</button>
+                </div>
+              </div>
+            {/if}
           </div>
         {/each}
       </div>
@@ -456,6 +511,12 @@
     border-color: var(--text-muted);
   }
 
+  .mini-btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+
   .mini-btn.danger:hover {
     color: var(--danger-text);
     border-color: var(--danger);
@@ -467,6 +528,7 @@
   }
 
   .cal-line {
+    flex-wrap: wrap;
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -490,6 +552,86 @@
 
   .cal-line.hidden .cal-name {
     opacity: 0.45;
+  }
+
+  .link-line {
+    flex-basis: 100%;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.6rem;
+    padding: 0.1rem 0 0.25rem 1.05rem;
+  }
+
+  .link-pill,
+  .link-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-height: 28px;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    font: inherit;
+    font-size: 0.74rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .link-pill {
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+    background: var(--accent-subtler, color-mix(in srgb, var(--accent) 10%, transparent));
+    color: var(--accent-text);
+  }
+
+  .link-add {
+    border: 1px dashed var(--border);
+    background: none;
+    color: var(--text-muted);
+  }
+
+  .link-add:hover {
+    color: var(--text);
+    border-color: var(--text-muted);
+  }
+
+  .link-status {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+
+  .link-status.error {
+    color: var(--danger-text);
+  }
+
+  .retry {
+    border: 0;
+    background: none;
+    padding: 0 0.2rem;
+    font: inherit;
+    font-weight: 600;
+    color: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .legacy {
+    flex-basis: 100%;
+    margin: 0.25rem 0 0.4rem 1.05rem;
+    padding: 0.55rem 0.65rem;
+    border-radius: var(--radius-sm);
+    background: var(--surface-tint);
+    font-size: 0.78rem;
+    line-height: 1.45;
+  }
+
+  .legacy p {
+    margin: 0 0 0.45rem;
+  }
+
+  .legacy-actions {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
   }
 
   .tag {

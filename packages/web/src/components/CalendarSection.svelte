@@ -1,0 +1,455 @@
+<script lang="ts">
+  import type { InboxItem } from '@inbox-rs/rs-module';
+  import { CaldavError } from '../lib/caldav';
+  import {
+    type CalendarChoice,
+    calendarAccounts,
+    choiceForCalendar,
+  } from '../lib/calendar-accounts';
+  import { cardCalendar, relativeTime, shortDate } from '../lib/calendar-card';
+  import {
+    calendarSyncStatus,
+    cardSyncErrors,
+    keepInSync,
+    readOnlyReason,
+    recurrenceLabel,
+    removeFromCalendar,
+    runCalendarSync,
+    stopSyncing,
+  } from '../lib/calendar-sync';
+  import { now } from '../lib/now';
+  import { collections, restoreItem, updateItem } from '../lib/stores';
+  import { showToast } from '../lib/toast';
+  import CalendarPicker from './CalendarPicker.svelte';
+
+  /**
+   * The card view's Calendar block: which calendar the card is on, how
+   * (kept in sync / sent once / about to be added), where it came from, the
+   * last sync, and the actions that change it. Rendered only for cards that
+   * are on, or headed for, a calendar.
+   */
+  let { item }: { item: InboxItem } = $props();
+
+  const info = $derived(
+    cardCalendar(
+      item,
+      $collections,
+      $calendarAccounts,
+      $cardSyncErrors,
+      $calendarSyncStatus,
+    ),
+  );
+  const status = $derived(info?.url ? $calendarSyncStatus[info.url] : undefined);
+  const collection = $derived(
+    item.collectionId ? $collections[item.collectionId] : undefined,
+  );
+  const lockReason = $derived(item.calendarSync ? readOnlyReason(item) : undefined);
+  const repeats = $derived(item.calendarSync ? recurrenceLabel(item) : undefined);
+  const kind = $derived<'event' | 'task'>(
+    item.isTodo || item.type === 'todo' || item.scheduleKind === 'task'
+      ? 'task'
+      : 'event',
+  );
+
+  const lockText = $derived(
+    lockReason === 'repeating'
+      ? 'Repeating — change it in your calendar app.'
+      : lockReason === 'attendees'
+        ? 'Has attendees — change it in your calendar app, so they get the update.'
+        : lockReason === 'unsupported'
+          ? 'This entry can only be changed in your calendar app.'
+          : '',
+  );
+
+  const origin = $derived.by(() => {
+    const parts: string[] = [];
+    if (item.importedAt) parts.push(`Imported ${shortDate(item.importedAt)}`);
+    if (item.calendarCreatedAt)
+      parts.push(`created ${shortDate(item.calendarCreatedAt)}`);
+    if (
+      item.calendarChangedAt &&
+      (!item.calendarCreatedAt || item.calendarChangedAt > item.calendarCreatedAt)
+    )
+      parts.push(`changed ${relativeTime(item.calendarChangedAt, $now.getTime())}`);
+    const text = parts.join(' · ');
+    return text ? text.charAt(0).toUpperCase() + text.slice(1) : '';
+  });
+
+  const statusLine = $derived.by(() => {
+    if (!info) return '';
+    if (!info.connected) {
+      return 'Syncs from devices connected to this calendar — not this one.';
+    }
+    if (status?.syncing) return 'Syncing…';
+    if (info.mode === 'pending') return `Will be added to ${info.name} on the next sync.`;
+    if (info.mode === 'once') return `Sent once — later changes stay here.`;
+    if (status?.lastSync) return `Synced ${relativeTime(status.lastSync, $now.getTime())}`;
+    return 'Waiting for the first sync…';
+  });
+
+  let busy = $state(false);
+  let confirmRemove = $state(false);
+  let showPicker = $state(false);
+
+  function friendly(err: unknown) {
+    return err instanceof CaldavError || err instanceof Error
+      ? err.message
+      : 'the calendar relay is unreachable';
+  }
+
+  async function act(run: () => Promise<void>) {
+    if (busy) return;
+    busy = true;
+    try {
+      await run();
+    } catch (err) {
+      console.error('Calendar action failed', err);
+      showToast(`Couldn’t do that: ${friendly(err)}`);
+    } finally {
+      busy = false;
+    }
+  }
+
+  function handleStop() {
+    const before = item;
+    void act(async () => {
+      const after = await stopSyncing(item);
+      showToast(`Stopped syncing — the entry stays in ${info?.name ?? 'the calendar'}`, after
+        ? {
+            label: 'Undo',
+            run: () =>
+              void restoreItem({ before, after }).then(() => runCalendarSync()),
+          }
+        : undefined);
+    });
+  }
+
+  function handleResume() {
+    const choice = info?.url ? choiceForCalendar(info.url) : undefined;
+    if (!choice) return;
+    void act(async () => {
+      await keepInSync(item, choice);
+      showToast(`Kept in sync with ${choice.calendar.name}`);
+    });
+  }
+
+  function handleRemove() {
+    if (!confirmRemove) {
+      confirmRemove = true;
+      return;
+    }
+    confirmRemove = false;
+    const name = info?.name ?? 'the calendar';
+    void act(async () => {
+      await removeFromCalendar(item);
+      showToast(`Removed from ${name} — the card stays here`);
+    });
+  }
+
+  function handleSkip() {
+    const before = item;
+    void act(async () => {
+      const after = await updateItem(item.id, (c) =>
+        c ? { ...c, calendarSync: false } : null,
+      );
+      showToast(`Kept off ${info?.name ?? 'the calendar'}`, after
+        ? { label: 'Undo', run: () => void restoreItem({ before, after }) }
+        : undefined);
+    });
+  }
+
+  function handleMove(choice: CalendarChoice) {
+    showPicker = false;
+    if (choice.calendar.id === info?.url) return;
+    void act(async () => {
+      await keepInSync(item, choice);
+      showToast(`Moved to ${choice.calendar.name}`);
+    });
+  }
+
+  function retry() {
+    void runCalendarSync();
+  }
+</script>
+
+{#if info}
+  <section class="cal-section" aria-label="Calendar" style="--cal-color: {info.color || 'var(--accent)'}">
+    <div class="head">
+      <span class="eyebrow">Calendar</span>
+      <span class="mode-badge" class:once={info.mode === 'once'} class:pending={info.mode === 'pending'}>
+        {info.mode === 'sync' ? 'Kept in sync' : info.mode === 'once' ? 'Sent once' : 'Not added yet'}
+      </span>
+    </div>
+
+    <div class="where">
+      <span class="swatch" aria-hidden="true"></span>
+      <span class="cal-name">{info.name}</span>
+      {#if info.account}<span class="acct">{info.account}</span>{/if}
+    </div>
+
+    {#if info.viaCollection && collection}
+      <p class="line">Follows <strong>{collection.name}</strong>, which is linked to this calendar.</p>
+    {/if}
+    {#if repeats}
+      <p class="line">{repeats} · showing the next date.</p>
+    {/if}
+    {#if origin}
+      <p class="line muted">{origin}</p>
+    {/if}
+
+    {#if info.error}
+      <div class="problem" role="status">
+        <span>{info.error}</span>
+        {#if info.connected}
+          <button type="button" class="link-btn" onclick={retry}>Try again</button>
+        {/if}
+      </div>
+    {:else}
+      <p class="line status" aria-live="polite">
+        {#if status?.syncing}<span class="spinner" aria-hidden="true"></span>{/if}
+        {statusLine}
+      </p>
+    {/if}
+
+    {#if lockText}
+      <p class="line lock">
+        <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>
+        {lockText}
+      </p>
+    {/if}
+
+    {#if info.connected}
+      <div class="actions">
+        {#if info.mode === 'pending'}
+          <button type="button" class="btn" disabled={busy} onclick={handleSkip}>Keep off {info.name}</button>
+        {:else if info.mode === 'once'}
+          <button type="button" class="btn primary" disabled={busy} onclick={handleResume}>Keep in sync</button>
+        {:else}
+          {#if !info.viaCollection && !lockReason}
+            <button type="button" class="btn" disabled={busy} onclick={() => (showPicker = true)}>Move to…</button>
+          {/if}
+          <button type="button" class="btn" disabled={busy} onclick={handleStop}>Stop syncing</button>
+          {#if !lockReason}
+            <button
+              type="button"
+              class="btn danger"
+              class:confirm={confirmRemove}
+              disabled={busy}
+              onclick={handleRemove}
+              onblur={() => (confirmRemove = false)}
+            >
+              {confirmRemove ? `Remove from ${info.name}?` : 'Remove from calendar'}
+            </button>
+          {/if}
+        {/if}
+      </div>
+    {/if}
+  </section>
+
+  {#if showPicker}
+    <CalendarPicker
+      {kind}
+      selectedId={info.url}
+      onpick={handleMove}
+      onclose={() => (showPicker = false)}
+    />
+  {/if}
+{/if}
+
+<style>
+  .cal-section {
+    margin: 0.25rem 0 0.5rem;
+    padding: 0.8rem 0.9rem 0.85rem;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--cal-color);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--cal-color) 5%, var(--surface));
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .eyebrow {
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .mode-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.12rem 0.5rem;
+    border-radius: 999px;
+    color: var(--accent-text);
+    background: var(--accent-subtler, color-mix(in srgb, var(--accent) 12%, transparent));
+  }
+
+  .mode-badge.once,
+  .mode-badge.pending {
+    color: var(--text-muted);
+    background: var(--surface-tint);
+  }
+
+  .where {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
+  }
+
+  .swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    background: var(--cal-color);
+    flex-shrink: 0;
+  }
+
+  .cal-name {
+    font-weight: 650;
+    font-size: 0.95rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .acct {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .acct::before {
+    content: '· ';
+  }
+
+  .line {
+    margin: 0;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--text);
+  }
+
+  .line.muted,
+  .line.status {
+    color: var(--text-muted);
+  }
+
+  .line.status {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .line.lock {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    color: var(--text-muted);
+  }
+
+  .line.lock svg {
+    margin-top: 0.2rem;
+    flex-shrink: 0;
+  }
+
+  .spinner {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .problem {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.6rem;
+    padding: 0.45rem 0.6rem;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
+    color: var(--danger-text);
+    font-size: 0.8rem;
+  }
+
+  .link-btn {
+    border: 0;
+    background: none;
+    padding: 0;
+    font: inherit;
+    font-weight: 600;
+    color: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+    min-height: 32px;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.35rem;
+  }
+
+  .btn {
+    min-height: 36px;
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 550;
+    cursor: pointer;
+  }
+
+  .btn:hover:not(:disabled) {
+    background: var(--surface-hover);
+  }
+
+  .btn:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+
+  .btn.danger {
+    color: var(--danger-text);
+  }
+
+  .btn.danger.confirm {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: white;
+  }
+
+  @media (max-width: 600px) {
+    .btn {
+      min-height: 44px;
+      flex: 1 1 auto;
+    }
+  }
+</style>

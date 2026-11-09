@@ -22,6 +22,9 @@
   import { planLabel } from '../lib/plan';
   import { todayStart } from '../lib/now';
   import AddToCalendarSheet from './AddToCalendarSheet.svelte';
+  import CalendarSection from './CalendarSection.svelte';
+  import { cardCalendar } from '../lib/calendar-card';
+  import { calendarAccounts } from '../lib/calendar-accounts';
   import { formatScheduled, isOverdue } from '../lib/schedule';
   import BookmarkView from './view-card/BookmarkView.svelte';
   import ImageView from './view-card/ImageView.svelte';
@@ -101,14 +104,25 @@
     }
   }
 
-  async function handleDelete() {
+  // Which calendar the card is on (or headed for) — drives the Calendar
+  // section and the delete dialog's "also delete it from …" choice.
+  const calendarInfo = $derived(cardCalendar(item, $collections, $calendarAccounts));
+  const syncedCalendarName = $derived(
+    item.calendarSync && item.eventUrl && calendarInfo?.connected
+      ? calendarInfo.name
+      : undefined,
+  );
+
+  async function handleDelete({ alsoCalendar }: { alsoCalendar: boolean }) {
     deleting = true;
     try {
       await flushEdits();
     } catch {
       // The save attempt has settled. Deletion must now win.
     }
-    await deleteItem(item.id, item);
+    await deleteItem(item.id, item, {
+      keepCalendarEntry: !!syncedCalendarName && !alsoCalendar,
+    });
     // The card is gone; an edit that failed to flush must not be written
     // back by the editor's teardown.
     discardEdits();
@@ -661,7 +675,7 @@
                   <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h15v18H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 14h15"/></svg>Make a reference
                 </button>
               {/if}
-              {#if item.startsAt}
+              {#if item.startsAt && !calendarInfo}
                 <button type="button" class="actions-menu-item" role="menuitem" onclick={() => { closeActions(true); void openCalendar(); }}>
                   <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg>
                   {item.eventUrl ? 'On calendar — manage…' : 'Add to calendar…'}
@@ -935,7 +949,9 @@
               ? 'When…'
               : 'Set time…'}
       </button>
-      {#if item.startsAt}
+      {#if calendarInfo}
+        <CalendarSection {item} />
+      {:else if item.startsAt}
         <button
           type="button"
           class="action-row"
@@ -965,6 +981,7 @@
     {#if showDelete}
       <DeleteConfirm
         onConfirm={handleDelete}
+        calendarName={syncedCalendarName}
         onCancel={() => (showDelete = false)}
         {deleting}
       />

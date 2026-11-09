@@ -5,8 +5,8 @@
  * deletes the entry, no matter what happens to the card: the user's
  * calendar is theirs, and entries must not change or vanish because
  * someone was editing cards in this app. All detach/re-enable operations
- * are local-only. The exception is tasks on a calendar opted into two-way
- * sync on this device — task-sync.ts keeps those in step.
+ * are local-only. The exception is cards kept in sync (`calendarSync`) —
+ * calendar-sync.ts keeps those in step.
  */
 import { applySchedule, type InboxItem } from '@inbox-rs/rs-module';
 import { get } from 'svelte/store';
@@ -16,10 +16,10 @@ import {
   findCalendarChoice,
   recordCalendarUse,
 } from './calendar-accounts';
+import { runCalendarSync } from './calendar-sync';
 import { cleanForStorage } from './clean-for-storage';
 import { clearPostedEntry, type PendingSchedule } from './schedule';
 import { flushItemChanges, items, restoreItem, storeItem } from './stores';
-import { isCalendarSynced, runTaskSync } from './task-sync';
 import { showToast } from './toast';
 
 /**
@@ -92,37 +92,34 @@ export class ReceiptWriteError extends Error {
  * never be posted again) and apply the ownership rule: in 'move' mode (the
  * default) the calendar owns the item now, so it is archived out of its
  * surface's active lists — any kind, filed or not. 'copy' mode posts
- * without archiving. Returns the stored item.
+ * without archiving. 'sync' keeps the card and the entry in step from now
+ * on (calendar-sync.ts). Returns the stored item.
  */
 export async function addItemToCalendar(
   item: InboxItem,
   calendarId: string,
-  mode: 'move' | 'copy' = 'move',
+  mode: 'move' | 'copy' | 'sync' = 'move',
 ): Promise<InboxItem> {
   if (item.eventUrl) {
     throw new Error(
       'Item is already on a calendar — posting is one-shot and never updates entries.',
     );
   }
-  // platform-caldav takes no event status yet (sockethub/sockethub#1364), so
-  // a cancelled event would be published as a live one.
-  if (item.cancelled) {
-    throw new CaldavError(
-      'Cancelled events cannot be added to a calendar yet — download the .ics instead',
-    );
-  }
   const target = findCalendarChoice(calendarId);
   if (!target) throw new CaldavError('caldav:invalid-calendar');
-  // A synced calendar shares tasks with the app rather than taking them over.
-  const synced = item.scheduleKind === 'task' && isCalendarSynced(calendarId);
-  if (synced) mode = 'copy';
+  // Kept in sync: the calendar shares the card rather than taking it over.
+  const synced = mode === 'sync';
   const receipt = await createEntry(
     target.account,
     calendarId,
     item,
     accountEndpoint(target.account),
   );
-  let posted: InboxItem = { ...item, ...receipt };
+  let posted: InboxItem = {
+    ...item,
+    ...receipt,
+    ...(synced ? { calendarSync: true } : {}),
+  };
   if (mode === 'move') {
     posted = {
       ...posted,
@@ -136,7 +133,7 @@ export async function addItemToCalendar(
   } catch (err) {
     throw new ReceiptWriteError(err);
   }
-  if (synced) void runTaskSync();
+  if (synced) void runCalendarSync();
   return posted;
 }
 

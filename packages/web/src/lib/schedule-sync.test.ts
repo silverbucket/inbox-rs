@@ -3,6 +3,7 @@ import type { NoteItem, TodoItem } from '@inbox-rs/rs-module';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./stores', () => ({ storeItem: vi.fn(async () => {}) }));
+vi.mock('./calendar-sync', () => ({ runCalendarSync: vi.fn(async () => {}) }));
 vi.mock('./caldav', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
   return {
@@ -100,11 +101,16 @@ describe('addItemToCalendar — the archive ownership rule', () => {
     expect(result.eventUrl).toBeTruthy();
   });
 
-  it('refuses to post a cancelled event — the relay has no event status', async () => {
-    await expect(
-      addItemToCalendar(note({ cancelled: true }), CAL.id),
-    ).rejects.toThrow(/Cancelled events/);
-    expect(vi.mocked(createEntry)).not.toHaveBeenCalled();
+  it('posts a cancelled event — the relay carries its status', async () => {
+    const result = await addItemToCalendar(note({ cancelled: true }), CAL.id);
+    expect(result.eventUrl).toBeTruthy();
+    expect(vi.mocked(createEntry)).toHaveBeenCalled();
+  });
+
+  it('marks the card kept in sync in sync mode, without archiving', async () => {
+    const result = await addItemToCalendar(note(), CAL.id, 'sync');
+    expect(result.calendarSync).toBe(true);
+    expect(result.archived).toBeUndefined();
   });
 
   it('refuses to post an already-posted item — publishing is one-shot', async () => {

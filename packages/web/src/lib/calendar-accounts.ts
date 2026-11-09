@@ -49,7 +49,12 @@ export interface CalendarAccount {
   hiddenCalendarIds?: string[];
   /** Preferred calendar for this account (settings ★). */
   defaultCalendarId?: string;
-  /** Calendars opted into two-way task sync on this device (task-sync.ts). */
+  /**
+   * Legacy: calendars whose every task used to sync into unfiled todos.
+   * Now only marks calendars that still need linking to a collection
+   * (Settings → Calendars offers it); calendar-sync.ts no longer imports
+   * from them.
+   */
   syncCalendarIds?: string[];
 }
 
@@ -138,19 +143,32 @@ export function choiceForEventUrl(
   if (!eventUrl) return undefined;
   for (const account of get(calendarAccounts)) {
     for (const calendar of account.calendars) {
-      const prefix = calendar.id.endsWith('/')
-        ? calendar.id
-        : `${calendar.id}/`;
-      if (eventUrl.startsWith(prefix)) return { account, calendar };
+      if (entryInCalendar(eventUrl, calendar.id)) return { account, calendar };
     }
   }
   return undefined;
 }
 
-/** Whether the entry lives in a calendar synced two-way on this device. */
-export function isSyncedEntry(eventUrl: string | undefined): boolean {
-  const choice = choiceForEventUrl(eventUrl);
-  return !!choice?.account.syncCalendarIds?.includes(choice.calendar.id);
+/** Whether `href` (an entry) lives in the calendar collection `calendarUrl`. */
+export function entryInCalendar(
+  href: string | undefined,
+  calendarUrl: string,
+): boolean {
+  if (!href) return false;
+  const prefix = calendarUrl.endsWith('/') ? calendarUrl : `${calendarUrl}/`;
+  return href.startsWith(prefix);
+}
+
+/** The calendar (on this device) whose id is `calendarUrl`. */
+export function choiceForCalendar(
+  calendarUrl: string | undefined,
+): CalendarChoice | undefined {
+  if (!calendarUrl) return undefined;
+  for (const account of get(calendarAccounts)) {
+    const calendar = account.calendars.find((c) => c.id === calendarUrl);
+    if (calendar) return { account, calendar };
+  }
+  return undefined;
 }
 
 /** Remember the chosen calendar per entry kind ("events" vs "tasks"). */
