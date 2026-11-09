@@ -16,6 +16,28 @@ describe('nextOccurrence', () => {
     expect(ymd(next)).toEqual([2026, 1, 11]);
   });
 
+  it.each([
+    ['SU', [5, 17, 19, 31]],
+    ['MO', [5, 10, 19, 24]],
+  ] as const)('honours WKST=%s in biweekly rules (RFC 5545 §3.3.10)', (weekStart, want) => {
+    const rule = {
+      frequency: 'weekly',
+      interval: 2,
+      count: 4,
+      byDay: ['TU', 'SU'],
+      weekStart,
+    } as const;
+    const days: number[] = [];
+    let after = local(1997, 8, 5, 8);
+    for (;;) {
+      const next = nextOccurrence(local(1997, 8, 5), rule, after);
+      if (!next) break;
+      days.push(next.getDate());
+      after = new Date(next.getTime() + 1);
+    }
+    expect(days).toEqual(want);
+  });
+
   it('counts negative month days from the end of the month', () => {
     const next = nextOccurrence(
       local(2025, 1, 31),

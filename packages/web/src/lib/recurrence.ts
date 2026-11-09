@@ -5,7 +5,7 @@
  * wall-clock time (its zone, or the device's when it has none), so DST
  * changes and weekdays follow the event, not the device.
  * Covers the rule parts platform-caldav models: frequency, interval,
- * count, until, byDay (weekly) and byMonthDay (monthly).
+ * count, until, byDay (weekly), byMonthDay (monthly) and weekStart.
  */
 import type { RemoteRecurrence } from './caldav';
 import { zonedToUtc } from './ics';
@@ -20,6 +20,8 @@ function* occurrences(start: Date, rule: RemoteRecurrence): Generator<Date> {
     .map((d) => DAY_CODES.indexOf(d.slice(-2).toUpperCase()))
     .filter((d) => d >= 0)
     .sort((a, b) => a - b);
+  const wkstIndex = DAY_CODES.indexOf(rule.weekStart ?? '');
+  const wkst = wkstIndex >= 0 ? wkstIndex : 1; // default Monday
   for (let step = 0; step < MAX_STEPS; step++) {
     const base = new Date(start);
     switch (rule.frequency) {
@@ -33,10 +35,14 @@ function* occurrences(start: Date, rule: RemoteRecurrence): Generator<Date> {
           yield base;
           break;
         }
-        // Weeks start on Monday (RFC 5545's default WKST).
+        // Weeks start on WKST (RFC 5545 default: Monday).
         const weekStart = new Date(base);
-        weekStart.setUTCDate(base.getUTCDate() - ((base.getUTCDay() + 6) % 7));
-        for (const day of days.map((d) => (d + 6) % 7).sort((a, b) => a - b)) {
+        weekStart.setUTCDate(
+          base.getUTCDate() - ((base.getUTCDay() + 7 - wkst) % 7),
+        );
+        for (const day of days
+          .map((d) => (d + 7 - wkst) % 7)
+          .sort((a, b) => a - b)) {
           const d = new Date(weekStart);
           d.setUTCDate(weekStart.getUTCDate() + day);
           if (d >= start) yield d;
