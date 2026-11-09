@@ -21,7 +21,7 @@
   import { relativeTime } from '../lib/calendar-card';
   import { now } from '../lib/now';
   import { collections, items } from '../lib/stores';
-  import LinkCalendarSheet from './LinkCalendarSheet.svelte';
+  import LinkCalendarSheet from './LazyLinkCalendarSheet.svelte';
   import { resolveSockethubEndpoint } from '../lib/enrich';
   import { DEFAULT_SOCKETHUB_ENDPOINT } from '../lib/link-metadata';
   import { showToast } from '../lib/toast';

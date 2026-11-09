@@ -63,6 +63,10 @@ export default defineConfig(({ command }) => ({
           'assets/transformers-*.js',
           'assets/MarkdownEditor-*.js',
           'assets/MarkdownEditor-*.css',
+          // Calendar linking needs the network anyway (it previews through
+          // the CalDAV relay), so its sheet loads on first use.
+          'assets/LinkCalendarSheet-*.js',
+          'assets/LinkCalendarSheet-*.css',
         ],
       },
     }),

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import LinkCalendarSheet from './LinkCalendarSheet.svelte';
+  import LinkCalendarSheet from './LazyLinkCalendarSheet.svelte';
   import { calendarSyncStatus } from '../lib/calendar-sync';
   import type { InboxItem, InboxItemType, Collection } from '@inbox-rs/rs-module';
   import {

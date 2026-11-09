@@ -2,7 +2,7 @@
   import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
   import { get } from 'svelte/store';
   import { appConfig, collections, groups, sortedGroups, storeGroup, updateConfig } from '../lib/stores';
-  import LinkCalendarSheet from './LinkCalendarSheet.svelte';
+  import LinkCalendarSheet from './LazyLinkCalendarSheet.svelte';
   import EntityFormModal from './EntityFormModal.svelte';
   import { randomPresetColor } from '../lib/constants';
 
