@@ -77,14 +77,13 @@
       parts.push(`Via the ${collection.name} collection`);
     if (item.calendarCreatedAt)
       parts.push(`created in the calendar ${shortDate(item.calendarCreatedAt)}`);
-    if (item.importedAt) parts.push(`imported here ${shortDate(item.importedAt)}`);
     if (
       item.calendarChangedAt &&
       (!item.calendarCreatedAt || item.calendarChangedAt > item.calendarCreatedAt)
     )
-      parts.push(`changed ${relativeTime(item.calendarChangedAt, $now.getTime())}`);
-    const text = parts.join(' · ');
-    return text ? text.charAt(0).toUpperCase() + text.slice(1) : '';
+      parts.push(`last changed there ${relativeTime(item.calendarChangedAt, $now.getTime())}`);
+    if (item.importedAt) parts.push(`imported here ${shortDate(item.importedAt)}`);
+    return parts.map((p, i) => (i === 0 ? p.charAt(0).toUpperCase() + p.slice(1) : p));
   });
 
   const statusLine = $derived.by(() => {
@@ -188,14 +187,14 @@
 {#if info}
   <section class="cal-section" aria-label="Calendar" style="--cal-color: {info.color || 'var(--accent)'}">
     <div class="head">
-      <span class="swatch" aria-hidden="true"></span>
+      <svg class="swatch" aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
       <span class="where">
         <span class="cal-name">{info.name} calendar</span>
         {#if info.account}<span class="acct">{info.account}</span>{/if}
       </span>
       {#if !info.error}
         <span class="state" class:muted={info.mode !== 'sync'} aria-live="polite">
-          {#if status?.syncing}<span class="spinner" aria-hidden="true"></span>{/if}
+          {#if status?.syncing}<span class="spinner" aria-hidden="true"></span>{:else}<span class="status-dot" class:ok={info.mode === 'sync' && info.connected} aria-hidden="true"></span>{/if}
           {statusLine}
         </span>
       {/if}
@@ -208,8 +207,10 @@
       </p>
     {/if}
 
-    {#if origin}
-      <p class="line muted">{origin}</p>
+    {#if origin.length}
+      <p class="line muted origin">
+        {#each origin as part, i}<span class="part">{i > 0 ? '· ' : ''}{part}</span>{' '}{/each}
+      </p>
     {/if}
 
     {#if info.error}
@@ -291,20 +292,42 @@
     min-width: 0;
   }
 
+  .head {
+    flex-wrap: wrap;
+  }
+
   .state {
     margin-left: auto;
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
     font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--accent-text);
+    color: var(--text-muted);
     white-space: nowrap;
   }
 
-  .state.muted {
-    color: var(--text-muted);
-    font-weight: 500;
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    opacity: 0.6;
+  }
+
+  .status-dot.ok {
+    background: #22a06b;
+    opacity: 1;
+  }
+
+  .origin .part {
+    white-space: nowrap;
+  }
+
+  @media (max-width: 600px) {
+    .state {
+      flex-basis: 100%;
+      margin-left: calc(15px + 0.55rem);
+    }
   }
 
   .consequence {
@@ -331,11 +354,9 @@
   }
 
   .swatch {
-    width: 10px;
-    height: 10px;
-    border-radius: 3px;
-    background: var(--cal-color);
+    color: var(--cal-color);
     flex-shrink: 0;
+    align-self: center;
   }
 
   .cal-name {

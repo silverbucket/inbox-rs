@@ -265,7 +265,7 @@
           {@const legacy = !linked && account.syncCalendarIds?.includes(cal.id)}
           {@const legacyCount = legacy ? Object.values($items).filter((i) => !i.collectionId && i.calendarSync && entryInCalendar(i.eventUrl, cal.id)).length : 0}
           <div class="cal-line" class:hidden>
-            <span class="dot" style="background: {cal.color || 'var(--accent)'}"></span>
+            <svg style="color: {cal.color || 'var(--accent)'}" class="cal-glyph" aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
             <span class="cal-name">{cal.name}</span>
             <span class="line-actions">
               <button
@@ -278,7 +278,7 @@
                 aria-label="Make {cal.name} the default calendar"
                 aria-pressed={account.defaultCalendarId === cal.id}
                 onclick={() => toggleDefault(account, cal.id)}
-              >★ <span class="star-label">{account.defaultCalendarId === cal.id ? 'Default' : ''}</span></button>
+              >★ <span class="star-label">Default</span></button>
               <label class="vis-label">
                 <input
                   type="checkbox"
@@ -306,7 +306,7 @@
                   {:else if calStatus?.syncing}
                     Syncing…
                   {:else if linked || count > 0}
-                    · {count} {count === 1 ? 'card' : 'cards'}{calStatus?.lastSync ? ` · synced ${relativeTime(calStatus.lastSync, $now.getTime())}` : ''}
+                    {count} {count === 1 ? 'card' : 'cards'}{calStatus?.lastSync ? ` · synced ${relativeTime(calStatus.lastSync, $now.getTime())}` : ''}
                   {/if}
                 </span>
                 {#if linked}
@@ -590,6 +590,7 @@
   }
 
   .linked-to {
+    white-space: nowrap;
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
@@ -616,12 +617,17 @@
     cursor: pointer;
   }
 
+  .cal-glyph {
+    flex-shrink: 0;
+  }
+
   .star-label {
     font-size: 0.68rem;
     font-weight: 600;
   }
 
   .link-status {
+    white-space: nowrap;
     font-size: 0.72rem;
     color: var(--text-muted);
   }
@@ -679,12 +685,16 @@
   }
 
   .star-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-height: 28px;
     border: none;
     background: none;
-    color: var(--border);
+    color: var(--text-muted);
     font-size: 0.9rem;
     cursor: pointer;
-    padding: 0;
+    padding: 0 0.2rem;
     line-height: 1;
     transition: color 0.15s;
   }

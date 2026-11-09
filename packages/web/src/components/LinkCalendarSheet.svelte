@@ -289,7 +289,7 @@
     {#if linked && collection}
       <!-- Already linked: say what that means, offer the way out. -->
       <div class="linked-card" style="--cal-color: {linked.color || 'var(--accent)'}">
-        <span class="swatch"></span>
+        <svg class="swatch" aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
         <div class="linked-text">
           <strong>{linked.name} calendar</strong>
           <span>{linkedCount} {linkedCount === 1 ? 'card' : 'cards'} kept in sync</span>
@@ -349,7 +349,7 @@
                   disabled={!!other || saving}
                   onclick={() => (collection ? load({ account: group.account, calendar: cal }) : (choice = { account: group.account, calendar: cal }))}
                 >
-                  <span class="dot" style="background: {cal.color || 'var(--accent)'}"></span>
+                  <svg style="color: {cal.color || 'var(--accent)'}" class="dot" aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
                   <span class="cal-name">{cal.name}</span>
                   <span class="cal-meta">
                     {#if other}
@@ -365,7 +365,7 @@
         </div>
       {:else if choice}
         <div class="linked-card compact" style="--cal-color: {choice.calendar.color || 'var(--accent)'}">
-          <span class="swatch"></span>
+          <svg class="swatch" aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
           <div class="linked-text"><strong>{choice.calendar.name}</strong><span>{choice.account.label}</span></div>
         </div>
       {/if}
@@ -448,13 +448,13 @@
             <div class="opt own">
               <label class="check">
                 <input type="checkbox" bind:checked={addExisting} disabled={saving} />
-                <span>This collection's <strong>{ownCards.length}</strong> {ownCards.length === 1 ? 'todo or dated card' : 'todos and dated cards'}</span>
+                <span><strong>{ownCards.length}</strong> {ownCards.length === 1 ? 'card' : 'cards'} from this collection <span class="sub">(todos and dated cards)</span></span>
               </label>
             </div>
           {/if}
         </div>
-        <p class="summary" aria-live="polite">{summary}</p>
         <div class="footer">
+          <p class="summary" aria-live="polite">{summary}</p>
           <button type="button" class="btn ghost" onclick={onclose} disabled={saving}>Cancel</button>
           <button type="button" class="btn primary" onclick={() => confirm(true)} disabled={saving}>
             {saving ? 'Linking…' : 'Link calendar'}
@@ -619,9 +619,6 @@
   }
 
   .dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
     flex-shrink: 0;
   }
 
@@ -655,10 +652,7 @@
   }
 
   .swatch {
-    width: 12px;
-    height: 12px;
-    border-radius: 4px;
-    background: var(--cal-color);
+    color: var(--cal-color);
     flex-shrink: 0;
   }
 
@@ -833,6 +827,7 @@
   }
 
   .summary {
+    flex-basis: 100%;
     margin: 0;
     padding: 0.55rem 0.7rem;
     border-radius: var(--radius-sm);
@@ -845,6 +840,7 @@
     position: sticky;
     bottom: -1rem;
     display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
     gap: 0.5rem;
     margin: 0 -1.2rem -1rem;
