@@ -61,6 +61,7 @@ import {
 } from './caldav';
 import { calendarAccounts } from './calendar-accounts';
 import {
+  cardSyncErrors,
   deleteSyncedEntry,
   entryIsCurrent,
   forgetEntry,
@@ -662,6 +663,38 @@ describe('push and create', () => {
     expect(card(`${CAL2}moved.ics`).calendarSync).toBe(true);
   });
 
+  it('does not move an entry whose zone it cannot read', async () => {
+    vi.mocked(syncCalendar).mockResolvedValueOnce(
+      page([
+        remote({
+          etag: '"2"',
+          due: '2099-11-12T09:00:00',
+          allDay: false,
+          timeZone: 'Eastern Standard Time',
+        }),
+      ]),
+    );
+    await runCalendarSync();
+    cols().update((all) => ({
+      ...all,
+      home: {
+        id: 'home',
+        name: 'Home',
+        itemIds: [],
+        createdAt: '2026-01-01T00:00:00Z',
+        calendar: { url: CAL2, name: 'Home' },
+      },
+    }));
+    items().update((all) => ({
+      ...all,
+      [card().id]: { ...card(), collectionId: 'home' },
+    }));
+    await runCalendarSync();
+    expect(createEntry).not.toHaveBeenCalled();
+    expect(deleteEntry).not.toHaveBeenCalled();
+    expect(get(cardSyncErrors)[card().id]).toMatch(/Unknown time zone/);
+  });
+
   it('retries removing the old entry when the move could not delete it', async () => {
     cols().update((all) => ({
       ...all,
@@ -1025,7 +1058,7 @@ describe('linking', () => {
 });
 
 describe('field mapping', () => {
-  it('sends instants when the entry has a zone Intl does not know', () => {
+  it('refuses to rewrite an entry whose zone Intl does not know', () => {
     const item = {
       id: 'x',
       type: 'note',
@@ -1034,9 +1067,10 @@ describe('field mapping', () => {
       createdAt: '2026-11-01T00:00:00Z',
       startsAt: '2099-03-04T14:00:00.000Z',
     } as InboxItem;
-    const sent = taskUpdateObject(event({ timeZone: 'Not/AZone' }), item);
-    expect(sent.startTime).toBe('2099-03-04T14:00:00.000Z');
-    expect(sent).not.toHaveProperty('timeZone');
+    // Its local times were read in the device's zone: a rewrite could shift it.
+    expect(() =>
+      taskUpdateObject(event({ timeZone: 'Not/AZone' }), item),
+    ).toThrow(/Unknown time zone/);
   });
 
   it("keeps a foreign entry's own link when the card has none", () => {

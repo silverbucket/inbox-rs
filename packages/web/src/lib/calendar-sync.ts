@@ -463,8 +463,14 @@ export function entryUpdateObject(
   }
   // The platform rejects a zone on all-day values, and wants local
   // date-times when one is kept.
-  // An unknown zone can't format local times; send instants instead.
-  const zone = fields.allDay ? undefined : knownZone(timeZone);
+  const zone = fields.allDay ? undefined : timeZone;
+  // Its times were read in this device's zone; rewriting them could shift
+  // the entry, so leave it to the calendar app.
+  if (zone && !knownZone(zone)) {
+    throw new CaldavError(
+      `Unknown time zone “${zone}” — change this entry in your calendar app`,
+    );
+  }
   if (zone) {
     for (const key of ['due', 'startTime', 'endTime']) {
       const value = fields[key];
