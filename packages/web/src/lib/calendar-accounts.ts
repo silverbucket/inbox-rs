@@ -49,6 +49,8 @@ export interface CalendarAccount {
   hiddenCalendarIds?: string[];
   /** Preferred calendar for this account (settings ★). */
   defaultCalendarId?: string;
+  /** Calendars opted into two-way task sync on this device (task-sync.ts). */
+  syncCalendarIds?: string[];
 }
 
 /** The pinned relay for an account (default fallback for legacy entries). */

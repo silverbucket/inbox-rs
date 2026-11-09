@@ -5,7 +5,8 @@
  * deletes the entry, no matter what happens to the card: the user's
  * calendar is theirs, and entries must not change or vanish because
  * someone was editing cards in this app. All detach/re-enable operations
- * are local-only.
+ * are local-only. The exception is tasks on a calendar opted into two-way
+ * sync on this device — task-sync.ts keeps those in step.
  */
 import { applySchedule, type InboxItem } from '@inbox-rs/rs-module';
 import { get } from 'svelte/store';
@@ -18,6 +19,7 @@ import {
 import { cleanForStorage } from './clean-for-storage';
 import { clearPostedEntry, type PendingSchedule } from './schedule';
 import { flushItemChanges, items, restoreItem, storeItem } from './stores';
+import { isCalendarSynced, runTaskSync } from './task-sync';
 import { showToast } from './toast';
 
 /**
@@ -111,6 +113,9 @@ export async function addItemToCalendar(
   }
   const target = findCalendarChoice(calendarId);
   if (!target) throw new CaldavError('caldav:invalid-calendar');
+  // A synced calendar shares tasks with the app rather than taking them over.
+  const synced = item.scheduleKind === 'task' && isCalendarSynced(calendarId);
+  if (synced) mode = 'copy';
   const receipt = await createEntry(
     target.account,
     calendarId,
@@ -131,6 +136,7 @@ export async function addItemToCalendar(
   } catch (err) {
     throw new ReceiptWriteError(err);
   }
+  if (synced) void runTaskSync();
   return posted;
 }
 

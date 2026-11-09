@@ -13,6 +13,7 @@
     type CalendarAccount,
   } from '../lib/calendar-accounts';
   import { trapFocusWhen } from '../lib/actions';
+  import { setCalendarSynced } from '../lib/task-sync';
   import { resolveSockethubEndpoint } from '../lib/enrich';
   import { DEFAULT_SOCKETHUB_ENDPOINT } from '../lib/link-metadata';
   import { showToast } from '../lib/toast';
@@ -253,6 +254,21 @@
                 />
                 show
               </label>
+              {#if cal.components.includes('task')}
+                <label
+                  class="vis-label"
+                  title="Two-way sync: tasks from this calendar show up as todos, and edits flow both ways (this device)"
+                >
+                  <input
+                    type="checkbox"
+                    checked={account.syncCalendarIds?.includes(cal.id) ?? false}
+                    aria-label="Sync tasks with {cal.name}"
+                    onchange={(e) =>
+                      setCalendarSynced(account, cal.id, e.currentTarget.checked)}
+                  />
+                  sync
+                </label>
+              {/if}
             </span>
           </div>
         {/each}
