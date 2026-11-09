@@ -69,6 +69,7 @@ import {
   runCalendarSync,
   stopSyncing,
   taskUpdateObject,
+  unlinkCollection,
 } from './calendar-sync';
 import { clearSchedule } from './schedule';
 import { restoreItem, storeCollection } from './stores';
@@ -349,6 +350,35 @@ describe('pull', () => {
     await runCalendarSync();
     expect(get(items()).victim).toMatchObject({ title: 'Private' });
     expect(get(items()).victim.eventUrl).toBeUndefined();
+  });
+
+  it('never lets a forged UID claim an imported card that was unlinked', async () => {
+    const digest = await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(`${CAL}orig.ics`),
+    );
+    const hid = `caldav-${[...new Uint8Array(digest).slice(0, 16)].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+    items().update((all) => ({
+      ...all,
+      [hid]: {
+        id: hid,
+        type: 'todo',
+        title: 'Mine',
+        createdAt: '2026-01-01T00:00:00Z',
+        completed: false,
+      } as InboxItem,
+    }));
+    vi.mocked(syncCalendar).mockResolvedValueOnce(
+      page([
+        remote({
+          id: `${CAL}other.ics`,
+          uid: `${hid}@inbox-rs`,
+          name: 'Hijacked',
+        }),
+      ]),
+    );
+    await runCalendarSync();
+    expect(get(items())[hid]).toMatchObject({ title: 'Mine' });
   });
 
   it('keeps a sent-once receipt when its entry is deleted in the calendar', async () => {
@@ -676,6 +706,69 @@ describe('push and create', () => {
     }));
     await runCalendarSync();
     expect(updateEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it('looks up a past entry it never fetched before deleting it, and refuses repeating ones', async () => {
+    const past = (extra: Partial<InboxItem>) =>
+      ({
+        id: 'p1',
+        type: 'note',
+        body: '',
+        title: 'Old',
+        createdAt: '2026-01-01T00:00:00Z',
+        startsAt: '2026-01-05T09:00:00Z',
+        scheduleKind: 'event',
+        eventUrl: `${CAL}old.ics`,
+        eventEtag: '"3"',
+        calendarSync: true,
+        collectionId: 'work',
+        ...extra,
+      }) as InboxItem;
+    vi.mocked(queryEntries).mockResolvedValueOnce({
+      items: [
+        event({
+          id: `${CAL}old.ics`,
+          uid: 'old',
+          startTime: '2026-01-05T09:00:00Z',
+          endTime: '2026-01-05T10:00:00Z',
+        }),
+      ],
+      removed: [],
+    });
+    await removeFromCalendar(past({}));
+    expect(vi.mocked(queryEntries).mock.calls.at(-1)?.[2]).toMatchObject({
+      type: 'event',
+      endTime: expect.any(String),
+    });
+    expect(deleteEntry).toHaveBeenCalledWith(
+      expect.anything(),
+      CAL,
+      { id: `${CAL}old.ics`, type: 'event', etag: '"3"' },
+      expect.any(String),
+    );
+    vi.mocked(deleteEntry).mockClear();
+    vi.mocked(queryEntries).mockResolvedValueOnce({
+      items: [
+        event({
+          id: `${CAL}old.ics`,
+          uid: 'old',
+          recurrence: { frequency: 'weekly' },
+        }),
+      ],
+      removed: [],
+    });
+    await expect(removeFromCalendar(past({}))).rejects.toThrow(/calendar app/);
+    expect(deleteEntry).not.toHaveBeenCalled();
+  });
+
+  it('unlinking keeps cards filed into the collection meanwhile', async () => {
+    cols().update((all) => ({
+      ...all,
+      work: { ...all.work, itemIds: ['late'] },
+    }));
+    await unlinkCollection(WORK); // a stale copy with no itemIds
+    expect(get(cols()).work.itemIds).toEqual(['late']);
+    expect(get(cols()).work.calendar).toBeUndefined();
   });
 
   it('never deletes a repeating entry from the server', async () => {

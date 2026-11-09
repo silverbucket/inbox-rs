@@ -547,9 +547,14 @@ const canPush = (base: Baseline) => !readOnlyReasonOf(base.remote);
  */
 async function itemIdFor(entry: RemoteEntry): Promise<string> {
   if (entry.uid.endsWith('@inbox-rs')) return entry.uid.slice(0, -9);
+  return hrefId(entry.id);
+}
+
+/** The card id derived from an entry's href (not forgeable via its UID). */
+async function hrefId(href: string): Promise<string> {
   const digest = await crypto.subtle.digest(
     'SHA-256',
-    new TextEncoder().encode(entry.id),
+    new TextEncoder().encode(href),
   );
   const hex = [...new Uint8Array(digest).slice(0, 16)]
     .map((b) => b.toString(16).padStart(2, '0'))
@@ -718,7 +723,11 @@ async function applyRemote(
   // adopt it — anyone who can write to a shared calendar could otherwise
   // overwrite any card whose id they know. Only an unlinked card with our
   // href-derived id (a re-import of this same entry) is adopted.
-  if (!linked && existing && (!id.startsWith('caldav-') || existing.eventUrl))
+  if (
+    !linked &&
+    existing &&
+    (existing.eventUrl || existing.id !== (await hrefId(entry.id)))
+  )
     return;
   if (!existing) {
     if (!target.collection || !entryIsCurrent(entry)) return;
@@ -1377,7 +1386,9 @@ export async function unlinkCollection(collection: Collection): Promise<void> {
   if (!url) return;
   // A pass in flight could otherwise add or re-link cards after this.
   if (running) await running;
-  const { calendar: _drop, ...rest } = collection;
+  // The live copy: that pass may have filed cards into it.
+  const live = get(collections)[collection.id] ?? collection;
+  const { calendar: _drop, ...rest } = live;
   await storeCollection(rest as Collection);
   for (const item of Object.values(get(items))) {
     if (item.collectionId !== collection.id) continue;
@@ -1467,19 +1478,47 @@ function forgetBaseline(href: string | undefined) {
   saveState(state);
 }
 
+/** One entry's server copy, found by a narrow query around its date. */
+async function fetchBaseline(
+  target: CalendarChoice,
+  item: InboxItem,
+): Promise<Baseline | undefined> {
+  const href = item.eventUrl;
+  if (!href) return undefined;
+  const isTask = isTodoish(item) || item.scheduleKind === 'task';
+  const day = 86_400_000;
+  const at = item.startsAt ? new Date(item.startsAt).getTime() : Date.now();
+  const result = await queryEntries(
+    target.account,
+    target.calendar.id,
+    isTask
+      ? { type: 'task' }
+      : {
+          type: 'event',
+          startTime: new Date(at - day).toISOString(),
+          endTime: new Date(at + 2 * day).toISOString(),
+        },
+    accountEndpoint(target.account),
+  );
+  const remote = result.items.filter(isEntry).find((e) => e.id === href);
+  return remote ? { fp: '', remote } : undefined;
+}
+
 async function deleteRemoteEntry(item: InboxItem): Promise<void> {
   const href = item.eventUrl;
   if (!href) return;
   const target = choiceForEventUrl(href);
-  const base = baselineFor(href);
+  let base = baselineFor(href);
   if (!target) {
     throw new CaldavError(
       'This device isn’t connected to that calendar account',
     );
   }
-  // Unknown read-only status (not fetched on this device yet): don't guess.
+  // Not fetched on this device yet (e.g. a past event): look it up around
+  // its date, so read-only status is known before anything is deleted.
+  if (!base) base = await fetchBaseline(target, item);
   if (!base) {
-    throw new CaldavError('Still syncing this entry — try again in a moment');
+    throw new CaldavError('That entry wasn’t found in the calendar');
   }
   // Deleting a repeating entry's resource would take the whole series.
   if (!canPush(base)) {

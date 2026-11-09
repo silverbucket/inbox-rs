@@ -386,7 +386,7 @@ export async function currentSyncToken(
 export async function queryEntries(
   creds: CaldavCredentials,
   calendarId: string,
-  query: { type: 'event' | 'task'; startTime?: string },
+  query: { type: 'event' | 'task'; startTime?: string; endTime?: string },
   endpoint: string,
 ): Promise<SyncResult> {
   const result = await send(
