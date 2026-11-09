@@ -184,3 +184,35 @@ test('Collections uses the bottom add action for creating a collection', async (
     page.getByRole('heading', { name: 'New Collection', exact: true }),
   ).toBeVisible();
 });
+
+test('bottom tabs close expanded collections, including same-page view switches', async ({
+  page,
+  webOrigin,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('inbox-rs:layout', 'sidebar');
+    localStorage.setItem('inbox-rs:sidebar-collapsed', '0');
+  });
+  await page.goto(webOrigin);
+  const nav = page.getByRole('navigation', { name: 'Primary (mobile)' });
+  const expand = page.getByRole('button', {
+    name: 'Expand sidebar',
+    exact: true,
+  });
+  const collapse = page.getByRole('button', {
+    name: 'Collapse sidebar',
+    exact: true,
+  });
+  await expect(collapse).toBeVisible();
+
+  for (const label of ['Today', 'Plan', 'Inbox', 'Collections']) {
+    await nav.getByRole('button', { name: label, exact: true }).click();
+    await expect(expand).toBeVisible();
+    await expect(page.locator('.sidebar')).toBeHidden();
+    await expect(
+      nav.getByRole('button', { name: label, exact: true }),
+    ).toHaveAttribute('aria-current', 'page');
+    await expand.click();
+    await expect(collapse).toBeVisible();
+  }
+});
