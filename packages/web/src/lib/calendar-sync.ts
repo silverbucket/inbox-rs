@@ -56,7 +56,7 @@ import {
   updateCalendarAccount,
 } from './calendar-accounts';
 import { entryUrl } from './ics';
-import { describeRecurrence, nextOccurrence } from './recurrence';
+import { describeRecurrence, knownZone, nextOccurrence } from './recurrence';
 import { clearPostedEntry, toDateInputValue } from './schedule';
 import {
   collections,
@@ -463,7 +463,8 @@ export function entryUpdateObject(
   }
   // The platform rejects a zone on all-day values, and wants local
   // date-times when one is kept.
-  const zone = fields.allDay ? undefined : timeZone;
+  // An unknown zone can't format local times; send instants instead.
+  const zone = fields.allDay ? undefined : knownZone(timeZone);
   if (zone) {
     for (const key of ['due', 'startTime', 'endTime']) {
       const value = fields[key];
@@ -858,7 +859,8 @@ async function pull(
   const seen = new Set(changes.items.map((entry) => entry.id));
   const removed = changes.full
     ? Object.keys(cal.entries).filter((href) => {
-        if (seen.has(href)) return false;
+        // A leftover's own retry settles it, even once it has ended.
+        if (seen.has(href) || cal.entries[href].leftover) return false;
         // An event that simply ended drops out of a "today onward" query.
         const remote = cal.entries[href].remote;
         if (remote.type === 'event' && !entryIsCurrent(remote)) {

@@ -1025,6 +1025,20 @@ describe('linking', () => {
 });
 
 describe('field mapping', () => {
+  it('sends instants when the entry has a zone Intl does not know', () => {
+    const item = {
+      id: 'x',
+      type: 'note',
+      title: 'Dentist',
+      body: '',
+      createdAt: '2026-11-01T00:00:00Z',
+      startsAt: '2099-03-04T14:00:00.000Z',
+    } as InboxItem;
+    const sent = taskUpdateObject(event({ timeZone: 'Not/AZone' }), item);
+    expect(sent.startTime).toBe('2099-03-04T14:00:00.000Z');
+    expect(sent).not.toHaveProperty('timeZone');
+  });
+
   it("keeps a foreign entry's own link when the card has none", () => {
     const item = {
       id: 'x',

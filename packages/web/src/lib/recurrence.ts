@@ -90,11 +90,16 @@ export function nextOccurrence(
 ): Date | undefined {
   const zone = knownZone(timeZone);
   const until = rule.until ? new Date(rule.until) : undefined;
+  // Zone offsets stay within ±14h, so a wall time this early can't reach
+  // `after`; skipping its conversion keeps long-running series cheap.
+  const skipBefore =
+    wallClock(after, zone).getTime() - durationMs - 2 * 86_400_000;
   let seen = 0;
   for (const wall of occurrences(wallClock(start, zone), rule)) {
-    const occurrence = toInstant(wall, zone);
     seen++;
     if (rule.count && seen > rule.count) return undefined;
+    if (wall.getTime() < skipBefore) continue;
+    const occurrence = toInstant(wall, zone);
     if (until && occurrence > until) return undefined;
     if (occurrence.getTime() + durationMs >= after.getTime()) return occurrence;
   }
@@ -102,7 +107,7 @@ export function nextOccurrence(
 }
 
 /** The zone, if Intl knows it; otherwise the device's (undefined). */
-function knownZone(zone?: string): string | undefined {
+export function knownZone(zone?: string): string | undefined {
   if (!zone) return undefined;
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: zone });
