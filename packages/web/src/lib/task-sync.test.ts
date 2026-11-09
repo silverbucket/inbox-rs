@@ -298,6 +298,8 @@ describe('task sync — review fixes', () => {
     vi.mocked(syncCalendar).mockResolvedValueOnce(page([remote()]));
     await runTaskSync();
     expect(clearSchedule(card()).eventUrl).toBe(HREF);
+    const event = { ...card(), scheduleKind: 'event' as const };
+    expect(clearSchedule(event).eventUrl).toBeUndefined();
     const unsynced = { ...card(), eventUrl: 'https://elsewhere.example/x.ics' };
     expect(clearSchedule(unsynced).eventUrl).toBeUndefined();
   });

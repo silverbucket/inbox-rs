@@ -163,7 +163,9 @@ export function clearSchedule<T extends InboxItem>(item: T): T {
     allDay: undefined,
     scheduleKind: undefined,
     cancelled: undefined,
-    ...(isSyncedEntry(item.eventUrl) ? {} : clearPostedEntryFields()),
+    ...(item.scheduleKind === 'task' && isSyncedEntry(item.eventUrl)
+      ? {}
+      : clearPostedEntryFields()),
   };
 }
 
