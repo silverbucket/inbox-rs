@@ -389,4 +389,14 @@ describe('TodoRow touch swipes', () => {
     const { row } = render({ as: 'div' });
     expect(row.tagName).toBe('DIV');
   });
+
+  it('reserves the handle column without a drag handle when aligning', () => {
+    const { row } = render({ alignHandle: true });
+    const spacer = row.querySelector('.handle-spacer');
+    expect(spacer).not.toBeNull();
+    expect(spacer?.getAttribute('aria-hidden')).toBe('true');
+    expect(row.querySelector('[aria-label^="Drag to reorder"]')).toBeNull();
+    // Same layout class as draggable rows, so the columns line up.
+    expect(row.classList.contains('reorderable')).toBe(true);
+  });
 });

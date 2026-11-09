@@ -560,7 +560,7 @@
             <div class="due-header">Due</div>
             <ul class="todo-list" role="list">
               {#each dueTodos as todo (todo.id)}
-                <TodoRow {todo} {collection} viewing={collection} {group} {onselect} />
+                <TodoRow {todo} {collection} viewing={collection} {group} {onselect} alignHandle />
               {/each}
             </ul>
           </div>

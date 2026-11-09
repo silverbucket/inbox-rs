@@ -29,7 +29,11 @@
     stacked = false,
     as = 'li',
     viewing = null,
+    alignHandle = false,
   }: {
+    /** Reserve the drag handle's space without one, so a non-draggable
+        row (the Due band) lines up with draggable rows below it. */
+    alignHandle?: boolean;
     todo: InboxItem;
     /** The collection this todo belongs to, or null when unfiled. */
     collection: Collection | null;
@@ -328,7 +332,7 @@
   class="todo-row"
   class:completed={todo.completed}
   class:unfiled={isUnfiled}
-  class:reorderable
+  class:reorderable={reorderable || alignHandle}
   class:stacked
   class:swiping
   class:swipe-complete={swipeHint === 'complete'}
@@ -371,6 +375,8 @@
         <circle cx="3" cy="13" r="1.25"/><circle cx="9" cy="13" r="1.25"/>
       </svg>
     </span>
+  {:else if alignHandle}
+    <span class="reorder-handle handle-spacer" aria-hidden="true"></span>
   {/if}
   {#if readonly}
     <span class="cal-marker" title={todo.eventUrl ? 'On calendar' : 'Archived'} role="img" aria-label={todo.eventUrl ? 'On calendar' : 'Archived'}>
@@ -518,6 +524,16 @@
 
   .todo-row.reorderable {
     cursor: grab;
+  }
+
+  .handle-spacer {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .todo-row:has(.handle-spacer),
+  .todo-row:has(.handle-spacer):active {
+    cursor: pointer;
   }
 
   .todo-row.reorderable:active {
