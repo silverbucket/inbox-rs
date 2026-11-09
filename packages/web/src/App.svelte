@@ -17,6 +17,7 @@
     appConfig, setActiveGroupFilters,
   } from './lib/stores';
   import { initAlerts, setAlertOpenHandler } from './lib/alerts';
+  import { initTaskSync } from './lib/task-sync';
   import { scheduleAutoTranscriptionDownload } from './lib/transcription-store';
   import { captureDetected, captureFile } from './lib/capture';
   import { settingsRequest } from './lib/settings-request';
@@ -225,6 +226,8 @@
     // page or filter is active. Idempotent across remounts.
     setAlertOpenHandler(openView);
     initAlerts();
+    // Two-way sync for calendars opted in under Settings → Calendars.
+    initTaskSync();
 
     // Fetch the offline transcription model in the background once the app
     // is idle, so the first voice note transcribes without a visible

@@ -6,6 +6,7 @@
  * conversion to UTC happens only at .ics/CalDAV serialization (see ics.ts).
  */
 import type { InboxItem, ScheduleInput } from '@inbox-rs/rs-module';
+import { isSyncedEntry } from './calendar-accounts';
 
 export type { ScheduleKind } from '@inbox-rs/rs-module';
 
@@ -152,6 +153,7 @@ export type PendingSchedule = ScheduleInput;
 /**
  * Return a copy of the item with all scheduling removed — including the
  * posted-entry pointer and the archived state that posting may have set.
+ * A two-way synced task keeps its link, so the cleared due date syncs.
  */
 export function clearSchedule<T extends InboxItem>(item: T): T {
   return {
@@ -161,7 +163,9 @@ export function clearSchedule<T extends InboxItem>(item: T): T {
     allDay: undefined,
     scheduleKind: undefined,
     cancelled: undefined,
-    ...clearPostedEntryFields(),
+    ...(item.scheduleKind === 'task' && isSyncedEntry(item.eventUrl)
+      ? {}
+      : clearPostedEntryFields()),
   };
 }
 

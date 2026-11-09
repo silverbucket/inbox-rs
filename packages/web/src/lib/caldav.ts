@@ -17,8 +17,9 @@
  * - client-supplied UIDs are allowed — we always use `<itemId>@inbox-rs`
  * - failures arrive as machine-readable `caldav:*` codes
  *
- * This client only discovers calendars and CREATES entries. Publishing is
- * one-shot by design — no updates, no deletes (see note at end of file).
+ * Publishing is one-shot (create only). Updates, deletes and incremental
+ * sync exist solely for calendars the user opted into two-way task sync
+ * (see task-sync.ts).
  */
 import type { InboxItem } from '@inbox-rs/rs-module';
 import { entryUrl } from './ics';
@@ -55,6 +56,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   'caldav:conflict': 'The entry changed in your calendar app',
   'caldav:not-found': 'The entry no longer exists on the server',
   'caldav:invalid-calendar': 'That calendar was not found on the server',
+  'caldav:sync-unsupported': 'That calendar server does not support sync',
+  'caldav:sync-token-invalid': 'The calendar sync position expired',
+  'caldav:sync-failed': 'Calendar sync failed',
   'caldav:unsupported-component':
     'That calendar does not support this entry type',
   // Client-side code: the relay itself was unreachable (offline, DNS, or
@@ -264,8 +268,110 @@ export async function createEntry(
   return mutationResult(result);
 }
 
-// There are deliberately no update or delete operations here. Publishing is
-// one-shot: inbox-rs only ever ADDS entries to the user's calendar, and only
-// on explicit request. Entries must never change or disappear because a card
-// was edited in the app. (The sockethub platform supports update/delete; this
-// client intentionally does not.)
+/** A task as the platform returns it from `sync` / `query`. */
+export interface RemoteTask {
+  id: string;
+  type: 'task';
+  uid: string;
+  etag?: string;
+  name: string;
+  content?: string;
+  due?: string;
+  allDay?: boolean;
+  timeZone?: string;
+  status?: string;
+  completedTime?: string;
+  percentComplete?: number;
+  sequence?: number;
+  recurrence?: unknown;
+  updateSupported?: boolean;
+  [key: string]: unknown;
+}
+
+export interface SyncResult {
+  items: Array<{ id: string; type: string } & Record<string, unknown>>;
+  removed: string[];
+  syncToken?: string;
+  truncated?: boolean;
+}
+
+function toSyncResult(result: Record<string, unknown>): SyncResult {
+  return {
+    items: Array.isArray(result.items)
+      ? (result.items as SyncResult['items'])
+      : [],
+    removed: Array.isArray(result.removed) ? (result.removed as string[]) : [],
+    syncToken:
+      typeof result.syncToken === 'string' ? result.syncToken : undefined,
+    truncated: result.truncated === true,
+  };
+}
+
+/** RFC 6578 sync of one calendar: everything without a token, else changes. */
+export async function syncCalendar(
+  creds: CaldavCredentials,
+  calendarId: string,
+  syncToken: string | undefined,
+  endpoint: string,
+): Promise<SyncResult> {
+  const result = await send(
+    creds,
+    {
+      type: 'sync',
+      target: { id: calendarId, type: 'calendar' },
+      ...(syncToken ? { object: { syncToken } } : {}),
+    },
+    ['collection'],
+    endpoint,
+  );
+  return toSyncResult(result);
+}
+
+/** Full task snapshot — the fallback for servers without WebDAV Sync. */
+export async function queryTasks(
+  creds: CaldavCredentials,
+  calendarId: string,
+  endpoint: string,
+): Promise<SyncResult> {
+  const result = await send(
+    creds,
+    {
+      type: 'query',
+      target: { id: calendarId, type: 'calendar' },
+      object: { type: 'task' },
+    },
+    ['collection'],
+    endpoint,
+  );
+  return toSyncResult(result);
+}
+
+/** Replace an entry; rejects with `caldav:conflict` when its ETag moved on. */
+export async function updateEntry(
+  creds: CaldavCredentials,
+  calendarId: string,
+  object: Record<string, unknown>,
+  endpoint: string,
+): Promise<PostedEntry> {
+  const result = await send(
+    creds,
+    { type: 'update', target: { id: calendarId, type: 'calendar' }, object },
+    ['update'],
+    endpoint,
+  );
+  return mutationResult(result);
+}
+
+export async function deleteEntry(
+  creds: CaldavCredentials,
+  calendarId: string,
+  object: { id: string; type: 'event' | 'task'; etag: string },
+  endpoint: string,
+): Promise<void> {
+  await send(
+    creds,
+    { type: 'delete', target: { id: calendarId, type: 'calendar' }, object },
+    ['delete'],
+    endpoint,
+  );
+}

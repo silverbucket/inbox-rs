@@ -1502,6 +1502,10 @@ async function removeItem(id: string, snapshot?: InboxItem) {
   // stored now, not what the caller saw.
   const item = get(items)[id] ?? snapshot;
   await inbox.remove(id, item);
+  // Dynamic: task-sync imports this module.
+  if (item?.eventUrl) {
+    void import('./task-sync').then((m) => m.deleteSyncedTask(item));
+  }
 
   // Revoke and remove any associated blob URLs (original + thumbnail) to
   // prevent memory leaks. All current callers pass the full item; we also do
