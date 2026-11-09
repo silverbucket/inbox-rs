@@ -54,6 +54,45 @@ describe('CollectionPicker', () => {
     if (component) unmount(component);
     component = undefined;
     host.remove();
+    vi.unstubAllGlobals();
+  });
+
+  it('tracks the visible viewport as the keyboard opens, pans, and closes', () => {
+    const viewport = Object.assign(new EventTarget(), {
+      height: 800,
+      offsetTop: 0,
+    });
+    vi.stubGlobal('visualViewport', viewport);
+    const removeListener = vi.spyOn(viewport, 'removeEventListener');
+    component = mount(CollectionPicker, {
+      target: host,
+      props: { item: { title: 'Item' }, onpick: vi.fn(), onclose: vi.fn() },
+    });
+    flushSync();
+    const overlay = host.querySelector<HTMLElement>('.overlay')!;
+    expect(overlay.style.getPropertyValue('--picker-height')).toBe('800px');
+
+    viewport.height = 350;
+    viewport.dispatchEvent(new Event('resize'));
+    flushSync();
+    expect(overlay.style.getPropertyValue('--picker-height')).toBe('350px');
+
+    viewport.offsetTop = 70;
+    viewport.dispatchEvent(new Event('scroll'));
+    flushSync();
+    expect(overlay.style.top).toBe('70px');
+
+    viewport.height = 800;
+    viewport.offsetTop = 0;
+    viewport.dispatchEvent(new Event('resize'));
+    flushSync();
+    expect(overlay.style.getPropertyValue('--picker-height')).toBe('800px');
+    expect(overlay.style.top).toBe('0px');
+
+    unmount(component);
+    component = undefined;
+    expect(removeListener).toHaveBeenCalledWith('resize', expect.any(Function));
+    expect(removeListener).toHaveBeenCalledWith('scroll', expect.any(Function));
   });
 
   it('shows each suggested collection with its group', () => {

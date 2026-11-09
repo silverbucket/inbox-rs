@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
+  import { onMount } from 'svelte';
   import { get } from 'svelte/store';
   import {
     appConfig,
@@ -54,6 +55,26 @@
     onpick: (collectionId: string | undefined) => void;
     onclose: () => void;
   } = $props();
+
+  let viewportHeight = $state<string | undefined>();
+  let viewportTop = $state<string | undefined>();
+
+  onMount(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    // The layout viewport stays behind the keyboard on mobile browsers.
+    const updateViewport = () => {
+      viewportHeight = `${viewport.height}px`;
+      viewportTop = `${viewport.offsetTop}px`;
+    };
+    updateViewport();
+    viewport.addEventListener('resize', updateViewport);
+    viewport.addEventListener('scroll', updateViewport);
+    return () => {
+      viewport.removeEventListener('resize', updateViewport);
+      viewport.removeEventListener('scroll', updateViewport);
+    };
+  });
 
   let query = $state('');
   let showCreate = $state(false);
@@ -261,10 +282,16 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="overlay" onclick={onclose}>
+<div
+  class="overlay"
+  style:--picker-height={viewportHeight}
+  style:top={viewportTop}
+  onclick={onclose}
+>
   <div
     class="panel"
     role="dialog"
+    tabindex="-1"
     aria-modal="true"
     aria-label={title}
     onclick={(e) => e.stopPropagation()}
@@ -553,6 +580,9 @@
   .overlay {
     position: fixed;
     inset: 0;
+    bottom: auto;
+    height: var(--picker-height, 100%);
+    box-sizing: border-box;
     z-index: 300;
     background: var(--overlay);
     display: flex;
@@ -569,7 +599,7 @@
     box-shadow: 0 12px 36px var(--shadow);
     width: 100%;
     max-width: 400px;
-    max-height: min(28rem, calc(100vh - 6rem));
+    max-height: min(28rem, calc(var(--picker-height, 100dvh) - 6rem));
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -588,7 +618,7 @@
 
     .panel {
       max-width: none;
-      max-height: 78dvh;
+      max-height: min(78dvh, var(--picker-height, 100dvh));
       border-left: none;
       border-right: none;
       border-bottom: none;
@@ -608,6 +638,7 @@
   }
 
   .head {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -804,6 +835,8 @@
 
   /* Inline create form */
   .create-form {
+    min-height: 0;
+    overflow-y: auto;
     padding: 0.35rem 1rem 1rem;
     display: flex;
     flex-direction: column;
