@@ -47,6 +47,7 @@ import {
   updateEntry,
 } from './caldav';
 import { calendarAccounts } from './calendar-accounts';
+import { clearSchedule } from './schedule';
 import {
   deleteSyncedTask,
   runTaskSync,
@@ -256,6 +257,49 @@ describe('task sync — push', () => {
       { id: HREF, type: 'task', etag: '"1"' },
       expect.any(String),
     );
+  });
+});
+
+describe('task sync — review fixes', () => {
+  it('links a previously published, archived card on first sync', async () => {
+    items().set({
+      p1: {
+        id: 'p1',
+        type: 'todo',
+        title: 'Pay rent',
+        createdAt: '2026-11-01T00:00:00Z',
+        completed: false,
+        eventUrl: HREF,
+        eventEtag: '"1"',
+        archived: true,
+        archiveReason: 'calendar',
+      } as InboxItem,
+    });
+    vi.mocked(syncCalendar).mockResolvedValueOnce(page([remote()]));
+    await runTaskSync();
+    expect(card()).toMatchObject({
+      id: 'p1',
+      isTodo: true,
+      scheduleKind: 'task',
+    });
+    expect(card().archived).toBeUndefined();
+  });
+
+  it('never deletes a recurring task from the server', async () => {
+    vi.mocked(syncCalendar).mockResolvedValueOnce(
+      page([remote({ recurrence: { frequency: 'weekly' } })]),
+    );
+    await runTaskSync();
+    await deleteSyncedTask(card());
+    expect(deleteEntry).not.toHaveBeenCalled();
+  });
+
+  it("clearing a synced task's time keeps its link, so the change syncs", async () => {
+    vi.mocked(syncCalendar).mockResolvedValueOnce(page([remote()]));
+    await runTaskSync();
+    expect(clearSchedule(card()).eventUrl).toBe(HREF);
+    const unsynced = { ...card(), eventUrl: 'https://elsewhere.example/x.ics' };
+    expect(clearSchedule(unsynced).eventUrl).toBeUndefined();
   });
 });
 

@@ -147,6 +147,12 @@ export function choiceForEventUrl(
   return undefined;
 }
 
+/** Whether the entry lives in a calendar synced two-way on this device. */
+export function isSyncedEntry(eventUrl: string | undefined): boolean {
+  const choice = choiceForEventUrl(eventUrl);
+  return !!choice?.account.syncCalendarIds?.includes(choice.calendar.id);
+}
+
 /** Remember the chosen calendar per entry kind ("events" vs "tasks"). */
 export function recordCalendarUse(
   kind: ScheduleKind,

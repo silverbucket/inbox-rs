@@ -324,9 +324,14 @@ async function applyRemote(
     cal.entries[task.id] = { fp: fingerprint(created), remote: task };
     return;
   }
-  if (item.eventUrl === task.id && item.eventEtag === task.etag && task.etag) {
+  if (
+    base &&
+    item.eventUrl === task.id &&
+    item.eventEtag === task.etag &&
+    task.etag
+  ) {
     // Unchanged on the server: refresh the copy, keep any pending local edit.
-    cal.entries[task.id] = { fp: base?.fp ?? fingerprint(item), remote: task };
+    cal.entries[task.id] = { fp: base.fp, remote: task };
     return;
   }
   const localEdit = !!base && fingerprint(item) !== base.fp;
@@ -503,7 +508,8 @@ export async function deleteSyncedTask(item: InboxItem): Promise<void> {
     saveState(state);
     const target = syncTargets().find((t) => t.calendarId === calendarId);
     const etag = item.eventEtag ?? base.remote.etag;
-    if (!target || !etag) return;
+    // Deleting a recurring task's resource would take the whole series.
+    if (!target || !etag || !canPush(base)) return;
     try {
       await deleteEntry(
         target.account,
