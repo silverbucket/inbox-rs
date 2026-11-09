@@ -311,6 +311,8 @@ export interface RemoteRecurrence {
   until?: string;
   byDay?: string[];
   byMonthDay?: number[];
+  /** WKST: the day weeks start on (RFC 5545 default 'MO'). */
+  weekStart?: 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
 }
 
 export type RemoteTask = RemoteEntry & { type: 'task' };
