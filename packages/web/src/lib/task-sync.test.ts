@@ -48,6 +48,7 @@ import {
 } from './caldav';
 import { calendarAccounts } from './calendar-accounts';
 import { clearSchedule } from './schedule';
+import { restoreItem } from './stores';
 import {
   deleteSyncedTask,
   runTaskSync,
@@ -261,6 +262,14 @@ describe('task sync — push', () => {
       expect.stringContaining('changed in your calendar app too'),
       expect.objectContaining({ label: 'Undo' }),
     );
+    // Undo restores the local edit on top of the latest server link.
+    const toast = vi.mocked(showToast).mock.calls.at(-1)?.[1] as {
+      run: () => void;
+    };
+    toast.run();
+    const { before, after } = vi.mocked(restoreItem).mock.calls[0][0];
+    expect(before).toMatchObject({ title: 'Local title', eventEtag: '"2"' });
+    expect(after).toMatchObject({ title: 'Remote title', eventEtag: '"2"' });
   });
 
   it('deleting the card deletes its task', async () => {
