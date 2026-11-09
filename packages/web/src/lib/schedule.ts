@@ -162,9 +162,10 @@ export function clearSchedule<T extends InboxItem>(item: T): T {
     allDay: undefined,
     scheduleKind: undefined,
     cancelled: undefined,
-    ...(item.scheduleKind === 'task' && item.calendarSync
+    ...(item.calendarSync &&
+    (item.scheduleKind === 'task' || item.isTodo || item.type === 'todo')
       ? {}
-      : clearPostedEntryFields()),
+      : clearPostedEntryFields(item)),
   };
 }
 
@@ -174,14 +175,16 @@ export function clearSchedule<T extends InboxItem>(item: T): T {
  * returns to the Inbox triage queue.
  */
 export function clearPostedEntry<T extends InboxItem>(item: T): T {
-  return { ...item, ...clearPostedEntryFields() };
+  return { ...item, ...clearPostedEntryFields(item) };
 }
 
-function clearPostedEntryFields() {
+function clearPostedEntryFields(item: Pick<InboxItem, 'calendarSync'>) {
   return {
     eventUrl: undefined,
     eventEtag: undefined,
-    calendarSync: undefined,
+    // "Not on a calendar" outlives the link, so a linked collection
+    // doesn't add the card back.
+    calendarSync: item.calendarSync === false ? false : undefined,
     archived: undefined,
     archivedAt: undefined,
     archiveReason: undefined,

@@ -28,7 +28,17 @@
    * last sync, and the actions that change it. Rendered only for cards that
    * are on, or headed for, a calendar.
    */
-  let { item }: { item: InboxItem } = $props();
+  let {
+    item,
+    prepare,
+    pickerOpen = $bindable(false),
+  }: {
+    item: InboxItem;
+    /** Settles pending editor saves first, so they can't undo an action. */
+    prepare?: () => Promise<void>;
+    /** True while the calendar picker is up (the card defers Escape to it). */
+    pickerOpen?: boolean;
+  } = $props();
 
   const info = $derived(
     cardCalendar(
@@ -89,7 +99,7 @@
 
   let busy = $state(false);
   let confirmRemove = $state(false);
-  let showPicker = $state(false);
+  
 
   function friendly(err: unknown) {
     return err instanceof CaldavError || err instanceof Error
@@ -101,6 +111,7 @@
     if (busy) return;
     busy = true;
     try {
+      await prepare?.();
       await run();
     } catch (err) {
       console.error('Calendar action failed', err);
@@ -159,7 +170,7 @@
   }
 
   function handleMove(choice: CalendarChoice) {
-    showPicker = false;
+    pickerOpen = false;
     if (choice.calendar.id === info?.url) return;
     void act(async () => {
       await keepInSync(item, choice);
@@ -218,18 +229,20 @@
       </p>
     {/if}
 
-    {#if info.connected}
+    {#if info.connected || info.mode !== 'once'}
+      <!-- Keep off / Stop syncing only change the card, so they work on a
+           device without the account; the rest talk to the calendar. -->
       <div class="actions">
         {#if info.mode === 'pending'}
           <button type="button" class="btn" disabled={busy} onclick={handleSkip}>Keep off {info.name}</button>
         {:else if info.mode === 'once'}
           <button type="button" class="btn primary" disabled={busy} onclick={handleResume}>Keep in sync</button>
         {:else}
-          {#if !info.viaCollection && !lockReason}
-            <button type="button" class="btn" disabled={busy} onclick={() => (showPicker = true)}>Move to…</button>
+          {#if info.connected && !info.viaCollection && !lockReason}
+            <button type="button" class="btn" disabled={busy} onclick={() => (pickerOpen = true)}>Move to…</button>
           {/if}
           <button type="button" class="btn" disabled={busy} onclick={handleStop}>Stop syncing</button>
-          {#if !lockReason}
+          {#if info.connected && !lockReason}
             <button
               type="button"
               class="btn danger"
@@ -246,12 +259,12 @@
     {/if}
   </section>
 
-  {#if showPicker}
+  {#if pickerOpen}
     <CalendarPicker
       {kind}
       selectedId={info.url}
       onpick={handleMove}
-      onclose={() => (showPicker = false)}
+      onclose={() => (pickerOpen = false)}
     />
   {/if}
 {/if}

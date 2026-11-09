@@ -104,6 +104,7 @@ describe('addItemToCalendar — the archive ownership rule', () => {
   it('posts a cancelled event — the relay carries its status', async () => {
     const result = await addItemToCalendar(note({ cancelled: true }), CAL.id);
     expect(result.eventUrl).toBeTruthy();
+    expect(result.cancelled).toBe(true);
     expect(vi.mocked(createEntry)).toHaveBeenCalled();
   });
 

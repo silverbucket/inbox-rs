@@ -25,6 +25,7 @@
   import CalendarSection from './CalendarSection.svelte';
   import { cardCalendar } from '../lib/calendar-card';
   import { calendarAccounts } from '../lib/calendar-accounts';
+  import { readOnlyReason } from '../lib/calendar-sync';
   import { formatScheduled, isOverdue } from '../lib/schedule';
   import BookmarkView from './view-card/BookmarkView.svelte';
   import ImageView from './view-card/ImageView.svelte';
@@ -107,11 +108,15 @@
   // Which calendar the card is on (or headed for) — drives the Calendar
   // section and the delete dialog's "also delete it from …" choice.
   const calendarInfo = $derived(cardCalendar(item, $collections, $calendarAccounts));
+  // Read-only entries (repeating, attendees) can't be deleted from here, so
+  // the dialog doesn't offer it and the entry is kept.
+  const calendarLocked = $derived(!!item.calendarSync && !!readOnlyReason(item));
   const syncedCalendarName = $derived(
-    item.calendarSync && item.eventUrl && calendarInfo?.connected
+    item.calendarSync && item.eventUrl && calendarInfo?.connected && !calendarLocked
       ? calendarInfo.name
       : undefined,
   );
+  let calendarPickerOpen = $state(false);
 
   async function handleDelete({ alsoCalendar }: { alsoCalendar: boolean }) {
     deleting = true;
@@ -121,7 +126,7 @@
       // The save attempt has settled. Deletion must now win.
     }
     await deleteItem(item.id, item, {
-      keepCalendarEntry: !!syncedCalendarName && !alsoCalendar,
+      keepCalendarEntry: calendarLocked || (!!syncedCalendarName && !alsoCalendar),
     });
     // The card is gone; an edit that failed to flush must not be written
     // back by the editor's teardown.
@@ -468,7 +473,7 @@
       return;
     }
     if (e.key !== 'Escape') return;
-    if (showDelete || showPicker || showSchedule || showCalendarSheet) return;
+    if (showDelete || showPicker || showSchedule || showCalendarSheet || calendarPickerOpen) return;
     if (showActions) {
       closeActions(true);
       return;
@@ -950,7 +955,7 @@
               : 'Set time…'}
       </button>
       {#if calendarInfo}
-        <CalendarSection {item} />
+        <CalendarSection {item} prepare={prepareAction} bind:pickerOpen={calendarPickerOpen} />
       {:else if item.startsAt}
         <button
           type="button"

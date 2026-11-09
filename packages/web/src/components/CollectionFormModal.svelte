@@ -134,7 +134,7 @@
       id: collectionId,
       name: name.trim(),
       description: description.trim() || undefined,
-      itemIds: collection?.itemIds ?? [],
+      itemIds: get(collections)[collectionId]?.itemIds ?? collection?.itemIds ?? [],
       createdAt: collection?.createdAt ?? new Date().toISOString(),
       color,
       groupId: destinationGroupId,

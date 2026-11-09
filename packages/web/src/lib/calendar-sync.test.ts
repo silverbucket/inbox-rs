@@ -65,6 +65,7 @@ import {
   entryIsCurrent,
   linkCollection,
   previewLink,
+  removeFromCalendar,
   runCalendarSync,
   stopSyncing,
   taskUpdateObject,
@@ -323,6 +324,50 @@ describe('pull', () => {
     // …and the linked collection doesn't add it straight back.
     await runCalendarSync();
     expect(createEntry).not.toHaveBeenCalled();
+  });
+
+  it('never lets an entry claim an unrelated card by putting its id in the UID', async () => {
+    items().update((all) => ({
+      ...all,
+      victim: {
+        id: 'victim',
+        type: 'todo',
+        title: 'Private',
+        createdAt: '2026-01-01T00:00:00Z',
+        completed: false,
+      } as InboxItem,
+    }));
+    vi.mocked(syncCalendar).mockResolvedValueOnce(
+      page([
+        remote({
+          id: `${CAL}evil.ics`,
+          uid: 'victim@inbox-rs',
+          name: 'Hijacked',
+        }),
+      ]),
+    );
+    await runCalendarSync();
+    expect(get(items()).victim).toMatchObject({ title: 'Private' });
+    expect(get(items()).victim.eventUrl).toBeUndefined();
+  });
+
+  it('keeps a sent-once receipt when its entry is deleted in the calendar', async () => {
+    items().update((all) => ({
+      ...all,
+      once: {
+        id: 'once',
+        type: 'todo',
+        title: 'Sent',
+        createdAt: '2026-01-01T00:00:00Z',
+        completed: false,
+        eventUrl: HREF,
+        eventEtag: '"1"',
+        calendarSync: false,
+      } as InboxItem,
+    }));
+    vi.mocked(syncCalendar).mockResolvedValueOnce(page([], [HREF]));
+    await runCalendarSync();
+    expect(get(items()).once.eventUrl).toBe(HREF);
   });
 
   it('ignores new entries on a calendar no collection is linked to', async () => {
@@ -616,6 +661,23 @@ describe('push and create', () => {
     );
   });
 
+  it('keeps tracking an entry whose removal the server rejected', async () => {
+    vi.mocked(deleteEntry).mockRejectedValueOnce(
+      new CaldavError('caldav:connection-failed'),
+    );
+    await expect(removeFromCalendar(card())).rejects.toThrow();
+    vi.mocked(updateEntry).mockResolvedValueOnce({
+      eventUrl: HREF,
+      eventEtag: '"2"',
+    });
+    items().update((all) => ({
+      ...all,
+      [card().id]: { ...card(), title: 'Still synced' },
+    }));
+    await runCalendarSync();
+    expect(updateEntry).toHaveBeenCalledTimes(1);
+  });
+
   it('never deletes a repeating entry from the server', async () => {
     vi.mocked(syncCalendar).mockResolvedValueOnce(
       page([remote({ etag: '"2"', recurrence: { frequency: 'weekly' } })]),
@@ -698,6 +760,19 @@ describe('field mapping', () => {
     ).toBe(false);
     expect(entryIsCurrent(remote({ due: '2019-01-01' }))).toBe(true);
     expect(entryIsCurrent(remote({ status: 'cancelled' }))).toBe(false);
+  });
+
+  it('clearing a date keeps "not on a calendar"', () => {
+    const off = {
+      id: 'x',
+      type: 'todo',
+      title: 'T',
+      createdAt: '',
+      completed: false,
+      startsAt: '2099-01-01T00:00:00Z',
+      calendarSync: false,
+    } as InboxItem;
+    expect(clearSchedule(off).calendarSync).toBe(false);
   });
 
   it("clearing a synced task's time keeps its link, so the change syncs", () => {

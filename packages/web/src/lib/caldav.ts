@@ -219,7 +219,9 @@ export function itemToCalendarObject(
   };
   if (isTask) {
     if (when) base.due = when;
-    if (item.completed) {
+    if (item.cancelled) {
+      base.status = 'cancelled';
+    } else if (item.completed) {
       base.status = 'completed';
       base.completedTime = item.completedAt ?? new Date().toISOString();
     }

@@ -275,8 +275,8 @@
         </button>
         <button type="button"
           class="mode-option"
-          class:active={postMode === 'move'}
-          aria-pressed={postMode === 'move'}
+          class:active={postMode !== 'sync'}
+          aria-pressed={postMode !== 'sync'}
           onclick={() => setPostMode($userSettings.calendarPostMode === 'copy' ? 'copy' : 'move')}
         >
           Send once

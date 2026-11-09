@@ -29,9 +29,10 @@ function* occurrences(start: Date, rule: RemoteRecurrence): Generator<Date> {
           yield base;
           break;
         }
+        // Weeks start on Monday (RFC 5545's default WKST).
         const weekStart = new Date(base);
-        weekStart.setDate(base.getDate() - base.getDay());
-        for (const day of days) {
+        weekStart.setDate(base.getDate() - ((base.getDay() + 6) % 7));
+        for (const day of days.map((d) => (d + 6) % 7).sort((a, b) => a - b)) {
           const d = new Date(weekStart);
           d.setDate(weekStart.getDate() + day);
           if (d >= start) yield d;
@@ -42,19 +43,26 @@ function* occurrences(start: Date, rule: RemoteRecurrence): Generator<Date> {
         const monthDays = rule.byMonthDay?.length
           ? [...rule.byMonthDay].sort((a, b) => a - b)
           : [start.getDate()];
+        const candidates: Date[] = [];
         for (const md of monthDays) {
           const d = new Date(start);
           d.setDate(1);
           d.setMonth(start.getMonth() + step * interval);
           const month = d.getMonth();
-          d.setDate(md);
+          // Negative days count from the month's end (-1 = the last day).
+          const length = new Date(d.getFullYear(), month + 1, 0).getDate();
+          d.setDate(md < 0 ? length + md + 1 : md);
           if (d.getMonth() !== month) continue; // e.g. the 31st in April
-          if (d >= start) yield d;
+          candidates.push(d);
         }
+        candidates.sort((a, b) => a.getTime() - b.getTime());
+        for (const d of candidates) if (d >= start) yield d;
         break;
       }
       case 'yearly':
         base.setFullYear(start.getFullYear() + step * interval);
+        // Feb 29 only occurs in leap years; don't roll into March 1.
+        if (base.getMonth() !== start.getMonth()) break;
         yield base;
         break;
       default:

@@ -714,6 +714,12 @@ async function applyRemote(
   const id = await itemIdFor(entry);
   const linked = byHref.get(entry.id);
   const existing = linked ?? get(items)[id];
+  // Found by id, not by link: a UID naming a card ("<id>@inbox-rs") must not
+  // adopt it — anyone who can write to a shared calendar could otherwise
+  // overwrite any card whose id they know. Only an unlinked card with our
+  // href-derived id (a re-import of this same entry) is adopted.
+  if (!linked && existing && (!id.startsWith('caldav-') || existing.eventUrl))
+    return;
   if (!existing) {
     if (!target.collection || !entryIsCurrent(entry)) return;
     if (cal.ignored?.includes(entry.id)) return;
@@ -787,7 +793,8 @@ async function unlinkRemoved(
   const item = byHref.get(href);
   if (!item) return;
   const next = await updateItem(item.id, (current) =>
-    current?.eventUrl === href
+    // A sent-once card keeps its receipt; only synced cards unlink.
+    current?.eventUrl === href && current.calendarSync === true
       ? { ...clearPostedEntry(current), calendarSync: false }
       : null,
   );
@@ -865,10 +872,12 @@ async function catchUpBaselines(target: SyncTarget, cal: CalendarSyncState) {
       !missingTried.has(i.eventUrl),
   );
   if (missing.length === 0) return;
+  const snapshot = await windowSnapshot(target);
+  // Only after a successful fetch: a failed one is retried next pass.
   for (const i of missing) if (i.eventUrl) missingTried.add(i.eventUrl);
   const byHref = hrefIndex();
   const wanted = new Set(missing.map((i) => i.eventUrl));
-  for (const entry of await windowSnapshot(target)) {
+  for (const entry of snapshot) {
     if (wanted.has(entry.id)) await applyRemote(entry, target, cal, byHref, []);
   }
 }
@@ -885,6 +894,7 @@ async function createPending(target: SyncTarget, cal: CalendarSyncState) {
       entryKindFor(i, target.components),
   );
   for (const item of pending) {
+    if (linkedCollection(target.calendarId)?.id !== col.id) return; // unlinked meanwhile
     const kind = entryKindFor(item, target.components);
     if (!kind) continue;
     try {
@@ -942,8 +952,8 @@ async function push(
     if (fingerprint(item, base.remote.type) === base.fp) continue;
     // No ETag means no conflict check; wait for a pull to supply one.
     if (!item.eventEtag && !base.remote.etag) continue;
-    const object = entryUpdateObject(base.remote, item);
     try {
+      const object = entryUpdateObject(base.remote, item);
       const { eventEtag } = await updateEntry(
         target.account,
         target.calendarId,
@@ -1365,6 +1375,8 @@ export async function linkCollection(
 export async function unlinkCollection(collection: Collection): Promise<void> {
   const url = collection.calendar?.url;
   if (!url) return;
+  // A pass in flight could otherwise add or re-link cards after this.
+  if (running) await running;
   const { calendar: _drop, ...rest } = collection;
   await storeCollection(rest as Collection);
   for (const item of Object.values(get(items))) {
@@ -1381,7 +1393,18 @@ export async function unlinkCollection(collection: Collection): Promise<void> {
     );
   }
   const state = loadState();
-  delete state[url];
+  const cal = state[url];
+  if (cal) {
+    const stillSynced = new Set(
+      Object.values(get(items))
+        .filter((i) => i.calendarSync && i.eventUrl)
+        .map((i) => i.eventUrl),
+    );
+    for (const href of Object.keys(cal.entries)) {
+      if (!stillSynced.has(href)) delete cal.entries[href];
+    }
+    if (Object.keys(cal.entries).length === 0) delete state[url];
+  }
   saveState(state);
 }
 
@@ -1449,29 +1472,30 @@ async function deleteRemoteEntry(item: InboxItem): Promise<void> {
   if (!href) return;
   const target = choiceForEventUrl(href);
   const base = baselineFor(href);
-  forgetBaseline(href);
   if (!target) {
     throw new CaldavError(
       'This device isn’t connected to that calendar account',
     );
   }
+  // Unknown read-only status (not fetched on this device yet): don't guess.
+  if (!base) {
+    throw new CaldavError('Still syncing this entry — try again in a moment');
+  }
   // Deleting a repeating entry's resource would take the whole series.
-  if (base && !canPush(base)) {
+  if (!canPush(base)) {
     throw new CaldavError(
       'This entry can only be removed in your calendar app',
     );
   }
-  const etag = item.eventEtag || base?.remote.etag;
+  const etag = item.eventEtag || base.remote.etag;
   if (!etag) throw new CaldavError('caldav:conflict');
-  const kind =
-    base?.remote.type ??
-    (isTodoish(item) || item.scheduleKind === 'task' ? 'task' : 'event');
   await deleteEntry(
     target.account,
     target.calendar.id,
-    { id: href, type: kind, etag },
+    { id: href, type: base.remote.type, etag },
     accountEndpoint(target.account),
   );
+  forgetBaseline(href);
 }
 
 /**
@@ -1489,6 +1513,7 @@ export async function deleteSyncedEntry(item: InboxItem): Promise<void> {
   try {
     await deleteRemoteEntry(item);
   } catch (err) {
+    forgetBaseline(item.eventUrl); // the card is gone either way
     console.error('Failed to delete synced entry', err);
     showToast(`Couldn’t remove “${item.title}” from ${name}`);
   }
@@ -1546,6 +1571,12 @@ export function initCalendarSync(): void {
     }, 2000);
   };
   items.subscribe(schedule);
+  // Connecting an account makes linked calendars reachable from here.
+  let accountsSeen = false;
+  calendarAccounts.subscribe(() => {
+    if (accountsSeen) kick();
+    accountsSeen = true;
+  });
   collections.subscribe(schedule);
 }
 

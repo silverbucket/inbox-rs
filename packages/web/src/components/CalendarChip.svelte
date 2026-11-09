@@ -32,7 +32,7 @@
   const redundant = $derived(
     !!info &&
       !info.error &&
-      info.mode !== 'pending' &&
+      info.mode === 'sync' &&
       !!context?.calendar &&
       context.calendar.url === info.url,
   );

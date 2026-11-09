@@ -79,7 +79,10 @@
     return other && other.id !== collectionId ? other : undefined;
   }
 
+  let loadSeq = 0;
+
   async function load(next: CalendarChoice) {
+    const seq = ++loadSeq;
     choice = next;
     preview = null;
     loadError = '';
@@ -87,15 +90,17 @@
     reviewing = null;
     loading = true;
     try {
-      preview = await previewLink(next);
+      const result = await previewLink(next);
+      if (seq === loadSeq) preview = result; // ignore a superseded pick
     } catch (err) {
+      if (seq !== loadSeq) return;
       console.error('Calendar preview failed', err);
       loadError =
         err instanceof CaldavError || err instanceof Error
           ? err.message
           : 'Couldn’t reach the calendar';
     } finally {
-      loading = false;
+      if (seq === loadSeq) loading = false;
     }
   }
 

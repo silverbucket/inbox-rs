@@ -114,6 +114,8 @@ export async function addItemToCalendar(
     calendarId,
     item,
     accountEndpoint(target.account),
+    item.scheduleKind ??
+      (item.isTodo || item.type === 'todo' ? 'task' : 'event'),
   );
   let posted: InboxItem = {
     ...item,
