@@ -36,6 +36,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: 'notifications', title: 'Notifications', icon: 'bell' },
   { id: 'columns', title: 'Column sets', icon: 'columns', wide: true },
   { id: 'data', title: 'Your data', icon: 'database' },
-  { id: 'apps', title: 'Ways to capture', icon: 'apps' },
+  { id: 'apps', title: 'Capture tools', icon: 'apps' },
   { id: 'about', title: 'About', icon: 'info' },
 ];

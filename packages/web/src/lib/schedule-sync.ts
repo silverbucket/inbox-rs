@@ -17,7 +17,8 @@ import {
 } from './calendar-accounts';
 import { cleanForStorage } from './clean-for-storage';
 import { clearPostedEntry, type PendingSchedule } from './schedule';
-import { flushItemChanges, items, storeItem } from './stores';
+import { flushItemChanges, items, restoreItem, storeItem } from './stores';
+import { showToast } from './toast';
 
 /**
  * The shared completion toggle — local-only. Completing a todo here never
@@ -38,6 +39,21 @@ export async function setItemCompleted(
     completedAt: completed ? new Date().toISOString() : undefined,
   };
   await storeItem(cleanForStorage(updated));
+  showToast(completed ? 'Todo completed' : 'Todo reopened', {
+    label: 'Undo',
+    run: () => {
+      void restoreItem({ before: latest, after: updated }).then(
+        (restored) => {
+          if (!restored)
+            showToast('That todo is gone, so there’s nothing to undo');
+        },
+        (error) => {
+          console.error('Failed to undo todo completion', error);
+          showToast('Couldn’t undo that');
+        },
+      );
+    },
+  });
 }
 
 /**

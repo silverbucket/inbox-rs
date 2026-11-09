@@ -237,7 +237,7 @@
       <span>{mod}↵ Open editor</span>
       {#if onopentodo}
         <span class="sep">·</span>
-        <span>{mod}⇧↵ Open as todo</span>
+        <span>{mod}⇧↵ Add as todo</span>
       {/if}
     {/if}
   </div>
