@@ -43,6 +43,7 @@
   let showCollectionForm = $state(false);
   let showGroupForm = $state(false);
   let userMenu = $state<UserMenuHandle | null>(null);
+  let sidebarShell = $state<SidebarShell | undefined>();
   let AddEntryModalComponent = $state<LazyComponent | null>(null);
   let ViewCardModalComponent = $state<LazyComponent | null>(null);
   let PluginsPageComponent = $state<LazyComponent | null>(null);
@@ -803,7 +804,7 @@
 <svelte:window onkeydown={handleGlobalKeydown} />
 
 {#if $layout === 'sidebar'}
-  <SidebarShell {route} {navTo} {navToCollection} onsearch={navToSearch} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} onopenhelp={() => shortcutHelpOpen = true} bind:userMenu>
+  <SidebarShell bind:this={sidebarShell} {route} {navTo} {navToCollection} onsearch={navToSearch} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} onopenhelp={() => shortcutHelpOpen = true} bind:userMenu>
     {#snippet children()}{@render shellBody()}{/snippet}
   </SidebarShell>
 {:else}
@@ -812,7 +813,7 @@
   </ClassicShell>
 {/if}
 
-<MobileTabBar page={bodyPage} planCount={viewTodoCount} {navTo} oncapture={() => bodyPage === 'todos' ? openAddTodo('') : bodyPage === 'collections' ? (showCollectionForm = true) : (captureSheetOpen = true)} />
+<MobileTabBar page={bodyPage} planCount={viewTodoCount} navTo={(page) => { sidebarShell?.collapseSidebar(); navTo(page); }} oncapture={() => bodyPage === 'todos' ? openAddTodo('') : bodyPage === 'collections' ? (showCollectionForm = true) : (captureSheetOpen = true)} />
 
 <!-- Focus mode: a route-driven popup (#/collection/:id) over the page the
      user was on. Rendered here, not in the shell body, so the backdrop can

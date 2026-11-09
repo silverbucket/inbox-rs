@@ -249,6 +249,10 @@
     }
   }
 
+  export function collapseSidebar() {
+    if (!collapsed) toggleCollapsed();
+  }
+
   function toggleCollapsed() {
     collapsed = !collapsed;
     try {
