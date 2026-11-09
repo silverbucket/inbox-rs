@@ -1,4 +1,6 @@
 <script lang="ts">
+  import LinkCalendarSheet from './LazyLinkCalendarSheet.svelte';
+  import { calendarSyncStatus } from '../lib/calendar-sync';
   import type { InboxItem, InboxItemType, Collection } from '@inbox-rs/rs-module';
   import {
     collectionItems,
@@ -59,6 +61,8 @@
     reorderable?: boolean;
   } = $props();
 
+  let showCalendarLink = $state(false);
+
   // Collection body renders both todos (at the top, drag-sortable) and
   // reference items (the existing masonry grid below) so the page keeps all
   // data in context while the flat Todos page shows the cross-collection view.
@@ -78,7 +82,30 @@
   const completedTodos = $derived(
     sortCompletedTodosByCompletedAt(filterCompletedTodos(todoItems))
   );
-  const referenceItems = $derived(filterReferenceItems(items));
+  // Events lead the references in date order; ones that have ended drop to
+  // a collapsed "Past" section — kept, never deleted.
+  const allReferenceItems = $derived(filterReferenceItems(items));
+  const isEvent = (i: InboxItem) => !!i.startsAt && i.scheduleKind !== 'task';
+  const eventEnded = (i: InboxItem, start: number) => {
+    const end = new Date(i.endsAt ?? i.startsAt ?? 0);
+    if (i.allDay) end.setHours(23, 59, 59, 999);
+    return end.getTime() < start;
+  };
+  const pastEvents = $derived(
+    allReferenceItems
+      .filter((i) => isEvent(i) && eventEnded(i, $todayStart))
+      .sort((a, b) => (b.startsAt ?? '').localeCompare(a.startsAt ?? '')),
+  );
+  const referenceItems = $derived.by(() => {
+    const current = allReferenceItems.filter(
+      (i) => !(isEvent(i) && eventEnded(i, $todayStart)),
+    );
+    const upcoming = current
+      .filter(isEvent)
+      .sort((a, b) => (a.startsAt ?? '').localeCompare(b.startsAt ?? ''));
+    return [...upcoming, ...current.filter((i) => !isEvent(i))];
+  });
+  let pastExpanded = $state(false);
 
   // Items moved to a calendar (todos and cards alike) — one combined
   // collapsed section; the calendar owns them until the entry is removed.
@@ -360,8 +387,25 @@
           <svg class="fav-mark" role="img" aria-label="Favourite" width="13" height="13" viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6L3.2 9.4l6.1-.8z"></path></svg>
         {/if}
       </div>
-      {#if boardSetName || collection.offPlan || sameNameInGroup}
+      {#if boardSetName || collection.offPlan || sameNameInGroup || collection.calendar}
         <span class="col-tags">
+          {#if collection.calendar}
+            {@const calStatus = $calendarSyncStatus[collection.calendar.url]}
+            <button
+              type="button"
+              class="cal-badge"
+              class:error={!!calStatus?.error}
+              style="--cal-color: {collection.calendar.color || 'var(--accent)'}"
+              title={calStatus?.error
+                ? `${collection.calendar.name}: ${calStatus.error}`
+                : `Linked to ${collection.calendar.name} — kept in sync`}
+              aria-label="Calendar link: {collection.calendar.name}"
+              onclick={(e) => { e.stopPropagation(); showCalendarLink = true; }}
+            >
+              <span class="cal-badge-dot"></span>{collection.calendar.name}
+              <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 2 21 6 17 10"></polyline><path d="M3 11V9a3 3 0 0 1 3-3h15"></path><polyline points="7 22 3 18 7 14"></polyline><path d="M21 13v2a3 3 0 0 1-3 3H3"></path></svg>
+            </button>
+          {/if}
           {#if boardSetName}<span class="board-badge" title="Board columns: {boardSetName}">{boardSetName}</span>{/if}
           {#if collection.offPlan}<span class="board-badge list" title={collection.planColumnId
               ? 'A list: its todos stay off the Todos plan, except its plan column’s'
@@ -514,7 +558,7 @@
             <div class="due-header">Due</div>
             <ul class="todo-list" role="list">
               {#each dueTodos as todo (todo.id)}
-                <TodoRow {todo} {collection} {group} {onselect} />
+                <TodoRow {todo} {collection} viewing={collection} {group} {onselect} />
               {/each}
             </ul>
           </div>
@@ -541,7 +585,7 @@
           >
             {#each dndOpen as todo (todo.id)}
               <li animate:flip={{ duration: 200 }} in:reorderFade.fade={{ duration: 180 }} out:reorderFade.fade={{ duration: 120 }}>
-                <TodoRow as="div" {todo} {collection} {group} reorderable {onselect} />
+                <TodoRow as="div" {todo} {collection} viewing={collection} {group} reorderable {onselect} />
               </li>
             {/each}
           </ul>
@@ -564,7 +608,7 @@
             <ul class="todo-list completed-list" role="list" transition:slide={{ duration: isTouchDevice ? 0 : 200 }}>
               {#each completedTodos as todo (todo.id)}
                 <div in:fade={{ duration: 150 }}>
-                  <TodoRow {todo} {collection} {group} {onselect} />
+                  <TodoRow {todo} {collection} viewing={collection} {group} {onselect} />
                 </div>
               {/each}
             </ul>
@@ -592,7 +636,7 @@
           <div class="grid">
             {#each referenceItems as item (item.id)}
               <div class="grid-card-wrapper">
-                <InboxCard {item} {onselect} />
+                <InboxCard {item} {onselect} viewing={collection} />
                 <div class="card-actions">
                   <button type="button" class="btn-card-action" onclick={() => makeTodo(item)} title="Move to todos" aria-label="Make todo">
                     <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -607,6 +651,32 @@
           <p class="section-empty">No references yet.</p>
         {/if}
       </section>
+
+      {#if pastEvents.length > 0}
+        <section class="on-calendar-section" aria-label="Past events in {collection.name}">
+          <button type="button"
+            class="btn-completed-toggle"
+            onclick={() => (pastExpanded = !pastExpanded)}
+            aria-expanded={pastExpanded}
+          >
+            <svg aria-hidden="true" class="chevron-sm" class:open={pastExpanded} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+            {pastEvents.length} past {pastEvents.length === 1 ? 'event' : 'events'}
+          </button>
+          {#if pastExpanded}
+            <div class="on-calendar-body" transition:slide={{ duration: isTouchDevice ? 0 : 200 }}>
+              <div class="grid on-calendar-grid">
+                {#each pastEvents as item (item.id)}
+                  <div class="grid-card-wrapper">
+                    <InboxCard {item} {onselect} viewing={collection} />
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/if}
+        </section>
+      {/if}
 
       {#if onCalendarItems.length > 0}
         <section class="on-calendar-section" aria-label="Archived in {collection.name}">
@@ -625,7 +695,7 @@
               {#if onCalendarTodos.length > 0}
                 <ul class="todo-list completed-list" role="list">
                   {#each onCalendarTodos as todo (todo.id)}
-                    <TodoRow {todo} readonly {collection} {group} {onselect} />
+                    <TodoRow {todo} readonly {collection} viewing={collection} {group} {onselect} />
                   {/each}
                 </ul>
               {/if}
@@ -633,7 +703,7 @@
                 <div class="grid on-calendar-grid">
                   {#each onCalendarRefs as item (item.id)}
                     <div class="grid-card-wrapper">
-                      <InboxCard {item} {onselect} />
+                      <InboxCard {item} {onselect} viewing={collection} />
                     </div>
                   {/each}
                 </div>
@@ -655,6 +725,10 @@
     onclose={() => { addingType = null; prefillTitle = ''; prefillFile = undefined; }}
     ondelete={async (item) => { await deleteItem(item.id, item); addingType = null; prefillTitle = ''; prefillFile = undefined; }}
   />
+{/if}
+
+{#if showCalendarLink}
+  <LinkCalendarSheet {collection} onclose={() => (showCalendarLink = false)} />
 {/if}
 
 <style>
@@ -686,6 +760,39 @@
   }
 
   /* ---- Header bar ---- */
+  .cal-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.08rem 0.45rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--cal-color) 40%, var(--border));
+    background: color-mix(in srgb, var(--cal-color) 10%, transparent);
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.7rem;
+    font-weight: 550;
+    line-height: 1.4;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .cal-badge:hover {
+    color: var(--text);
+  }
+
+  .cal-badge.error {
+    border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+    color: var(--danger-text);
+  }
+
+  .cal-badge-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--cal-color);
+  }
+
   .collection-header {
     display: flex;
     align-items: center;

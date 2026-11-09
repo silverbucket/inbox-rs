@@ -136,7 +136,9 @@ export const items = writable<Record<string, InboxItem>>({});
 const rawItems = writable<Record<string, object>>({});
 export const appConfig = writable<AppConfig>({});
 export const userSettings = writable<UserSettings>({});
-export const collections = writable<Record<string, Collection>>({});
+export { collections } from './collections-store';
+
+import { collections } from './collections-store';
 export const groups = writable<Record<string, CollectionGroup>>({});
 const INITIAL_MIGRATION_ALERT_TIMEOUT_MS = 2500;
 
@@ -1490,21 +1492,32 @@ export async function removeFile(path: string) {
   releaseBlobPath(path);
 }
 
-export function deleteItem(id: string, item?: InboxItem): Promise<void> {
+export function deleteItem(
+  id: string,
+  item?: InboxItem,
+  options: { keepCalendarEntry?: boolean } = {},
+): Promise<void> {
   // Queued so a save still landing can't follow the removal and resurrect
   // the item, and a later read-merge-write finds it gone.
-  return runForItem(id, () => removeItem(id, item));
+  return runForItem(id, () => removeItem(id, item, options));
 }
 
-async function removeItem(id: string, snapshot?: InboxItem) {
+async function removeItem(
+  id: string,
+  snapshot: InboxItem | undefined,
+  options: { keepCalendarEntry?: boolean },
+) {
   const inbox = requireInbox();
   // Saves queued ahead of us may have moved the binaries; remove what is
   // stored now, not what the caller saw.
   const item = get(items)[id] ?? snapshot;
   await inbox.remove(id, item);
-  // Dynamic: task-sync imports this module.
+  // Dynamic: calendar-sync imports this module.
   if (item?.eventUrl) {
-    void import('./task-sync').then((m) => m.deleteSyncedTask(item));
+    const keep = options.keepCalendarEntry;
+    void import('./calendar-sync').then((m) =>
+      keep ? m.forgetEntry(item) : m.deleteSyncedEntry(item),
+    );
   }
 
   // Revoke and remove any associated blob URLs (original + thumbnail) to

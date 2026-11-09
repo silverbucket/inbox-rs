@@ -1,10 +1,21 @@
 <script lang="ts">
-  let { onConfirm, onCancel, deleting = false, message = 'Delete permanently? This can’t be undone.' }: {
-    onConfirm: () => void;
+  let {
+    onConfirm,
+    onCancel,
+    deleting = false,
+    message = 'Delete permanently? This can’t be undone.',
+    calendarName,
+  }: {
+    /** `alsoCalendar`: also delete the synced calendar entry. */
+    onConfirm: (options: { alsoCalendar: boolean }) => void;
     onCancel: () => void;
     deleting?: boolean;
     message?: string;
+    /** The calendar a synced card's entry lives in — offers deleting it too. */
+    calendarName?: string;
   } = $props();
+
+  let alsoCalendar = $state(true);
 
   /**
    * Escape cancels the confirm. If we're already mid-delete, ignore so the
@@ -24,9 +35,15 @@
 <div class="overlay" role="dialog" aria-modal="true" onclick={() => { if (!deleting) onCancel(); }}>
   <div class="dialog" onclick={(e) => e.stopPropagation()}>
     <p>{message}</p>
+    {#if calendarName}
+      <label class="also">
+        <input type="checkbox" bind:checked={alsoCalendar} disabled={deleting} />
+        <span>Also delete it from <strong>{calendarName}</strong></span>
+      </label>
+    {/if}
     <div class="actions">
       <button type="button" class="btn-cancel" onclick={onCancel} disabled={deleting}>Cancel</button>
-      <button type="button" class="btn-confirm" onclick={onConfirm} disabled={deleting}>
+      <button type="button" class="btn-confirm" onclick={() => onConfirm({ alsoCalendar: !!calendarName && alsoCalendar })} disabled={deleting}>
         {deleting ? 'Deleting...' : 'Delete'}
       </button>
     </div>
@@ -62,6 +79,24 @@
     font-size: 0.9rem;
     margin-bottom: 1rem;
     line-height: 1.4;
+  }
+
+  .also {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin: -0.25rem 0 1rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    min-height: 44px;
+  }
+
+  .also input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--danger);
   }
 
   .actions {

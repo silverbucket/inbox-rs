@@ -15,13 +15,16 @@
  * normal growth while a heavyweight regression (a library pulled into the
  * eager graph is typically 300 KB+) still fails. Image notes (drop a picture
  * onto a note) then landed it a few KB over; 1.4 MB is the same margin, still
- * well under one heavyweight regression.
+ * well under one heavyweight regression. Collection-linked calendar sync adds
+ * ~40 KB of eager app code (the sync engine and the calendar chip every card
+ * can show); its network-only link sheet stays out of the precache. 1.45 MB
+ * keeps the same margin.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const BUDGET_BYTES = 1.4 * 1024 * 1024;
+const BUDGET_BYTES = 1.45 * 1024 * 1024;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const swPath = path.resolve(__dirname, '../packages/web/dist/sw.js');

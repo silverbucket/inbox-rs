@@ -6,7 +6,6 @@
  * conversion to UTC happens only at .ics/CalDAV serialization (see ics.ts).
  */
 import type { InboxItem, ScheduleInput } from '@inbox-rs/rs-module';
-import { isSyncedEntry } from './calendar-accounts';
 
 export type { ScheduleKind } from '@inbox-rs/rs-module';
 
@@ -163,9 +162,10 @@ export function clearSchedule<T extends InboxItem>(item: T): T {
     allDay: undefined,
     scheduleKind: undefined,
     cancelled: undefined,
-    ...(item.scheduleKind === 'task' && isSyncedEntry(item.eventUrl)
+    ...(item.calendarSync &&
+    (item.scheduleKind === 'task' || item.isTodo || item.type === 'todo')
       ? {}
-      : clearPostedEntryFields()),
+      : clearPostedEntryFields(item)),
   };
 }
 
@@ -175,13 +175,16 @@ export function clearSchedule<T extends InboxItem>(item: T): T {
  * returns to the Inbox triage queue.
  */
 export function clearPostedEntry<T extends InboxItem>(item: T): T {
-  return { ...item, ...clearPostedEntryFields() };
+  return { ...item, ...clearPostedEntryFields(item) };
 }
 
-function clearPostedEntryFields() {
+function clearPostedEntryFields(item: Pick<InboxItem, 'calendarSync'>) {
   return {
     eventUrl: undefined,
     eventEtag: undefined,
+    // "Not on a calendar" outlives the link, so a linked collection
+    // doesn't add the card back.
+    calendarSync: item.calendarSync === false ? false : undefined,
     archived: undefined,
     archivedAt: undefined,
     archiveReason: undefined,

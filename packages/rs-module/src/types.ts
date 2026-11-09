@@ -60,6 +60,18 @@ export interface InboxItemBase {
   eventUrl?: string;
   eventEtag?: string;
   /**
+   * Two-way sync with the calendar entry at `eventUrl`. `true` keeps the
+   * card and entry in step; `false` is an explicit "not on a calendar"
+   * that stops a linked collection from adding the card; unset with an
+   * `eventUrl` means the card was sent once (a receipt only).
+   */
+  calendarSync?: boolean;
+  /** When the card was brought in from a calendar. */
+  importedAt?: string;
+  /** The calendar entry's own CREATED / LAST-MODIFIED stamps, when known. */
+  calendarCreatedAt?: string;
+  calendarChangedAt?: string;
+  /**
    * Set when posting an item to a calendar in "move" mode: the calendar now
    * owns it, so it leaves the active lists for its surface's collapsed
    * "on calendar" section (Inbox archived section for unfiled cards, the
@@ -269,6 +281,19 @@ export interface Collection {
    */
   offPlan?: boolean;
   planColumnId?: string;
+  /**
+   * The calendar this collection is linked to. Its new entries arrive here,
+   * and todos and dated cards filed here are kept in sync with it. `url` is
+   * the calendar's CalDAV href; name and color are kept so devices without
+   * the account can still label the link.
+   */
+  calendar?: CollectionCalendarLink;
+}
+
+export interface CollectionCalendarLink {
+  url: string;
+  name: string;
+  color?: string;
 }
 
 export interface CollectionGroup {

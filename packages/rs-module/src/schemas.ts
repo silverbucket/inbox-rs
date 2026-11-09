@@ -26,6 +26,10 @@ const scheduleFields = {
   location: { type: 'string' },
   eventUrl: { type: 'string' },
   eventEtag: { type: 'string' },
+  calendarSync: { type: 'boolean' },
+  importedAt: { type: 'string' },
+  calendarCreatedAt: { type: 'string' },
+  calendarChangedAt: { type: 'string' },
   archived: { type: 'boolean' },
   archivedAt: { type: 'string' },
   archiveReason: { type: 'string', enum: ['manual', 'calendar'] },
@@ -297,6 +301,15 @@ export const collectionSchema = {
     boardSetId: { type: 'string' },
     offPlan: { type: 'boolean' },
     planColumnId: { type: 'string' },
+    calendar: {
+      type: 'object',
+      properties: {
+        url: { type: 'string' },
+        name: { type: 'string' },
+        color: { type: 'string' },
+      },
+      required: ['url', 'name'],
+    },
   },
   required: ['id', 'name', 'itemIds', 'createdAt'],
 };
