@@ -15,7 +15,7 @@
   import { calendarAccounts } from '../lib/calendar-accounts';
   import { cardCalendar } from '../lib/calendar-card';
   import { calendarSyncStatus, cardSyncErrors } from '../lib/calendar-sync';
-  import { collections as allCollections } from '../lib/collections-store';
+  import { collections } from '../lib/collections-store';
 
   let {
     todo,
@@ -85,7 +85,7 @@
   // calendar mark inside the collection pill — one chip, not two that both
   // say "Work". Anything else (its own calendar, a problem) gets the chip.
   const calInfo = $derived(
-    cardCalendar(todo, $allCollections, $calendarAccounts, $cardSyncErrors, $calendarSyncStatus),
+    cardCalendar(todo, $collections, $calendarAccounts, $cardSyncErrors, $calendarSyncStatus),
   );
   const followsLink = $derived(
     !!calInfo && calInfo.viaCollection && calInfo.mode === 'sync' && !calInfo.error,
