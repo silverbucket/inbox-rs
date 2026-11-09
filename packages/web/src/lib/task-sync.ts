@@ -231,7 +231,7 @@ export function taskUpdateObject(
       : {}),
     ...fields,
     type: 'task',
-    etag: item.eventEtag ?? remote.etag,
+    etag: item.eventEtag || remote.etag,
     sequence: (remote.sequence ?? 0) + 1,
   };
 }
@@ -534,7 +534,7 @@ export async function deleteSyncedTask(item: InboxItem): Promise<void> {
     delete cal.entries[href];
     saveState(state);
     const target = syncTargets().find((t) => t.calendarId === calendarId);
-    const etag = item.eventEtag ?? base.remote.etag;
+    const etag = item.eventEtag || base.remote.etag;
     // Deleting a recurring task's resource would take the whole series.
     if (!target || !etag || !canPush(base)) return;
     try {
