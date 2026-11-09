@@ -135,6 +135,7 @@ export const items = writable<Record<string, InboxItem>>({});
  */
 const rawItems = writable<Record<string, object>>({});
 export const appConfig = writable<AppConfig>({});
+let initialAppConfig = get(appConfig);
 export const userSettings = writable<UserSettings>({});
 export { collections } from './collections-store';
 
@@ -383,12 +384,24 @@ function replayPendingCardDrafts(): Promise<void> {
   return draftReplay;
 }
 
-async function loadConfig() {
+let pendingConfigLoad: Promise<void> | null = null;
+
+function loadConfig() {
+  const loading = readConfig();
+  pendingConfigLoad = loading;
+  return loading.finally(() => {
+    if (pendingConfigLoad === loading) pendingConfigLoad = null;
+  });
+}
+
+async function readConfig() {
   const inbox = getInbox();
   if (!inbox) return;
   try {
+    const beforeLoad = get(appConfig);
     const config = await inbox.getConfig();
-    if (config && typeof config === 'object') {
+    // A write or sync event received during the read is newer than its snapshot.
+    if (config && typeof config === 'object' && get(appConfig) === beforeLoad) {
       appConfig.set(config);
     }
   } catch (e) {
@@ -635,6 +648,7 @@ rs.on('disconnected', () => {
   items.set({});
   rawItems.set({});
   appConfig.set({});
+  initialAppConfig = get(appConfig);
   userSettings.set({});
   collections.set({});
   groups.set({});
@@ -660,6 +674,8 @@ export async function runAllMigrations() {
 }
 
 export async function updateConfig(patch: Partial<AppConfig>) {
+  // Don't persist a partial config before saved favorites/settings have loaded.
+  if (pendingConfigLoad) await pendingConfigLoad;
   const inbox = getInbox();
   if (!inbox) throw new Error('Cannot update config: storage not connected');
   const currentConfig = get(appConfig);
@@ -668,7 +684,18 @@ export async function updateConfig(patch: Partial<AppConfig>) {
   try {
     await inbox.setConfig(cleanForStorage(updated));
   } catch (e) {
-    appConfig.set(currentConfig);
+    // Roll back only this patch's unchanged fields; later edits must survive.
+    appConfig.update((current) => {
+      const restored = { ...current };
+      for (const key of Object.keys(patch) as (keyof AppConfig)[]) {
+        if (current[key] !== updated[key]) continue;
+        delete restored[key];
+        if (key in currentConfig) {
+          Object.assign(restored, { [key]: currentConfig[key] });
+        }
+      }
+      return restored;
+    });
     console.error('[inbox] failed to persist config update:', e);
     throw e;
   }
@@ -837,6 +864,9 @@ if (inboxRef) {
         });
       }
     } else if (path === 'config/app') {
+      // Startup cache replay must never overwrite a loaded or edited config.
+      if (event.origin === 'local' && get(appConfig) !== initialAppConfig)
+        return;
       if (value && typeof value === 'object') {
         appConfig.set(value as AppConfig);
       }
@@ -1442,6 +1472,7 @@ export const favoriteCollections = derived(
 
 /** Add or remove a collection from favourites. New favourites go last. */
 export async function toggleFavoriteCollection(id: string) {
+  if (pendingConfigLoad) await pendingConfigLoad;
   const current = get(appConfig).favoriteCollectionIds ?? [];
   await updateConfig({
     favoriteCollectionIds: current.includes(id)
