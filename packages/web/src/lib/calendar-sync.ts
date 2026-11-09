@@ -523,6 +523,13 @@ export function recurrenceLabel(
   return rule ? describeRecurrence(rule) : undefined;
 }
 
+function baselineIn(state: SyncState, href: string): Baseline | undefined {
+  for (const cal of Object.values(state)) {
+    if (cal.entries[href]) return cal.entries[href];
+  }
+  return undefined;
+}
+
 function baselineFor(href: string | undefined): Baseline | undefined {
   if (!href) return undefined;
   for (const cal of Object.values(loadState())) {
@@ -674,11 +681,10 @@ async function fetchChanges(
   } catch (err) {
     if (!(err instanceof CaldavError)) throw err;
     if (err.code === 'caldav:sync-token-invalid') {
-      // Restart from now. Entries that changed in the gap are fetched by
-      // the baseline catch-up below.
+      // Restart from now, and reconcile the gap with a "today onward"
+      // snapshot so changes made meanwhile aren't skipped.
       await startTracking(target, cal);
-      missingTried.clear();
-      return { items: [], removed: [], full: false, token: cal.token };
+      return { items: await windowSnapshot(target), removed: [], full: true };
     }
     if (err.code !== 'caldav:sync-unsupported') throw err;
     cal.snapshot = true;
@@ -822,6 +828,26 @@ async function pull(
   if (!changes.full) cal.token = changes.token ?? cal.token;
 }
 
+/**
+ * Repeating events show their next date. Time moves on without the server
+ * changing anything, so recompute it from the stored copy every pass.
+ */
+async function advanceRepeating(cal: CalendarSyncState) {
+  const byHref = hrefIndex();
+  for (const [href, base] of Object.entries(cal.entries)) {
+    if (base.remote.type !== 'event' || !base.remote.recurrence) continue;
+    const item = byHref.get(href);
+    if (!item?.calendarSync) continue;
+    const { startsAt, endsAt } = itemFieldsFromEntry(base.remote);
+    if (!startsAt || (startsAt === item.startsAt && endsAt === item.endsAt))
+      continue;
+    const next = await updateItem(item.id, (current) =>
+      current?.eventUrl === href ? { ...current, startsAt, endsAt } : null,
+    );
+    if (next) cal.entries[href] = { ...base, fp: fingerprint(next, 'event') };
+  }
+}
+
 /** Synced cards on this calendar that have no baseline get one, once. */
 const missingTried = new Set<string>();
 
@@ -879,7 +905,8 @@ async function createPending(target: SyncTarget, cal: CalendarSyncState) {
       );
       if (!next) continue;
       cal.entries[receipt.eventUrl] = {
-        fp: fingerprint(next, kind),
+        // What was uploaded: an edit made meanwhile stays pending.
+        fp: fingerprint(item, kind),
         remote: {
           ...object,
           id: receipt.eventUrl,
@@ -955,6 +982,10 @@ async function moveEntry(
   const from = choiceForEventUrl(href);
   const fromCal = from ? state[from.calendar.id] : undefined;
   const base = href ? fromCal?.entries[href] : undefined;
+  // Unknown read-only status (no copy fetched yet on this device): wait.
+  if (href && !base) {
+    throw new CaldavError('Still syncing this entry — try again in a moment');
+  }
   if (base && !canPush(base)) {
     throw new CaldavError(
       'This entry can only be changed in your calendar app',
@@ -1002,7 +1033,7 @@ async function moveEntry(
   if (!next) throw new Error('The card is gone');
   state[to.calendar.id] ??= { entries: {} };
   state[to.calendar.id].entries[receipt.eventUrl] = {
-    fp: fingerprint(next, kind),
+    fp: fingerprint(item, kind),
     remote: {
       ...object,
       id: receipt.eventUrl,
@@ -1022,6 +1053,7 @@ async function followLinks(state: SyncState) {
     if (!link || entryInCalendar(item.eventUrl, link.url)) continue;
     const to = choiceForCalendar(link.url);
     if (!to) continue; // another device with the account moves it
+    if (!baselineIn(state, item.eventUrl)) continue; // after its first pull
     try {
       await moveEntry(item, to, state);
       setCardError(item.id, undefined);
@@ -1059,6 +1091,7 @@ async function syncAll(): Promise<void> {
         await pull(target, cal, notes);
       }
       await catchUpBaselines(target, cal);
+      await advanceRepeating(cal);
       await createPending(target, cal);
       if (await push(target, cal)) await pull(target, cal, notes);
       cal.lastSync = new Date().toISOString();

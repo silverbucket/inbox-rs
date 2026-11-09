@@ -168,13 +168,23 @@ describe('starting from today', () => {
     }
   });
 
-  it('restarts from now when the server drops the token', async () => {
+  it('restarts from now when the server drops the token, without losing the gap', async () => {
+    vi.mocked(syncCalendar).mockResolvedValueOnce(page([remote()], [], 't1'));
+    await runCalendarSync();
     vi.mocked(syncCalendar).mockRejectedValueOnce(
       new CaldavError('caldav:sync-token-invalid'),
     );
     vi.mocked(currentSyncToken).mockResolvedValueOnce('t9');
+    // Changed while the token was stale: only the snapshot can tell us.
+    vi.mocked(queryEntries).mockImplementation(async (_a, _c, q) => ({
+      items:
+        q.type === 'task'
+          ? [remote({ etag: '"5"', name: 'Renamed in gap' })]
+          : [],
+      removed: [],
+    }));
     await runCalendarSync();
-    expect(currentSyncToken).toHaveBeenCalled();
+    expect(card().title).toBe('Renamed in gap');
     vi.mocked(syncCalendar).mockClear();
     await runCalendarSync();
     expect(vi.mocked(syncCalendar).mock.calls[0][2]).toBe('t9');
@@ -251,6 +261,33 @@ describe('pull', () => {
     const next = new Date(card(`${CAL}ev-1.ics`).startsAt as string);
     expect(next.getTime()).toBeGreaterThan(Date.now() - 7 * 86_400_000);
     expect(next.getDay()).toBe(new Date('2020-01-06T09:00:00Z').getDay());
+  });
+
+  it('moves a repeating event to its next date as time passes, with no server change', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-11-09T12:00:00Z'));
+      vi.mocked(syncCalendar).mockResolvedValueOnce(
+        page([
+          event({
+            startTime: '2020-01-06T09:00:00Z',
+            endTime: '2020-01-06T09:30:00Z',
+            recurrence: { frequency: 'weekly' },
+          }),
+        ]),
+      );
+      await runCalendarSync();
+      const first = card(`${CAL}ev-1.ics`).startsAt as string;
+      vi.setSystemTime(new Date('2026-11-16T12:00:00Z'));
+      await runCalendarSync(); // empty sync response
+      const later = card(`${CAL}ev-1.ics`).startsAt as string;
+      expect(new Date(later).getTime() - new Date(first).getTime()).toBe(
+        7 * 86_400_000,
+      );
+      expect(updateEntry).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('applies changes and unlinks entries removed in the calendar, keeping the card', async () => {
@@ -465,6 +502,70 @@ describe('push and create', () => {
       expect.any(String),
     );
     expect(card(`${CAL2}moved.ics`).calendarSync).toBe(true);
+  });
+
+  it('keeps an edit made while the entry was being created as a pending push', async () => {
+    vi.mocked(createEntry).mockImplementationOnce(async () => {
+      // The user renames the card while the create is in flight.
+      items().update((all) => ({
+        ...all,
+        n1: { ...all.n1, title: 'Renamed' },
+      }));
+      return { eventUrl: `${CAL}n1.ics`, eventEtag: '"1"' };
+    });
+    vi.mocked(updateEntry).mockResolvedValue({
+      eventUrl: `${CAL}n1.ics`,
+      eventEtag: '"2"',
+    });
+    items().update((all) => ({
+      ...all,
+      n1: {
+        id: 'n1',
+        type: 'todo',
+        title: 'New',
+        createdAt: '2026-01-01T00:00:00Z',
+        completed: false,
+        collectionId: 'work',
+      } as InboxItem,
+    }));
+    await runCalendarSync();
+    expect(updateEntry).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(updateEntry).mock.calls[0][2]).toMatchObject({
+      name: 'Renamed',
+    });
+  });
+
+  it('does not move an entry before this device has fetched it', async () => {
+    cols().update((all) => ({
+      ...all,
+      home: {
+        id: 'home',
+        name: 'Home',
+        itemIds: [],
+        createdAt: '2026-01-01T00:00:00Z',
+        calendar: { url: CAL2, name: 'Home' },
+      },
+    }));
+    // A card synced elsewhere, never pulled on this device (no baseline).
+    items().update((all) => ({
+      ...all,
+      r1: {
+        id: 'r1',
+        type: 'note',
+        body: '',
+        title: 'Series',
+        createdAt: '2026-01-01T00:00:00Z',
+        startsAt: '2099-01-01T09:00:00Z',
+        scheduleKind: 'event',
+        eventUrl: `${CAL}series.ics`,
+        eventEtag: '"1"',
+        calendarSync: true,
+        collectionId: 'home',
+      } as InboxItem,
+    }));
+    await runCalendarSync();
+    expect(createEntry).not.toHaveBeenCalled();
+    expect(deleteEntry).not.toHaveBeenCalled();
   });
 
   it('never pushes an entry that has attendees', async () => {
