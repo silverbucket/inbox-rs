@@ -21,11 +21,11 @@ test('capture bar hints the todo shortcut and carries the text into the editor',
   );
   const hint = page.locator('.capture .hint');
   await capture.click();
-  await expect(hint).not.toContainText('Open as todo');
+  await expect(hint).not.toContainText('Add as todo');
 
   const title = `capture todo shortcut ${Date.now()}`;
   await capture.fill(title);
-  await expect(hint).toContainText(/(⌘|Ctrl)⇧↵ Open as todo/);
+  await expect(hint).toContainText(/(⌘|Ctrl)⇧↵ Add as todo/);
 
   await capture.press('ControlOrMeta+Shift+Enter');
   const editor = page.getByRole('dialog', { name: 'Add Todo' });
