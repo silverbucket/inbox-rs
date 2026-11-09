@@ -49,7 +49,7 @@
       case 'notifications': return $alertPermission === 'granted' ? 'Allowed' : 'Not allowed';
       case 'columns': return `${$columnSets.length} set${$columnSets.length === 1 ? '' : 's'}`;
       case 'data': return `${itemList.length} item${itemList.length === 1 ? '' : 's'}`;
-      case 'apps': return 'Capture tools';
+      case 'apps': return 'Set up capture';
       case 'account': return $connectionStatus;
       case 'about': return versionLabel;
     }
@@ -62,7 +62,7 @@
       case 'notifications': return 'Alerts when a todo is due';
       case 'columns': return 'Shared columns for item boards';
       case 'data': return 'Export or restore a backup';
-      case 'apps': return 'Add-ons';
+      case 'apps': return 'Quick Capture, browser, and email';
       case 'account': return $userAddress || 'Connect storage';
       case 'about': return "What's new · Source";
     }

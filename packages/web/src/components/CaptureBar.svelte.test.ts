@@ -164,24 +164,24 @@ describe('CaptureBar', () => {
     expect(onopentodo).not.toHaveBeenCalled();
   });
 
-  it('hints the Open-as-todo shortcut only while focused with text', () => {
+  it('hints the Add-as-todo shortcut only while focused with text', () => {
     render({ onopentodo: vi.fn() });
     const input = host.querySelector('.text-input') as HTMLInputElement;
     const hint = () => host.querySelector('.hint')?.textContent ?? '';
     input.dispatchEvent(new FocusEvent('focus'));
     flushSync();
-    expect(hint()).not.toContain('Open as todo');
+    expect(hint()).not.toContain('Add as todo');
     type('buy milk');
-    expect(hint()).toMatch(/(⌘|Ctrl)⇧↵ Open as todo/);
+    expect(hint()).toMatch(/(⌘|Ctrl)⇧↵ Add as todo/);
   });
 
-  it('omits the Open-as-todo hint without onopentodo', () => {
+  it('omits the Add-as-todo hint without onopentodo', () => {
     render();
     const input = host.querySelector('.text-input') as HTMLInputElement;
     input.dispatchEvent(new FocusEvent('focus'));
     type('buy milk');
     expect(host.querySelector('.hint')?.textContent).not.toContain(
-      'Open as todo',
+      'Add as todo',
     );
   });
 
