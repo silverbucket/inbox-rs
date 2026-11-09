@@ -173,6 +173,20 @@ describe('task sync — pull', () => {
     expect([due.getDate(), due.getHours()]).toEqual([12, 0]);
   });
 
+  it('reads a zoned due time in the task zone, not the device zone', async () => {
+    vi.mocked(syncCalendar).mockResolvedValueOnce(
+      page([
+        remote({
+          allDay: undefined,
+          due: '2026-11-12T10:00:00',
+          timeZone: 'Europe/Prague',
+        }),
+      ]),
+    );
+    await runTaskSync();
+    expect(card().startsAt).toBe('2026-11-12T09:00:00.000Z');
+  });
+
   it('falls back to a full query when the server has no WebDAV Sync', async () => {
     vi.mocked(syncCalendar).mockRejectedValueOnce(
       new CaldavError('caldav:sync-unsupported'),
@@ -306,6 +320,21 @@ describe('task sync — review fixes', () => {
 });
 
 describe('taskUpdateObject', () => {
+  it('keeps an in-process status when only the title changed', () => {
+    const item = {
+      id: 'x',
+      type: 'todo',
+      title: 'Renamed',
+      createdAt: '2026-11-01T00:00:00Z',
+      completed: false,
+    } as InboxItem;
+    const sent = taskUpdateObject(
+      remote({ status: 'in-process', percentComplete: 40 }),
+      item,
+    );
+    expect(sent).toMatchObject({ status: 'in-process', percentComplete: 40 });
+  });
+
   it('keeps a task zone by sending the due time as local wall time', () => {
     const item = {
       id: 'x',

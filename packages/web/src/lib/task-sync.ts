@@ -139,13 +139,32 @@ export function taskFields(item: InboxItem): Record<string, unknown> {
 
 const fingerprint = (item: InboxItem) => JSON.stringify(taskFields(item));
 
-function parseDue(value: string, allDay: boolean): string | undefined {
+/** UTC ms for a wall-clock time in `zone`; the second pass settles DST edges. */
+function zonedToUtc(local: string, zone: string): number {
+  const wall = Date.parse(`${local.slice(0, 19)}Z`);
+  const offset = (t: number) =>
+    Date.parse(
+      `${new Date(t).toLocaleString('sv-SE', { timeZone: zone }).replace(' ', 'T')}Z`,
+    ) - t;
+  return wall - offset(wall - offset(wall));
+}
+
+function parseDue(
+  value: string,
+  allDay: boolean,
+  zone?: string,
+): string | undefined {
   let date: Date;
   if (allDay) {
     const [y, m, d] = value.slice(0, 10).split('-').map(Number);
     date = new Date(y, m - 1, d);
+  } else if (zone && !/(Z|[+-]\d{2}:?\d{2})$/.test(value)) {
+    try {
+      date = new Date(zonedToUtc(value, zone));
+    } catch {
+      date = new Date(value); // unknown zone: read it as device-local
+    }
   } else {
-    // shortcut: a floating time (TZID) is read in this device's zone; convert from task.timeZone if people sync across zones.
     date = new Date(value);
   }
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
@@ -155,7 +174,9 @@ function parseDue(value: string, allDay: boolean): string | undefined {
 export function itemFieldsFromTask(task: RemoteTask): Partial<InboxItem> {
   // Servers report a DATE-valued DUE as a bare date, without `allDay`.
   const allDay = !!task.allDay || /^\d{4}-\d{2}-\d{2}$/.test(task.due ?? '');
-  const startsAt = task.due ? parseDue(task.due, allDay) : undefined;
+  const startsAt = task.due
+    ? parseDue(task.due, allDay, task.timeZone)
+    : undefined;
   const completed = task.status === 'completed';
   return {
     title: task.name,
@@ -189,6 +210,10 @@ export function taskUpdateObject(
     ...rest
   } = remote;
   const fields = taskFields(item);
+  // Keep a richer open status (`in-process`) unless completion changed.
+  if (fields.status === 'needs-action' && status && status !== 'completed') {
+    fields.status = status;
+  }
   // The platform rejects a zone on all-day values, and wants local
   // date-times when one is kept.
   const zone = fields.allDay ? undefined : timeZone;
@@ -404,6 +429,8 @@ async function push(
   for (const [href, base] of Object.entries(cal.entries)) {
     const item = byHref.get(href);
     if (!item || !canPush(base) || fingerprint(item) === base.fp) continue;
+    // No ETag means no conflict check; wait for a pull to supply one.
+    if (!item.eventEtag && !base.remote.etag) continue;
     const object = taskUpdateObject(base.remote, item);
     try {
       const { eventEtag } = await updateEntry(
