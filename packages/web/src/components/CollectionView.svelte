@@ -400,8 +400,7 @@
               aria-label="Calendar link: {collection.calendar.name}"
               onclick={(e) => { e.stopPropagation(); showCalendarLink = true; }}
             >
-              <span class="cal-badge-dot"></span>{collection.calendar.name}
-              <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 2 21 6 17 10"></polyline><path d="M3 11V9a3 3 0 0 1 3-3h15"></path><polyline points="7 22 3 18 7 14"></polyline><path d="M21 13v2a3 3 0 0 1-3 3H3"></path></svg>
+              <svg class="cal-badge-icon" aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>{collection.calendar.name} calendar
             </button>
           {/if}
           {#if boardSetName}<span class="board-badge" title="Board columns: {boardSetName}">{boardSetName}</span>{/if}
@@ -771,7 +770,7 @@
     align-items: center;
     gap: 0.3rem;
     padding: 0.08rem 0.45rem;
-    border-radius: 999px;
+    border-radius: 6px;
     border: 1px solid color-mix(in srgb, var(--cal-color) 40%, var(--border));
     background: color-mix(in srgb, var(--cal-color) 10%, transparent);
     color: var(--text-muted);
@@ -792,11 +791,8 @@
     color: var(--danger-text);
   }
 
-  .cal-badge-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--cal-color);
+  .cal-badge-icon {
+    color: var(--cal-color);
   }
 
   .collection-header {

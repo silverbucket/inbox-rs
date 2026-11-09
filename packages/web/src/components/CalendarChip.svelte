@@ -38,8 +38,14 @@
   );
   // A card that simply follows its collection's link needs no name: the
   // collection pill beside it already says where it lives.
+  // …unless the calendar's name differs from the collection's, which the
+  // pill can't tell you.
   const compact = $derived(
-    !!info && info.viaCollection && info.mode === 'sync' && !info.error,
+    !!info &&
+      info.viaCollection &&
+      info.mode === 'sync' &&
+      !info.error &&
+      info.name === (item.collectionId ? $collections[item.collectionId]?.name : undefined),
   );
   const label = $derived.by(() => {
     if (!info) return '';

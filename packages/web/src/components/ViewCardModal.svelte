@@ -598,7 +598,7 @@
           Back
         </button>
         <span class="type-badge">{item.type === 'note' && item.scheduleKind === 'event' ? 'event' : item.type}</span>
-        <time class="date">{formatDate(item.createdAt)}</time>
+        <time class="date">{item.importedAt ? `Created ${formatDate(item.createdAt)}` : formatDate(item.createdAt)}</time>
         <button
           type="button"
           class="save-status"

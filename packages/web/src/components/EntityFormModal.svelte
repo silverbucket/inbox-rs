@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { PRESET_COLORS } from '../lib/constants';
-  import { autofocus } from '../lib/actions';
+  import { autofocus, portal } from '../lib/actions';
 
   let {
     entityName,
@@ -77,7 +77,7 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="overlay" onclick={onclose}>
+<div class="overlay" use:portal onclick={onclose}>
   <div class="modal" role="dialog" aria-modal="true" style="max-width: {maxWidth}" onclick={(e) => e.stopPropagation()}>
     <h2>{displayTitle}</h2>
 

@@ -231,7 +231,28 @@
     void $items; // recount as cards change
     return linked ? calendarCardCount(linked.url) : 0;
   });
-  const pastNote = 'Nothing that ended before today is brought in.';
+  const pastNote =
+    'Events ending today or later, plus every open task — overdue and undated too. Unticked entries stay out unless they change later.';
+
+  /** Exactly what "Link calendar" will do, in one line. */
+  const summary = $derived.by(() => {
+    const parts: string[] = [];
+    if (chosenCount > 0)
+      parts.push(`Bring in ${chosenCount} ${chosenCount === 1 ? 'entry' : 'entries'}`);
+    if (addExisting && ownCards.length > 0)
+      parts.push(
+        `add ${ownCards.length} ${ownCards.length === 1 ? 'card' : 'cards'} to the ${preview?.choice.calendar.name ?? ''} calendar`,
+      );
+    if (parts.length === 0) return 'Link only — new entries will arrive from now on.';
+    const text = `${parts.join(' · ')}. New entries keep arriving.`;
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  });
+
+  function isEntryOverdue(entry: RemoteEntry): boolean {
+    if (entry.type !== 'task') return false;
+    const f = itemFieldsFromEntry(entry);
+    return isOverdue({ ...f, completed: false } as never);
+  }
 </script>
 
 <svelte:window onkeydowncapture={handleEscape} />
@@ -251,7 +272,7 @@
     <header class="top">
       <h3 id="link-cal-title">
         {#if linked}
-          Calendar link
+          “{collection?.name}” is linked
         {:else if collection}
           Link “{collection.name}” to a calendar
         {:else if choice}
@@ -270,25 +291,25 @@
       <div class="linked-card" style="--cal-color: {linked.color || 'var(--accent)'}">
         <span class="swatch"></span>
         <div class="linked-text">
-          <strong>{linked.name}</strong>
+          <strong>{linked.name} calendar</strong>
           <span>{linkedCount} {linkedCount === 1 ? 'card' : 'cards'} kept in sync</span>
         </div>
       </div>
       <ul class="rules">
-        <li>New events and open tasks in {linked.name} arrive in <strong>{collection.name}</strong>.</li>
-        <li>Todos and dated cards filed here are added to {linked.name}.</li>
+        <li>New events and open tasks in the {linked.name} calendar arrive in the <strong>{collection.name}</strong> collection.</li>
+        <li>Todos and dated cards filed here are added to the {linked.name} calendar.</li>
         <li>Edits sync both ways. If both sides change, the calendar wins — with Undo.</li>
       </ul>
       {#if confirmUnlink}
         <p class="note warn">
-          Cards stay in {collection.name} and their entries stay in {linked.name}. They just
-          stop syncing.
+          Cards stay in the {collection.name} collection and their entries stay in the
+          {linked.name} calendar. They just stop syncing.
         </p>
       {/if}
       <div class="footer">
         <button type="button" class="btn ghost" onclick={onclose} disabled={saving}>Done</button>
         <button type="button" class="btn danger" class:solid={confirmUnlink} onclick={unlink} disabled={saving}>
-          {confirmUnlink ? `Unlink ${linked.name}` : 'Unlink…'}
+          {confirmUnlink ? 'Unlink now' : 'Unlink…'}
         </button>
       </div>
     {:else if groups.length === 0}
@@ -314,7 +335,6 @@
 
       {#if !initialCalendarId || !choice}
         <div class="field">
-          <span class="field-label">Calendar</span>
           <div class="cal-list" role="radiogroup" aria-label="Calendar">
             {#each groups as group (group.account.id)}
               <div class="grp">{group.account.label}</div>
@@ -334,8 +354,8 @@
                   <span class="cal-meta">
                     {#if other}
                       Linked to {other.name}
-                    {:else}
-                      {cal.components.includes('event') ? 'Events' : ''}{cal.components.length === 2 ? ' · ' : ''}{cal.components.includes('task') ? 'Tasks' : ''}
+                    {:else if cal.components.length === 1}
+                      {cal.components[0] === 'event' ? 'Events only' : 'Tasks only'}
                     {/if}
                   </span>
                 </button>
@@ -362,7 +382,7 @@
         </div>
       {:else if preview && collection}
         <div class="preview">
-          <p class="eyebrow">Bring in from {preview.choice.calendar.name}</p>
+          <p class="eyebrow">From the {preview.choice.calendar.name} calendar</p>
           {#if events.length === 0 && tasks.length === 0}
             <p class="note">Nothing upcoming right now. New entries will arrive as they're added.</p>
           {/if}
@@ -383,7 +403,7 @@
                     <label>
                       <input type="checkbox" checked={includeEvents && !skipped.has(entry.id)} disabled={!includeEvents} onchange={() => toggleEntry(entry.id)} />
                       <span class="r-title">{entry.name}</span>
-                      <span class="r-when">{whenLabel(entry)}</span>
+                      <span class="r-when" class:overdue={isEntryOverdue(entry)}>{whenLabel(entry)}{isEntryOverdue(entry) ? ' · overdue' : ''}</span>
                     </label>
                   </li>
                 {/each}
@@ -412,7 +432,7 @@
                     <label>
                       <input type="checkbox" checked={includeTasks && !skipped.has(entry.id)} disabled={!includeTasks} onchange={() => toggleEntry(entry.id)} />
                       <span class="r-title">{entry.name}</span>
-                      <span class="r-when">{whenLabel(entry)}</span>
+                      <span class="r-when" class:overdue={isEntryOverdue(entry)}>{whenLabel(entry)}{isEntryOverdue(entry) ? ' · overdue' : ''}</span>
                     </label>
                   </li>
                 {/each}
@@ -422,20 +442,22 @@
           {#if existingCount > 0}
             <p class="note">{existingCount} of these {existingCount === 1 ? 'is' : 'are'} already cards — {existingCount === 1 ? 'it moves' : 'they move'} into {collection.name}.</p>
           {/if}
+          <p class="note subtle">{pastNote}</p>
           {#if ownCards.length > 0}
+            <p class="eyebrow out">To the {preview.choice.calendar.name} calendar</p>
             <div class="opt own">
               <label class="check">
                 <input type="checkbox" bind:checked={addExisting} disabled={saving} />
-                <span>Add {collection.name}'s <strong>{ownCards.length}</strong> {ownCards.length === 1 ? 'todo or dated card' : 'todos and dated cards'} to {preview.choice.calendar.name}</span>
+                <span>This collection's <strong>{ownCards.length}</strong> {ownCards.length === 1 ? 'todo or dated card' : 'todos and dated cards'}</span>
               </label>
             </div>
           {/if}
-          <p class="note subtle">{pastNote}</p>
         </div>
+        <p class="summary" aria-live="polite">{summary}</p>
         <div class="footer">
-          <button type="button" class="btn ghost" onclick={() => confirm(false)} disabled={saving}>Link only</button>
+          <button type="button" class="btn ghost" onclick={onclose} disabled={saving}>Cancel</button>
           <button type="button" class="btn primary" onclick={() => confirm(true)} disabled={saving}>
-            {saving ? 'Linking…' : chosenCount > 0 ? `Link and bring in ${chosenCount}` : 'Link'}
+            {saving ? 'Linking…' : 'Link calendar'}
           </button>
         </div>
       {:else if !collection && choice}
@@ -522,6 +544,7 @@
   .field-label,
   .eyebrow,
   .grp {
+    margin: 0;
     font-size: 0.66rem;
     font-weight: 700;
     letter-spacing: 0.08em;
@@ -530,7 +553,20 @@
   }
 
   .grp {
-    margin: 0.4rem 0 0.15rem 0.2rem;
+    margin: 0.2rem 0 0.1rem 0.6rem;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .eyebrow.out {
+    margin-top: 0.5rem;
+  }
+
+  .r-when.overdue {
+    color: var(--danger-text);
+    font-weight: 600;
   }
 
   select {
@@ -796,11 +832,25 @@
     text-decoration: underline;
   }
 
+  .summary {
+    margin: 0;
+    padding: 0.55rem 0.7rem;
+    border-radius: var(--radius-sm);
+    background: var(--surface-tint);
+    font-size: 0.82rem;
+    line-height: 1.4;
+  }
+
   .footer {
+    position: sticky;
+    bottom: -1rem;
     display: flex;
     justify-content: flex-end;
     gap: 0.5rem;
-    padding-top: 0.25rem;
+    margin: 0 -1.2rem -1rem;
+    padding: 0.7rem 1.2rem 1rem;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
   }
 
   .btn {
@@ -870,11 +920,9 @@
     }
 
     .footer {
-      position: sticky;
       bottom: calc(-1rem - env(safe-area-inset-bottom));
-      background: var(--surface);
-      padding: 0.6rem 0 0.2rem;
-      margin-top: 0.1rem;
+      margin: 0 -1rem calc(-1rem - env(safe-area-inset-bottom));
+      padding: 0.7rem 1rem calc(1rem + env(safe-area-inset-bottom));
     }
 
     .footer .btn {

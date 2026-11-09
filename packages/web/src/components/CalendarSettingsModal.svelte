@@ -229,7 +229,7 @@
       </button>
     </div>
     <p class="sub">
-      Link a calendar to a collection: its events and tasks from today on
+      Link a calendar to a collection: its upcoming events and open tasks
       arrive there, and edits sync both ways. Connected over CalDAV through
       <a href="https://sockethub.org" target="_blank" rel="noreferrer">Sockethub</a>;
       your app password stays on this device.
@@ -267,9 +267,6 @@
           <div class="cal-line" class:hidden>
             <span class="dot" style="background: {cal.color || 'var(--accent)'}"></span>
             <span class="cal-name">{cal.name}</span>
-            {#if cal.components.includes('task')}
-              <span class="tag">tasks</span>
-            {/if}
             <span class="line-actions">
               <button
                 type="button"
@@ -281,7 +278,7 @@
                 aria-label="Make {cal.name} the default calendar"
                 aria-pressed={account.defaultCalendarId === cal.id}
                 onclick={() => toggleDefault(account, cal.id)}
-              >★</button>
+              >★ <span class="star-label">{account.defaultCalendarId === cal.id ? 'Default' : ''}</span></button>
               <label class="vis-label">
                 <input
                   type="checkbox"
@@ -289,16 +286,16 @@
                   aria-label="Show {cal.name} in pickers"
                   onchange={() => toggleHidden(account, cal.id)}
                 />
-                show
+                Show in pickers
               </label>
             </span>
             {#if !hidden || linked}
               <div class="link-line">
                 {#if linked}
-                  <button type="button" class="link-pill" onclick={() => openLink(cal.id)}>
-                    <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 2 21 6 17 10"></polyline><path d="M3 11V9a3 3 0 0 1 3-3h15"></path><polyline points="7 22 3 18 7 14"></polyline><path d="M21 13v2a3 3 0 0 1-3 3H3"></path></svg>
-                    {linked.name}
-                  </button>
+                  <span class="linked-to">
+                    Linked to
+                    <span class="col-dot" style="background: {linked.color || 'var(--text-muted)'}"></span>
+                    <strong>{linked.name}</strong> collection</span>
                 {:else}
                   <button type="button" class="link-add" onclick={() => openLink(cal.id)}>Link to a collection…</button>
                 {/if}
@@ -309,9 +306,12 @@
                   {:else if calStatus?.syncing}
                     Syncing…
                   {:else if linked || count > 0}
-                    {count} {count === 1 ? 'card' : 'cards'}{calStatus?.lastSync ? ` · synced ${relativeTime(calStatus.lastSync, $now.getTime())}` : ''}
+                    · {count} {count === 1 ? 'card' : 'cards'}{calStatus?.lastSync ? ` · synced ${relativeTime(calStatus.lastSync, $now.getTime())}` : ''}
                   {/if}
                 </span>
+                {#if linked}
+                  <button type="button" class="change-link" onclick={() => openLink(cal.id)}>Change</button>
+                {/if}
               </div>
             {/if}
             {#if legacy}
@@ -564,7 +564,6 @@
     padding: 0.1rem 0 0.25rem 1.05rem;
   }
 
-  .link-pill,
   .link-add {
     display: inline-flex;
     align-items: center;
@@ -578,11 +577,6 @@
     cursor: pointer;
   }
 
-  .link-pill {
-    border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
-    background: var(--accent-subtler, color-mix(in srgb, var(--accent) 10%, transparent));
-    color: var(--accent-text);
-  }
 
   .link-add {
     border: 1px dashed var(--border);
@@ -593,6 +587,38 @@
   .link-add:hover {
     color: var(--text);
     border-color: var(--text-muted);
+  }
+
+  .linked-to {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.76rem;
+    color: var(--text);
+  }
+
+  .col-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+
+  .change-link {
+    margin-left: auto;
+    border: 0;
+    background: none;
+    padding: 0.2rem 0.3rem;
+    min-height: 28px;
+    font: inherit;
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: var(--accent-text);
+    cursor: pointer;
+  }
+
+  .star-label {
+    font-size: 0.68rem;
+    font-weight: 600;
   }
 
   .link-status {

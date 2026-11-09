@@ -12,6 +12,10 @@
   import { swipeAction, swipeAxis, swipeOffset } from '../lib/swipe';
   import ScheduleSheet from './ScheduleSheet.svelte';
   import CalendarChip from './CalendarChip.svelte';
+  import { calendarAccounts } from '../lib/calendar-accounts';
+  import { cardCalendar } from '../lib/calendar-card';
+  import { calendarSyncStatus, cardSyncErrors } from '../lib/calendar-sync';
+  import { collections as allCollections } from '../lib/collections-store';
 
   let {
     todo,
@@ -76,6 +80,21 @@
   const groupColor = $derived(group?.color || 'var(--text-muted)');
   const collectionColor = $derived(collection?.color || 'var(--text-muted)');
   const isUnfiled = $derived(!collection);
+
+  // A todo that just follows its collection's calendar link wears a small
+  // calendar mark inside the collection pill — one chip, not two that both
+  // say "Work". Anything else (its own calendar, a problem) gets the chip.
+  const calInfo = $derived(
+    cardCalendar(todo, $allCollections, $calendarAccounts, $cardSyncErrors, $calendarSyncStatus),
+  );
+  const followsLink = $derived(
+    !!calInfo && calInfo.viaCollection && calInfo.mode === 'sync' && !calInfo.error,
+  );
+  const pillLabel = $derived(
+    followsLink && calInfo
+      ? `Filed in ${collectionName}, kept in sync with the ${calInfo.name} calendar`
+      : `Filed in ${collectionName}`,
+  );
 
   // Human-friendly relative date — "today", "yesterday", "3d ago", or the date.
   // Designed to fit in the horizontal toolbar without wrapping on desktop.
@@ -411,13 +430,19 @@
     {/if}
     <span
       class="collection-pill"
-      title={collectionName}
-      aria-label={`Filed in ${collectionName}`}
+      title={pillLabel}
+      aria-label={pillLabel}
     >
       <span class="pill-dot"></span>
       <span class="pill-name">{collectionName}</span>
+      {#if followsLink && calInfo && viewing?.calendar?.url !== calInfo.url}
+        <svg class="pill-cal" style="color: {calInfo.color || 'var(--accent)'}" aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
+        {#if calInfo.name !== collectionName}<span class="pill-cal-name">{calInfo.name}</span>{/if}
+      {/if}
     </span>
-    <CalendarChip item={todo} context={viewing} />
+    {#if !followsLink}
+      <CalendarChip item={todo} context={viewing} />
+    {/if}
     {#if showTypeIcon}
       <span class="type-pill" title={typeLabel} aria-label={typeLabel}>
         <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -426,7 +451,7 @@
       </span>
     {/if}
     {#if createdLabel}
-      <span class="date" title={createdTitle}>Added {createdLabel}</span>
+      <span class="date" title={createdTitle}>{todo.importedAt ? 'Created' : 'Added'} {createdLabel}</span>
     {/if}
   </div>
 
@@ -649,6 +674,15 @@
 
   .unfiled .collection-pill {
     border-style: dashed;
+  }
+
+  .pill-cal-name {
+    white-space: nowrap;
+  }
+
+  .pill-cal {
+    flex-shrink: 0;
+    margin-left: 0.05rem;
   }
 
   .pill-dot {

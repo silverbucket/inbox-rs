@@ -63,9 +63,9 @@
 
   const lockText = $derived(
     lockReason === 'repeating'
-      ? 'Repeating — change it in your calendar app.'
+      ? `${repeats ?? 'Repeating'} · edit it in your calendar app. Showing the next date.`
       : lockReason === 'attendees'
-        ? 'Has attendees — change it in your calendar app, so they get the update.'
+        ? 'Has attendees · edit it in your calendar app, so they get the update.'
         : lockReason === 'unsupported'
           ? 'This entry can only be changed in your calendar app.'
           : '',
@@ -73,9 +73,11 @@
 
   const origin = $derived.by(() => {
     const parts: string[] = [];
-    if (item.importedAt) parts.push(`Imported ${shortDate(item.importedAt)}`);
+    if (info?.viaCollection && collection)
+      parts.push(`Via the ${collection.name} collection`);
     if (item.calendarCreatedAt)
-      parts.push(`created ${shortDate(item.calendarCreatedAt)}`);
+      parts.push(`created in the calendar ${shortDate(item.calendarCreatedAt)}`);
+    if (item.importedAt) parts.push(`imported here ${shortDate(item.importedAt)}`);
     if (
       item.calendarChangedAt &&
       (!item.calendarCreatedAt || item.calendarChangedAt > item.calendarCreatedAt)
@@ -88,13 +90,13 @@
   const statusLine = $derived.by(() => {
     if (!info) return '';
     if (!info.connected) {
-      return 'Syncs from devices connected to this calendar — not this one.';
+      return 'Syncs from your other devices';
     }
     if (status?.syncing) return 'Syncing…';
-    if (info.mode === 'pending') return `Will be added to ${info.name} on the next sync.`;
-    if (info.mode === 'once') return `Sent once — later changes stay here.`;
-    if (status?.lastSync) return `Synced ${relativeTime(status.lastSync, $now.getTime())}`;
-    return 'Waiting for the first sync…';
+    if (info.mode === 'pending') return 'Adding on the next sync…';
+    if (info.mode === 'once') return 'Sent once · not updated';
+    if (status?.lastSync) return `In sync · ${relativeTime(status.lastSync, $now.getTime())}`;
+    return 'Kept in sync';
   });
 
   let busy = $state(false);
@@ -186,24 +188,26 @@
 {#if info}
   <section class="cal-section" aria-label="Calendar" style="--cal-color: {info.color || 'var(--accent)'}">
     <div class="head">
-      <span class="eyebrow">Calendar</span>
-      <span class="mode-badge" class:once={info.mode === 'once'} class:pending={info.mode === 'pending'}>
-        {info.mode === 'sync' ? 'Kept in sync' : info.mode === 'once' ? 'Sent once' : 'Not added yet'}
-      </span>
-    </div>
-
-    <div class="where">
       <span class="swatch" aria-hidden="true"></span>
-      <span class="cal-name">{info.name}</span>
-      {#if info.account}<span class="acct">{info.account}</span>{/if}
+      <span class="where">
+        <span class="cal-name">{info.name} calendar</span>
+        {#if info.account}<span class="acct">{info.account}</span>{/if}
+      </span>
+      {#if !info.error}
+        <span class="state" class:muted={info.mode !== 'sync'} aria-live="polite">
+          {#if status?.syncing}<span class="spinner" aria-hidden="true"></span>{/if}
+          {statusLine}
+        </span>
+      {/if}
     </div>
 
-    {#if info.viaCollection && collection}
-      <p class="line">Follows <strong>{collection.name}</strong>, which is linked to this calendar.</p>
+    {#if lockText}
+      <p class="line lock">
+        <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>
+        {lockText}
+      </p>
     {/if}
-    {#if repeats}
-      <p class="line">{repeats} · showing the next date.</p>
-    {/if}
+
     {#if origin}
       <p class="line muted">{origin}</p>
     {/if}
@@ -215,19 +219,8 @@
           <button type="button" class="link-btn" onclick={retry}>Try again</button>
         {/if}
       </div>
-    {:else}
-      <p class="line status" aria-live="polite">
-        {#if status?.syncing}<span class="spinner" aria-hidden="true"></span>{/if}
-        {statusLine}
-      </p>
     {/if}
 
-    {#if lockText}
-      <p class="line lock">
-        <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>
-        {lockText}
-      </p>
-    {/if}
 
     {#if info.connected || info.mode !== 'once'}
       <!-- Keep off / Stop syncing only change the card, so they work on a
@@ -251,11 +244,19 @@
               onclick={handleRemove}
               onblur={() => (confirmRemove = false)}
             >
-              {confirmRemove ? `Remove from ${info.name}?` : 'Remove from calendar'}
+              {confirmRemove ? `Delete from ${info.name} calendar? Card stays` : 'Remove from calendar'}
             </button>
           {/if}
         {/if}
       </div>
+      {#if info.mode === 'sync'}
+        <p class="consequence">
+          <strong>Stop syncing</strong> keeps both copies, unlinked.
+          {#if !lockReason}<strong>Remove</strong> deletes the entry from the {info.name} calendar; the card stays here.{/if}
+        </p>
+      {:else if info.mode === 'pending'}
+        <p class="consequence">The {collection?.name ?? ''} collection adds its todos and dated cards to the {info.name} calendar.</p>
+      {/if}
     {/if}
   </section>
 
@@ -271,6 +272,7 @@
 
 <style>
   .cal-section {
+    max-width: 40rem;
     margin: 0.75rem 0 0.5rem;
     padding: 0.8rem 0.9rem 0.85rem;
     border: 1px solid var(--border);
@@ -285,38 +287,47 @@
   .head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
+    gap: 0.55rem;
+    min-width: 0;
   }
 
-  .eyebrow {
-    font-size: 0.66rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-  }
-
-  .mode-badge {
-    font-size: 0.7rem;
+  .state {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.78rem;
     font-weight: 600;
-    padding: 0.12rem 0.5rem;
-    border-radius: 999px;
     color: var(--accent-text);
-    background: var(--accent-subtler, color-mix(in srgb, var(--accent) 12%, transparent));
+    white-space: nowrap;
   }
 
-  .mode-badge.once,
-  .mode-badge.pending {
+  .state.muted {
     color: var(--text-muted);
-    background: var(--surface-tint);
+    font-weight: 500;
   }
+
+  .consequence {
+    margin: 0.15rem 0 0;
+    font-size: 0.75rem;
+    line-height: 1.45;
+    color: var(--text-muted);
+  }
+
+  .consequence strong {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+
+
 
   .where {
     display: flex;
-    align-items: center;
-    gap: 0.45rem;
+    align-items: baseline;
+    gap: 0.4rem;
     min-width: 0;
+    overflow: hidden;
   }
 
   .swatch {
@@ -352,16 +363,10 @@
     color: var(--text);
   }
 
-  .line.muted,
-  .line.status {
+  .line.muted {
     color: var(--text-muted);
   }
 
-  .line.status {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
 
   .line.lock {
     display: flex;

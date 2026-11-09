@@ -38,7 +38,7 @@
     {#if calendarName}
       <label class="also">
         <input type="checkbox" bind:checked={alsoCalendar} disabled={deleting} />
-        <span>Also delete it from <strong>{calendarName}</strong></span>
+        <span>Also delete it from the <strong>{calendarName}</strong> calendar</span>
       </label>
     {/if}
     <div class="actions">
