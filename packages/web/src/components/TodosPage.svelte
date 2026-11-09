@@ -611,6 +611,7 @@
           {#each dueTodos as todo (todo.id)}
             <TodoRow
               {todo}
+              alignHandle
               collection={lookupCollection(todo.collectionId)}
               group={lookupGroup(todo.collectionId)}
               {onselect}

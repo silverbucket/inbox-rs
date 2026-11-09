@@ -1,5 +1,6 @@
 <script lang="ts">
   import LinkCalendarSheet from './LazyLinkCalendarSheet.svelte';
+  import EventAgenda from './EventAgenda.svelte';
   import { calendarSyncStatus } from '../lib/calendar-sync';
   import type { InboxItem, InboxItemType, Collection } from '@inbox-rs/rs-module';
   import {
@@ -96,15 +97,12 @@
       .filter((i) => isEvent(i) && eventEnded(i, $todayStart))
       .sort((a, b) => (b.startsAt ?? '').localeCompare(a.startsAt ?? '')),
   );
-  const referenceItems = $derived.by(() => {
-    const current = allReferenceItems.filter(
-      (i) => !(isEvent(i) && eventEnded(i, $todayStart)),
-    );
-    const upcoming = current
-      .filter(isEvent)
-      .sort((a, b) => (a.startsAt ?? '').localeCompare(b.startsAt ?? ''));
-    return [...upcoming, ...current.filter((i) => !isEvent(i))];
-  });
+  const upcomingEvents = $derived(
+    allReferenceItems
+      .filter((i) => isEvent(i) && !eventEnded(i, $todayStart))
+      .sort((a, b) => (a.startsAt ?? '').localeCompare(b.startsAt ?? '')),
+  );
+  const referenceItems = $derived(allReferenceItems.filter((i) => !isEvent(i)));
   let pastExpanded = $state(false);
 
   // Items moved to a calendar (todos and cards alike) — one combined
@@ -402,8 +400,7 @@
               aria-label="Calendar link: {collection.calendar.name}"
               onclick={(e) => { e.stopPropagation(); showCalendarLink = true; }}
             >
-              <span class="cal-badge-dot"></span>{collection.calendar.name}
-              <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 2 21 6 17 10"></polyline><path d="M3 11V9a3 3 0 0 1 3-3h15"></path><polyline points="7 22 3 18 7 14"></polyline><path d="M21 13v2a3 3 0 0 1-3 3H3"></path></svg>
+              <svg class="cal-badge-icon" aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>{collection.calendar.name} calendar
             </button>
           {/if}
           {#if boardSetName}<span class="board-badge" title="Board columns: {boardSetName}">{boardSetName}</span>{/if}
@@ -423,11 +420,16 @@
           {openTodos.length} {openTodos.length === 1 ? 'todo' : 'todos'}
         </span>
       {/if}
+      {#if upcomingEvents.length > 0}
+        <span class="badge badge-ref" aria-label="{upcomingEvents.length} upcoming events" title="{upcomingEvents.length} upcoming {upcomingEvents.length === 1 ? 'event' : 'events'}">
+          {upcomingEvents.length} upcoming
+        </span>
+      {/if}
       {#if referenceItems.length > 0}
         <span class="badge badge-ref" aria-label="{referenceItems.length} reference items" title="{referenceItems.length} reference items">
           {referenceItems.length} {referenceItems.length === 1 ? 'reference' : 'references'}
         </span>
-      {:else if openTodos.length === 0}
+      {:else if openTodos.length === 0 && upcomingEvents.length === 0}
         <span class="badge badge-ref" aria-label="0 reference items" title="0 reference items">0 references</span>
       {/if}
     </div>
@@ -558,7 +560,7 @@
             <div class="due-header">Due</div>
             <ul class="todo-list" role="list">
               {#each dueTodos as todo (todo.id)}
-                <TodoRow {todo} {collection} viewing={collection} {group} {onselect} />
+                <TodoRow {todo} {collection} viewing={collection} {group} {onselect} alignHandle />
               {/each}
             </ul>
           </div>
@@ -616,6 +618,15 @@
         {/if}
       </section>
 
+      {#if upcomingEvents.length > 0}
+        <section class="events-section" aria-label="Upcoming events in {collection.name}">
+          <div class="section-header">
+            <h4>Upcoming</h4>
+          </div>
+          <EventAgenda events={upcomingEvents} {onselect} viewing={collection} />
+        </section>
+      {/if}
+
       <section class="references-section" aria-label="References in {collection.name}">
         <div class="section-header">
           <h4>References</h4>
@@ -666,13 +677,7 @@
           </button>
           {#if pastExpanded}
             <div class="on-calendar-body" transition:slide={{ duration: isTouchDevice ? 0 : 200 }}>
-              <div class="grid on-calendar-grid">
-                {#each pastEvents as item (item.id)}
-                  <div class="grid-card-wrapper">
-                    <InboxCard {item} {onselect} viewing={collection} />
-                  </div>
-                {/each}
-              </div>
+              <EventAgenda events={pastEvents} {onselect} viewing={collection} past />
             </div>
           {/if}
         </section>
@@ -765,7 +770,7 @@
     align-items: center;
     gap: 0.3rem;
     padding: 0.08rem 0.45rem;
-    border-radius: 999px;
+    border-radius: 6px;
     border: 1px solid color-mix(in srgb, var(--cal-color) 40%, var(--border));
     background: color-mix(in srgb, var(--cal-color) 10%, transparent);
     color: var(--text-muted);
@@ -786,11 +791,8 @@
     color: var(--danger-text);
   }
 
-  .cal-badge-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--cal-color);
+  .cal-badge-icon {
+    color: var(--cal-color);
   }
 
   .collection-header {
@@ -1112,7 +1114,8 @@
   }
 
   /* ---- Section framing (Todos + References share the same pattern) ---- */
-  .todos-section {
+  .todos-section,
+  .events-section {
     margin-bottom: 1.25rem;
   }
 

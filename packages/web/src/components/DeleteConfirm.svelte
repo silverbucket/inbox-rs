@@ -5,7 +5,14 @@
     deleting = false,
     message = 'Delete permanently? This can’t be undone.',
     calendarName,
+    mayReturn = false,
+    keptIn,
   }: {
+    /** A read-only entry (repeating, attendees) the delete keeps, by calendar. */
+    keptIn?: string;
+    /** The card follows a collection link, so a later change to the kept
+        entry brings it back. */
+    mayReturn?: boolean;
     /** `alsoCalendar`: also delete the synced calendar entry. */
     onConfirm: (options: { alsoCalendar: boolean }) => void;
     onCancel: () => void;
@@ -38,8 +45,19 @@
     {#if calendarName}
       <label class="also">
         <input type="checkbox" bind:checked={alsoCalendar} disabled={deleting} />
-        <span>Also delete it from <strong>{calendarName}</strong></span>
+        <span>Also delete it from the <strong>{calendarName}</strong> calendar</span>
       </label>
+      <p class="also-hint">
+        {alsoCalendar
+          ? 'Gone from both places. This can’t be undone.'
+          : mayReturn
+            ? `It stays in the ${calendarName} calendar, and only comes back here if it changes there.`
+            : `It stays in the ${calendarName} calendar.`}
+      </p>
+    {:else if keptIn}
+      <p class="also-hint kept">
+        It stays in the {keptIn} calendar (change it there){mayReturn ? ', and comes back here if it changes there' : ''}.
+      </p>
     {/if}
     <div class="actions">
       <button type="button" class="btn-cancel" onclick={onCancel} disabled={deleting}>Cancel</button>
@@ -91,6 +109,17 @@
     color: var(--text-muted);
     cursor: pointer;
     min-height: 44px;
+  }
+
+  .also-hint.kept {
+    margin-top: 0;
+  }
+
+  .also-hint {
+    margin: -0.85rem 0 1rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.4;
   }
 
   .also input {
