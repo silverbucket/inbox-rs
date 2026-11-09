@@ -127,6 +127,7 @@ import {
   toggleCollectionFilter,
   toggleGroupFilter,
   triageToTodo,
+  updateConfig,
   updateItem,
   userAddress,
   userSettings,
@@ -764,6 +765,70 @@ describe('triageToTodo / restoreItem', () => {
     await expect(restoreItem({ before, after })).resolves.toBe(true);
     expect(get(items).n1).not.toHaveProperty('collectionId');
     expect(get(collections).here.itemIds).toEqual([]);
+  });
+});
+
+describe('config update races', () => {
+  beforeEach(() => {
+    appConfig.set({});
+    mockInbox.setConfig.mockReset().mockResolvedValue(undefined);
+  });
+
+  it('keeps favorites when startup cache replay arrives after an edit', async () => {
+    await updateConfig({ favoriteCollectionIds: ['c1'] });
+    emitModuleChange({
+      relativePath: 'config/app',
+      origin: 'local',
+      newValue: {},
+    });
+    expect(get(appConfig).favoriteCollectionIds).toEqual(['c1']);
+  });
+
+  it('keeps a remote removal authoritative over startup cache replay', () => {
+    emitModuleChange({ relativePath: 'config/app', newValue: {} });
+    emitModuleChange({
+      relativePath: 'config/app',
+      origin: 'local',
+      newValue: { favoriteCollectionIds: ['c1'] },
+    });
+    expect(get(appConfig).favoriteCollectionIds).toBeUndefined();
+  });
+
+  it('keeps favorites changed while another settings write fails', async () => {
+    let rejectWrite!: (error: Error) => void;
+    mockInbox.setConfig.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectWrite = reject;
+        }),
+    );
+    appConfig.set({ groupsOrder: ['g1'] });
+    const pending = updateConfig({ groupsOrder: ['g2'] });
+    await updateConfig({ favoriteCollectionIds: ['c1'] });
+    rejectWrite(new Error('write failed'));
+    await expect(pending).rejects.toThrow('write failed');
+    expect(get(appConfig)).toEqual({
+      groupsOrder: ['g1'],
+      favoriteCollectionIds: ['c1'],
+    });
+  });
+
+  it('keeps favorites received while the initial config read is pending', async () => {
+    let resolveRead!: (config: object) => void;
+    mockInbox.getConfig.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    const pending = rsHandlers.connected();
+    emitModuleChange({
+      relativePath: 'config/app',
+      newValue: { favoriteCollectionIds: ['c1'] },
+    });
+    resolveRead({});
+    await pending;
+    expect(get(appConfig).favoriteCollectionIds).toEqual(['c1']);
   });
 });
 
