@@ -271,7 +271,7 @@
 
 <style>
   .cal-section {
-    margin: 0.25rem 0 0.5rem;
+    margin: 0.75rem 0 0.5rem;
     padding: 0.8rem 0.9rem 0.85rem;
     border: 1px solid var(--border);
     border-left: 3px solid var(--cal-color);

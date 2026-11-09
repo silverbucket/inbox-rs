@@ -1,5 +1,6 @@
 <script lang="ts">
   import LinkCalendarSheet from './LazyLinkCalendarSheet.svelte';
+  import EventAgenda from './EventAgenda.svelte';
   import { calendarSyncStatus } from '../lib/calendar-sync';
   import type { InboxItem, InboxItemType, Collection } from '@inbox-rs/rs-module';
   import {
@@ -96,15 +97,12 @@
       .filter((i) => isEvent(i) && eventEnded(i, $todayStart))
       .sort((a, b) => (b.startsAt ?? '').localeCompare(a.startsAt ?? '')),
   );
-  const referenceItems = $derived.by(() => {
-    const current = allReferenceItems.filter(
-      (i) => !(isEvent(i) && eventEnded(i, $todayStart)),
-    );
-    const upcoming = current
-      .filter(isEvent)
-      .sort((a, b) => (a.startsAt ?? '').localeCompare(b.startsAt ?? ''));
-    return [...upcoming, ...current.filter((i) => !isEvent(i))];
-  });
+  const upcomingEvents = $derived(
+    allReferenceItems
+      .filter((i) => isEvent(i) && !eventEnded(i, $todayStart))
+      .sort((a, b) => (a.startsAt ?? '').localeCompare(b.startsAt ?? '')),
+  );
+  const referenceItems = $derived(allReferenceItems.filter((i) => !isEvent(i)));
   let pastExpanded = $state(false);
 
   // Items moved to a calendar (todos and cards alike) — one combined
@@ -423,11 +421,16 @@
           {openTodos.length} {openTodos.length === 1 ? 'todo' : 'todos'}
         </span>
       {/if}
+      {#if upcomingEvents.length > 0}
+        <span class="badge badge-ref" aria-label="{upcomingEvents.length} upcoming events" title="{upcomingEvents.length} upcoming {upcomingEvents.length === 1 ? 'event' : 'events'}">
+          {upcomingEvents.length} upcoming
+        </span>
+      {/if}
       {#if referenceItems.length > 0}
         <span class="badge badge-ref" aria-label="{referenceItems.length} reference items" title="{referenceItems.length} reference items">
           {referenceItems.length} {referenceItems.length === 1 ? 'reference' : 'references'}
         </span>
-      {:else if openTodos.length === 0}
+      {:else if openTodos.length === 0 && upcomingEvents.length === 0}
         <span class="badge badge-ref" aria-label="0 reference items" title="0 reference items">0 references</span>
       {/if}
     </div>
@@ -616,6 +619,15 @@
         {/if}
       </section>
 
+      {#if upcomingEvents.length > 0}
+        <section class="events-section" aria-label="Upcoming events in {collection.name}">
+          <div class="section-header">
+            <h4>Upcoming</h4>
+          </div>
+          <EventAgenda events={upcomingEvents} {onselect} viewing={collection} />
+        </section>
+      {/if}
+
       <section class="references-section" aria-label="References in {collection.name}">
         <div class="section-header">
           <h4>References</h4>
@@ -666,13 +678,7 @@
           </button>
           {#if pastExpanded}
             <div class="on-calendar-body" transition:slide={{ duration: isTouchDevice ? 0 : 200 }}>
-              <div class="grid on-calendar-grid">
-                {#each pastEvents as item (item.id)}
-                  <div class="grid-card-wrapper">
-                    <InboxCard {item} {onselect} viewing={collection} />
-                  </div>
-                {/each}
-              </div>
+              <EventAgenda events={pastEvents} {onselect} viewing={collection} past />
             </div>
           {/if}
         </section>
@@ -1112,7 +1118,8 @@
   }
 
   /* ---- Section framing (Todos + References share the same pattern) ---- */
-  .todos-section {
+  .todos-section,
+  .events-section {
     margin-bottom: 1.25rem;
   }
 

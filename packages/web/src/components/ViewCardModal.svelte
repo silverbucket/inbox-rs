@@ -597,7 +597,7 @@
           </svg>
           Back
         </button>
-        <span class="type-badge">{item.type}</span>
+        <span class="type-badge">{item.type === 'note' && item.scheduleKind === 'event' ? 'event' : item.type}</span>
         <time class="date">{formatDate(item.createdAt)}</time>
         <button
           type="button"
@@ -864,7 +864,9 @@
       {/if}
     </div>
 
-
+    {#if calendarInfo}
+      <CalendarSection {item} prepare={prepareAction} bind:pickerOpen={calendarPickerOpen} />
+    {/if}
 
     <div class="action-list">
       <button type="button" class="action-row" disabled={changingArchiveState} onclick={() => void toggleArchived()}>
@@ -954,9 +956,7 @@
               ? 'When…'
               : 'Set time…'}
       </button>
-      {#if calendarInfo}
-        <CalendarSection {item} prepare={prepareAction} bind:pickerOpen={calendarPickerOpen} />
-      {:else if item.startsAt}
+      {#if item.startsAt && !calendarInfo}
         <button
           type="button"
           class="action-row"

@@ -36,6 +36,11 @@
       !!context?.calendar &&
       context.calendar.url === info.url,
   );
+  // A card that simply follows its collection's link needs no name: the
+  // collection pill beside it already says where it lives.
+  const compact = $derived(
+    !!info && info.viaCollection && info.mode === 'sync' && !info.error,
+  );
   const label = $derived.by(() => {
     if (!info) return '';
     if (info.error) return `${info.name}: ${info.error}`;
@@ -48,6 +53,7 @@
 {#if info && !redundant}
   <span
     class="cal-chip"
+    class:compact
     class:error={!!info.error}
     class:pending={info.mode === 'pending'}
     style="--cal-color: {info.color || 'var(--accent)'}"
@@ -55,8 +61,8 @@
     aria-label={label}
     role="img"
   >
-    <span class="dot"></span>
-    <span class="name">{info.name}</span>
+    <svg class="cal-icon" aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
+    {#if !compact}<span class="name">{info.name}</span>{/if}
     <svg class="mode" aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
       {#if info.error}
         <line x1="12" y1="7" x2="12" y2="13"></line>
@@ -84,7 +90,7 @@
     max-width: 9.5rem;
     min-width: 0;
     padding: 0.12rem 0.45rem 0.12rem 0.4rem;
-    border-radius: 999px;
+    border-radius: 6px;
     border: 1px solid color-mix(in srgb, var(--cal-color) 40%, var(--border));
     background: color-mix(in srgb, var(--cal-color) 10%, transparent);
     color: var(--text-muted);
@@ -94,12 +100,14 @@
     white-space: nowrap;
   }
 
-  .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--cal-color);
+  .cal-icon {
+    color: var(--cal-color);
     flex-shrink: 0;
+  }
+
+  .compact {
+    padding: 0.14rem 0.38rem;
+    gap: 0.2rem;
   }
 
   .name {
@@ -122,6 +130,10 @@
     border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
     background: color-mix(in srgb, var(--danger) 10%, transparent);
     color: var(--danger-text);
+  }
+
+  .error .cal-icon {
+    color: inherit;
   }
 
   .error .mode {

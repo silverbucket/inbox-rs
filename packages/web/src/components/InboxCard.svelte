@@ -93,7 +93,10 @@
   });
   // `||` not `??`: a parsed-but-empty hostname ('' for odd/non-host URLs)
   // should still fall back to the generic label rather than render blank.
-  const kindLabel = $derived(bookmarkDomain || kind.label);
+  const kindLabel = $derived(
+    bookmarkDomain ||
+      (item.type === 'note' && item.scheduleKind === 'event' ? 'Event' : kind.label),
+  );
 
   // The site's favicon decorates bookmark cards in place of the generic
   // bookmark glyph. Resolved against the bookmark URL because older items
