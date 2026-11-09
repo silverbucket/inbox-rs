@@ -125,6 +125,7 @@ import {
   syncing,
   todoItems,
   toggleCollectionFilter,
+  toggleFavoriteCollection,
   toggleGroupFilter,
   triageToTodo,
   updateConfig,
@@ -810,6 +811,49 @@ describe('config update races', () => {
     expect(get(appConfig)).toEqual({
       groupsOrder: ['g1'],
       favoriteCollectionIds: ['c1'],
+    });
+  });
+
+  it('preserves saved favorites and both toggles made during startup', async () => {
+    let resolveRead!: (config: object) => void;
+    mockInbox.getConfig.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    const loading = rsHandlers.connected();
+    const first = toggleFavoriteCollection('c2');
+    const second = toggleFavoriteCollection('c3');
+    resolveRead({ favoriteCollectionIds: ['c1'] });
+    await Promise.all([loading, first, second]);
+    expect(get(appConfig).favoriteCollectionIds).toEqual(['c1', 'c2', 'c3']);
+    expect(mockInbox.setConfig).toHaveBeenLastCalledWith({
+      favoriteCollectionIds: ['c1', 'c2', 'c3'],
+    });
+  });
+
+  it('loads saved favorites before an overlapping edit that fails', async () => {
+    let resolveRead!: (config: object) => void;
+    mockInbox.getConfig.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    const loading = rsHandlers.connected();
+    mockInbox.setConfig.mockRejectedValueOnce(new Error('write failed'));
+    const editing = updateConfig({ groupsOrder: ['g1'] });
+    const failedEdit = expect(editing).rejects.toThrow('write failed');
+    expect(mockInbox.setConfig).not.toHaveBeenCalled();
+    resolveRead({ favoriteCollectionIds: ['c1'] });
+    await loading;
+    await failedEdit;
+    expect(get(appConfig)).toEqual({ favoriteCollectionIds: ['c1'] });
+    await updateConfig({ groupsOrder: ['g2'] });
+    expect(mockInbox.setConfig).toHaveBeenLastCalledWith({
+      favoriteCollectionIds: ['c1'],
+      groupsOrder: ['g2'],
     });
   });
 

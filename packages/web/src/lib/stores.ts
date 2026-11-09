@@ -384,7 +384,17 @@ function replayPendingCardDrafts(): Promise<void> {
   return draftReplay;
 }
 
-async function loadConfig() {
+let pendingConfigLoad: Promise<void> | null = null;
+
+function loadConfig() {
+  const loading = readConfig();
+  pendingConfigLoad = loading;
+  return loading.finally(() => {
+    if (pendingConfigLoad === loading) pendingConfigLoad = null;
+  });
+}
+
+async function readConfig() {
   const inbox = getInbox();
   if (!inbox) return;
   try {
@@ -664,6 +674,8 @@ export async function runAllMigrations() {
 }
 
 export async function updateConfig(patch: Partial<AppConfig>) {
+  // Don't persist a partial config before saved favorites/settings have loaded.
+  if (pendingConfigLoad) await pendingConfigLoad;
   const inbox = getInbox();
   if (!inbox) throw new Error('Cannot update config: storage not connected');
   const currentConfig = get(appConfig);
@@ -1460,6 +1472,7 @@ export const favoriteCollections = derived(
 
 /** Add or remove a collection from favourites. New favourites go last. */
 export async function toggleFavoriteCollection(id: string) {
+  if (pendingConfigLoad) await pendingConfigLoad;
   const current = get(appConfig).favoriteCollectionIds ?? [];
   await updateConfig({
     favoriteCollectionIds: current.includes(id)
