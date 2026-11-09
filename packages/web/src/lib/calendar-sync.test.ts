@@ -63,6 +63,7 @@ import { calendarAccounts } from './calendar-accounts';
 import {
   deleteSyncedEntry,
   entryIsCurrent,
+  keepInSync,
   linkCollection,
   previewLink,
   removeFromCalendar,
@@ -759,6 +760,14 @@ describe('push and create', () => {
     });
     await expect(removeFromCalendar(past({}))).rejects.toThrow(/calendar app/);
     expect(deleteEntry).not.toHaveBeenCalled();
+  });
+
+  it('refuses a manual move for a card its collection link now governs', async () => {
+    const choice = { account, calendar: account.calendars[1] };
+    await expect(keepInSync(card(), choice)).rejects.toThrow(
+      /follows its collection/,
+    );
+    expect(createEntry).not.toHaveBeenCalled();
   });
 
   it('unlinking keeps cards filed into the collection meanwhile', async () => {

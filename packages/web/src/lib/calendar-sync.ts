@@ -1447,6 +1447,15 @@ export async function keepInSync(
   item: InboxItem,
   choice: CalendarChoice,
 ): Promise<InboxItem> {
+  // The latest card: a sync may have filed it under a link meanwhile.
+  const latest = get(items)[item.id] ?? item;
+  const link = collectionLinkFor(latest);
+  if (link && link.url !== choice.calendar.id) {
+    throw new CaldavError(
+      `This card follows its collection's ${link.name} calendar — move the card to another collection instead`,
+    );
+  }
+  item = latest;
   const state = loadState();
   try {
     if (item.eventUrl && entryInCalendar(item.eventUrl, choice.calendar.id)) {

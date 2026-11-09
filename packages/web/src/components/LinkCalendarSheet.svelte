@@ -20,7 +20,7 @@
   } from '../lib/calendar-sync';
   import { loadLazy } from '../lib/lazy-load';
   import { formatScheduled, isOverdue } from '../lib/schedule';
-  import { collections } from '../lib/stores';
+  import { collections, items } from '../lib/stores';
   import { showToast } from '../lib/toast';
 
   /**
@@ -163,11 +163,11 @@
           ? [...events, ...tasks].filter((e) => isChosen(e)).map((e) => e.id)
           : [],
       );
+      const name = preview.choice.calendar.name;
       const count = await linkCollection(collection, preview, {
         importIds,
         addExisting,
       });
-      const name = preview.choice.calendar.name;
       showToast(
         count > 0
           ? `Linked to ${name} — brought in ${count} ${count === 1 ? 'card' : 'cards'}`
@@ -216,7 +216,10 @@
   }
 
   function handleEscape(e: KeyboardEvent) {
-    if (e.key !== 'Escape' || showSettings || saving) return;
+    if (e.key !== 'Escape' || showSettings) return;
+    // The sheet is on top: forms underneath must not also close.
+    e.stopPropagation();
+    if (saving) return;
     if (reviewing) {
       reviewing = null;
       return;
@@ -224,15 +227,18 @@
     onclose();
   }
 
-  const linkedCount = $derived(linked ? calendarCardCount(linked.url) : 0);
+  const linkedCount = $derived.by(() => {
+    void $items; // recount as cards change
+    return linked ? calendarCardCount(linked.url) : 0;
+  });
   const pastNote = 'Nothing that ended before today is brought in.';
 </script>
 
-<svelte:window onkeydown={handleEscape} />
+<svelte:window onkeydowncapture={handleEscape} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="overlay" use:portal onclick={() => !saving && onclose()}>
+<div class="overlay" use:portal onclick={() => !saving && onclose()} style:visibility={showSettings ? 'hidden' : undefined}>
   <div
     class="sheet"
     role="dialog"
@@ -295,7 +301,7 @@
       {#if !initialCollection}
         <label class="field">
           <span class="field-label">Collection</span>
-          <select bind:value={collectionId} onchange={() => { preview = null; loadError = ''; }}>
+          <select bind:value={collectionId} disabled={saving} onchange={() => { preview = null; loadError = ''; }}>
             <option value="" disabled>Choose a collection…</option>
             {#each openCollections as c (c.id)}
               <option value={c.id} disabled={!!c.calendar}>

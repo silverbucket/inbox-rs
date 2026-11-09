@@ -8,6 +8,7 @@
     accountEndpoint,
     addCalendarAccount,
     calendarAccounts,
+    entryInCalendar,
     removeCalendarAccount,
     updateCalendarAccount,
     type CalendarAccount,
@@ -260,9 +261,9 @@
           {@const hidden = account.hiddenCalendarIds?.includes(cal.id)}
           {@const linked = linkedCollection(cal.id, $collections)}
           {@const calStatus = $calendarSyncStatus[cal.id]}
-          {@const count = Object.values($items).filter((i) => i.calendarSync && i.eventUrl?.startsWith(cal.id)).length}
+          {@const count = Object.values($items).filter((i) => i.calendarSync && entryInCalendar(i.eventUrl, cal.id)).length}
           {@const legacy = !linked && account.syncCalendarIds?.includes(cal.id)}
-          {@const legacyCount = legacy ? Object.values($items).filter((i) => !i.collectionId && i.calendarSync && i.eventUrl?.startsWith(cal.id)).length : 0}
+          {@const legacyCount = legacy ? Object.values($items).filter((i) => !i.collectionId && i.calendarSync && entryInCalendar(i.eventUrl, cal.id)).length : 0}
           <div class="cal-line" class:hidden>
             <span class="dot" style="background: {cal.color || 'var(--accent)'}"></span>
             <span class="cal-name">{cal.name}</span>
