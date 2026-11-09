@@ -682,9 +682,13 @@ async function fetchChanges(
     if (!(err instanceof CaldavError)) throw err;
     if (err.code === 'caldav:sync-token-invalid') {
       // Restart from now, and reconcile the gap with a "today onward"
-      // snapshot so changes made meanwhile aren't skipped.
-      await startTracking(target, cal);
-      return { items: await windowSnapshot(target), removed: [], full: true };
+      // snapshot so changes made meanwhile aren't skipped. The new token is
+      // only stored once that reconcile is done (see pull), so a failed
+      // snapshot retries the recovery next pass.
+      const fresh: CalendarSyncState = { entries: {} };
+      await startTracking(target, fresh);
+      const items = await windowSnapshot(target);
+      return { items, removed: [], full: true, token: fresh.token };
     }
     if (err.code !== 'caldav:sync-unsupported') throw err;
     cal.snapshot = true;
@@ -825,7 +829,7 @@ async function pull(
       })
     : changes.removed;
   for (const href of removed) await unlinkRemoved(href, cal, byHref, notes);
-  if (!changes.full) cal.token = changes.token ?? cal.token;
+  if (changes.token) cal.token = changes.token;
 }
 
 /**

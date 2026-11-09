@@ -183,7 +183,20 @@ describe('starting from today', () => {
           : [],
       removed: [],
     }));
+    // The first recovery's snapshot fails: the stale token must survive so
+    // the next pass recovers again instead of skipping the gap.
+    vi.mocked(queryEntries).mockRejectedValueOnce(
+      new CaldavError('caldav:connection-failed'),
+    );
     await runCalendarSync();
+    expect(card().title).toBe('Pay rent');
+    vi.mocked(syncCalendar).mockRejectedValueOnce(
+      new CaldavError('caldav:sync-token-invalid'),
+    );
+    vi.mocked(currentSyncToken).mockResolvedValueOnce('t9');
+    await runCalendarSync();
+    // The retry still sent the old token, not the unreconciled new one.
+    expect(vi.mocked(syncCalendar).mock.calls.at(-1)?.[2]).toBe('t1');
     expect(card().title).toBe('Renamed in gap');
     vi.mocked(syncCalendar).mockClear();
     await runCalendarSync();
