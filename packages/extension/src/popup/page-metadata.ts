@@ -6,7 +6,9 @@ import {
   type UserSettings,
 } from '@inbox-rs/rs-module';
 
-const SAVE_METADATA_TIMEOUT_MS = 3_000;
+// Covers reading the settings and the relay's fetch. Slow sites (a Reddit
+// image post takes 2–3 s) lose a shorter race and save without their image.
+const SAVE_METADATA_TIMEOUT_MS = 8_000;
 
 type SettingsReader = {
   getUserSettings(): Promise<UserSettings>;
