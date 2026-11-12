@@ -83,6 +83,27 @@ describe('TodosToday', () => {
     expect(section('today-week')?.textContent).toContain('Todo sat');
   });
 
+  it('shows a multi-day event on its middle day, marked as ongoing', () => {
+    // Tuesday to Thursday; today is the Wednesday in between.
+    const trip = todo('trip', {
+      startsAt: new Date(2026, 10, 3).toISOString(),
+      endsAt: new Date(2026, 10, 5).toISOString(),
+      allDay: true,
+      scheduleKind: 'event',
+    });
+    render([trip]);
+    const due = section('today-due');
+    expect(due?.textContent).toContain('Todo trip');
+    expect(due?.querySelector('.day-tag')?.textContent).toBe('Day 2 of 3');
+    expect(day(5)?.querySelector('.mark.on')).not.toBeNull();
+    expect(day(6)?.querySelector('.mark.on')).toBeNull();
+    day(5)?.click();
+    flushSync();
+    expect(
+      section('today-picked')?.querySelector('.day-tag')?.textContent,
+    ).toBe('Day 3 of 3');
+  });
+
   it('sorts a day by time, not by the stored string', () => {
     // Same moment written with different offsets sorts wrong as text.
     const early = todo('early', { startsAt: '2026-11-06T09:00:00+02:00' });

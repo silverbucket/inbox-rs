@@ -13,7 +13,9 @@ import {
   planFor,
   planLabel,
   scheduledDayKey,
+  scheduledDayKeys,
   shiftMonth,
+  spanDayLabel,
   toDateKey,
   weekStart,
 } from './plan';
@@ -209,6 +211,56 @@ describe('calendar helpers', () => {
       scheduledDayKey({ startsAt: new Date(2026, 10, 6, 9).toISOString() }),
     ).toBe('2026-11-06');
     expect(scheduledDayKey({})).toBeNull();
+  });
+
+  it('keys a multi-day all-day event by every day of its span', () => {
+    const trip = {
+      startsAt: new Date(2026, 10, 9).toISOString(),
+      endsAt: new Date(2026, 10, 11).toISOString(),
+      allDay: true,
+    };
+    expect(scheduledDayKeys(trip)).toEqual([
+      '2026-11-09',
+      '2026-11-10',
+      '2026-11-11',
+    ]);
+    expect(spanDayLabel(trip, '2026-11-09')).toBe('');
+    expect(spanDayLabel(trip, '2026-11-10')).toBe('Day 2 of 3');
+    expect(spanDayLabel(trip, '2026-11-12')).toBe('');
+    // A timed event keeps one key, whatever its end.
+    expect(
+      scheduledDayKeys({
+        startsAt: new Date(2026, 10, 9, 22).toISOString(),
+        endsAt: new Date(2026, 10, 10, 2).toISOString(),
+      }),
+    ).toEqual(['2026-11-09']);
+    expect(scheduledDayKeys({})).toEqual([]);
+  });
+
+  it('walks a span by calendar day across a clock change', () => {
+    const tz = process.env.TZ;
+    // Central Europe leaves summer time on Sunday, October 25 2026, and
+    // goes back to it on Sunday, March 28 2027.
+    process.env.TZ = 'Europe/Prague';
+    try {
+      expect(
+        scheduledDayKeys({
+          startsAt: new Date(2026, 9, 24).toISOString(),
+          endsAt: new Date(2026, 9, 26).toISOString(),
+          allDay: true,
+        }),
+      ).toEqual(['2026-10-24', '2026-10-25', '2026-10-26']);
+      expect(
+        scheduledDayKeys({
+          startsAt: new Date(2027, 2, 27).toISOString(),
+          endsAt: new Date(2027, 2, 29).toISOString(),
+          allDay: true,
+        }),
+      ).toEqual(['2027-03-27', '2027-03-28', '2027-03-29']);
+    } finally {
+      if (tz === undefined) delete process.env.TZ;
+      else process.env.TZ = tz;
+    }
   });
 
   it('moves undated or all-day items as all-day tasks, timed ones keep their time', () => {

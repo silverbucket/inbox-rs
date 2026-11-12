@@ -8,7 +8,14 @@
    */
   import type { Collection, CollectionGroup, InboxItem } from '@inbox-rs/rs-module';
   import { todayStart } from '../lib/now';
-  import { type Placement, scheduledDayKey, toDateKey, weekStart } from '../lib/plan';
+  import {
+    type Placement,
+    scheduledDayKey,
+    scheduledDayKeys,
+    spanDayLabel,
+    toDateKey,
+    weekStart,
+  } from '../lib/plan';
   import { compareByDueTime } from '../lib/schedule';
   import TodoRow from './TodoRow.svelte';
 
@@ -61,11 +68,12 @@
   const byDay = $derived.by(() => {
     const map = new Map<string, InboxItem[]>();
     for (const t of todos) {
-      const key = scheduledDayKey(t);
-      if (!key) continue;
-      const list = map.get(key) ?? [];
-      list.push(t);
-      map.set(key, list);
+      // A multi-day all-day event sits on every day of its span.
+      for (const key of scheduledDayKeys(t)) {
+        const list = map.get(key) ?? [];
+        list.push(t);
+        map.set(key, list);
+      }
     }
     for (const list of map.values()) {
       list.sort(compareByDueTime);
@@ -106,7 +114,7 @@
       if (placements.get(t.id)?.section !== 'week') return false;
       const key = scheduledDayKey(t);
       // The picked day is already listed above; don't show it twice.
-      return !key || (key > todayKey && key !== selectedKey);
+      return !key || (key > todayKey && !scheduledDayKeys(t).includes(selectedKey));
     }),
   );
 
@@ -114,7 +122,7 @@
 
 </script>
 
-{#snippet list(items: InboxItem[])}
+{#snippet list(items: InboxItem[], dayKey?: string)}
   <ul class="list" role="list">
     {#each items as todo (todo.id)}
       <TodoRow
@@ -122,6 +130,7 @@
         collection={lookupCollection(todo.collectionId)}
         group={lookupGroup(todo.collectionId)}
         planTag={placements.get(todo.id)?.rolledFrom}
+        dayTag={dayKey ? spanDayLabel(todo, dayKey) : undefined}
         {onselect}
         onaddincollection={onaddincollection}
       />
@@ -160,7 +169,7 @@
     <section class="group" style="--h: var(--horizon-week)" aria-labelledby="today-picked">
       <h2 class="label" id="today-picked"><span class="swatch"></span>{pickedTitle}<span class="count">{pickedDay.length}</span></h2>
       {#if pickedDay.length > 0}
-        {@render list(pickedDay)}
+        {@render list(pickedDay, selectedKey)}
       {:else}
         <p class="empty">Nothing dated that day.</p>
       {/if}
@@ -170,7 +179,7 @@
   <section class="group" style="--h: var(--horizon-due)" aria-labelledby="today-due">
     <h2 class="label" id="today-due"><span class="swatch"></span>Due today{#if dueToday.length}<span class="count">{dueToday.length}</span>{:else}<span class="empty-inline">Nothing due</span>{/if}</h2>
     {#if dueToday.length > 0}
-      {@render list(dueToday)}
+      {@render list(dueToday, todayKey)}
     {/if}
   </section>
 

@@ -405,6 +405,48 @@ export function scheduledDayKey(
   return Number.isNaN(d.getTime()) ? null : toDateKey(d);
 }
 
+/** Longest span walked day by day; guards against a corrupt `endsAt`. */
+const MAX_SPAN_DAYS = 366;
+
+/**
+ * Local date keys of every day an item occupies: start through end,
+ * inclusive, for a multi-day all-day event; just the start day otherwise.
+ * Empty when undated.
+ */
+export function scheduledDayKeys(
+  item: Pick<InboxItem, 'startsAt' | 'endsAt' | 'allDay'>,
+): string[] {
+  const first = scheduledDayKey(item);
+  if (!first) return [];
+  const keys = [first];
+  if (!item.allDay || !item.endsAt) return keys;
+  const end = new Date(item.endsAt);
+  if (Number.isNaN(end.getTime())) return keys;
+  const last = toDateKey(end);
+  // Step by calendar day, not 24 h, so a DST change can't skip or repeat one.
+  const d = startOfDay(new Date(item.startsAt as string));
+  while (keys.length < MAX_SPAN_DAYS) {
+    d.setDate(d.getDate() + 1);
+    const key = toDateKey(d);
+    if (key > last) break;
+    keys.push(key);
+  }
+  return keys;
+}
+
+/**
+ * "Day 2 of 3" when `key` is a later day of the item's multi-day span;
+ * empty on its first day, on single-day items, and outside the span.
+ */
+export function spanDayLabel(
+  item: Pick<InboxItem, 'startsAt' | 'endsAt' | 'allDay'>,
+  key: string,
+): string {
+  const keys = scheduledDayKeys(item);
+  const i = keys.indexOf(key);
+  return i > 0 ? `Day ${i + 1} of ${keys.length}` : '';
+}
+
 /**
  * The schedule for moving an item to `day`: an all-day task when it had no
  * time (or no date), otherwise the same clock time on the new day. A timed
