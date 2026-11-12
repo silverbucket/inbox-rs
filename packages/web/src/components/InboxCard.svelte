@@ -22,6 +22,7 @@
     hints,
     onfile,
     onfetchtitle,
+    oncompare,
     viewing = null,
   }: {
     item: InboxItem;
@@ -34,6 +35,8 @@
     onfile?: (collection: Collection) => void;
     /** Replace a stand-in title with the page's own. */
     onfetchtitle?: () => Promise<void>;
+    /** Show this card beside the copies it repeats. */
+    oncompare?: () => void;
   } = $props();
 
   let fetchingTitle = $state(false);
@@ -280,6 +283,17 @@
         }}
       >
         {fetchingTitle ? 'Fetching title…' : 'Title looks incomplete — fetch it?'}
+      </button>
+    {:else if hints?.flag && hints.duplicate && oncompare}
+      <button
+        type="button"
+        class="hint-title"
+        onclick={(e) => {
+          e.stopPropagation();
+          oncompare();
+        }}
+      >
+        {hints.flag}
       </button>
     {:else if hints?.flag}
       <p class="hint-flag">{hints.flag}</p>

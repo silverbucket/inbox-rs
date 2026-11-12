@@ -137,8 +137,8 @@ describe('findDuplicates', () => {
     );
     const c = note('c', 'Something else entirely, long enough to count');
     const dups = findDuplicates([a, b, c]);
-    expect(dups.get('a')?.id).toBe('b');
-    expect(dups.get('b')?.id).toBe('a');
+    expect(dups.get('a')?.[0].id).toBe('b');
+    expect(dups.get('b')?.[0].id).toBe('a');
     expect(dups.has('c')).toBe(false);
   });
 
@@ -151,7 +151,7 @@ describe('findDuplicates', () => {
     const b = note('b', '**Minnesota has faced a major, multi-year fraud sc', {
       body: `**${body}**¹`,
     });
-    expect(findDuplicates([a, b]).get('a')?.id).toBe('b');
+    expect(findDuplicates([a, b]).get('a')?.[0].id).toBe('b');
   });
 
   it('pairs bookmarks to the same page', () => {
@@ -160,7 +160,7 @@ describe('findDuplicates', () => {
       bookmark('b', 'http://example.org/post#comments'),
       bookmark('c', 'https://example.org/other'),
     ]);
-    expect(dups.get('a')?.id).toBe('b');
+    expect(dups.get('a')?.[0].id).toBe('b');
     expect(dups.has('c')).toBe(false);
   });
 
@@ -170,7 +170,7 @@ describe('findDuplicates', () => {
       bookmark('b', 'http://localhost:4000/page'),
       bookmark('c', 'http://localhost:3000/page/'),
     ]);
-    expect(dups.get('a')?.id).toBe('c');
+    expect(dups.get('a')?.[0].id).toBe('c');
     expect(dups.has('b')).toBe(false);
   });
 
