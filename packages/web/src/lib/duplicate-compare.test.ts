@@ -79,6 +79,20 @@ describe('compareRows', () => {
     expect(row('saved')?.differs).toBe(false);
   });
 
+  it('marks long notes that only differ past where they are cut off', () => {
+    const long = 'word '.repeat(60);
+    const rows = compareRows(
+      [
+        bookmark('a', { notes: `${long}one` }),
+        bookmark('b', { notes: `${long}two` }),
+      ],
+      collections,
+    );
+    const notes = rows.find((r) => r.key === 'notes');
+    expect(notes?.values[0]).toBe(notes?.values[1]);
+    expect(notes?.differs).toBe(true);
+  });
+
   it('calls an unfiled todo by its page', () => {
     expect(whereLabel(bookmark('a', { isTodo: true }), collections)).toBe(
       'Todos',

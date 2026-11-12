@@ -76,6 +76,8 @@ export function compareRows(
     key: string;
     label: string;
     of: (item: InboxItem) => string;
+    /** What to compare when the shown text is cut short or leaves detail out. */
+    full?: (item: InboxItem) => string;
     /** Always shown, even when empty. */
     always?: boolean;
     /** Expected to differ: never highlighted. */
@@ -94,13 +96,25 @@ export function compareRows(
       always: true,
       quiet: true,
     },
-    { key: 'title', label: 'Title', of: (i) => clip(i.title), always: true },
+    {
+      key: 'title',
+      label: 'Title',
+      of: (i) => clip(i.title),
+      full: (i) => clip(i.title, Infinity),
+      always: true,
+    },
     {
       key: 'description',
       label: 'Description',
       of: (i) => clip(i.description),
+      full: (i) => clip(i.description, Infinity),
     },
-    { key: 'notes', label: 'Notes', of: (i) => clip(field(i, 'notes')) },
+    {
+      key: 'notes',
+      label: 'Notes',
+      of: (i) => clip(field(i, 'notes')),
+      full: (i) => clip(field(i, 'notes'), Infinity),
+    },
     {
       key: 'image',
       label: 'Preview image',
@@ -113,6 +127,8 @@ export function compareRows(
       key: 'scheduled',
       label: 'Scheduled',
       of: (i) => formatScheduled(i, now),
+      // The label leaves out a timed entry's end.
+      full: (i) => [i.startsAt, i.endsAt, i.allDay].join('|'),
     },
     {
       key: 'todo',
@@ -136,11 +152,12 @@ export function compareRows(
   for (const fact of facts) {
     const values = copies.map(fact.of);
     if (!fact.always && values.every((v) => !v)) continue;
+    const compared = copies.map(fact.full ?? fact.of);
     rows.push({
       key: fact.key,
       label: fact.label,
       values,
-      differs: !fact.quiet && values.some((v) => v !== values[0]),
+      differs: !fact.quiet && compared.some((v) => v !== compared[0]),
     });
   }
   return rows;
