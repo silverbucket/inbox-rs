@@ -5,6 +5,7 @@
    * changes nothing.
    */
   import type { InboxItem } from '@inbox-rs/rs-module';
+  import { portal, trapFocus } from '../lib/actions';
   import { compareRows } from '../lib/duplicate-compare';
   import { now } from '../lib/now';
   import { collections, items } from '../lib/stores';
@@ -50,24 +51,22 @@
     e.preventDefault();
     onclose();
   }
-
-  function focusOnMount(node: HTMLElement) {
-    node.focus();
-  }
 </script>
 
 <svelte:window onkeydown={handleEscape} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="overlay" onclick={() => { if (!busy) onclose(); }}>
+<!-- Portalled: the mobile shell's content sits in its own stacking context,
+     below the tab bar. -->
+<div class="overlay" use:portal onclick={() => { if (!busy) onclose(); }}>
   <div
     class="dialog"
     role="dialog"
     aria-modal="true"
     aria-labelledby="dup-compare-title"
     tabindex="-1"
-    use:focusOnMount
+    use:trapFocus
     onclick={(e) => e.stopPropagation()}
   >
     <header class="head">
@@ -81,7 +80,9 @@
         <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
     </header>
-    <div class="copies">
+    <!-- Each copy spans the same rows (card, one per fact, button), so a
+         fact sits at the same height in every column. -->
+    <div class="copies" style="--rows: {rows.length + 2}">
       {#each copies as copy, at (copy.id)}
         <section class="copy" aria-label="Copy {at + 1}: {rows.find((r) => r.key === 'where')?.values[at] ?? ''}">
           <InboxCard item={copy} onselect={onopen} />
@@ -169,7 +170,8 @@
     display: grid;
     grid-auto-flow: column;
     grid-auto-columns: minmax(260px, 1fr);
-    gap: 1rem;
+    grid-template-rows: repeat(var(--rows), auto);
+    gap: 0.15rem 1rem;
     padding: 1.1rem 1.25rem 1.25rem;
     overflow: auto;
     overscroll-behavior: contain;
@@ -177,18 +179,19 @@
   }
 
   .copy {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
+    display: grid;
+    grid-template-rows: subgrid;
+    grid-row: span var(--rows);
     min-width: 0;
     scroll-snap-align: start;
   }
 
+  .copy > :global(.card) {
+    margin-bottom: 0.6rem;
+  }
+
   .facts {
-    display: grid;
-    gap: 0.15rem;
-    margin: 0;
-    font-size: 0.82rem;
+    display: contents;
   }
 
   .fact {
@@ -197,6 +200,7 @@
     gap: 0.5rem;
     padding: 0.25rem 0.45rem;
     border-radius: var(--radius-sm);
+    font-size: 0.82rem;
   }
 
   .fact.differs {
@@ -222,7 +226,7 @@
   }
 
   .keep {
-    margin-top: auto;
+    margin-top: 0.6rem;
     min-height: 44px;
     border: 0;
     border-radius: var(--radius-sm);
