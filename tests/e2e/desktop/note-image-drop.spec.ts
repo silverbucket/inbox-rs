@@ -133,7 +133,10 @@ test('an image dropped on a note that is still being pushed reaches the server',
   // disk). Sync then records the finished push in the middle of the
   // conversion's write, which used to leave the server with the plain note.
   await page.addInitScript(() => {
-    const state = window as unknown as { dropStarted?: boolean };
+    const state = window as unknown as {
+      putHeld?: boolean;
+      dropStarted?: boolean;
+    };
     let answer = () => {};
     const answered = new Promise<void>((resolve) => {
       answer = resolve;
@@ -146,6 +149,7 @@ test('an image dropped on a note that is still being pushed reaches the server',
       const url = typeof input === 'string' ? input : (input as Request).url;
       if (!held && init?.method === 'PUT' && url.includes('/inbox/items/')) {
         held = true;
+        state.putHeld = true;
         await answered;
       }
       return response;
@@ -189,6 +193,10 @@ test('an image dropped on a note that is still being pushed reaches the server',
   const editor = dialog.locator('.tiptap-editor');
   await expect(editor).toBeVisible();
 
+  // Only drop once the note's PUT is actually being held.
+  await page.waitForFunction(
+    () => (window as unknown as { putHeld?: boolean }).putHeld === true,
+  );
   await page.evaluate(() => {
     (window as unknown as { dropStarted?: boolean }).dropStarted = true;
   });
