@@ -87,11 +87,30 @@ describe('fetchPageMetadataForSave', () => {
       fetcher,
     );
 
-    await vi.advanceTimersByTimeAsync(3_000);
+    await vi.advanceTimersByTimeAsync(8_000);
     await expect(result).resolves.toBeNull();
     resolveSettings?.({});
     await Promise.resolve();
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('waits for a relay that takes a few seconds to answer', async () => {
+    vi.useFakeTimers();
+    const metadata: LinkMetadata = { image: 'https://i.redd.it/real.jpeg' };
+    const fetcher = vi.fn(
+      () =>
+        new Promise<LinkMetadata | null>((resolve) => {
+          setTimeout(() => resolve(metadata), 5_000);
+        }),
+    );
+    const result = fetchPageMetadataForSave(
+      reader(),
+      'https://example.com',
+      fetcher,
+    );
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    await expect(result).resolves.toEqual(metadata);
   });
 
   it('aborts a metadata request when the save-time budget expires', async () => {
@@ -109,7 +128,7 @@ describe('fetchPageMetadataForSave', () => {
       fetcher,
     );
 
-    await vi.advanceTimersByTimeAsync(3_000);
+    await vi.advanceTimersByTimeAsync(8_000);
     await expect(result).resolves.toBeNull();
     expect(requestSignal?.aborted).toBe(true);
   });
