@@ -5,6 +5,7 @@ import InboxModule, {
 import SharesModule from 'remotestorage-module-shares';
 import RemoteStorage from 'remotestoragejs';
 import { beginOAuthAuthorization, guardOAuthCallback } from './oauth-state';
+import { serializeCacheWrites } from './rs-write-lock';
 
 /**
  * Shape of the remoteStorage instance once our modules are loaded.
@@ -56,6 +57,9 @@ const rs = new RemoteStorage({
   modules: [InboxModule, SharesModule],
   changeEvents: { local: true, window: false, remote: true, conflict: true },
 }) as RSWithModules;
+
+// A write landing mid-push would otherwise be dropped by the library (#329).
+serializeCacheWrites(rs);
 
 // The library forwards OAuth state but does not validate it on return.
 // Capture a per-tab nonce for every authorization redirect, including reconnect.
