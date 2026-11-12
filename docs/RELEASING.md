@@ -19,8 +19,9 @@ SHA — fix CI first, then retry.
   `inbox-rs-chromium-<extVer>.zip`, `inbox-rs-firefox-<extVer>.xpi`,
   `inbox-rs-thunderbird-<tbVer>.xpi`.
 - GitHub Release with auto-generated notes.
-- Store submissions for each extension that was bumped: Chrome Web Store,
-  AMO (Firefox) and ATN (Thunderbird). See [Store publishing](#store-publishing).
+- Store submissions: AMO (Firefox) and ATN (Thunderbird) for each extension
+  that was bumped, and the Chrome Web Store whenever it lacks the current
+  extension version. See [Store publishing](#store-publishing).
 
 The build commit (with `dist/`) is force-pushed to 5apps from a throwaway
 `deploy/v<ver>` branch and never reaches `origin`. `master` only sees
@@ -97,17 +98,26 @@ Steps 5, 7 and 9 are the only ones that touch remotes.
 
 ## Store publishing
 
-The release job exposes `version`, `extension_bumped` and `thunderbird_bumped`
-outputs. `extension_bumped` and `thunderbird_bumped` are `true` when
-`release-bump.mjs` bumped that package. Each publish job checks out the release
+The release job exposes `version`, `extension_version`, `extension_bumped` and
+`thunderbird_bumped` outputs. `extension_bumped` and `thunderbird_bumped` are
+`true` when `release-bump.mjs` bumped that package. `extension_version` is the
+browser extension's own version, which lags `version` on web-only releases. Each publish job checks out the release
 tag and downloads the `extension-submissions-<version>` workflow artifact, so it
 submits the same files that `check:submissions` verified.
 
 | Job | Runs when | Secrets | What it does |
 |---|---|---|---|
-| `publish-chrome` | `extension_bumped` | `CHROME_EXTENSION_ID`, `CHROME_PUBLISHER_ID`, `CHROME_SERVICE_ACCOUNT_JSON` | [`scripts/publish/chrome.mjs`](../scripts/publish/chrome.mjs) uploads the Chromium ZIP with Chrome Web Store API v2 and submits it for publishing |
+| `publish-chrome` | every release; uploads only when the store has neither published the current extension version nor has it in review | `CHROME_EXTENSION_ID`, `CHROME_PUBLISHER_ID`, `CHROME_SERVICE_ACCOUNT_JSON` | [`scripts/publish/chrome.mjs`](../scripts/publish/chrome.mjs) uploads the Chromium ZIP with Chrome Web Store API v2 and submits it for publishing |
 | `publish-firefox` | `extension_bumped` | `AMO_JWT_ISSUER`, `AMO_JWT_SECRET` | `web-ext sign --channel=listed` on the Firefox build, with its source ZIP attached; doesn't wait for review |
 | `publish-thunderbird` | `thunderbird_bumped` and the `PUBLISH_THUNDERBIRD` repository variable is `true` | `ATN_JWT_ISSUER`, `ATN_JWT_SECRET` | [`scripts/publish/atn.mjs`](../scripts/publish/atn.mjs) uploads the XPI to addons.thunderbird.net, waits for validation, then warns you to upload the source ZIP by hand |
+
+`publish-chrome` isn't gated on `extension_bumped`, so a failed Chrome publish
+isn't lost: the next release submits that version again, even if it didn't
+touch the extension. The usual failure is `NOT_UPDATEABLE`: the store refuses
+an upload while an earlier version is still in review. To retry without a new
+release, run the **Publish to Chrome Web Store** workflow
+([`publish-chrome.yml`](../.github/workflows/publish-chrome.yml)) with the
+release tag. It submits the Chromium ZIP attached to that GitHub Release.
 
 All three behave the same way:
 
