@@ -551,6 +551,17 @@ describe('refreshBookmark', () => {
   });
 });
 
+describe('refreshBookmark without a reply', () => {
+  it('reports a skipped check, not an unchanged page', async () => {
+    const item = bookmark({ title: 'T' });
+    itemsMap[item.id] = item;
+    fetchLinkMetadata.mockResolvedValue(null);
+
+    await expect(refreshBookmark(item)).resolves.toEqual({ status: 'skipped' });
+    await expect(enrichBookmark(item)).resolves.toBe('none');
+  });
+});
+
 describe('replaceBookmarkImage', () => {
   it('stores the chosen image and drops the old local copy', async () => {
     const item = bookmark({

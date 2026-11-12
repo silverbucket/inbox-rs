@@ -198,7 +198,8 @@ export function applyLinkMetadata(
 
 /** What a preview fetch did, and what it left for the user to decide. */
 export interface PreviewRefresh {
-  status: 'updated' | 'none';
+  /** 'skipped': the page was never read (previews off, offline, no reply). */
+  status: 'updated' | 'none' | 'skipped';
   /**
    * A real image the page offers that differs from the one already saved.
    * It is never applied on its own: the saved image may be the only copy of
@@ -217,9 +218,11 @@ export interface PreviewRefresh {
 export async function refreshBookmark(
   item: BookmarkItem,
 ): Promise<PreviewRefresh> {
-  if (!linkPreviewsEnabled() || !navigator.onLine) return { status: 'none' };
+  if (!linkPreviewsEnabled() || !navigator.onLine) {
+    return { status: 'skipped' };
+  }
   const meta = await fetchLinkMetadata(item.url, resolveSockethubEndpoint());
-  if (!meta) return { status: 'none' };
+  if (!meta) return { status: 'skipped' };
   // Read-merge-write inside the item's queue: the user may have edited it
   // during the fetch, and a save still landing must be merged against, not
   // overwritten. If it's gone (deleted or the capture was undone), storing
@@ -263,7 +266,8 @@ export async function refreshBookmark(
 export async function enrichBookmark(
   item: BookmarkItem,
 ): Promise<'updated' | 'none'> {
-  return (await refreshBookmark(item)).status;
+  const { status } = await refreshBookmark(item);
+  return status === 'updated' ? 'updated' : 'none';
 }
 
 /**

@@ -77,7 +77,9 @@
       imageOffer = result.image ?? '';
       // The enriched fields flow back reactively through the items store;
       // only "nothing new" needs an explicit signal.
-      if (result.status === 'none' && !imageOffer) {
+      if (result.status === 'skipped') {
+        previewStatus = 'none';
+      } else if (result.status === 'none' && !imageOffer) {
         previewStatus = incomplete ? 'none' : 'current';
       }
     } catch (e) {
@@ -87,6 +89,15 @@
       fetchingPreview = false;
     }
   }
+
+  // An offer belongs to the link it was fetched for: editing the URL in
+  // this same card must not let it land on a different page's bookmark.
+  // Derived, so that saving other fields of the same link keeps the offer.
+  const offerUrl = $derived(item.url);
+  $effect(() => {
+    void offerUrl;
+    imageOffer = '';
+  });
 
   async function useOfferedImage() {
     applyingImage = true;

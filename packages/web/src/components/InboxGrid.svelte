@@ -14,7 +14,7 @@
     quickSuggestion,
   } from '../lib/triage';
   import { fileFromInbox } from '../lib/triage-actions';
-  import { enrichBookmark, LINK_PREVIEW_ERROR } from '../lib/enrich';
+  import { enrichBookmark, LINK_PREVIEW_ERROR, linkPreviewsEnabled } from '../lib/enrich';
   import { showToast } from '../lib/toast';
   import InboxCard from './InboxCard.svelte';
   import TriagePanel from './TriagePanel.svelte';
@@ -101,6 +101,10 @@
   /** A card's "fetch the title" button: ask the page, say so if it has none. */
   async function fetchTitle(item: InboxItem) {
     if (item.type !== 'bookmark') return;
+    if (!linkPreviewsEnabled()) {
+      showToast('Link previews are turned off in Settings');
+      return;
+    }
     if (!navigator.onLine) {
       showToast('You’re offline — try again when connected');
       return;
