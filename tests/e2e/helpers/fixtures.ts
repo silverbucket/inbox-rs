@@ -20,7 +20,12 @@
  */
 
 import { randomBytes } from 'node:crypto';
-import { type BrowserContext, test as base, type Page } from '@playwright/test';
+import {
+  type BrowserContext,
+  test as base,
+  expect,
+  type Page,
+} from '@playwright/test';
 
 import {
   ensureUser,
@@ -70,6 +75,17 @@ type TestFixtures = {
   connectedContext: BrowserContext;
   /** A `Page` opened from `connectedContext`. */
   connectedPage: Page;
+  /**
+   * Set to true (`test.use({ allowCspViolations: true })`) in a spec that
+   * provokes Content Security Policy violations on purpose.
+   */
+  allowCspViolations: boolean;
+  /**
+   * Auto fixture: fails the test if any page in `context` logs a Content
+   * Security Policy violation, so every flow the suite drives also proves
+   * the policy in index.html / capture/index.html doesn't break it (#74).
+   */
+  cspGuard: undefined;
 };
 
 export const test = base.extend<TestFixtures, WorkerFixtures>({
@@ -112,6 +128,27 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     await use(context);
   },
 
+  allowCspViolations: [false, { option: true }],
+
+  cspGuard: [
+    async ({ context, allowCspViolations }, use) => {
+      const violations: string[] = [];
+      const watch = (page: Page) =>
+        page.on('console', (msg) => {
+          if (msg.text().includes('Content Security Policy')) {
+            violations.push(`${page.url()}: ${msg.text()}`);
+          }
+        });
+      context.pages().forEach(watch);
+      context.on('page', watch);
+      await use(undefined);
+      if (!allowCspViolations) {
+        expect(violations, 'Content Security Policy violations').toEqual([]);
+      }
+    },
+    { auto: true },
+  ],
+
   connectedPage: async ({ connectedContext }, use) => {
     const page = await connectedContext.newPage();
     await use(page);
@@ -119,4 +156,4 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
   },
 });
 
-export { expect } from '@playwright/test';
+export { expect };

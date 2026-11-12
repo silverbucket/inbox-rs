@@ -2,6 +2,23 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      Content Security Policy (issue #74). Kept identical in index.html and
+      capture/index.html; tests/e2e/desktop/csp.spec.ts checks both, and every
+      e2e test fails on a CSP violation. Static hosting (5apps) can't set
+      headers, so this is a meta tag, which also means frame-ancestors and
+      reporting are unavailable. Deliberately broad parts:
+      - script-src 'wasm-unsafe-eval': onnxruntime-web compiles WebAssembly for
+        audio transcription. No 'unsafe-eval'/'unsafe-inline' scripts.
+      - style-src 'unsafe-inline': Svelte templates use style="" attributes
+        and Tiptap injects a <style> element.
+      - connect-src *: the remoteStorage server (WebFinger, OAuth, data), its
+        Dropbox/Google Drive backends and the Sockethub relay are user-chosen
+        origins. blob:/data: cover cached transcription WASM and image fetches.
+      - img-src/media-src *: link previews and favicons come from any site;
+        stored files play from blob: URLs.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src * data: blob:; media-src * data: blob:; connect-src * data: blob:; font-src 'self' data:; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Inbox RS</title>
     <meta name="description" content="One inbox for links, notes, images, audio, documents, and email — capture from anywhere, file it, schedule it. Backed by remoteStorage: your data on storage you own." />
