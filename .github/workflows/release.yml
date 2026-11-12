@@ -66,6 +66,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       extension_bumped: ${{ steps.bump.outputs.extension_bumped }}
+      extension_version: ${{ steps.extension.outputs.version }}
       thunderbird_bumped: ${{ steps.bump.outputs.thunderbird_bumped }}
     steps:
       - uses: actions/checkout@v4
@@ -113,6 +114,11 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: node scripts/release-bump.mjs "$VERSION"
+
+      - name: Read the extension version
+        id: extension
+        # Lags the release version on web-only releases.
+        run: echo "version=$(node -p "require('./packages/extension/package.json').version")" >> "$GITHUB_OUTPUT"
 
       - name: Build web app
         run: npm run build
@@ -297,19 +303,24 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: gh release upload "v${VERSION}" dist/submissions/*/* --clobber
 
-  # Store publishing. Each job runs only when release-bump.mjs bumped its
-  # package (stores reject a re-used version), uses the exact artifacts the
-  # release job verified, and skips with a notice when its secrets are unset.
-  # Re-running after a partial publish is safe: a version the store already
-  # has counts as success.
+  # Store publishing. Each job uses the exact artifacts the release job
+  # verified, and skips with a notice when its secrets are unset. Firefox and
+  # Thunderbird run only when release-bump.mjs bumped their package (stores
+  # reject a re-used version). Re-running after a partial publish is safe: a
+  # version the store already has counts as success.
+  #
+  # Chrome runs on every release. Every release builds the current extension
+  # version, and chrome.mjs uploads it only when the store has neither
+  # published it nor has it in review. So a publish that failed (the store
+  # refuses uploads while an earlier version is in review) is retried by the
+  # next release, even one that did not touch the extension.
   publish-chrome:
     runs-on: ubuntu-latest
     needs: release
-    if: needs.release.outputs.extension_bumped == 'true'
     permissions:
       contents: read
     env:
-      VERSION: ${{ needs.release.outputs.version }}
+      VERSION: ${{ needs.release.outputs.extension_version }}
       CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
       CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
       CHROME_SERVICE_ACCOUNT_JSON: ${{ secrets.CHROME_SERVICE_ACCOUNT_JSON }}
