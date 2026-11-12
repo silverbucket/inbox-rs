@@ -92,6 +92,8 @@ interface CalendarSyncState {
   entries: Record<string, Baseline>;
   lastSync?: string;
   error?: string;
+  /** `RECURRENCE_SCHEMA` once repeating baselines carry `weekStart`. */
+  recurrenceSchema?: number;
 }
 
 type SyncState = Record<string, CalendarSyncState>;
@@ -909,6 +911,38 @@ async function advanceRepeating(cal: CalendarSyncState) {
   }
 }
 
+const RECURRENCE_SCHEMA = 2;
+
+/**
+ * Repeating events synced before the relay passed WKST have a baseline with
+ * no `weekStart`, and an unchanged event never comes back in a token sync.
+ * Refetch those once, so their next date is worked out with the right week.
+ */
+async function refreshRepeatingBaselines(
+  target: SyncTarget,
+  cal: CalendarSyncState,
+) {
+  if (cal.recurrenceSchema === RECURRENCE_SCHEMA) return;
+  const stale = Object.entries(cal.entries).filter(
+    ([, base]) =>
+      base.remote.type === 'event' &&
+      base.remote.recurrence &&
+      !base.remote.recurrence.weekStart,
+  );
+  // Snapshot mode refetches every entry on every pass already.
+  if (stale.length > 0 && !cal.snapshot) {
+    const snapshot = await windowSnapshot({ ...target, components: ['event'] });
+    const fresh = new Map(snapshot.map((entry) => [entry.id, entry]));
+    for (const [href, base] of stale) {
+      const entry = fresh.get(href);
+      // A changed entry is left to the next pull, which handles local edits.
+      if (entry?.recurrence && entry.etag === base.remote.etag)
+        cal.entries[href] = { ...base, remote: entry };
+    }
+  }
+  cal.recurrenceSchema = RECURRENCE_SCHEMA;
+}
+
 /** Synced cards on this calendar that have no baseline get one, once. */
 const missingTried = new Set<string>();
 
@@ -1201,6 +1235,7 @@ async function syncAll(): Promise<void> {
         await pull(target, cal, notes);
       }
       await catchUpBaselines(target, cal);
+      await refreshRepeatingBaselines(target, cal);
       await advanceRepeating(cal);
       await createPending(target, cal);
       if (await push(target, cal)) await pull(target, cal, notes);

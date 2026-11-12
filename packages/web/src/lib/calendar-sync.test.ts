@@ -309,6 +309,50 @@ describe('pull', () => {
     }
   });
 
+  it('refetches a repeating baseline stored before weekStart existed, once', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      // Tuesday. Every 2 weeks on Tue + Sun, from Tue 3 Nov: Monday weeks
+      // give Sun 8 Nov and then Tue 17 Nov; Sunday weeks give Sun 15 Nov.
+      vi.setSystemTime(new Date('2026-11-10T12:00:00Z'));
+      const href = `${CAL}ev-1.ics`;
+      const series = (weekStart?: 'SU') =>
+        event({
+          startTime: '2026-11-03T09:00:00Z',
+          endTime: '2026-11-03T09:30:00Z',
+          recurrence: {
+            frequency: 'weekly',
+            interval: 2,
+            byDay: ['TU', 'SU'],
+            ...(weekStart ? { weekStart } : {}),
+          },
+        });
+      vi.mocked(syncCalendar).mockResolvedValueOnce(page([series()]));
+      await runCalendarSync();
+      expect(card(href).startsAt).toBe('2026-11-17T09:00:00.000Z');
+
+      // As stored by a build that predates the marker.
+      const stored = JSON.parse(localStorage.getItem('inbox-rs:task-sync')!);
+      delete stored[CAL].recurrenceSchema;
+      localStorage.setItem('inbox-rs:task-sync', JSON.stringify(stored));
+      vi.mocked(queryEntries).mockClear();
+      vi.mocked(queryEntries).mockResolvedValueOnce({
+        items: [series('SU')],
+        removed: [],
+      });
+      await runCalendarSync(); // empty sync response
+      const state = JSON.parse(localStorage.getItem('inbox-rs:task-sync')!);
+      expect(state[CAL].entries[href].remote.recurrence.weekStart).toBe('SU');
+      expect(card(href).startsAt).toBe('2026-11-15T09:00:00.000Z');
+      expect(queryEntries).toHaveBeenCalledTimes(1);
+
+      await runCalendarSync();
+      expect(queryEntries).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('still offers Undo when a local edit to an advanced repeating event meets a remote change', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
