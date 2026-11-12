@@ -2,6 +2,7 @@
   import type { Collection, InboxItem } from '@inbox-rs/rs-module';
   import { tick, untrack } from 'svelte';
   import { inview } from '../lib/actions';
+  import { outsideInbox, whereLabel } from '../lib/duplicate-compare';
   import { now } from '../lib/now';
   import { archivedItems, collections, connected, items, restoring, sortedItems } from '../lib/stores';
   import {
@@ -16,6 +17,7 @@
   import { fileFromInbox } from '../lib/triage-actions';
   import { enrichBookmark, LINK_PREVIEW_ERROR, linkPreviewsEnabled } from '../lib/enrich';
   import { showToast } from '../lib/toast';
+  import DuplicateCompare from './DuplicateCompare.svelte';
   import InboxCard from './InboxCard.svelte';
   import TriagePanel from './TriagePanel.svelte';
 
@@ -72,7 +74,18 @@
     Object.values($collections).filter((c) => !c.archived),
   );
   const siteIndex = $derived(buildSiteIndex(liveCollections, $items));
-  const duplicates = $derived(findDuplicates(inboxItems));
+  // An inbox card can repeat one that is already filed, not only another
+  // inbox card.
+  const duplicates = $derived(
+    findDuplicates(inboxItems, outsideInbox($items, $collections)),
+  );
+  /** The card and its copies shown side by side, or null. */
+  let comparing = $state<string[] | null>(null);
+
+  function compare(item: InboxItem) {
+    const copies = duplicates.get(item.id);
+    if (copies) comparing = [item.id, ...copies.map((copy) => copy.id)];
+  }
 
   /** Shorten a title for a one-line hint. */
   function clip(text: string, n = 40): string {
@@ -82,9 +95,13 @@
   /** The flag, filing suggestion and emphasis a card shows in the Inbox. */
   function hintsFor(item: InboxItem): CardHints {
     const dup = duplicates.get(item.id);
-    const flag = dup
-      ? `Same as “${clip(dup.title || 'another card')}” — archive one?`
-      : lacksTitle(item)
+    // A filed copy is the one to know about: the card may not need keeping.
+    const filed = dup?.find((copy) => copy.collectionId);
+    const flag = filed
+      ? `Already in ${clip(whereLabel(filed, $collections), 28)} — compare?`
+      : dup
+        ? `Same as “${clip(dup[0].title || 'another card')}” — compare?`
+        : lacksTitle(item)
         ? 'Preview title looks incomplete'
         : undefined;
     return {
@@ -210,6 +227,7 @@
         <TriagePanel
           queue={triageQueue}
           {hintsFor}
+          oncompare={compare}
           onopen={onselect}
           onclose={closeTriage}
           oncurrent={(id) => (triageCurrent = id)}
@@ -226,7 +244,7 @@
           <div class="grid-wrap">
             <div class="grid">
               {#each g.shown as item (item.id)}
-                <InboxCard {item} {onselect} hints={hintsFor(item)} onfile={(c) => fileCard(item, c)} onfetchtitle={() => fetchTitle(item)} />
+                <InboxCard {item} {onselect} hints={hintsFor(item)} onfile={(c) => fileCard(item, c)} onfetchtitle={() => fetchTitle(item)} oncompare={() => compare(item)} />
               {/each}
             </div>
           </div>
@@ -247,6 +265,17 @@
       {/if}
     </div>
   </div>
+{/if}
+
+{#if comparing}
+  <DuplicateCompare
+    ids={comparing}
+    onopen={(item) => {
+      comparing = null;
+      onselect(item);
+    }}
+    onclose={() => (comparing = null)}
+  />
 {/if}
 
 {#if archived.length > 0}

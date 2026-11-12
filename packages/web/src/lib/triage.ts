@@ -128,7 +128,7 @@ export interface CardHints {
   untitled?: boolean;
   /** A collection worth offering as a one-click "File to …?". */
   suggest?: Collection | null;
-  /** Repeats another card. */
+  /** Repeats another card: the flag opens both side by side. */
   duplicate?: boolean;
   /** Sitting for over two months. */
   stale?: boolean;
@@ -194,25 +194,29 @@ function dupKey(item: InboxItem): string | null {
 }
 
 /**
- * For each card that likely repeats another (same link, or text that opens
- * with the same words), the card it repeats. Each card points at the first other copy in `items`.
+ * For each inbox card that likely repeats another (same link, or text that
+ * opens with the same words), every other copy: inbox cards first, then the
+ * ones in `elsewhere` (filed cards and todos). Only inbox cards get an entry.
  */
-export function findDuplicates(items: InboxItem[]): Map<string, InboxItem> {
+export function findDuplicates(
+  inbox: InboxItem[],
+  elsewhere: InboxItem[] = [],
+): Map<string, InboxItem[]> {
   const groups = new Map<string, InboxItem[]>();
-  for (const item of items) {
+  for (const item of [...inbox, ...elsewhere]) {
     const key = dupKey(item);
     if (!key) continue;
     const list = groups.get(key) ?? [];
     list.push(item);
     groups.set(key, list);
   }
-  const out = new Map<string, InboxItem>();
-  for (const list of groups.values()) {
-    if (list.length < 2) continue;
-    for (const item of list) {
-      const other = list.find((o) => o.id !== item.id);
-      if (other) out.set(item.id, other);
-    }
+  const out = new Map<string, InboxItem[]>();
+  for (const item of inbox) {
+    const key = dupKey(item);
+    const others = key
+      ? (groups.get(key) ?? []).filter((o) => o.id !== item.id)
+      : [];
+    if (others.length > 0) out.set(item.id, others);
   }
   return out;
 }

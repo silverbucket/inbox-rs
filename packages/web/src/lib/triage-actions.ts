@@ -134,3 +134,46 @@ export async function todoFromInbox(
     return false;
   }
 }
+
+/**
+ * Settle a duplicate: archive every copy but the one being kept, with one
+ * toast that brings them all back.
+ */
+export async function archiveCopies(
+  copies: InboxItem[],
+  onundo?: () => void,
+): Promise<boolean> {
+  const changes: TriageChange[] = [];
+  try {
+    for (const copy of copies) {
+      const before = fresh(copy);
+      await setItemArchived(copy.id, true);
+      changes.push({ before, after: get(items)[copy.id] ?? before });
+    }
+  } catch (error) {
+    console.error('Failed to archive a duplicate', error);
+    showToast('Couldn’t archive that card');
+    return false;
+  }
+  showToast(
+    changes.length === 1
+      ? 'Archived the other copy'
+      : `Archived the ${changes.length} other copies`,
+    {
+      label: 'Undo',
+      run: () => {
+        Promise.all(changes.map((change) => restoreItem(change))).then(
+          (restored) => {
+            if (restored.some(Boolean)) onundo?.();
+            else showToast('Those cards are gone, so there’s nothing to undo');
+          },
+          (error) => {
+            console.error('Failed to undo archiving duplicates', error);
+            showToast('Couldn’t undo that');
+          },
+        );
+      },
+    },
+  );
+  return true;
+}

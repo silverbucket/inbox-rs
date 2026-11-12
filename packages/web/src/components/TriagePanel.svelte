@@ -30,6 +30,7 @@
   let {
     queue,
     hintsFor,
+    oncompare,
     onopen,
     onclose,
     oncurrent,
@@ -38,6 +39,8 @@
     queue: string[];
     /** The same warning line the grid shows on each card. */
     hintsFor: (item: InboxItem) => CardHints;
+    /** Show a duplicated card beside its copies. */
+    oncompare?: (item: InboxItem) => void;
     /** Open the full card. */
     onopen: (item: InboxItem) => void;
     onclose: () => void;
@@ -71,7 +74,8 @@
       : [],
   );
   const dateHint = $derived(current ? suggestedDate(current, $now) : null);
-  const flag = $derived(current ? hintsFor(current).flag : undefined);
+  const hints = $derived(current ? hintsFor(current) : undefined);
+  const flag = $derived(hints?.flag);
 
   const preview = $derived.by(() => {
     if (!current) return '';
@@ -227,7 +231,10 @@
       {#if preview}
         <p class="preview">{preview}</p>
       {/if}
-      {#if flag}
+      {#if flag && hints?.duplicate && oncompare && current}
+        {@const card = current}
+        <button type="button" class="flag flag-action" onclick={() => oncompare(card)}>{flag}</button>
+      {:else if flag}
         <p class="flag">{flag}</p>
       {/if}
     </article>
@@ -402,6 +409,23 @@
     font-size: 0.8rem;
     font-weight: 700;
     color: var(--warn-text);
+  }
+
+  .flag-action {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-align: left;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .flag-action:focus-visible {
+    outline: 2px solid var(--accent-text);
+    outline-offset: 1px;
   }
 
   .date-hint {
