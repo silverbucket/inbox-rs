@@ -18,6 +18,7 @@
  */
 
 import type { Page } from '@playwright/test';
+import { putInboxItem } from '../helpers/armadietto';
 import { expect, test } from '../helpers/fixtures';
 import {
   assertNoConsoleErrors,
@@ -225,4 +226,197 @@ test('a failed metadata fetch leaves the capture intact and the view card offers
   ).toHaveValue('Recovered metadata');
 
   assertNoConsoleErrors(log);
+});
+
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+test('a complete preview can be re-fetched, and a different image is only used when chosen', async ({
+  context,
+  freshRsUser,
+  freshRsToken,
+  webOrigin,
+}) => {
+  const url = 'https://example.net/post/1';
+  const saved = 'https://example.net/generic-card.png';
+  const fresh = 'https://example.net/real-photo.png';
+  // Nothing is missing here, so before this feature the card offered no
+  // way to fetch again.
+  await putInboxItem(freshRsUser, freshRsToken, {
+    item: {
+      id: 'wrong-image',
+      type: 'bookmark',
+      title: 'A post worth keeping',
+      url,
+      description: 'Saved with the site’s generic card.',
+      siteName: 'Example',
+      ogImage: saved,
+      createdAt: new Date().toISOString(),
+    },
+  });
+  const page = await freshConnectedPage({
+    context,
+    freshRsUser,
+    freshRsToken,
+    webOrigin,
+  });
+  const log = attachConsoleCapture(page);
+  await page.route(SOCKETHUB_GLOB, (route) =>
+    route.fulfill(
+      metadataResult(url, {
+        type: 'page',
+        title: 'The page’s own title',
+        description: 'The page’s own description',
+        image: [{ url: fresh }],
+        url,
+      }),
+    ),
+  );
+  for (const mediaUrl of [saved, fresh]) {
+    await page.route(mediaUrl, (route) =>
+      route.fulfill({ status: 200, contentType: 'image/png', body: PNG }),
+    );
+  }
+
+  await page.goto(webOrigin);
+  await page
+    .locator('[data-item-id="wrong-image"] .card-select')
+    .press('Enter');
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible({ timeout: 10_000 });
+
+  // Declining keeps everything as it was saved.
+  await dialog.getByRole('button', { name: 'Refresh preview' }).click();
+  const choice = dialog.getByRole('group', {
+    name: 'Choose the preview image',
+  });
+  await expect(choice.locator(`img[src="${saved}"]`)).toBeVisible();
+  await expect(choice.locator(`img[src="${fresh}"]`)).toBeVisible();
+  await choice.getByRole('button', { name: 'Keep saved image' }).click();
+  await expect(choice).toBeHidden();
+  await expect(dialog.locator(`img.view-image[src="${saved}"]`)).toBeVisible();
+  // Text the user already has is never replaced by a re-fetch.
+  await expect(dialog.getByRole('textbox', { name: 'Title' })).toHaveValue(
+    'A post worth keeping',
+  );
+
+  // Accepting swaps the image, and only the image.
+  await dialog.getByRole('button', { name: 'Refresh preview' }).click();
+  await choice.getByRole('button', { name: 'Use new image' }).click();
+  await expect(dialog.locator(`img.view-image[src="${fresh}"]`)).toBeVisible();
+  await expect(dialog.getByRole('textbox', { name: 'Title' })).toHaveValue(
+    'A post worth keeping',
+  );
+
+  // The page now agrees with what is saved: nothing left to offer.
+  await dialog.getByRole('button', { name: 'Refresh preview' }).click();
+  await expect(dialog.getByText('Preview is up to date')).toBeVisible();
+  // The answer does not take the button away.
+  await expect(
+    dialog.getByRole('button', { name: 'Refresh preview' }),
+  ).toBeVisible();
+
+  assertNoConsoleErrors(log);
+});
+
+test('re-fetching a dead link changes nothing', async ({
+  context,
+  freshRsUser,
+  freshRsToken,
+  webOrigin,
+}) => {
+  const saved = 'https://example.net/kept.png';
+  await putInboxItem(freshRsUser, freshRsToken, {
+    item: {
+      id: 'dead-link',
+      type: 'bookmark',
+      title: 'A page that is gone',
+      url: 'https://example.net/gone',
+      description: 'Still the copy I saved.',
+      siteName: 'Example',
+      ogImage: saved,
+      createdAt: new Date().toISOString(),
+    },
+  });
+  const page = await freshConnectedPage({
+    context,
+    freshRsUser,
+    freshRsToken,
+    webOrigin,
+  });
+  await page.route(SOCKETHUB_GLOB, (route) =>
+    route.fulfill(ndjson([{ type: 'error', error: 'could not fetch page' }])),
+  );
+  await page.route(saved, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: PNG }),
+  );
+
+  await page.goto(webOrigin);
+  await page.locator('[data-item-id="dead-link"] .card-select').press('Enter');
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Refresh preview' }).click();
+
+  await expect(
+    dialog.getByText('Couldn’t load a preview for this link.'),
+  ).toBeVisible();
+  await expect(dialog.locator(`img.view-image[src="${saved}"]`)).toBeVisible();
+  await expect(dialog.getByRole('textbox', { name: 'Title' })).toHaveValue(
+    'A page that is gone',
+  );
+  await expect(
+    dialog.getByRole('textbox', { name: 'Description' }),
+  ).toHaveValue('Still the copy I saved.');
+});
+
+test('the incomplete-title hint fetches the title instead of opening the card', async ({
+  context,
+  freshRsUser,
+  freshRsToken,
+  webOrigin,
+}) => {
+  const url = 'https://www.reddit.com/r/hockey/comments/abc/a_post/';
+  await putInboxItem(freshRsUser, freshRsToken, {
+    item: {
+      id: 'site-name-title',
+      type: 'bookmark',
+      title: 'reddit',
+      url,
+      createdAt: new Date().toISOString(),
+    },
+  });
+  const page = await freshConnectedPage({
+    context,
+    freshRsUser,
+    freshRsToken,
+    webOrigin,
+  });
+  await page.route(SOCKETHUB_GLOB, (route) =>
+    route.fulfill(
+      metadataResult(url, {
+        type: 'page',
+        title: 'You people better be wearing your poppies',
+        name: 'reddit',
+        url,
+      }),
+    ),
+  );
+
+  await page.goto(webOrigin);
+  const card = page.locator('[data-item-id="site-name-title"]');
+  await card
+    .getByRole('button', { name: 'Title looks incomplete — fetch it?' })
+    .click();
+
+  await expect(
+    card.getByRole('link', {
+      name: 'You people better be wearing your poppies',
+    }),
+  ).toBeVisible({ timeout: 10_000 });
+  // The hint is gone with the problem, and the card never opened.
+  await expect(card.getByRole('button', { name: /Title looks/ })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 });

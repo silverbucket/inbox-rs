@@ -21,6 +21,7 @@
     onselect,
     hints,
     onfile,
+    onfetchtitle,
     viewing = null,
   }: {
     item: InboxItem;
@@ -31,7 +32,20 @@
     hints?: CardHints;
     /** File the card into the suggested collection. */
     onfile?: (collection: Collection) => void;
+    /** Replace a stand-in title with the page's own. */
+    onfetchtitle?: () => Promise<void>;
   } = $props();
+
+  let fetchingTitle = $state(false);
+  async function fetchTitle() {
+    if (!onfetchtitle) return;
+    fetchingTitle = true;
+    try {
+      await onfetchtitle();
+    } finally {
+      fetchingTitle = false;
+    }
+  }
 
   // Drag onto a sidebar collection to file the item there. The id rides in
   // dataTransfer; the store lets drop targets highlight during the drag.
@@ -255,7 +269,19 @@
     {#if cardNotes}
       <p class="card-notes">{cardNotes}</p>
     {/if}
-    {#if hints?.flag}
+    {#if hints?.untitled && onfetchtitle}
+      <button
+        type="button"
+        class="hint-title"
+        disabled={fetchingTitle}
+        onclick={(e) => {
+          e.stopPropagation();
+          void fetchTitle();
+        }}
+      >
+        {fetchingTitle ? 'Fetching title…' : 'Title looks incomplete — fetch it?'}
+      </button>
+    {:else if hints?.flag}
       <p class="hint-flag">{hints.flag}</p>
     {/if}
     {#if reportItem}
@@ -459,6 +485,32 @@
     font-size: 0.78rem;
     font-weight: 700;
     color: var(--warn-text);
+  }
+
+  /* Same warning voice as the flag, but it acts: underlined like a link. */
+  .hint-title {
+    display: block;
+    margin: 0.55rem 0 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--warn-text);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-align: left;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .hint-title:disabled {
+    cursor: default;
+    text-decoration: none;
+  }
+
+  .hint-title:focus-visible {
+    outline: 2px solid var(--accent-text);
+    outline-offset: 1px;
   }
 
   .hint-file {

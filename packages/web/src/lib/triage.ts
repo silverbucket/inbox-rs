@@ -122,8 +122,10 @@ export function relativeAge(iso: string, now: Date): string {
 
 /** What the Inbox tells a card to show beyond its content. */
 export interface CardHints {
-  /** A short warning line ("Same as …", "No title came through"). */
+  /** A short warning line ("Same as …"). */
   flag?: string;
+  /** The bookmark's title is a stand-in the page could replace. */
+  untitled?: boolean;
   /** A collection worth offering as a one-click "File to …?". */
   suggest?: Collection | null;
   /** Repeats another card. */

@@ -28,6 +28,7 @@ import {
 } from './link-metadata';
 import { items, removeFile, updateItem, userSettings } from './stores';
 import { showToast } from './toast';
+import { lacksTitle } from './triage';
 
 export const LOCAL_LINK_PREVIEWS_KEY = 'inbox-rs:link-previews';
 export const LOCAL_SOCKETHUB_URL_KEY = 'inbox-rs:sockethub-url';
@@ -82,8 +83,7 @@ export function describeLinkPreviewError(error: unknown): string {
 /** True when a fetch could still add something to this bookmark. */
 export function needsEnrichment(item: BookmarkItem): boolean {
   return (
-    !item.title ||
-    item.title === item.url ||
+    lacksTitle(item) ||
     !item.description ||
     !item.ogImage ||
     isPlaceholderImage(item.ogImage) ||
@@ -140,8 +140,9 @@ export function noteToBookmark(note: NoteItem, url: string): BookmarkItem {
 /**
  * Merge fetched metadata into a bookmark, never clobbering what the user
  * (or the extension's richer DOM scrape) already provided: the title is
- * only replaced while it's still the URL fallback, and description/image/
- * site name/favicon only fill empty fields. Returns the updated copy, or
+ * only replaced while it's still a stand-in (blank, the URL, or just the
+ * site's name), and description/image/site name/favicon only fill empty
+ * fields. Returns the updated copy, or
  * null when nothing new was learned.
  */
 export function applyLinkMetadata(
@@ -159,7 +160,7 @@ export function applyLinkMetadata(
   }
   // An event-only page still names its event; better than a URL title.
   const title = meta.title || meta.event?.name;
-  if (title && (!item.title || item.title === item.url)) {
+  if (title && title !== item.title && lacksTitle(item)) {
     updated.title = title;
     changed = true;
   }
@@ -195,20 +196,33 @@ export function applyLinkMetadata(
   return changed ? updated : null;
 }
 
+/** What a preview fetch did, and what it left for the user to decide. */
+export interface PreviewRefresh {
+  /** 'skipped': the page was never read (previews off, offline, no reply). */
+  status: 'updated' | 'none' | 'skipped';
+  /**
+   * A real image the page offers that differs from the one already saved.
+   * It is never applied on its own: the saved image may be the only copy of
+   * a page that has since changed, so the caller asks first and applies the
+   * answer with {@link replaceBookmarkImage}.
+   */
+  image?: string;
+}
+
 /**
- * Fetch metadata for a bookmark and store the enriched copy. Returns
- * 'updated' when the item changed, 'none' when the page had nothing to add
- * (or we're offline / the item vanished meanwhile); rejects when the fetch
- * itself failed so interactive callers can offer a retry. Fire-and-forget
- * callers should `.catch()` — a capture must never fail because its
- * preview did.
+ * Fetch metadata for a bookmark and store the enriched copy, under the
+ * fill-only rules of {@link applyLinkMetadata}. On top of that it reports a
+ * different image the page now has, for the user to accept or decline.
+ * Rejects when the fetch itself failed, so a dead link changes nothing.
  */
-export async function enrichBookmark(
+export async function refreshBookmark(
   item: BookmarkItem,
-): Promise<'updated' | 'none'> {
-  if (!linkPreviewsEnabled() || !navigator.onLine) return 'none';
+): Promise<PreviewRefresh> {
+  if (!linkPreviewsEnabled() || !navigator.onLine) {
+    return { status: 'skipped' };
+  }
   const meta = await fetchLinkMetadata(item.url, resolveSockethubEndpoint());
-  if (!meta) return 'none';
+  if (!meta) return { status: 'skipped' };
   // Read-merge-write inside the item's queue: the user may have edited it
   // during the fetch, and a save still landing must be merged against, not
   // overwritten. If it's gone (deleted or the capture was undone), storing
@@ -221,7 +235,16 @@ export async function enrichBookmark(
     before = current;
     return applyLinkMetadata(current, meta);
   });
-  if (!updated) return 'none';
+  const latest = (updated as BookmarkItem | null) ?? before;
+  const image =
+    latest &&
+    (latest.ogImage || latest.filePath) &&
+    meta.image &&
+    !isPlaceholderImage(meta.image) &&
+    latest.ogImage !== meta.image
+      ? meta.image
+      : undefined;
+  if (!updated) return { status: 'none', image };
   // The local copy of a replaced share card is now unreferenced.
   if (before?.filePath && !updated.filePath) void removeFile(before.filePath);
   // Background enrichment is otherwise silent; a date appearing on its own
@@ -229,7 +252,45 @@ export async function enrichBookmark(
   if (updated.startsAt && !before?.startsAt) {
     showToast('Event time added from the page');
   }
-  return 'updated';
+  return { status: 'updated', image };
+}
+
+/**
+ * Fetch metadata for a bookmark and store the enriched copy. Returns
+ * 'updated' when the item changed, 'none' when the page had nothing to add
+ * (or we're offline / the item vanished meanwhile); rejects when the fetch
+ * itself failed so interactive callers can offer a retry. Fire-and-forget
+ * callers should `.catch()` — a capture must never fail because its
+ * preview did.
+ */
+export async function enrichBookmark(
+  item: BookmarkItem,
+): Promise<'updated' | 'none'> {
+  const { status } = await refreshBookmark(item);
+  return status === 'updated' ? 'updated' : 'none';
+}
+
+/**
+ * Swap a bookmark's preview image for one the user picked after a refresh,
+ * dropping the local copy of the old one. False when the bookmark changed
+ * or vanished meanwhile.
+ */
+export async function replaceBookmarkImage(
+  item: BookmarkItem,
+  image: string,
+): Promise<boolean> {
+  let oldFile: string | undefined;
+  const updated = await updateItem(item.id, (current) => {
+    if (!current || current.type !== 'bookmark' || current.url !== item.url) {
+      return null;
+    }
+    oldFile = current.filePath;
+    const { filePath: _filePath, mimeType: _mimeType, ...rest } = current;
+    return { ...rest, ogImage: image };
+  });
+  if (!updated) return false;
+  if (oldFile) void removeFile(oldFile);
+  return true;
 }
 
 export interface BulkEnrichProgress {
