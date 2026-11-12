@@ -15,7 +15,7 @@
   import { todayStart } from '../lib/now';
   import {
     DEFAULT_COLLAPSED, HORIZON_ORDER, type HorizonSection, type PlanChoice,
-    type Plan, placeTodo, planFor, scheduledDayKey, sectionInfo, toDateKey,
+    type Plan, placeTodo, planFor, scheduledDayKeys, sectionInfo, toDateKey,
   } from '../lib/plan';
   import { showToast } from '../lib/toast';
   import AlertsPermissionBanner from './AlertsPermissionBanner.svelte';
@@ -375,7 +375,8 @@
   // ── Slipped review ────────────────────────────────────────────────────
   const todayKey = $derived(toDateKey(today));
   const overdueTodos = $derived(
-    dueTodos.filter(t => (scheduledDayKey(t) ?? todayKey) < todayKey),
+    // A multi-day event still running today isn't overdue: judge by its last day.
+    dueTodos.filter(t => (scheduledDayKeys(t).at(-1) ?? todayKey) < todayKey),
   );
   const rolledTodos = $derived(
     restOpenTodos

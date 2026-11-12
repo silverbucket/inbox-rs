@@ -16,7 +16,9 @@
     monthStart,
     type Placement,
     scheduledDayKey,
+    scheduledDayKeys,
     sectionInfo,
+    spanDayLabel,
     shiftMonth,
     toDateKey,
     weekStart,
@@ -59,11 +61,12 @@
   const byDay = $derived.by(() => {
     const map = new Map<string, InboxItem[]>();
     for (const t of todos) {
-      const key = scheduledDayKey(t);
-      if (!key) continue;
-      const list = map.get(key) ?? [];
-      list.push(t);
-      map.set(key, list);
+      // A multi-day all-day event sits on every day of its span.
+      for (const key of scheduledDayKeys(t)) {
+        const list = map.get(key) ?? [];
+        list.push(t);
+        map.set(key, list);
+      }
     }
     for (const list of map.values()) {
       list.sort(compareByDueTime);
@@ -160,8 +163,14 @@
     expandedDays = next;
   }
 
-  function startDrag(e: DragEvent, todo: InboxItem) {
+  /** Days between a dragged event's start and the day its chip was grabbed
+      from, so dropping a later day of a span shifts the whole span by the
+      same distance instead of starting it on the drop day. */
+  let dragOffsetDays = 0;
+
+  function startDrag(e: DragEvent, todo: InboxItem, fromKey?: string) {
     if (!e.dataTransfer) return;
+    dragOffsetDays = fromKey ? Math.max(0, scheduledDayKeys(todo).indexOf(fromKey)) : 0;
     e.dataTransfer.setData(DRAG_TYPE, todo.id);
     e.dataTransfer.effectAllowed = 'move';
   }
@@ -180,8 +189,10 @@
     e.preventDefault();
     const todo = todos.find((t) => t.id === id);
     if (!todo) return;
+    const start = new Date(day);
+    start.setDate(start.getDate() - dragOffsetDays);
     try {
-      await moveStoredItemToDay(todo, day);
+      await moveStoredItemToDay(todo, start);
     } catch (error) {
       console.error('Failed to move todo to day', error);
       showToast('Couldn’t move that todo');
@@ -190,17 +201,20 @@
 
 </script>
 
-{#snippet chip(t: InboxItem)}
+{#snippet chip(t: InboxItem, dayKey?: string)}
+  {@const spanDay = dayKey ? spanDayLabel(t, dayKey) : ''}
   <button
     type="button"
     class="chip"
+    class:cont={!!spanDay}
     draggable={!lockText(t)}
-    title={t.title}
-    ondragstart={(e) => startDrag(e, t)}
+    title={spanDay ? `${t.title} · ${spanDay}` : t.title}
+    ondragstart={(e) => startDrag(e, t, dayKey)}
     onclick={() => onselect(t)}
   >
     <span class="dot" style="background: {lookupCollection(t.collectionId)?.color || 'var(--text-muted)'}"></span>
     <span class="chip-text">{t.title}</span>
+    {#if spanDay}<span class="sr-only">, {spanDay}</span>{/if}
   </button>
 {/snippet}
 
@@ -296,7 +310,7 @@
               >
                 <span class="num">{cell.n}</span>
                 {#each expandedDays.has(cell.key) ? cell.items : cell.items.slice(0, DAY_LIMIT) as t (t.id)}
-                  {@render chip(t)}
+                  {@render chip(t, cell.key)}
                 {/each}
                 {#if cell.items.length > DAY_LIMIT}
                   <button
@@ -514,6 +528,24 @@
 
   .chip:hover {
     background: var(--surface-hover);
+  }
+
+  /* Later days of a multi-day event: the same card again, not a new one. */
+  .chip.cont {
+    border-style: dashed;
+    color: var(--text-muted);
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   .chip-text {

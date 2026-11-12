@@ -26,6 +26,7 @@
     readonly = false,
     reorderable = false,
     planTag,
+    dayTag,
     stacked = false,
     as = 'li',
     viewing = null,
@@ -55,6 +56,9 @@
     reorderable?: boolean;
     /** Short plan note, e.g. "from last week" for a todo that rolled over. */
     planTag?: string;
+    /** "Day 2 of 3" on the later days of a multi-day event, so the same
+        card shown on each day of its span doesn't read as separate events. */
+    dayTag?: string;
     /** Two-line card layout (title, then meta) for narrow containers such
         as board columns, regardless of viewport width. */
     stacked?: boolean;
@@ -434,6 +438,9 @@
     {#if planTag && !todo.completed}
       <span class="plan-tag" title="Its planned week or month has passed, so it moved up">{planTag}</span>
     {/if}
+    {#if dayTag}
+      <span class="day-tag" title="Continues from an earlier day">{dayTag}</span>
+    {/if}
     <span
       class="collection-pill"
       title={pillLabel}
@@ -764,6 +771,17 @@
     font-weight: 600;
     color: var(--warn-text);
     background: color-mix(in srgb, var(--warn) 14%, transparent);
+    border-radius: 999px;
+    padding: 0.08rem 0.45rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .day-tag {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--surface-tint);
     border-radius: 999px;
     padding: 0.08rem 0.45rem;
     white-space: nowrap;
