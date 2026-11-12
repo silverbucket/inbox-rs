@@ -61,6 +61,8 @@ import {
   needsEnrichment,
   needsLinkPreview,
   noteToBookmark,
+  refreshBookmark,
+  replaceBookmarkImage,
   resolveSockethubEndpoint,
 } from './enrich';
 
@@ -228,6 +230,22 @@ describe('applyLinkMetadata', () => {
       siteName: 'Example',
       favicon: 'https://x/f.ico',
     });
+  });
+
+  it('replaces a title that is only the site name', () => {
+    const item = bookmark({
+      title: 'reddit',
+      url: 'https://www.reddit.com/r/hockey/comments/abc/a_post/',
+    });
+    expect(
+      needsEnrichment({
+        ...item,
+        description: 'D',
+        siteName: 'reddit',
+        ogImage: 'https://x/i.png',
+      }),
+    ).toBe(true);
+    expect(applyLinkMetadata(item, { title: 'A post' })?.title).toBe('A post');
   });
 
   it('never overwrites user-provided fields', () => {
@@ -463,6 +481,100 @@ describe('enrichBookmark', () => {
     itemsMap[item.id] = item;
     fetchLinkMetadata.mockRejectedValue(new Error('boom'));
     await expect(enrichBookmark(item)).rejects.toThrow('boom');
+  });
+});
+
+describe('refreshBookmark', () => {
+  const complete = () =>
+    bookmark({
+      title: 'My title',
+      description: 'D',
+      siteName: 'X',
+      ogImage: 'https://abs.twimg.com/generic-card.png',
+      filePath: 'files/b1.png',
+      mimeType: 'image/png',
+    });
+
+  it('offers a different image without replacing the saved one', async () => {
+    const item = complete();
+    itemsMap[item.id] = item;
+    fetchLinkMetadata.mockResolvedValue({
+      title: 'Their title',
+      image: 'https://pbs.twimg.com/media/real.jpg',
+    });
+
+    await expect(refreshBookmark(item)).resolves.toEqual({
+      status: 'none',
+      image: 'https://pbs.twimg.com/media/real.jpg',
+    });
+    expect(storeItem).not.toHaveBeenCalled();
+    expect(removeFile).not.toHaveBeenCalled();
+    expect(itemsMap[item.id]).toBe(item);
+  });
+
+  it('offers nothing when the page still has the saved image', async () => {
+    const item = complete();
+    itemsMap[item.id] = item;
+    fetchLinkMetadata.mockResolvedValue({
+      image: 'https://abs.twimg.com/generic-card.png',
+    });
+
+    await expect(refreshBookmark(item)).resolves.toEqual({ status: 'none' });
+  });
+
+  it('never offers a share card in place of a saved image', async () => {
+    const item = complete();
+    itemsMap[item.id] = item;
+    fetchLinkMetadata.mockResolvedValue({
+      image: 'https://share.redd.it/preview/post/1xlli1q',
+    });
+
+    await expect(refreshBookmark(item)).resolves.toEqual({ status: 'none' });
+  });
+
+  it('offers nothing for an image it has just filled in', async () => {
+    const item = bookmark();
+    itemsMap[item.id] = item;
+    fetchLinkMetadata.mockResolvedValue({ image: 'https://x/og.png' });
+
+    await expect(refreshBookmark(item)).resolves.toEqual({ status: 'updated' });
+  });
+
+  it('leaves the bookmark alone when the link is dead', async () => {
+    const item = complete();
+    itemsMap[item.id] = item;
+    fetchLinkMetadata.mockRejectedValue(new Error('404'));
+
+    await expect(refreshBookmark(item)).rejects.toThrow('404');
+    expect(storeItem).not.toHaveBeenCalled();
+    expect(removeFile).not.toHaveBeenCalled();
+  });
+});
+
+describe('replaceBookmarkImage', () => {
+  it('stores the chosen image and drops the old local copy', async () => {
+    const item = bookmark({
+      ogImage: 'https://abs.twimg.com/generic-card.png',
+      filePath: 'files/b1.png',
+      mimeType: 'image/png',
+    });
+    itemsMap[item.id] = item;
+
+    await expect(
+      replaceBookmarkImage(item, 'https://pbs.twimg.com/media/real.jpg'),
+    ).resolves.toBe(true);
+    const stored = storeItem.mock.calls[0][0];
+    expect(stored.ogImage).toBe('https://pbs.twimg.com/media/real.jpg');
+    expect(stored.filePath).toBeUndefined();
+    expect(stored.mimeType).toBeUndefined();
+    expect(removeFile).toHaveBeenCalledWith('files/b1.png');
+  });
+
+  it('does nothing when the bookmark vanished meanwhile', async () => {
+    await expect(
+      replaceBookmarkImage(bookmark(), 'https://x/new.png'),
+    ).resolves.toBe(false);
+    expect(storeItem).not.toHaveBeenCalled();
   });
 });
 

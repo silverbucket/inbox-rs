@@ -14,6 +14,8 @@
     quickSuggestion,
   } from '../lib/triage';
   import { fileFromInbox } from '../lib/triage-actions';
+  import { enrichBookmark, LINK_PREVIEW_ERROR } from '../lib/enrich';
+  import { showToast } from '../lib/toast';
   import InboxCard from './InboxCard.svelte';
   import TriagePanel from './TriagePanel.svelte';
 
@@ -83,15 +85,36 @@
     const flag = dup
       ? `Same as “${clip(dup.title || 'another card')}” — archive one?`
       : lacksTitle(item)
-        ? 'Preview title looks incomplete — improve it?'
+        ? 'Preview title looks incomplete'
         : undefined;
     return {
       flag,
+      // The card turns this flag into a button that fetches the title.
+      untitled: !dup && lacksTitle(item),
       suggest: quickSuggestion(item, siteIndex, liveCollections),
       duplicate: !!dup,
       stale: ageBucket(item, $now) === 'stale',
       active: item.id === triageCurrent,
     };
+  }
+
+  /** A card's "fetch the title" button: ask the page, say so if it has none. */
+  async function fetchTitle(item: InboxItem) {
+    if (item.type !== 'bookmark') return;
+    if (!navigator.onLine) {
+      showToast('You’re offline — try again when connected');
+      return;
+    }
+    try {
+      await enrichBookmark(item);
+    } catch {
+      showToast(LINK_PREVIEW_ERROR);
+      return;
+    }
+    const live = $items[item.id];
+    if (live && lacksTitle(live)) {
+      showToast('No better title found — open the card to name it');
+    }
   }
 
   /** A card's "File to …?" button. */
@@ -199,7 +222,7 @@
           <div class="grid-wrap">
             <div class="grid">
               {#each g.shown as item (item.id)}
-                <InboxCard {item} {onselect} hints={hintsFor(item)} onfile={(c) => fileCard(item, c)} />
+                <InboxCard {item} {onselect} hints={hintsFor(item)} onfile={(c) => fileCard(item, c)} onfetchtitle={() => fetchTitle(item)} />
               {/each}
             </div>
           </div>

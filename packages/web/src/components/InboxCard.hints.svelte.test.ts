@@ -90,6 +90,38 @@ describe('InboxCard hints', () => {
     expect(onselect).not.toHaveBeenCalled();
   });
 
+  it('fetches the title from the incomplete-title hint without opening the card', async () => {
+    const onselect = vi.fn();
+    let finish = () => {};
+    const onfetchtitle = vi.fn(
+      () => new Promise<void>((resolve) => (finish = resolve)),
+    );
+    const el = render({
+      onselect,
+      onfetchtitle,
+      hints: { flag: 'Preview title looks incomplete', untitled: true },
+    });
+    const button = el.querySelector<HTMLButtonElement>('.hint-title');
+    expect(button?.textContent?.trim()).toBe(
+      'Title looks incomplete — fetch it?',
+    );
+    // The button replaces the plain warning line; it does not repeat it.
+    expect(el.querySelector('.hint-flag')).toBeNull();
+
+    button?.click();
+    flushSync();
+    expect(onfetchtitle).toHaveBeenCalledOnce();
+    expect(onselect).not.toHaveBeenCalled();
+    expect(button?.disabled).toBe(true);
+    expect(button?.textContent?.trim()).toBe('Fetching title…');
+
+    finish();
+    await Promise.resolve();
+    await Promise.resolve();
+    flushSync();
+    expect(button?.disabled).toBe(false);
+  });
+
   it('shows no hints outside the Inbox', () => {
     const el = render({});
     expect(el.querySelector('.hint-flag')).toBeNull();
