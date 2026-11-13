@@ -12,6 +12,7 @@
   import { animatePriorityChange } from '../lib/priority-motion';
   import { formatScheduled, isOverdue, isPast } from '../lib/schedule';
   import { kindOf } from '../lib/kinds';
+  import { linkNote } from '../lib/link-note';
   import { setItemPinned } from '../lib/stores';
   import { type CardHints, relativeAge } from '../lib/triage';
   import { hasIncompletePreview, reportPreview } from '../lib/metadata-report';
@@ -146,6 +147,10 @@
       null,
   );
 
+  // A link's own note says why it was kept, so it stands in for the page's
+  // description: one line, under the link's title.
+  const ownNote = $derived(linkNote(item));
+
   function formatDate(iso: string): string {
     const d = new Date(iso);
     return d.toLocaleDateString(undefined, {
@@ -269,7 +274,12 @@
     {:else if item.type === 'email'}
       <EmailCard {item} />
     {/if}
-    {#if cardNotes}
+    {#if ownNote}
+      <p class="card-own-note">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+        <span>{ownNote}</span>
+      </p>
+    {:else if cardNotes}
       <p class="card-notes">{cardNotes}</p>
     {/if}
     {#if hints?.untitled && onfetchtitle}
@@ -643,5 +653,30 @@
   }
   @media (max-width: 600px) {
     .card-notes { -webkit-line-clamp: 3; }
+  }
+
+  /* The person's own note on a link: secondary to the link's title, and
+     marked with a pencil so it doesn't read as the page's description. */
+  .card-own-note {
+    margin-top: 0.5rem;
+    display: flex;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+  }
+  .card-own-note svg {
+    flex-shrink: 0;
+    width: 0.8rem;
+    height: 0.8rem;
+    margin-top: 0.25rem;
+  }
+  .card-own-note span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 </style>

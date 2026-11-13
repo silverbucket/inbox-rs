@@ -13,6 +13,7 @@
   import { addToColumn, moveItemToColumn, updateColumns } from '../../lib/board-actions';
   import { BOARD_UNSORTED, groupByColumn, nextColumnColor, newId } from '../../lib/boards';
   import { kindOf } from '../../lib/kinds';
+  import { linkNote } from '../../lib/link-note';
   import { now } from '../../lib/now';
   import { planLabel } from '../../lib/plan';
   import { setItemCompleted } from '../../lib/schedule-sync';
@@ -198,6 +199,7 @@
           <!-- On a calendar (archived): the calendar owns it now, so it's
                read-only here, as in the collection's "On calendar" list. -->
           {@const locked = !!item.archived}
+          {@const note = linkNote(item)}
           <li
             class="card"
             class:dragging={dragId === item.id}
@@ -232,6 +234,7 @@
             {/if}
             <button type="button" class="open" onclick={() => onselect(item)}>
               <span class="title">{item.title || 'Untitled'}</span>
+              {#if note}<span class="note">{note}</span>{/if}
               <span class="sub">
                 {#if col}<span class="coll"><span class="cdot" style="background: {col.color || 'var(--text-muted)'}"></span>{col.name}</span>{/if}
                 {subline(item)}
@@ -540,6 +543,18 @@
   .card.completed .title {
     color: var(--text-muted);
     text-decoration: line-through;
+  }
+
+  /* A link's own note: one quiet line (two when it wraps) under its title. */
+  .note {
+    font-size: 0.78rem;
+    line-height: 1.35;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .sub {
