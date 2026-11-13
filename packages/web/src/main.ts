@@ -1,4 +1,5 @@
 import { mount } from 'svelte';
+import { installBackdropPressGuard } from './lib/backdrop-press';
 import { installPreloadErrorReload } from './lib/preload-error';
 import {
   type Accent,
@@ -15,6 +16,10 @@ import './styles/global.css';
 // CDN inconsistency. Deploys retain old hashed assets, so this is a last line
 // of defence rather than the normal update path (see lib/preload-error.ts).
 installPreloadErrorReload();
+
+// A text selection dragged past the edge of a modal must not close it (see
+// lib/backdrop-press.ts).
+installBackdropPressGuard();
 
 // Apply the stored theme (accent + light/dark) before mount to avoid a flash.
 // Mode is reconciled with synced UserSettings once connected (see UserMenu);
