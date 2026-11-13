@@ -212,6 +212,7 @@ export const userSettingsSchema = {
     abbreviation: { type: 'string' },
     theme: { type: 'string', enum: ['system', 'light', 'dark'] },
     linkPreviews: { type: 'boolean' },
+    keepLinkImages: { type: 'boolean' },
     sockethubUrl: { type: 'string' },
     calendarPostMode: { type: 'string', enum: ['move', 'copy'] },
   },

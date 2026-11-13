@@ -34,6 +34,7 @@ import { showToast } from './toast';
 import { lacksTitle } from './triage';
 
 export const LOCAL_LINK_PREVIEWS_KEY = 'inbox-rs:link-previews';
+export const LOCAL_KEEP_LINK_IMAGES_KEY = 'inbox-rs:keep-link-images';
 export const LOCAL_SOCKETHUB_URL_KEY = 'inbox-rs:sockethub-url';
 
 /** Read a browser-local setting without failing in restricted storage contexts. */
@@ -50,6 +51,18 @@ export function linkPreviewsEnabled(): boolean {
   return (
     get(userSettings).linkPreviews !== false &&
     localSetting(LOCAL_LINK_PREVIEWS_KEY) !== 'false'
+  );
+}
+
+/**
+ * Saved links keep their own copy of the preview image unless the user
+ * turned that off, to show the image from its original site instead and
+ * spend no storage on it.
+ */
+export function keepLinkImagesEnabled(): boolean {
+  return (
+    get(userSettings).keepLinkImages !== false &&
+    localSetting(LOCAL_KEEP_LINK_IMAGES_KEY) !== 'false'
   );
 }
 
@@ -290,8 +303,12 @@ function localImagePath(id: string, mimeType: string): string | null {
   return ext ? `files/${id}.${ext}` : null;
 }
 
-/** Download an image for a bookmark, or null when this server can't. */
+/**
+ * Download an image for a bookmark, or null when copies are turned off or
+ * this server can't download them.
+ */
 async function downloadBookmarkImage(item: BookmarkItem, image: string) {
+  if (!keepLinkImagesEnabled()) return null;
   const endpoint = resolveSockethubEndpoint();
   if (!(await canDownloadImages(endpoint))) return null;
   const file = await downloadLinkImage(item.url, image, endpoint);
@@ -331,8 +348,9 @@ export async function keepBookmarkImage(item: BookmarkItem): Promise<boolean> {
  * Swap a bookmark's preview image for one the user picked after a refresh.
  * The new image is downloaded first and stored as the bookmark's own copy.
  * A bookmark that already has a local copy never trades it for a remote
- * link: when the new image can't be downloaded the saved one stays and the
- * result is 'kept'. 'gone' when the bookmark changed or vanished meanwhile.
+ * link while copies are kept: when the new image can't be downloaded the
+ * saved one stays and the result is 'kept'. With copies turned off the
+ * bookmark links to the new image and its old copy is removed. 'gone' when the bookmark changed or vanished meanwhile.
  */
 export async function replaceBookmarkImage(
   item: BookmarkItem,
@@ -351,7 +369,9 @@ export async function replaceBookmarkImage(
         return null;
       }
       const { filePath, mimeType: _mimeType, ...rest } = current;
-      if (!file && filePath) {
+      // With copies turned off there is nothing to protect: the choice
+      // was to show images from their site, so the stored one goes.
+      if (!file && filePath && keepLinkImagesEnabled()) {
         kept = true;
         return null;
       }

@@ -323,6 +323,39 @@ describe('saveAsBookmark', () => {
     );
   });
 
+  it('links the image without storing a copy when copies are turned off', async () => {
+    const rs = makeRS();
+    vi.spyOn(rs, 'getUserSettings').mockResolvedValue({
+      keepLinkImages: false,
+    });
+    const result = await saveAsBookmark({
+      rs,
+      ...baseParams,
+      ogImage: 'https://example.com/og-image.jpg',
+    });
+
+    expect(mockSendMessage).not.toHaveBeenCalled();
+    expect(result.filePath).toBeUndefined();
+    expect(result.ogImage).toBe('https://example.com/og-image.jpg');
+  });
+
+  it('links a tweet photo, not the generic card, when copies are turned off', async () => {
+    const rs = makeRS();
+    vi.spyOn(rs, 'getUserSettings').mockResolvedValue({
+      keepLinkImages: false,
+    });
+    const result = await saveAsBookmark({
+      rs,
+      ...baseParams,
+      pageUrl: 'https://x.com/example/status/123',
+      tweetImages: ['https://pbs.twimg.com/media/abc.jpg'],
+      ogImage: 'https://pbs.twimg.com/generic-card.jpg',
+    });
+
+    expect(mockSendMessage).not.toHaveBeenCalled();
+    expect(result.ogImage).toBe('https://pbs.twimg.com/media/abc.jpg');
+  });
+
   it('downloads og:image for Reddit posts that also have embedded text', async () => {
     mockSendMessage.mockResolvedValue({ ok: true, mimeType: 'image/png' });
     mockFetch.mockResolvedValue({ ok: true });

@@ -71,6 +71,7 @@ import {
   isSavedLink,
   keepBookmarkImage,
   LINK_PREVIEW_ERROR,
+  LOCAL_KEEP_LINK_IMAGES_KEY,
   LOCAL_LINK_PREVIEWS_KEY,
   LOCAL_SOCKETHUB_URL_KEY,
   linkNoteUrl,
@@ -652,6 +653,43 @@ describe('keepBookmarkImage', () => {
     downloadLinkImage.mockResolvedValue(downloaded('image/tiff'));
     await expect(keepBookmarkImage(item)).resolves.toBe(false);
     expect(storeItem).not.toHaveBeenCalled();
+  });
+});
+
+describe('with image copies turned off', () => {
+  it('saves no copy, in either place the setting is stored', async () => {
+    const item = bookmark({ ogImage: 'https://cdn/hero' });
+    itemsMap[item.id] = item;
+    canDownloadImages.mockResolvedValue(true);
+
+    settings.keepLinkImages = false;
+    await expect(keepBookmarkImage(item)).resolves.toBe(false);
+    delete settings.keepLinkImages;
+    localStorage.setItem(LOCAL_KEEP_LINK_IMAGES_KEY, 'false');
+    await expect(keepBookmarkImage(item)).resolves.toBe(false);
+
+    expect(downloadLinkImage).not.toHaveBeenCalled();
+    expect(storeItem).not.toHaveBeenCalled();
+  });
+
+  it('links to a newly chosen image and removes the old copy', async () => {
+    settings.keepLinkImages = false;
+    const item = bookmark({
+      ogImage: 'https://cdn/old.jpg',
+      filePath: 'files/b1.jpg',
+      mimeType: 'image/jpeg',
+    });
+    itemsMap[item.id] = item;
+    canDownloadImages.mockResolvedValue(true);
+
+    await expect(
+      replaceBookmarkImage(item, 'https://cdn/new.jpg'),
+    ).resolves.toBe('replaced');
+    expect(downloadLinkImage).not.toHaveBeenCalled();
+    const stored = storeItem.mock.calls[0][0];
+    expect(stored.ogImage).toBe('https://cdn/new.jpg');
+    expect(stored.filePath).toBeUndefined();
+    expect(removeFile).toHaveBeenCalledWith('files/b1.jpg');
   });
 });
 

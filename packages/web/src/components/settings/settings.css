@@ -116,6 +116,10 @@
 .settings-section .switch.on {
   background: var(--accent);
 }
+.settings-section .switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .settings-section .switch.on:after {
   transform: translateX(17px);
 }

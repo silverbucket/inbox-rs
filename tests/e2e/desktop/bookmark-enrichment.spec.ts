@@ -699,3 +699,86 @@ test('choosing a new image that cannot be downloaded keeps the saved copy', asyn
   );
   expect(file.status).toBe(200);
 });
+
+test('with image copies turned off, a saved link shows its image from the site and stores nothing', async ({
+  context,
+  freshRsUser,
+  freshRsToken,
+  webOrigin,
+}) => {
+  const page = await freshConnectedPage({
+    context,
+    freshRsUser,
+    freshRsToken,
+    webOrigin,
+  });
+  const log = attachConsoleCapture(page);
+  const url = 'https://example.com/no-copy';
+  const image = 'https://cdn.example.com/no-copy-hero';
+  const downloads = await routeSockethubWithMedia(page, url, image, {
+    object: {
+      type: 'image',
+      url: image,
+      mediaType: 'image/png',
+      size: PNG.byteLength,
+      data: PNG.toString('base64'),
+    },
+  });
+  await page.route(image, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: PNG }),
+  );
+
+  await page.goto(webOrigin);
+  await page.waitForLoadState('networkidle');
+
+  // Turn the setting off where the user does.
+  await page.keyboard.press('ControlOrMeta+,');
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  await settings.getByRole('button', { name: /^Link previews/ }).click();
+  const keep = settings.getByRole('button', {
+    name: 'Keep a copy of preview images',
+  });
+  await expect(keep).toHaveAttribute('aria-pressed', 'true');
+  await keep.click();
+  await expect(keep).toHaveAttribute('aria-pressed', 'false');
+  // Click the overlay: Escape only collapses the open section.
+  await page.mouse.click(5, 5);
+  await expect(settings).toBeHidden();
+
+  await page
+    .getByRole('button', { name: 'Inbox', exact: true })
+    .first()
+    .click();
+  const input = page.getByPlaceholder(
+    'Paste a link, jot a note, or drop a file…',
+  );
+  await input.click();
+  await input.fill(url);
+  await input.press('Enter');
+
+  // The preview arrives and the card shows the image straight from its site.
+  const card = page.locator('article.card', {
+    has: page.getByRole('link', { name: 'A page with a picture' }),
+  });
+  await expect(card.locator(`img.og-image[src="${image}"]`)).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // The choice is synced, and nothing was downloaded or stored.
+  await expect
+    .poll(async () => {
+      const r = await fetch(
+        `http://localhost:8000/storage/${freshRsUser.username}/inbox/config/user`,
+        { headers: { Authorization: `Bearer ${freshRsToken}` } },
+      );
+      return r.ok ? (await r.json()).keepLinkImages : undefined;
+    })
+    .toBe(false);
+  expect(downloads).toHaveLength(0);
+  const items = await getInboxItems(freshRsUser, freshRsToken);
+  const stored = items.find((item) => (item as { url?: string }).url === url);
+  expect(stored).toMatchObject({ ogImage: image });
+  expect((stored as { filePath?: string }).filePath).toBeUndefined();
+
+  assertNoConsoleErrors(log);
+});
