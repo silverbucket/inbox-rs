@@ -7,13 +7,16 @@
  *
  * Pages: inbox (default), todos, collections, plugins (Add-ons, at
  * `#/add-ons`; legacy `#/plugins` still resolves), search,
- * collection (focus mode for one collection: `#/collection/:id`), and
- * groupBoard (one group's items as a board: `#/group-board/:id`).
+ * collection (focus mode for one collection: `#/collection/:id`),
+ * groupBoard (one group's items as a board: `#/group-board/:id`), and
+ * item (one item's card, opened over the current page: `#/item/:id`).
  * Query params:
  *   g  — comma-separated group IDs for filter state. Only meaningful on
  *        the `todos` and `collections` pages; ignored elsewhere.
  *   q  — search text. Only meaningful on the `search` page.
  */
+
+import { itemHref, itemIdFromHref } from './item-links';
 
 export type Page =
   | 'inbox'
@@ -22,7 +25,8 @@ export type Page =
   | 'plugins'
   | 'search'
   | 'collection'
-  | 'groupBoard';
+  | 'groupBoard'
+  | 'item';
 
 export interface Route {
   page: Page;
@@ -32,6 +36,8 @@ export interface Route {
   collectionId?: string;
   /** Group whose board is open. Only set when `page` is `groupBoard`. */
   groupId?: string;
+  /** Item whose card is open. Only set when `page` is `item`. */
+  itemId?: string;
   /** Search text from the `q=` param. Only set when `page` is `search`. */
   query?: string;
 }
@@ -68,6 +74,11 @@ export function parseHash(hash: string): Route {
     } catch {
       // Malformed encoding: fall through like any unknown path.
     }
+  }
+
+  if (clean.startsWith('item/')) {
+    const id = itemIdFromHref(`#/${clean}`);
+    if (id) return { page: 'item', itemId: id };
   }
 
   const page = pageFromPath(clean);
@@ -138,6 +149,9 @@ export function formatRoute(route: Route): string {
       ? `#/group-board/${encodeURIComponent(route.groupId)}`
       : '#/collections';
   }
+  if (route.page === 'item') {
+    return route.itemId ? itemHref(route.itemId) : '#/';
+  }
   if (route.page === 'search') {
     // URLSearchParams encodes spaces as `+`, which reads better in a shared
     // link than `%20` and round-trips through `parseQueryText`.
@@ -156,7 +170,7 @@ export function formatRoute(route: Route): string {
 }
 
 function pathFromPage(
-  page: Exclude<Page, 'collection' | 'search' | 'groupBoard'>,
+  page: Exclude<Page, 'collection' | 'search' | 'groupBoard' | 'item'>,
 ): string {
   switch (page) {
     case 'inbox':

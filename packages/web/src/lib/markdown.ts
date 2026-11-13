@@ -2,7 +2,8 @@ import type { Config as DOMPurifyConfig } from 'dompurify';
 import DOMPurify from 'dompurify';
 import type { LanguageFn } from 'highlight.js';
 import hljs from 'highlight.js/lib/core';
-import { Marked } from 'marked';
+import { Marked, type Tokens } from 'marked';
+import { itemHref, itemIdFromHref } from './item-links';
 
 // `satisfies` keeps the literal checked against DOMPurify's Config while
 // avoiding `as const`, whose readonly arrays don't satisfy Config's mutable
@@ -124,6 +125,17 @@ export async function renderMarkdown(source: string): Promise<string> {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
       return `<pre><code>${escaped}</code></pre>`;
+    },
+    // A link to another item is marked up so the page can keep its text in
+    // step with the target's title (see lib/item-link-live.ts).
+    link(
+      this: { parser: { parseInline(tokens: Tokens.Generic[]): string } },
+      { href, tokens }: Tokens.Link,
+    ) {
+      const id = itemIdFromHref(href);
+      if (!id) return false;
+      const attr = id.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+      return `<a class="item-link" data-item-id="${attr}" href="${itemHref(id)}">${this.parser.parseInline(tokens)}</a>`;
     },
   };
 

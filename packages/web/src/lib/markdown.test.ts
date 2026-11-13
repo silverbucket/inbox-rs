@@ -59,4 +59,14 @@ describe('renderMarkdown', () => {
     expect(html).not.toContain('<tag>');
     expect(html).toContain("'quote'");
   });
+
+  it('marks links to other items, and only those', async () => {
+    const html = await renderMarkdown(
+      '[Trip **plan**](#/item/abc-1) and [site](https://example.com/#/item/x)',
+    );
+    expect(html).toContain(
+      '<a class="item-link" data-item-id="abc-1" href="#/item/abc-1">Trip <strong>plan</strong></a>',
+    );
+    expect(html).toContain('<a href="https://example.com/#/item/x">site</a>');
+  });
 });

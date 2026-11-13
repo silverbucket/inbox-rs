@@ -12,7 +12,7 @@
   import MobileTabBar from './components/MobileTabBar.svelte';
   import Toast from './components/Toast.svelte';
   import {
-    connected, deleteItem, items, visibleOpenTodos, openTodos, pendingMigrationCount, runAllMigrations,
+    connected, deleteItem, items, restoring, visibleOpenTodos, openTodos, pendingMigrationCount, runAllMigrations,
     createCollection, storeGroup,
     appConfig, setActiveGroupFilters,
   } from './lib/stores';
@@ -24,6 +24,7 @@
   import { loadLazy } from './lib/lazy-load';
   import { showToast } from './lib/toast';
   import { parseHash, formatRoute, pageUsesFilters, type Page, type Route } from './lib/route';
+  import { itemIdFromHref } from './lib/item-links';
   import { layout } from './lib/layout';
   import SettingsModal from './components/SettingsModal.svelte';
   import type { SectionId } from './lib/settings-sections';
@@ -99,12 +100,36 @@
   // that page; it defaults to Collections for direct links, where there is
   // no "underneath" to return to.
   /** Pages that open as a popup over the page the user was on. */
-  const isOverlayPage = (page: Page) => page === 'collection' || page === 'groupBoard';
+  const isOverlayPage = (page: Page) =>
+    page === 'collection' || page === 'groupBoard' || page === 'item';
   let lastListPage = $state<Page>('collections');
   $effect(() => {
     if (!isOverlayPage(route.page)) lastListPage = route.page;
   });
   const bodyPage = $derived(isOverlayPage(route.page) ? lastListPage : route.page);
+
+  // The route's item as last seen in the store, so the card stays up for the
+  // moment between its deletion and the modal closing.
+  let routeItemSnapshot = $state<InboxItem | null>(null);
+  $effect(() => {
+    if (route.page !== 'item' || !route.itemId) {
+      routeItemSnapshot = null;
+      return;
+    }
+    const live = $items[route.itemId];
+    if (live) {
+      routeItemSnapshot = live;
+    } else if (!$restoring && routeItemSnapshot?.id !== route.itemId) {
+      // Loaded, and it was never there: a link to something since deleted.
+      showToast('That item no longer exists.');
+      closeViewModal();
+    }
+  });
+  const shownItem = $derived(
+    route.page === 'item'
+      ? routeItemSnapshot?.id === route.itemId ? routeItemSnapshot : null
+      : viewingItem,
+  );
 
   // True only when focus mode was entered by in-app navigation, so exiting
   // can pop the history entry instead of pushing a new one. A direct link
@@ -132,7 +157,7 @@
   async function loadViewCardModal() {
     ViewCardModalComponent ??= await loadLazy<LazyComponent>(
       () => import('./components/ViewCardModal.svelte'),
-      () => { viewingItem = null; },
+      closeViewModal,
     );
   }
 
@@ -215,11 +240,12 @@
     }
   });
 
+  function syncRoute() {
+    navigationGeneration += 1;
+    route = parseHash(window.location.hash);
+  }
+
   onMount(() => {
-    const syncRoute = () => {
-      navigationGeneration += 1;
-      route = parseHash(window.location.hash);
-    };
     syncRoute();
     window.addEventListener('hashchange', syncRoute);
 
@@ -249,7 +275,9 @@
   // stale hashchange arrives). The $derived memoizes on the page *value*
   // (plus the focused collection, so switching focus targets also counts as
   // navigation), so this only fires when the user actually lands elsewhere.
-  const routePage = $derived(`${route.page}:${route.collectionId ?? route.groupId ?? ''}`);
+  const routePage = $derived(
+    `${route.page}:${route.collectionId ?? route.groupId ?? route.itemId ?? ''}`,
+  );
   $effect(() => {
     void routePage;
     activeModal = null;
@@ -288,7 +316,7 @@
   });
 
   $effect(() => {
-    if (viewingItem) void loadViewCardModal();
+    if (shownItem) void loadViewCardModal();
   });
 
   $effect(() => {
@@ -304,7 +332,7 @@
   // condition that renders it — so the lock can never engage for a modal that
   // isn't on screen (e.g. its chunk failed to load).
   const anyModalOpen = $derived(
-    !!(viewingItem && ViewCardModalComponent)
+    !!(shownItem && ViewCardModalComponent)
     || !!(activeModal && AddEntryModalComponent)
     || (showCollectionForm && !!CollectionFormModalComponent)
     || (showGroupForm && !!GroupFormModalComponent)
@@ -323,7 +351,7 @@
   // cleanup discard the pending view.
   const anyOverlayRequested = $derived(
     activeModal !== null
-    || viewingItem !== null
+    || shownItem !== null
     || showCollectionForm
     || showGroupForm
     || captureSheetOpen
@@ -623,8 +651,56 @@
     void loadViewCardModal();
   }
 
+  // ---- Item links (#/item/:id) ----
+  // An item's address opens its card over the page the user was on. Cards
+  // opened by clicking them stay off the URL (openView above); the route is
+  // what a link from one item to another points at.
+
+  /** Follow a link to an item: its card replaces whatever card is open. */
+  function navToItem(itemId: string) {
+    if (route.page === 'item' && route.itemId === itemId) return;
+    // The entries are marked so closing the card can step back through them
+    // (linked card → the list that linked it → the page underneath).
+    const state = { inApp: true };
+    if (viewingItem && route.page !== 'item') {
+      // The open card was opened by a click and has no history entry yet;
+      // give it one so Back from the linked card returns to it.
+      window.history.pushState(state, '', formatRoute({ page: 'item', itemId: viewingItem.id }));
+    }
+    window.history.pushState(state, '', formatRoute({ page: 'item', itemId }));
+    // pushState fires no hashchange.
+    syncRoute();
+  }
+
+  // The shells highlight the current page; under an item card that is the
+  // page it opened over.
+  const shellRoute = $derived<Route>(route.page === 'item' ? { page: bodyPage } : route);
+
+  // Listens in the capture phase: the card modal stops clicks inside it from
+  // bubbling, and most item links are clicked inside a card.
+  function handleItemLinkClick(e: MouseEvent) {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const link = (e.target as Element | null)?.closest?.('a[href^="#/item/"]');
+    const itemId = itemIdFromHref(link?.getAttribute('href'));
+    if (!itemId) return;
+    e.preventDefault();
+    // Following a link would discard a half-written new entry (navigation
+    // closes that form), so links there are inert until it is saved.
+    if (activeModal) return;
+    if ($items[itemId]) navToItem(itemId);
+    else showToast('That item no longer exists.');
+  }
+
   function closeViewModal() {
-    viewingItem = null;
+    if (route.page !== 'item') {
+      viewingItem = null;
+    } else if (window.history.state?.inApp) {
+      window.history.back();
+    } else {
+      // A direct link or bookmark: there is nothing in-app to go back to.
+      // Replace the entry, so Back doesn't reopen the card just closed.
+      window.location.replace(formatRoute({ page: lastListPage }));
+    }
   }
 
   function closeModal() {
@@ -801,14 +877,14 @@
     {/if}
 {/snippet}
 
-<svelte:window onkeydown={handleGlobalKeydown} />
+<svelte:window onkeydown={handleGlobalKeydown} onclickcapture={handleItemLinkClick} />
 
 {#if $layout === 'sidebar'}
-  <SidebarShell bind:this={sidebarShell} {route} {navTo} {navToCollection} onsearch={navToSearch} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} onopenhelp={() => shortcutHelpOpen = true} bind:userMenu>
+  <SidebarShell bind:this={sidebarShell} route={shellRoute} {navTo} {navToCollection} onsearch={navToSearch} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} onopenhelp={() => shortcutHelpOpen = true} bind:userMenu>
     {#snippet children()}{@render shellBody()}{/snippet}
   </SidebarShell>
 {:else}
-  <ClassicShell {route} {navTo} onsearch={navToSearch} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} onopenhelp={() => shortcutHelpOpen = true} bind:userMenu>
+  <ClassicShell route={shellRoute} {navTo} onsearch={navToSearch} {viewTodoCount} {totalTodoCount} onaddgroup={openGroupForm} onopensettings={openSettings} onopenhelp={() => shortcutHelpOpen = true} bind:userMenu>
     {#snippet children()}{@render shellBody()}{/snippet}
   </ClassicShell>
 {/if}
@@ -839,7 +915,7 @@
   {/if}
 {/if}
 
-{#if viewingItem}
+{#if shownItem}
   {#if ViewCardModalComponent}
     <!--
       Prefer the live copy from the items store so background updates —
@@ -848,7 +924,11 @@
       snapshot fallback covers the moment an item is deleted elsewhere
       while the modal is closing.
     -->
-    <ViewCardModalComponent item={$items[viewingItem.id] ?? viewingItem} onclose={closeViewModal} />
+    <!-- Keyed: following a link swaps the card, and the modal's own state
+         (open menus, its closing latch) must not carry over. -->
+    {#key shownItem.id}
+      <ViewCardModalComponent item={$items[shownItem.id] ?? shownItem} onclose={closeViewModal} />
+    {/key}
   {/if}
 {/if}
 
