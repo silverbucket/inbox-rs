@@ -46,6 +46,14 @@
   // svelte-ignore state_referenced_locally
   let copyFrom = $state($columnSets[0]?.id ?? '');
   let name = $state(SET_TEMPLATES[0].name);
+  /** The name the dialog last filled in; anything else is the user's own. */
+  let suggested = SET_TEMPLATES[0].name;
+  /** Offer a name for the chosen start, unless the user has typed their own. */
+  function suggestName(next: string) {
+    if (name.trim() && name !== suggested) return;
+    name = next;
+    suggested = next;
+  }
   let columns = $state<BoardColumn[]>(columnsFromSpecs(SET_TEMPLATES[0].columns));
   // svelte-ignore state_referenced_locally
   let picked = $state<Set<string>>(new Set(preselect));
@@ -59,7 +67,7 @@
     template = t;
     const spec = SET_TEMPLATES.find((x) => x.name === t);
     if (!spec) return;
-    name = spec.name;
+    suggestName(spec.name);
     columns = columnsFromSpecs(spec.columns);
   }
 
@@ -68,13 +76,13 @@
     copyFrom = id;
     const src = $columnSets.find((s) => s.id === id);
     if (!src) return;
-    name = `${src.name} copy`;
+    suggestName(`${src.name} copy`);
     columns = src.columns.map((c) => ({ ...c, id: c.id === BOARD_UNSORTED ? c.id : newId() }));
   }
 
   function useBlank() {
     start = 'blank';
-    name = '';
+    suggestName('');
     columns = normalizeColumns([
       { id: newId(), name: 'To do', color: COLUMN_COLORS[0] },
       { id: newId(), name: 'Done', color: '#0f766e', done: true },
