@@ -252,3 +252,34 @@ a:hover {
     scroll-behavior: auto !important;
   }
 }
+
+/* A link from one item's text to another item (lib/item-links.ts). Shown as
+   a chip so it reads as "a thing in this app", not a web link. Global
+   because it appears in rendered markdown and in the visual editor. */
+a.item-link {
+  display: inline;
+  padding: 0.08em 0.45em;
+  border: 1px solid var(--border);
+  border-radius: 0.45em;
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+a.item-link:hover {
+  border-color: var(--accent-text);
+  text-decoration: none;
+}
+a.item-link.missing {
+  background: transparent;
+  color: var(--text-muted);
+  text-decoration: line-through;
+  cursor: default;
+}
+a.item-link.ProseMirror-selectednode {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 1px;
+}

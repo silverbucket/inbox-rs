@@ -93,10 +93,14 @@ export type MarkdownEditorProps = {
   value: string;
   placeholder?: string;
   focusOnMount?: boolean;
+  selfId?: string;
 };
 
+/** What `bind:this` on the MarkdownEditor exposes. */
+export type MarkdownEditorHandle = { linkItem(): void };
+
 export async function loadMarkdownEditorComponent(): Promise<
-  Component<MarkdownEditorProps>
+  Component<MarkdownEditorProps, MarkdownEditorHandle>
 > {
   const module = await import('../components/MarkdownEditor.svelte');
   return module.default;

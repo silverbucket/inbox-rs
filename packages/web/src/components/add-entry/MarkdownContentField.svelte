@@ -3,9 +3,11 @@
   import { autofocus } from '../../lib/actions';
   import {
     loadMarkdownEditorComponent,
+    type MarkdownEditorHandle,
     type MarkdownEditorProps,
   } from '../../lib/add-entry-modal';
   import { createCodeKeydownHandler } from '../../lib/code-indent';
+  import { liveItemLinks } from '../../lib/item-link-live';
   import { renderMarkdown } from '../../lib/markdown';
 
   let {
@@ -13,19 +15,24 @@
     label = 'Content',
     placeholder = 'Write your note...',
     focusOnMount = false,
+    selfId = undefined,
     onchange = undefined,
   }: {
     value?: string;
     label?: string;
     placeholder?: string;
     focusOnMount?: boolean;
+    /** The item being edited, left out of the item-link picker. */
+    selfId?: string;
     onchange?: () => void;
   } = $props();
 
   let editorMode = $state<'visual' | 'write' | 'preview'>('visual');
-  let MarkdownEditorComponent = $state<Component<MarkdownEditorProps> | null>(
-    null,
-  );
+  let MarkdownEditorComponent = $state<Component<
+    MarkdownEditorProps,
+    MarkdownEditorHandle
+  > | null>(null);
+  let markdownEditor = $state<MarkdownEditorHandle>();
   let markdownEditorLoadError = $state('');
   let previewHtml = $state('');
 
@@ -95,6 +102,20 @@
   <div class="field-header">
     <span>{label}</span>
     <div class="editor-tabs">
+      {#if editorMode === 'visual' && MarkdownEditorComponent}
+        <!-- mousedown is cancelled so the editor keeps its cursor position. -->
+        <button
+          type="button"
+          class="tab link-item"
+          title="Link to another item (or type [[ )"
+          aria-label="Link item"
+          onmousedown={(e) => e.preventDefault()}
+          onclick={() => markdownEditor?.linkItem()}
+        >
+          <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"></path><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"></path></svg>
+          <span class="link-item-label">Link item</span>
+        </button>
+      {/if}
       <button type="button" class="tab" class:active={editorMode === 'visual'} onclick={() => (editorMode = 'visual')} disabled={!!markdownEditorLoadError}>Visual</button>
       <button type="button" class="tab" class:active={editorMode === 'write'} onclick={() => (editorMode = 'write')}>Markdown</button>
       <button type="button" class="tab" class:active={editorMode === 'preview'} onclick={() => (editorMode = 'preview')}>Preview</button>
@@ -102,7 +123,7 @@
   </div>
   {#if editorMode === 'visual'}
     {#if MarkdownEditorComponent}
-      <MarkdownEditorComponent bind:value {placeholder} {focusOnMount} />
+      <MarkdownEditorComponent bind:this={markdownEditor} bind:value {placeholder} {focusOnMount} {selfId} />
     {:else if markdownEditorLoadError}
       <textarea use:autofocus class="code-input" bind:value rows="10" {placeholder} onkeydown={handleCodeKeydown}></textarea>
     {:else}
@@ -111,7 +132,7 @@
   {:else if editorMode === 'write'}
     <textarea use:autofocus class="code-input" bind:value rows="10" {placeholder} onkeydown={handleCodeKeydown}></textarea>
   {:else}
-    <div class="preview-wrap markdown-body">
+    <div class="preview-wrap markdown-body" use:liveItemLinks>
       {#if previewHtml}
         {@html previewHtml}
       {:else if value.trim()}
@@ -171,6 +192,21 @@
     border-color: var(--border);
     background: var(--surface-hover);
     color: var(--accent-text);
+  }
+
+  .tab.link-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-right: 0.5rem;
+    white-space: nowrap;
+  }
+
+  /* Phone width: the three tabs need the room; the icon carries it. */
+  @media (max-width: 480px) {
+    .link-item-label {
+      display: none;
+    }
   }
 
   .tab:disabled {

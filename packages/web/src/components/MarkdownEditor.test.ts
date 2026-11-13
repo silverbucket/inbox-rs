@@ -3,6 +3,7 @@
 import { Editor } from '@tiptap/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createMarkdownEditorExtensions } from '../lib/markdown-editor';
+import { items } from '../lib/stores';
 
 type MarkdownStorage = {
   markdown: { getMarkdown(): string };
@@ -59,5 +60,36 @@ describe('MarkdownEditor markdown compatibility', () => {
     const markdown = '- [x] done\n- [ ] pending';
 
     expect(roundTrip(markdown)).toBe('- \\[x\\] done\n- \\[ \\] pending');
+  });
+
+  it('keeps a link to another item as a plain markdown link', () => {
+    const markdown =
+      'See [Trip plan](#/item/abc-1) and [web](https://example.com)';
+
+    expect(roundTrip(markdown)).toBe(markdown);
+    // It is its own node (a chip), not an ordinary link mark.
+    expect(editor?.getJSON().content?.[0].content?.[1]).toEqual({
+      type: 'itemLink',
+      attrs: { id: 'abc-1', title: 'Trip plan' },
+    });
+  });
+
+  it("saves an item link with the target's current title", () => {
+    items.set({
+      'abc-1': {
+        id: 'abc-1',
+        type: 'note',
+        title: 'Trip plan (final)',
+        body: '',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    try {
+      expect(roundTrip('[Trip plan](#/item/abc-1)')).toBe(
+        '[Trip plan (final)](#/item/abc-1)',
+      );
+    } finally {
+      items.set({});
+    }
   });
 });

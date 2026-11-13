@@ -3,6 +3,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { common, createLowlight } from 'lowlight';
 import { Markdown } from 'tiptap-markdown';
 import { CodeBlockAutoIndent } from './tiptap-code-indent';
+import { ItemLink } from './tiptap-item-link';
 
 export function createMarkdownEditorExtensions() {
   return [
@@ -21,5 +22,6 @@ export function createMarkdownEditorExtensions() {
       transformPastedText: true,
     }),
     CodeBlockAutoIndent,
+    ItemLink,
   ];
 }

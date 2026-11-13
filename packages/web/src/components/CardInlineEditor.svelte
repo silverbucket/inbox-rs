@@ -341,6 +341,7 @@
       bind:value={draft.body}
       label={bodyLabel}
       placeholder={bodyPlaceholder}
+      selfId={item.id}
       onchange={scheduleSave}
     />
   {/if}

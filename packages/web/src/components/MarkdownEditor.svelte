@@ -3,17 +3,132 @@
   import { Editor } from '@tiptap/core';
   import Placeholder from '@tiptap/extension-placeholder';
   import 'highlight.js/styles/github-dark.min.css';
+  import type { InboxItem } from '@inbox-rs/rs-module';
+  import { itemLinkTitle, matchItemLinkTrigger } from '../lib/item-links';
+  import { kindOf } from '../lib/kinds';
   import { createMarkdownEditorExtensions } from '../lib/markdown-editor';
+  import { isTodoLike, parseQuery, searchItemsWithTerms } from '../lib/search';
+  import { collections, items } from '../lib/stores';
 
   let {
     value = $bindable(''),
     placeholder = 'Write your note...',
     focusOnMount = false,
+    selfId = undefined,
   }: {
     value: string;
     placeholder?: string;
     focusOnMount?: boolean;
+    /** The item being edited, left out of the item-link picker. */
+    selfId?: string;
   } = $props();
+
+  // ---- Item-link picker ----
+  // Typing `[[` opens a list of items; picking one replaces the `[[query`
+  // with a link to it (see lib/item-links.ts).
+  const PICKER_LIMIT = 8;
+  /** The `[[query` being typed: its document range and the query text. */
+  let trigger = $state<{ from: number; to: number; query: string } | null>(null);
+  let pickerIndex = $state(0);
+  let pickerPos = $state({ left: 0, top: 0, bottom: 0 });
+  // Where the user dismissed the picker with Escape; it stays closed until
+  // a new `[[` is typed somewhere else.
+  let dismissedFrom = -1;
+
+  const pickerItems = $derived.by((): InboxItem[] => {
+    if (!trigger) return [];
+    const all = Object.values($items).filter((item) => item.id !== selfId);
+    const terms = parseQuery(trigger.query);
+    if (terms.length === 0) {
+      // Nothing typed yet: offer the newest items.
+      return all
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, PICKER_LIMIT);
+    }
+    return searchItemsWithTerms(all, terms, $collections)
+      .slice(0, PICKER_LIMIT)
+      .map((result) => result.item);
+  });
+  const pickerOpen = $derived(trigger !== null && pickerItems.length > 0);
+
+  $effect(() => {
+    if (pickerIndex >= pickerItems.length) pickerIndex = 0;
+  });
+
+  function refreshTrigger(e: Editor) {
+    const { $from: cursor, empty } = e.state.selection;
+    const before =
+      empty && !cursor.parent.type.spec.code
+        ? cursor.parent.textBetween(0, cursor.parentOffset, undefined, '\ufffc')
+        : '';
+    const match = matchItemLinkTrigger(before);
+    if (!match) {
+      trigger = null;
+      dismissedFrom = -1;
+      return;
+    }
+    const from = cursor.pos - match.length;
+    if (from === dismissedFrom) {
+      trigger = null;
+      return;
+    }
+    if (trigger?.query !== match.query) pickerIndex = 0;
+    trigger = { from, to: cursor.pos, query: match.query };
+    const caret = e.view.coordsAtPos(cursor.pos);
+    pickerPos = { left: caret.left, top: caret.top, bottom: caret.bottom };
+  }
+
+  function pickItem(item: InboxItem) {
+    if (!editor || !trigger) return;
+    editor
+      .chain()
+      .focus()
+      .insertContentAt({ from: trigger.from, to: trigger.to }, [
+        { type: 'itemLink', attrs: { id: item.id, title: itemLinkTitle(item) } },
+        { type: 'text', text: ' ' },
+      ])
+      .run();
+    trigger = null;
+  }
+
+  /** Keys the picker takes over while it is open. */
+  function handlePickerKey(event: KeyboardEvent): boolean {
+    if (!pickerOpen || !trigger) return false;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      const step = event.key === 'ArrowDown' ? 1 : -1;
+      pickerIndex =
+        (pickerIndex + step + pickerItems.length) % pickerItems.length;
+    } else if (event.key === 'Enter' || event.key === 'Tab') {
+      pickItem(pickerItems[pickerIndex]);
+    } else if (event.key === 'Escape') {
+      dismissedFrom = trigger.from;
+      trigger = null;
+    } else {
+      return false;
+    }
+    // Escape must close only the picker, not the card around the editor.
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+
+  /** Start an item link at the cursor (the "Link item" button). */
+  export function linkItem() {
+    editor?.chain().focus().insertContent('[[').run();
+  }
+
+  // Keep the list on screen: below the caret, or above it near the bottom
+  // edge; clamped so it never runs off the right side.
+  const pickerStyle = $derived.by(() => {
+    const width = Math.min(340, window.innerWidth - 16);
+    const left = Math.max(8, Math.min(pickerPos.left, window.innerWidth - width - 8));
+    const below = window.innerHeight - pickerPos.bottom;
+    const vertical =
+      below < 280 && pickerPos.top > below
+        ? `bottom: ${window.innerHeight - pickerPos.top + 4}px`
+        : `top: ${pickerPos.bottom + 4}px`;
+    return `left: ${left}px; width: ${width}px; ${vertical};`;
+  });
 
   // Bound via `bind:this` below — populated after mount, so the type is
   // optional and `onMount` returns early if the bind hasn't resolved yet
@@ -37,10 +152,18 @@
       onUpdate: ({ editor: e }) => {
         value = (e.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown();
       },
+      onSelectionUpdate: ({ editor: e }) => refreshTrigger(e),
+      onTransaction: ({ editor: e, transaction }) => {
+        if (transaction.docChanged) refreshTrigger(e);
+      },
+      onBlur: () => {
+        trigger = null;
+      },
       editorProps: {
         attributes: {
           class: 'tiptap-editor',
         },
+        handleKeyDown: (_view, event) => handlePickerKey(event),
       },
     });
   });
@@ -64,6 +187,29 @@
 
 <div class="editor-container">
   <div class="tiptap-wrap" bind:this={editorElement}></div>
+  {#if pickerOpen}
+    <!-- Focus stays in the editor; the list is driven from its keydown. -->
+    <ul class="item-picker" role="listbox" aria-label="Link to an item" style={pickerStyle}>
+      {#each pickerItems as item, i (item.id)}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <li
+          role="option"
+          aria-selected={i === pickerIndex}
+          class:active={i === pickerIndex}
+          onmousedown={(e) => e.preventDefault()}
+          onmouseenter={() => (pickerIndex = i)}
+          onclick={() => pickItem(item)}
+        >
+          <span class="item-picker-title">{itemLinkTitle(item)}</span>
+          <span class="item-picker-meta">
+            {isTodoLike(item) ? 'Todo' : kindOf(item.type).label}{item.collectionId && $collections[item.collectionId]
+              ? ` · ${$collections[item.collectionId].name}`
+              : ''}
+          </span>
+        </li>
+      {/each}
+    </ul>
+  {/if}
 </div>
 
 <style>
@@ -72,6 +218,43 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+  }
+
+  .item-picker {
+    position: fixed;
+    z-index: 400;
+    max-height: 17rem;
+    margin: 0;
+    padding: 0.25rem;
+    overflow-y: auto;
+    list-style: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  }
+  .item-picker li {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.4rem 0.55rem;
+    border-radius: calc(var(--radius-sm) - 2px);
+    cursor: pointer;
+  }
+  .item-picker li.active {
+    background: var(--accent-subtle);
+  }
+  .item-picker-title {
+    overflow: hidden;
+    font-size: 0.88rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .item-picker-meta {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    font-size: 0.72rem;
   }
 
   .tiptap-wrap {

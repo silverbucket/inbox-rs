@@ -226,6 +226,16 @@ describe('search route', () => {
 });
 
 describe('group board route', () => {
+  it('round-trips #/item/:id', () => {
+    expect(parseHash('#/item/i1')).toEqual({ page: 'item', itemId: 'i1' });
+    expect(formatRoute({ page: 'item', itemId: 'a b' })).toBe('#/item/a%20b');
+    expect(parseHash('#/item/a%20b')).toEqual({ page: 'item', itemId: 'a b' });
+    // No id, or a mangled one, is just an unknown path.
+    expect(parseHash('#/item/').page).toBe('inbox');
+    expect(parseHash('#/item/%').page).toBe('inbox');
+    expect(formatRoute({ page: 'item' })).toBe('#/');
+  });
+
   it('parses #/group-board/:id', () => {
     expect(parseHash('#/group-board/g1')).toEqual({
       page: 'groupBoard',
