@@ -283,3 +283,92 @@ a.item-link.ProseMirror-selectednode {
   outline: 2px solid var(--accent-text);
   outline-offset: 1px;
 }
+
+/* The preview of a web link written alone on its line (lib/link-preview.ts).
+   Global because it appears in rendered markdown and in the visual editor. */
+a.link-preview {
+  display: flex;
+  align-items: stretch;
+  max-width: 34rem;
+  margin: 0.35rem 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-style: normal;
+  text-decoration: none;
+  cursor: pointer;
+}
+a.link-preview:hover {
+  border-color: var(--accent-text);
+  /* biome-ignore lint/complexity/noImportantStyles: Rendered text underlines its links on hover with a more specific rule; a card must not underline all of its text. */
+  text-decoration: none !important;
+}
+.link-preview-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  padding: 0.55rem 0.75rem;
+}
+.link-preview-site {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+.link-preview-favicon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+.link-preview-host,
+.link-preview-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.link-preview-title {
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.link-preview-desc {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.link-preview-image {
+  flex-shrink: 0;
+  width: 7rem;
+  min-height: 4.5rem;
+  max-height: 6.5rem;
+  object-fit: cover;
+  border-left: 1px solid var(--border);
+}
+@media (max-width: 480px) {
+  .link-preview-image {
+    width: 4.5rem;
+  }
+}
+/* In rendered text the card stands in for the address it previews; the line
+   break after it would only add a blank line under the card. */
+a[data-link-preview="shown"],
+a.link-preview + br {
+  display: none;
+}
+/* In the visual editor the address stays editable and the card sits under
+   its paragraph. */
+.link-preview-slot {
+  margin: -0.15rem 0 0.4rem;
+}

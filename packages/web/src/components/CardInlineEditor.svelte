@@ -342,6 +342,7 @@
       label={bodyLabel}
       placeholder={bodyPlaceholder}
       selfId={item.id}
+      linkPreviews={item.type !== 'email'}
       onchange={scheduleSave}
     />
   {/if}

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { TodoItem } from '@inbox-rs/rs-module';
   import 'highlight.js/styles/github-dark.min.css';
+  import { linkPreviews } from '../../lib/link-preview';
   import { renderMarkdown } from '../../lib/markdown';
 
   let { item, titleId }: { item: TodoItem; titleId: string } = $props();
@@ -26,7 +27,7 @@
   <div class="content-block">
     <span class="content-label">Body</span>
     {#if renderedBody}
-      <div class="markdown-body">{@html renderedBody}</div>
+      <div class="markdown-body" use:linkPreviews>{@html renderedBody}</div>
     {:else}
       <p class="content-text">{item.body}</p>
     {/if}

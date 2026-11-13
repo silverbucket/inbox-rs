@@ -8,6 +8,7 @@
   } from '../../lib/add-entry-modal';
   import { createCodeKeydownHandler } from '../../lib/code-indent';
   import { liveItemLinks } from '../../lib/item-link-live';
+  import { linkPreviews } from '../../lib/link-preview';
   import { renderMarkdown } from '../../lib/markdown';
 
   let {
@@ -16,6 +17,7 @@
     placeholder = 'Write your note...',
     focusOnMount = false,
     selfId = undefined,
+    linkPreviews: showLinkPreviews = true,
     onchange = undefined,
   }: {
     value?: string;
@@ -24,6 +26,8 @@
     focusOnMount?: boolean;
     /** The item being edited, left out of the item-link picker. */
     selfId?: string;
+    /** Show preview cards for web links alone on a line (not for emails). */
+    linkPreviews?: boolean;
     onchange?: () => void;
   } = $props();
 
@@ -123,7 +127,7 @@
   </div>
   {#if editorMode === 'visual'}
     {#if MarkdownEditorComponent}
-      <MarkdownEditorComponent bind:this={markdownEditor} bind:value {placeholder} {focusOnMount} {selfId} />
+      <MarkdownEditorComponent bind:this={markdownEditor} bind:value {placeholder} {focusOnMount} {selfId} linkPreviews={showLinkPreviews} />
     {:else if markdownEditorLoadError}
       <textarea use:autofocus class="code-input" bind:value rows="10" {placeholder} onkeydown={handleCodeKeydown}></textarea>
     {:else}
@@ -132,7 +136,7 @@
   {:else if editorMode === 'write'}
     <textarea use:autofocus class="code-input" bind:value rows="10" {placeholder} onkeydown={handleCodeKeydown}></textarea>
   {:else}
-    <div class="preview-wrap markdown-body" use:liveItemLinks>
+    <div class="preview-wrap markdown-body" use:liveItemLinks use:linkPreviews={showLinkPreviews}>
       {#if previewHtml}
         {@html previewHtml}
       {:else if value.trim()}
