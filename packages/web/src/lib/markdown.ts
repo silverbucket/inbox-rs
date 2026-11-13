@@ -35,6 +35,8 @@ const MARKDOWN_SANITIZE_OPTIONS = {
     'base',
   ],
   FORBID_ATTR: ['style'],
+  // DOMPurify drops `target` by default; web links carry it (see below).
+  ADD_ATTR: ['target'],
 } satisfies DOMPurifyConfig;
 
 export const langModules: Record<
@@ -130,12 +132,19 @@ export async function renderMarkdown(source: string): Promise<string> {
     // step with the target's title (see lib/item-link-live.ts).
     link(
       this: { parser: { parseInline(tokens: Tokens.Generic[]): string } },
-      { href, tokens }: Tokens.Link,
+      { href, title, tokens }: Tokens.Link,
     ) {
       const id = itemIdFromHref(href);
-      if (!id) return false;
-      const attr = id.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-      return `<a class="item-link" data-item-id="${attr}" href="${itemHref(id)}">${this.parser.parseInline(tokens)}</a>`;
+      const attr = (value: string) =>
+        value.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+      if (id) {
+        return `<a class="item-link" data-item-id="${attr(id)}" href="${itemHref(id)}">${this.parser.parseInline(tokens)}</a>`;
+      }
+      // A web link opens in a new tab, so following it never replaces the
+      // app (and a half-written entry with it).
+      if (!/^https?:\/\//i.test(href)) return false;
+      const titleAttr = title ? ` title="${attr(title)}"` : '';
+      return `<a href="${attr(href)}"${titleAttr} target="_blank" rel="noopener noreferrer">${this.parser.parseInline(tokens)}</a>`;
     },
   };
 

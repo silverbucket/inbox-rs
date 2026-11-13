@@ -94,6 +94,7 @@ export type MarkdownEditorProps = {
   placeholder?: string;
   focusOnMount?: boolean;
   selfId?: string;
+  linkPreviews?: boolean;
 };
 
 /** What `bind:this` on the MarkdownEditor exposes. */

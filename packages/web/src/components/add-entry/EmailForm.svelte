@@ -52,7 +52,7 @@
   <span>From</span>
   <input type="text" bind:value={from} placeholder="Sender" />
 </label>
-<MarkdownContentField bind:value={body} label="Body *" placeholder="Email body..." />
+<MarkdownContentField bind:value={body} label="Body *" placeholder="Email body..." linkPreviews={false} />
 <label class="field">
   <span>Notes</span>
   <textarea bind:value={notes} rows="2" placeholder="Optional notes..."

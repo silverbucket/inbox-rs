@@ -15,12 +15,19 @@
     placeholder = 'Write your note...',
     focusOnMount = false,
     selfId = undefined,
+    linkPreviews = true,
   }: {
     value: string;
     placeholder?: string;
     focusOnMount?: boolean;
     /** The item being edited, left out of the item-link picker. */
     selfId?: string;
+    /**
+     * Show a preview card under a web address alone on its line. Off for
+     * saved emails, whose links (unsubscribe, confirm) must never be
+     * visited on the reader's behalf.
+     */
+    linkPreviews?: boolean;
   } = $props();
 
   // ---- Item-link picker ----
@@ -142,7 +149,7 @@
     editor = new Editor({
       element: editorElement,
       extensions: [
-        ...createMarkdownEditorExtensions(),
+        ...createMarkdownEditorExtensions({ linkPreviews }),
         Placeholder.configure({
           placeholder,
         }),

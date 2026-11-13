@@ -17,6 +17,7 @@
     userSettings,
   } from '../../lib/stores';
   import { liveItemLinks } from '../../lib/item-link-live';
+  import { linkPreviews } from '../../lib/link-preview';
   import { renderMarkdown } from '../../lib/markdown';
   import Lightbox from '../Lightbox.svelte';
 
@@ -295,7 +296,7 @@
     <span class="content-label">Notes</span>
     {#if renderedBody}
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-      <div class="markdown-body" use:liveItemLinks>{@html renderedBody}</div>
+      <div class="markdown-body" use:liveItemLinks use:linkPreviews>{@html renderedBody}</div>
     {:else}
       <p class="content-text">{item.body}</p>
     {/if}

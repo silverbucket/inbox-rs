@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { NoteItem } from '@inbox-rs/rs-module';
   import 'highlight.js/styles/github-dark.min.css';
+  import { linkPreviews } from '../../lib/link-preview';
   import { renderMarkdown } from '../../lib/markdown';
 
   let { item, titleId }: { item: NoteItem; titleId: string } = $props();
@@ -28,7 +29,7 @@
     <span class="content-label">Body</span>
     {#if renderedBody}
       <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-      <div class="markdown-body">{@html renderedBody}</div>
+      <div class="markdown-body" use:linkPreviews>{@html renderedBody}</div>
     {:else}
       <p class="content-text">{item.body}</p>
     {/if}

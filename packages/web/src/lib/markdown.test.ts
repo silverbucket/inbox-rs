@@ -37,7 +37,9 @@ describe('renderMarkdown', () => {
     expect(html).not.toContain('<form');
     expect(html).not.toContain('<input');
     expect(html).not.toContain('style=');
-    expect(html).toContain('<a href="https://example.com">safe</a>');
+    expect(html).toContain(
+      '<a href="https://example.com" target="_blank" rel="noopener noreferrer">safe</a>',
+    );
   });
 
   it('preserves highlighted code block classes for safe markdown output', async () => {
@@ -67,6 +69,18 @@ describe('renderMarkdown', () => {
     expect(html).toContain(
       '<a class="item-link" data-item-id="abc-1" href="#/item/abc-1">Trip <strong>plan</strong></a>',
     );
-    expect(html).toContain('<a href="https://example.com/#/item/x">site</a>');
+    expect(html).toContain(
+      '<a href="https://example.com/#/item/x" target="_blank" rel="noopener noreferrer">site</a>',
+    );
+  });
+
+  it('opens web links in a new tab, written out or bare', async () => {
+    const html = await renderMarkdown(
+      'https://example.com/a?b=1&c=2 and [mail](mailto:sam@example.com)',
+    );
+    expect(html).toContain(
+      '<a href="https://example.com/a?b=1&amp;c=2" target="_blank" rel="noopener noreferrer">https://example.com/a?b=1&amp;c=2</a>',
+    );
+    expect(html).toContain('<a href="mailto:sam@example.com">mail</a>');
   });
 });
