@@ -695,6 +695,27 @@ describe('refreshBookmark keeping the image', () => {
     warn.mockRestore();
   });
 
+  it('removes a replaced share card before storing the new image on its path', async () => {
+    const item = bookmark({
+      ogImage: 'https://share.redd.it/preview/post/abc',
+      filePath: 'files/b1.jpg',
+      mimeType: 'image/jpeg',
+    });
+    itemsMap[item.id] = item;
+    fetchLinkMetadata.mockResolvedValue({ image: 'https://cdn/real' });
+    canDownloadImages.mockResolvedValue(true);
+    downloadLinkImage.mockResolvedValue(downloaded());
+
+    await refreshBookmark(item);
+
+    expect((itemsMap[item.id] as BookmarkItem).filePath).toBe('files/b1.jpg');
+    expect(removeFile).toHaveBeenCalledTimes(1);
+    const storedWithFile = storeItem.mock.calls.findIndex((call) => call[1]);
+    expect(removeFile.mock.invocationCallOrder[0]).toBeLessThan(
+      storeItem.mock.invocationCallOrder[storedWithFile],
+    );
+  });
+
   it('gives an older bookmark its copy even when nothing else is new', async () => {
     const item = bookmark({
       title: 'Done',

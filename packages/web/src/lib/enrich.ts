@@ -247,6 +247,11 @@ export async function refreshBookmark(
     latest.ogImage !== meta.image
       ? meta.image
       : undefined;
+  // The local copy of a replaced share card is now unreferenced. It goes
+  // before the new image is stored, which may land on the same path.
+  if (updated && before?.filePath && !updated.filePath) {
+    await removeFile(before.filePath);
+  }
   // Runs even when the page had nothing new: a bookmark saved before
   // images were kept gets its copy the next time its preview is fetched.
   // Best effort, as a preview must not fail because its image did.
@@ -256,8 +261,6 @@ export async function refreshBookmark(
     });
   }
   if (!updated) return { status: 'none', image };
-  // The local copy of a replaced share card is now unreferenced.
-  if (before?.filePath && !updated.filePath) void removeFile(before.filePath);
   // Background enrichment is otherwise silent; a date appearing on its own
   // would read as a glitch.
   if (updated.startsAt && !before?.startsAt) {
