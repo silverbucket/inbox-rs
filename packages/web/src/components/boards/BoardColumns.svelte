@@ -358,7 +358,10 @@
   .board {
     display: flex;
     gap: 0.85rem;
-    align-items: flex-start;
+    /* Every column runs as tall as the longest one, so a card dragged from
+       the bottom of a long column can drop into a short one right beside it
+       instead of being carried back up to that column's last card. */
+    align-items: stretch;
     overflow-x: auto;
     padding-bottom: 0.75rem;
     scroll-snap-type: x proximity;
