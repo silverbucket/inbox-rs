@@ -321,6 +321,64 @@ test('a complete preview can be re-fetched, and a different image is only used w
   assertNoConsoleErrors(log);
 });
 
+test('a card whose saved image is dead shows the replacement as soon as it is chosen', async ({
+  context,
+  freshRsUser,
+  freshRsToken,
+  webOrigin,
+}) => {
+  const url = 'https://example.net/post/2';
+  const dead = 'https://example.net/gone.png';
+  const fresh = 'https://example.net/real-photo.png';
+  await putInboxItem(freshRsUser, freshRsToken, {
+    item: {
+      id: 'dead-image',
+      type: 'bookmark',
+      title: 'A post whose card image went away',
+      url,
+      description: 'Saved while the image still existed.',
+      siteName: 'Example',
+      ogImage: dead,
+      createdAt: new Date().toISOString(),
+    },
+  });
+  const page = await freshConnectedPage({
+    context,
+    freshRsUser,
+    freshRsToken,
+    webOrigin,
+  });
+  await page.route(SOCKETHUB_GLOB, (route) =>
+    route.fulfill(
+      metadataResult(url, {
+        type: 'page',
+        title: 'The page’s own title',
+        image: [{ url: fresh }],
+        url,
+      }),
+    ),
+  );
+  await page.route(dead, (route) => route.abort());
+  await page.route(fresh, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: PNG }),
+  );
+
+  await page.goto(webOrigin);
+  const card = page.locator('[data-item-id="dead-image"]');
+  await expect(card).toBeVisible({ timeout: 10_000 });
+  // The dead image has been tried and given up on before the swap.
+  await expect(card.locator('img.og-image:visible')).toHaveCount(0);
+
+  await card.locator('.card-select').press('Enter');
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Refresh preview' }).click();
+  await dialog.getByRole('button', { name: 'Use new image' }).click();
+  await expect(dialog.locator(`img.view-image[src="${fresh}"]`)).toBeVisible();
+
+  // The card behind the dialog picks it up too, with no reload.
+  await expect(card.locator(`img.og-image[src="${fresh}"]`)).toBeVisible();
+});
+
 test('re-fetching a dead link changes nothing', async ({
   context,
   freshRsUser,
