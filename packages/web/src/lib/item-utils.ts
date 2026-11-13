@@ -1,4 +1,5 @@
 import type { InboxItem, InboxItemType } from '@inbox-rs/rs-module';
+import { linkNote } from './link-note';
 import { storeItem } from './stores';
 
 /**
@@ -66,6 +67,8 @@ export function todoNote(item: InboxItem): string | null {
   // sprinkling `any` through the lookups.
   const r = item as unknown as Record<string, unknown>;
   const notes =
+    // A link's own note beats the page's description, as on its card.
+    linkNote(item) ||
     ('notes' in item ? (r.notes as string | undefined) : null) ||
     item.description ||
     ('body' in item ? (r.body as string | undefined) : null);

@@ -7,6 +7,7 @@
   import { columnSets } from '../../lib/board-actions';
   import { columnOf } from '../../lib/boards';
   import { kindOf } from '../../lib/kinds';
+  import { linkNote } from '../../lib/link-note';
   import { now } from '../../lib/now';
   import { setItemCompleted } from '../../lib/schedule-sync';
   import { showToast } from '../../lib/toast';
@@ -40,6 +41,7 @@
     {#each items as item (item.id)}
       {@const kind = kindOf(item.type)}
       {@const column = set ? set.columns.find((c) => c.id === columnOf(item, set)) : undefined}
+      {@const note = linkNote(item)}
       <li class="row" class:completed={isTodo(item) && item.completed}>
         {#if isTodo(item) && !item.archived}
           <button
@@ -54,8 +56,11 @@
           <span class="glyph" style="--kc: {kind.color}" aria-hidden="true">{kind.label[0]}</span>
         {/if}
         <button type="button" class="open" onclick={() => onselect(item)}>
-          <span class="title">{item.title || 'Untitled'}</span>
-          <span class="kind">{isTodo(item) ? 'Todo' : kind.label}</span>
+          <span class="head">
+            <span class="title">{item.title || 'Untitled'}</span>
+            <span class="kind">{isTodo(item) ? 'Todo' : kind.label}</span>
+          </span>
+          {#if note}<span class="note">{note}</span>{/if}
         </button>
         {#if column}
           <span class="col"><span class="sw" style="background: {column.color}"></span>{column.name}</span>
@@ -125,8 +130,7 @@
     flex: 1;
     min-width: 0;
     display: flex;
-    align-items: baseline;
-    gap: 0.6rem;
+    flex-direction: column;
     padding: 0;
     border: 0;
     background: none;
@@ -143,6 +147,22 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
+  }
+
+  .head {
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+  }
+
+  /* A link's own note: one quiet line under its title. */
+  .note {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .kind,

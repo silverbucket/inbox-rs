@@ -185,6 +185,19 @@ describe('todoNote', () => {
     expect(todoNote(item)).toBeNull();
   });
 
+  it("prefers a link's own note over the page's description", () => {
+    const item: InboxItem = {
+      id: 'bm-1',
+      type: 'bookmark',
+      title: 'Link',
+      url: 'https://example.com',
+      description: 'The page describing itself',
+      body: '**Ask Sam** about this\nmore',
+      createdAt: '2026-04-01T00:00:00.000Z',
+    };
+    expect(todoNote(item)).toBe('Ask Sam about this');
+  });
+
   it('prefers the notes field over body', () => {
     // EmailItem carries both `notes` and `body`; the lookup chain is
     // notes → description → body, so notes must win.
