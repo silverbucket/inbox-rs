@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  canDownloadImages,
   DEFAULT_SOCKETHUB_ENDPOINT,
   fetchLinkMetadata,
   fetchSockethubInfo,
@@ -332,5 +333,49 @@ describe('fetchLinkMetadata', () => {
   it('resolves null on an empty response body', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ndjsonResponse([])));
     await expect(fetchLinkMetadata('https://x')).resolves.toBeNull();
+  });
+});
+
+describe('canDownloadImages', () => {
+  const info = (ids: string[]) => ({
+    ok: true,
+    json: () =>
+      Promise.resolve({
+        name: 'sockethub',
+        apiVersion: 5,
+        platforms: ids.map((id) => ({ id, apiVersion: 1 })),
+      }),
+  });
+
+  it('asks a server once and remembers what it reports', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(info(['metadata', 'media']));
+    vi.stubGlobal('fetch', fetchMock);
+    const endpoint = 'https://with-media.example/sockethub-http';
+    await expect(canDownloadImages(endpoint)).resolves.toBe(true);
+    await expect(canDownloadImages(endpoint)).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('remembers a server that reports no media platform', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(info(['metadata']));
+    vi.stubGlobal('fetch', fetchMock);
+    const endpoint = 'https://no-media.example/sockethub-http';
+    await expect(canDownloadImages(endpoint)).resolves.toBe(false);
+    await expect(canDownloadImages(endpoint)).resolves.toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks again after an error status or a network failure', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValue(info(['media']));
+    vi.stubGlobal('fetch', fetchMock);
+    const endpoint = 'https://recovering.example/sockethub-http';
+    await expect(canDownloadImages(endpoint)).resolves.toBe(false);
+    await expect(canDownloadImages(endpoint)).resolves.toBe(false);
+    await expect(canDownloadImages(endpoint)).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });

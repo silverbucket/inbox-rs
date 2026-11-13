@@ -47,17 +47,24 @@ const imageDownloadSupport = new Map<string, Promise<boolean>>();
 
 /**
  * Whether this Sockethub server offers image downloads (its `media`
- * platform), asked once per endpoint. An unreachable server is asked again
- * next time, since that says nothing about what it offers.
+ * platform), asked once per endpoint. A server that is unreachable or
+ * gives no usable answer is asked again next time, since that says nothing
+ * about what it offers.
  */
 export function canDownloadImages(
   endpoint: string = DEFAULT_SOCKETHUB_ENDPOINT,
 ): Promise<boolean> {
   let support = imageDownloadSupport.get(endpoint);
   if (!support) {
-    support = fetchSockethubInfo(endpoint).then(supportsImageDownload);
+    const forget = () => imageDownloadSupport.delete(endpoint);
+    support = fetchSockethubInfo(endpoint).then((info) => {
+      // No usable answer (an error status, not a Sockethub reply) is not a
+      // "no": only what the server actually reports is remembered.
+      if (!info) forget();
+      return supportsImageDownload(info);
+    });
     imageDownloadSupport.set(endpoint, support);
-    support.catch(() => imageDownloadSupport.delete(endpoint));
+    support.catch(forget);
   }
   return support.catch(() => false);
 }

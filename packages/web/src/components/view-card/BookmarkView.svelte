@@ -143,6 +143,9 @@
     // Load from the remote when connected, otherwise the local cache, so
     // offline-captured files still render; retries on reconnect.
     void $connected;
+    // Read this path's URL so the effect also reruns when the blob cache
+    // evicts it: a stored copy has no remote fallback to show meanwhile.
+    void (item.filePath && $blobUrls[item.filePath]);
     if (item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
   });
 </script>
