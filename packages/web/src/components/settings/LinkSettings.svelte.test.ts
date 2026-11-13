@@ -3,7 +3,8 @@ import type { BookmarkItem } from '@inbox-rs/rs-module';
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { enrichAllBookmarks, showToast } = vi.hoisted(() => ({
+const { canDownloadImages, enrichAllBookmarks, showToast } = vi.hoisted(() => ({
+  canDownloadImages: vi.fn(),
   enrichAllBookmarks: vi.fn(),
   showToast: vi.fn(),
 }));
@@ -14,6 +15,10 @@ vi.mock('../../lib/enrich', async (importOriginal) => ({
   enrichAllBookmarks,
 }));
 vi.mock('../../lib/toast', () => ({ showToast }));
+vi.mock('../../lib/link-metadata', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/link-metadata')>()),
+  canDownloadImages,
+}));
 vi.mock('../../lib/stores', async () => {
   const { writable } = await import('svelte/store');
   return {
@@ -25,7 +30,7 @@ vi.mock('../../lib/stores', async () => {
 });
 
 import type { Writable } from 'svelte/store';
-import { items } from '../../lib/stores';
+import { items, updateUserSettings } from '../../lib/stores';
 import LinkSettings from './LinkSettings.svelte';
 
 function bookmark(
@@ -48,6 +53,7 @@ describe('LinkSettings bulk fetch toast', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    canDownloadImages.mockResolvedValue(true);
     writeText.mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -74,6 +80,43 @@ describe('LinkSettings bulk fetch toast', () => {
 
   const fetchButton = () =>
     host.querySelector('button.btn:not(.secondary)') as HTMLButtonElement;
+
+  const keepSwitch = () =>
+    host.querySelector(
+      'button[aria-label="Keep a copy of preview images"]',
+    ) as HTMLButtonElement;
+
+  it('keeps image copies by default and lets you turn them off', async () => {
+    render();
+    await vi.waitFor(() => expect(canDownloadImages).toHaveBeenCalled());
+    flushSync();
+    expect(keepSwitch().getAttribute('aria-pressed')).toBe('true');
+
+    keepSwitch().click();
+    flushSync();
+
+    expect(keepSwitch().getAttribute('aria-pressed')).toBe('false');
+    expect(localStorage.getItem('inbox-rs:keep-link-images')).toBe('false');
+    expect(updateUserSettings).toHaveBeenCalledWith({ keepLinkImages: false });
+
+    keepSwitch().click();
+    flushSync();
+    expect(keepSwitch().getAttribute('aria-pressed')).toBe('true');
+    expect(updateUserSettings).toHaveBeenLastCalledWith({
+      keepLinkImages: undefined,
+    });
+  });
+
+  it('shows image copies as unavailable when the service cannot download images', async () => {
+    canDownloadImages.mockResolvedValue(false);
+    render();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(keepSwitch().disabled).toBe(true);
+    });
+    expect(keepSwitch().getAttribute('aria-pressed')).toBe('false');
+    expect(host.textContent).toContain('Not available');
+  });
 
   it('counts link-only notes among the previews still to fetch', () => {
     (items as Writable<Record<string, unknown>>).set({

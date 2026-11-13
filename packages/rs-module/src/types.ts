@@ -173,6 +173,9 @@ export interface UserSettings {
   /** Fetch link metadata (title/description/preview image) for bookmarks.
    *  Undefined means enabled. */
   linkPreviews?: boolean;
+  /** Store a copy of each saved link's preview image next to it, so the
+   *  image outlives its original host. Undefined means enabled. */
+  keepLinkImages?: boolean;
   /** Sockethub HTTP actions endpoint used for link-metadata fetching.
    *  Undefined/empty means the app's default server. */
   sockethubUrl?: string;

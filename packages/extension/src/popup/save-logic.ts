@@ -153,7 +153,18 @@ export async function saveAsBookmark(
   let filePath: string | undefined;
   let mimeType: string | undefined;
 
+  // The user can turn image copies off (Settings → Links in the web app),
+  // to show images from their site and spend no storage on them.
+  let keepImages = true;
   if (imageToSave) {
+    try {
+      keepImages = (await rs.getUserSettings()).keepLinkImages !== false;
+    } catch {
+      // Settings unreadable: keep the default.
+    }
+  }
+
+  if (imageToSave && keepImages) {
     const guessedExt =
       imageToSave.match(/\.(png|jpg|jpeg|gif|webp|avif)/i)?.[1] || 'jpg';
     const candidatePath = `files/${id}.${guessedExt}`;
@@ -184,7 +195,13 @@ export async function saveAsBookmark(
     ...(pageDescription ? { description: pageDescription } : {}),
     ...(body ? { body } : {}),
     ...(filePath ? { filePath, mimeType } : {}),
-    ...(isUsefulOgImage ? { ogImage } : {}),
+    // A tweet's photo is not its og:image, so without a stored copy the
+    // photo's own URL is what the card shows.
+    ...(!keepImages && imageToSave
+      ? { ogImage: imageToSave }
+      : isUsefulOgImage
+        ? { ogImage }
+        : {}),
     ...(favicon ? { favicon } : {}),
     ...(siteName ? { siteName } : {}),
   };
