@@ -15,6 +15,7 @@ import {
   type BookmarkItem,
   eventSchedule,
   type InboxItem,
+  imageExtension,
   isPlaceholderImage,
   type NoteItem,
   truncateTitle,
@@ -22,7 +23,9 @@ import {
 import { get, writable } from 'svelte/store';
 import { bookmarkUrlFromNoteBody } from './capture-detect';
 import {
+  canDownloadImages,
   DEFAULT_SOCKETHUB_ENDPOINT,
+  downloadLinkImage,
   fetchLinkMetadata,
   type LinkMetadata,
 } from './link-metadata';
@@ -244,6 +247,14 @@ export async function refreshBookmark(
     latest.ogImage !== meta.image
       ? meta.image
       : undefined;
+  // Runs even when the page had nothing new: a bookmark saved before
+  // images were kept gets its copy the next time its preview is fetched.
+  // Best effort, as a preview must not fail because its image did.
+  if (latest) {
+    await keepBookmarkImage(latest).catch((e) => {
+      console.warn('Saving the preview image failed:', latest.url, e);
+    });
+  }
   if (!updated) return { status: 'none', image };
   // The local copy of a replaced share card is now unreferenced.
   if (before?.filePath && !updated.filePath) void removeFile(before.filePath);
@@ -270,27 +281,95 @@ export async function enrichBookmark(
   return status === 'updated' ? 'updated' : 'none';
 }
 
+/** Where a bookmark's own copy of its preview image is stored. */
+function localImagePath(id: string, mimeType: string): string | null {
+  const ext = imageExtension(mimeType);
+  return ext ? `files/${id}.${ext}` : null;
+}
+
+/** Download an image for a bookmark, or null when this server can't. */
+async function downloadBookmarkImage(item: BookmarkItem, image: string) {
+  const endpoint = resolveSockethubEndpoint();
+  if (!(await canDownloadImages(endpoint))) return null;
+  const file = await downloadLinkImage(item.url, image, endpoint);
+  const filePath = localImagePath(item.id, file.mimeType);
+  return filePath
+    ? { filePath, mimeType: file.mimeType, data: file.data }
+    : null;
+}
+
 /**
- * Swap a bookmark's preview image for one the user picked after a refresh,
- * dropping the local copy of the old one. False when the bookmark changed
- * or vanished meanwhile.
+ * Store the bookmark's preview image next to it, so the card keeps its
+ * image after the page or its image host is gone. True when a copy was
+ * stored; false when there is nothing to copy, a copy already exists, the
+ * server can't download images, or the bookmark changed meanwhile. Rejects
+ * when the download itself failed.
+ */
+export async function keepBookmarkImage(item: BookmarkItem): Promise<boolean> {
+  const image = item.ogImage;
+  if (!image || item.filePath || isPlaceholderImage(image)) return false;
+  const file = await downloadBookmarkImage(item, image);
+  if (!file) return false;
+  const updated = await updateItem(
+    item.id,
+    (current) =>
+      current?.type === 'bookmark' &&
+      current.url === item.url &&
+      current.ogImage === image &&
+      !current.filePath
+        ? { ...current, filePath: file.filePath, mimeType: file.mimeType }
+        : null,
+    file.data,
+  );
+  return !!updated;
+}
+
+/**
+ * Swap a bookmark's preview image for one the user picked after a refresh.
+ * The new image is downloaded first and stored as the bookmark's own copy.
+ * A bookmark that already has a local copy never trades it for a remote
+ * link: when the new image can't be downloaded the saved one stays and the
+ * result is 'kept'. 'gone' when the bookmark changed or vanished meanwhile.
  */
 export async function replaceBookmarkImage(
   item: BookmarkItem,
   image: string,
-): Promise<boolean> {
-  let oldFile: string | undefined;
-  const updated = await updateItem(item.id, (current) => {
-    if (!current || current.type !== 'bookmark' || current.url !== item.url) {
-      return null;
-    }
-    oldFile = current.filePath;
-    const { filePath: _filePath, mimeType: _mimeType, ...rest } = current;
-    return { ...rest, ogImage: image };
+): Promise<'replaced' | 'kept' | 'gone'> {
+  const file = await downloadBookmarkImage(item, image).catch((e) => {
+    console.warn('Downloading the new preview image failed:', image, e);
+    return null;
   });
-  if (!updated) return false;
-  if (oldFile) void removeFile(oldFile);
-  return true;
+  let oldFile: string | undefined;
+  let kept = false;
+  const updated = await updateItem(
+    item.id,
+    (current) => {
+      if (!current || current.type !== 'bookmark' || current.url !== item.url) {
+        return null;
+      }
+      const { filePath, mimeType: _mimeType, ...rest } = current;
+      if (!file && filePath) {
+        kept = true;
+        return null;
+      }
+      oldFile = filePath;
+      return file
+        ? {
+            ...rest,
+            ogImage: image,
+            filePath: file.filePath,
+            mimeType: file.mimeType,
+          }
+        : { ...rest, ogImage: image };
+    },
+    file?.data,
+  );
+  if (kept) return 'kept';
+  if (!updated) return 'gone';
+  if (oldFile && oldFile !== (updated as BookmarkItem).filePath) {
+    void removeFile(oldFile);
+  }
+  return 'replaced';
 }
 
 export interface BulkEnrichProgress {

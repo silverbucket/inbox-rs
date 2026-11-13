@@ -1,7 +1,8 @@
 <script lang="ts">
   import { inview } from '../lib/actions';
   import type { BookmarkItem } from '@inbox-rs/rs-module';
-  import { blobUrls, connected, loadFileBlobUrl } from '../lib/stores';
+  import { bookmarkImageSrc } from '../lib/item-utils';
+  import { blobLoadFailures, blobUrls, connected, loadFileBlobUrl } from '../lib/stores';
   import Lightbox from './Lightbox.svelte';
 
   let { item }: { item: BookmarkItem } = $props();
@@ -15,8 +16,7 @@
   let failedSrc = $state('');
 
   const imageSrc = $derived.by(() => {
-    const src =
-      (item.filePath ? ($blobUrls[item.filePath] || null) : null) || item.ogImage || null;
+    const src = bookmarkImageSrc(item, $blobUrls, $blobLoadFailures);
     return src === failedSrc ? null : src;
   });
 

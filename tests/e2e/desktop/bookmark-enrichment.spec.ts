@@ -18,7 +18,11 @@
  */
 
 import type { Page } from '@playwright/test';
-import { putInboxItem } from '../helpers/armadietto';
+import {
+  getInboxItems,
+  putInboxFile,
+  putInboxItem,
+} from '../helpers/armadietto';
 import { expect, test } from '../helpers/fixtures';
 import {
   assertNoConsoleErrors,
@@ -477,4 +481,221 @@ test('the incomplete-title hint fetches the title instead of opening the card', 
     0,
   );
   await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+/**
+ * A Sockethub that also offers the `media` platform: the info request lists
+ * it, `fetch` answers with the page's metadata and `download` with
+ * `downloadReply`. Returns the `download` requests it received.
+ */
+async function routeSockethubWithMedia(
+  page: Page,
+  url: string,
+  image: string,
+  downloadReply: Record<string, unknown>,
+): Promise<Array<Record<string, unknown>>> {
+  const downloads: Array<Record<string, unknown>> = [];
+  await page.route(SOCKETHUB_GLOB, (route) => {
+    const request = route.request();
+    if (request.method() === 'GET') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          name: 'sockethub',
+          apiVersion: 5,
+          platforms: [
+            { id: 'media', apiVersion: 1 },
+            { id: 'metadata', apiVersion: 1 },
+          ],
+        }),
+      });
+    }
+    const action = request.postDataJSON() as Record<string, unknown>;
+    if (action.type === 'download') {
+      downloads.push(action);
+      return route.fulfill(ndjson([{ ...action, ...downloadReply }]));
+    }
+    return route.fulfill(
+      metadataResult(url, {
+        type: 'page',
+        title: 'A page with a picture',
+        name: 'Example',
+        description: 'Saved with its picture',
+        image: [{ url: image }],
+        url,
+      }),
+    );
+  });
+  return downloads;
+}
+
+async function serverFile(
+  username: string,
+  token: string,
+  path: string,
+): Promise<Response> {
+  return fetch(`http://localhost:8000/storage/${username}/inbox/${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+test('a captured link keeps its own copy of the preview image, which outlives the original', async ({
+  context,
+  freshRsUser,
+  freshRsToken,
+  webOrigin,
+}) => {
+  const page = await freshConnectedPage({
+    context,
+    freshRsUser,
+    freshRsToken,
+    webOrigin,
+  });
+  const log = attachConsoleCapture(page);
+  const url = 'https://example.com/with-picture';
+  const image = 'https://cdn.example.com/hero';
+  const downloads = await routeSockethubWithMedia(page, url, image, {
+    object: {
+      type: 'image',
+      url: image,
+      mediaType: 'image/png',
+      size: PNG.byteLength,
+      data: PNG.toString('base64'),
+    },
+  });
+  // The image host sends no CORS headers, as most do: the page can show
+  // the image but could never read its bytes itself.
+  await page.route(image, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: PNG }),
+  );
+
+  await page.goto(webOrigin);
+  await page.waitForLoadState('networkidle');
+  await page
+    .getByRole('button', { name: 'Inbox', exact: true })
+    .first()
+    .click();
+  const input = page.getByPlaceholder(
+    'Paste a link, jot a note, or drop a file…',
+  );
+  await input.click();
+  await input.fill(url);
+  await input.press('Enter');
+
+  // The card ends up showing its own stored copy, not the remote URL.
+  const card = page.locator('article.card', {
+    has: page.getByRole('link', { name: 'A page with a picture' }),
+  });
+  await expect(card.locator('img.og-image[src^="blob:"]')).toBeVisible({
+    timeout: 15_000,
+  });
+  expect(downloads).toHaveLength(1);
+  expect(downloads[0]).toMatchObject({
+    actor: { id: url, type: 'website' },
+    object: { type: 'image', url: image },
+  });
+
+  // The copy reached the server, next to the item that points at it.
+  let stored: Record<string, unknown> | undefined;
+  await expect
+    .poll(async () => {
+      const items = await getInboxItems(freshRsUser, freshRsToken);
+      stored = items.find((item) => (item as { url?: string }).url === url) as
+        | Record<string, unknown>
+        | undefined;
+      return stored?.filePath;
+    })
+    .toBeTruthy();
+  expect(stored?.filePath).toBe(`files/${stored?.id}.png`);
+  expect(stored).toMatchObject({ mimeType: 'image/png', ogImage: image });
+  const file = await serverFile(
+    freshRsUser.username,
+    freshRsToken,
+    stored?.filePath as string,
+  );
+  expect(file.status).toBe(200);
+  expect(Buffer.from(await file.arrayBuffer()).equals(PNG)).toBe(true);
+
+  // The original goes away. After a reload the card still has its image.
+  await page.unroute(image);
+  await page.route(image, (route) => route.abort());
+  await page.reload();
+  const reloaded = page.locator('article.card', {
+    has: page.getByRole('link', { name: 'A page with a picture' }),
+  });
+  const kept = reloaded.locator('img.og-image[src^="blob:"]');
+  await expect(kept).toBeVisible({ timeout: 15_000 });
+  await expect
+    .poll(() => kept.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .toBeGreaterThan(0);
+
+  assertNoConsoleErrors(log);
+});
+
+test('choosing a new image that cannot be downloaded keeps the saved copy', async ({
+  context,
+  freshRsUser,
+  freshRsToken,
+  webOrigin,
+}) => {
+  const url = 'https://example.net/post/3';
+  const saved = 'https://example.net/saved.png';
+  const fresh = 'https://example.net/newer.png';
+  await putInboxFile(freshRsUser, freshRsToken, {
+    path: 'files/has-copy.png',
+    body: new Uint8Array(PNG),
+    contentType: 'image/png',
+  });
+  await putInboxItem(freshRsUser, freshRsToken, {
+    item: {
+      id: 'has-copy',
+      type: 'bookmark',
+      title: 'A post saved with its picture',
+      url,
+      description: 'Has a local copy of its image.',
+      siteName: 'Example',
+      ogImage: saved,
+      filePath: 'files/has-copy.png',
+      mimeType: 'image/png',
+      createdAt: new Date().toISOString(),
+    },
+  });
+  const page = await freshConnectedPage({
+    context,
+    freshRsUser,
+    freshRsToken,
+    webOrigin,
+  });
+  await routeSockethubWithMedia(page, url, fresh, {
+    error: `Error: image download failed (origin-refused) for ${fresh}: HTTP 403`,
+  });
+  await page.route(fresh, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: PNG }),
+  );
+
+  await page.goto(webOrigin);
+  await page.locator('[data-item-id="has-copy"] .card-select').press('Enter');
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.locator('img.view-image[src^="blob:"]')).toBeVisible({
+    timeout: 10_000,
+  });
+  await dialog.getByRole('button', { name: 'Refresh preview' }).click();
+  await dialog.getByRole('button', { name: 'Use new image' }).click();
+
+  await expect(
+    dialog.getByText('Couldn’t save the new image — kept the saved one'),
+  ).toBeVisible();
+  await expect(dialog.locator('img.view-image[src^="blob:"]')).toBeVisible();
+  const items = await getInboxItems(freshRsUser, freshRsToken);
+  expect(items.find((item) => item.id === 'has-copy')).toMatchObject({
+    ogImage: saved,
+    filePath: 'files/has-copy.png',
+  });
+  const file = await serverFile(
+    freshRsUser.username,
+    freshRsToken,
+    'files/has-copy.png',
+  );
+  expect(file.status).toBe(200);
 });

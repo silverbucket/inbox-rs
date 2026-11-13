@@ -8,6 +8,7 @@ vi.mock('../lib/stores', async () => {
   const { writable } = await import('svelte/store');
   return {
     connected: writable(false),
+    blobLoadFailures: writable(new Set<string>()),
     blobUrls: writable<Record<string, string>>({}),
     loadFileBlobUrl: vi.fn(),
     draggingItemId: writable<string | null>(null),

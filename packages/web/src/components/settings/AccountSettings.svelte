@@ -53,7 +53,9 @@
         ? sockethubCustom
           ? 'The server answered but didn\'t report a version — it may be older than Sockethub 5.0 alpha. Update it, or use the default.'
           : 'The default service answered but didn\'t report a version. Link previews may not work right now.'
-        : '',
+        : sockethubStatus === 'reported' && !sockethubPlatforms.some((p) => p.id === 'media')
+          ? 'This server can\'t download images (no media platform), so saved links only link to their preview image and lose it if the site goes away.'
+          : '',
   );
   let address = $state(''); let connecting = $state(false); let connectInput = $state<HTMLInputElement|null>(null);
   let reconnectError = $state('');

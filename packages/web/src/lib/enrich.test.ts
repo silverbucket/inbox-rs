@@ -3,29 +3,44 @@ import type { BookmarkItem } from '@inbox-rs/rs-module';
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { fetchLinkMetadata, storeItem, removeFile, itemsMap, settings } =
-  vi.hoisted(() => {
-    const map: Record<string, unknown> = {};
-    return {
-      fetchLinkMetadata: vi.fn(),
-      removeFile: vi.fn().mockResolvedValue(undefined),
-      storeItem: vi.fn().mockResolvedValue(undefined),
-      itemsMap: map,
-      settings: {} as Record<string, unknown>,
-    };
-  });
+const {
+  canDownloadImages,
+  downloadLinkImage,
+  fetchLinkMetadata,
+  storeItem,
+  removeFile,
+  itemsMap,
+  settings,
+} = vi.hoisted(() => {
+  const map: Record<string, unknown> = {};
+  return {
+    canDownloadImages: vi.fn(),
+    downloadLinkImage: vi.fn(),
+    fetchLinkMetadata: vi.fn(),
+    removeFile: vi.fn().mockResolvedValue(undefined),
+    storeItem: vi.fn().mockResolvedValue(undefined),
+    itemsMap: map,
+    settings: {} as Record<string, unknown>,
+  };
+});
 vi.mock('./link-metadata', async (importOriginal) => ({
   // Keep the real DEFAULT_SOCKETHUB_ENDPOINT so endpoint-resolution
   // assertions run against the actual default.
   ...(await importOriginal<typeof import('./link-metadata')>()),
+  canDownloadImages,
+  downloadLinkImage,
   fetchLinkMetadata,
 }));
 // Minimal readable-store stubs so `get(...)` resolves synchronously.
 vi.mock('./stores', () => ({
-  updateItem: async (id: string, update: (c: unknown) => unknown) => {
+  updateItem: async (
+    id: string,
+    update: (c: unknown) => unknown,
+    fileData?: ArrayBuffer,
+  ) => {
     const next = update(itemsMap[id]);
     if (next) {
-      await storeItem(next);
+      await (fileData ? storeItem(next, fileData) : storeItem(next));
       itemsMap[id] = next;
     }
     return next;
@@ -54,6 +69,7 @@ import {
   enrichAllBookmarks,
   enrichBookmark,
   isSavedLink,
+  keepBookmarkImage,
   LINK_PREVIEW_ERROR,
   LOCAL_LINK_PREVIEWS_KEY,
   LOCAL_SOCKETHUB_URL_KEY,
@@ -78,7 +94,9 @@ function bookmark(overrides: Partial<BookmarkItem> = {}): BookmarkItem {
 }
 
 afterEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
+  storeItem.mockResolvedValue(undefined);
+  removeFile.mockResolvedValue(undefined);
   localStorage.clear();
   for (const key of Object.keys(itemsMap)) delete itemsMap[key];
   for (const key of Object.keys(settings)) delete settings[key];
@@ -562,29 +580,226 @@ describe('refreshBookmark without a reply', () => {
   });
 });
 
+/** A downloaded image as the media platform client returns it. */
+function downloaded(mimeType = 'image/jpeg') {
+  return {
+    url: 'https://cdn/final',
+    mimeType,
+    data: new Uint8Array([1, 2, 3]).buffer,
+  };
+}
+
+describe('keepBookmarkImage', () => {
+  it('stores the preview image next to the bookmark', async () => {
+    const item = bookmark({ ogImage: 'https://cdn/hero' });
+    itemsMap[item.id] = item;
+    canDownloadImages.mockResolvedValue(true);
+    downloadLinkImage.mockResolvedValue(downloaded('image/webp'));
+
+    await expect(keepBookmarkImage(item)).resolves.toBe(true);
+    expect(downloadLinkImage).toHaveBeenCalledWith(
+      'https://example.com',
+      'https://cdn/hero',
+      expect.any(String),
+    );
+    const [stored, data] = storeItem.mock.calls[0];
+    expect(stored).toMatchObject({
+      ogImage: 'https://cdn/hero',
+      filePath: 'files/b1.webp',
+      mimeType: 'image/webp',
+    });
+    expect(new Uint8Array(data)).toEqual(new Uint8Array([1, 2, 3]));
+  });
+
+  it('leaves a bookmark that already has a copy alone', async () => {
+    const item = bookmark({
+      ogImage: 'https://cdn/hero',
+      filePath: 'files/b1.jpg',
+      mimeType: 'image/jpeg',
+    });
+    await expect(keepBookmarkImage(item)).resolves.toBe(false);
+    expect(downloadLinkImage).not.toHaveBeenCalled();
+  });
+
+  it('does not keep a placeholder share card', async () => {
+    const item = bookmark({ ogImage: 'https://share.redd.it/preview/x' });
+    await expect(keepBookmarkImage(item)).resolves.toBe(false);
+    expect(canDownloadImages).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when the server cannot download images', async () => {
+    const item = bookmark({ ogImage: 'https://cdn/hero' });
+    itemsMap[item.id] = item;
+    canDownloadImages.mockResolvedValue(false);
+    await expect(keepBookmarkImage(item)).resolves.toBe(false);
+    expect(downloadLinkImage).not.toHaveBeenCalled();
+    expect(storeItem).not.toHaveBeenCalled();
+  });
+
+  it('drops the download when the image changed meanwhile', async () => {
+    const item = bookmark({ ogImage: 'https://cdn/hero' });
+    itemsMap[item.id] = { ...item, ogImage: 'https://cdn/other' };
+    canDownloadImages.mockResolvedValue(true);
+    downloadLinkImage.mockResolvedValue(downloaded());
+    await expect(keepBookmarkImage(item)).resolves.toBe(false);
+    expect(storeItem).not.toHaveBeenCalled();
+  });
+
+  it('skips an image type it has no file extension for', async () => {
+    const item = bookmark({ ogImage: 'https://cdn/hero' });
+    itemsMap[item.id] = item;
+    canDownloadImages.mockResolvedValue(true);
+    downloadLinkImage.mockResolvedValue(downloaded('image/tiff'));
+    await expect(keepBookmarkImage(item)).resolves.toBe(false);
+    expect(storeItem).not.toHaveBeenCalled();
+  });
+});
+
+describe('refreshBookmark keeping the image', () => {
+  it('stores the image the page offers for a new bookmark', async () => {
+    const item = bookmark();
+    itemsMap[item.id] = item;
+    fetchLinkMetadata.mockResolvedValue({
+      title: 'Title',
+      image: 'https://cdn/hero',
+    });
+    canDownloadImages.mockResolvedValue(true);
+    downloadLinkImage.mockResolvedValue(downloaded());
+
+    await expect(refreshBookmark(item)).resolves.toEqual({ status: 'updated' });
+    expect(itemsMap[item.id]).toMatchObject({
+      title: 'Title',
+      ogImage: 'https://cdn/hero',
+      filePath: 'files/b1.jpg',
+      mimeType: 'image/jpeg',
+    });
+  });
+
+  it('keeps the preview when its image cannot be downloaded', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const item = bookmark();
+    itemsMap[item.id] = item;
+    fetchLinkMetadata.mockResolvedValue({
+      title: 'Title',
+      image: 'https://cdn/hero',
+    });
+    canDownloadImages.mockResolvedValue(true);
+    downloadLinkImage.mockRejectedValue(new Error('not-found'));
+
+    await expect(refreshBookmark(item)).resolves.toEqual({ status: 'updated' });
+    expect(itemsMap[item.id]).toMatchObject({
+      title: 'Title',
+      ogImage: 'https://cdn/hero',
+    });
+    expect((itemsMap[item.id] as BookmarkItem).filePath).toBeUndefined();
+    warn.mockRestore();
+  });
+
+  it('gives an older bookmark its copy even when nothing else is new', async () => {
+    const item = bookmark({
+      title: 'Done',
+      description: 'D',
+      siteName: 'S',
+      ogImage: 'https://cdn/hero',
+    });
+    itemsMap[item.id] = item;
+    fetchLinkMetadata.mockResolvedValue({ image: 'https://cdn/hero' });
+    canDownloadImages.mockResolvedValue(true);
+    downloadLinkImage.mockResolvedValue(downloaded());
+
+    await expect(refreshBookmark(item)).resolves.toEqual({ status: 'none' });
+    expect((itemsMap[item.id] as BookmarkItem).filePath).toBe('files/b1.jpg');
+  });
+});
+
 describe('replaceBookmarkImage', () => {
-  it('stores the chosen image and drops the old local copy', async () => {
+  it('stores a copy of the chosen image and drops the old one', async () => {
     const item = bookmark({
       ogImage: 'https://abs.twimg.com/generic-card.png',
       filePath: 'files/b1.png',
       mimeType: 'image/png',
     });
     itemsMap[item.id] = item;
+    canDownloadImages.mockResolvedValue(true);
+    downloadLinkImage.mockResolvedValue(downloaded());
 
     await expect(
       replaceBookmarkImage(item, 'https://pbs.twimg.com/media/real.jpg'),
-    ).resolves.toBe(true);
-    const stored = storeItem.mock.calls[0][0];
+    ).resolves.toBe('replaced');
+    const [stored, data] = storeItem.mock.calls[0];
     expect(stored.ogImage).toBe('https://pbs.twimg.com/media/real.jpg');
-    expect(stored.filePath).toBeUndefined();
-    expect(stored.mimeType).toBeUndefined();
+    expect(stored.filePath).toBe('files/b1.jpg');
+    expect(stored.mimeType).toBe('image/jpeg');
+    expect(data).toBeInstanceOf(ArrayBuffer);
     expect(removeFile).toHaveBeenCalledWith('files/b1.png');
   });
 
+  it('overwrites a copy stored under the same path without deleting it', async () => {
+    const item = bookmark({
+      ogImage: 'https://cdn/old.jpg',
+      filePath: 'files/b1.jpg',
+      mimeType: 'image/jpeg',
+    });
+    itemsMap[item.id] = item;
+    canDownloadImages.mockResolvedValue(true);
+    downloadLinkImage.mockResolvedValue(downloaded());
+
+    await expect(
+      replaceBookmarkImage(item, 'https://cdn/new.jpg'),
+    ).resolves.toBe('replaced');
+    expect(removeFile).not.toHaveBeenCalled();
+  });
+
+  it('keeps the saved copy when the new image cannot be downloaded', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const item = bookmark({
+      ogImage: 'https://cdn/old.jpg',
+      filePath: 'files/b1.jpg',
+      mimeType: 'image/jpeg',
+    });
+    itemsMap[item.id] = item;
+    canDownloadImages.mockResolvedValue(true);
+    downloadLinkImage.mockRejectedValue(new Error('origin-refused'));
+
+    await expect(
+      replaceBookmarkImage(item, 'https://cdn/new.jpg'),
+    ).resolves.toBe('kept');
+    expect(storeItem).not.toHaveBeenCalled();
+    expect(removeFile).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('keeps the saved copy when the server cannot download images', async () => {
+    const item = bookmark({
+      ogImage: 'https://cdn/old.jpg',
+      filePath: 'files/b1.jpg',
+      mimeType: 'image/jpeg',
+    });
+    itemsMap[item.id] = item;
+    canDownloadImages.mockResolvedValue(false);
+
+    await expect(
+      replaceBookmarkImage(item, 'https://cdn/new.jpg'),
+    ).resolves.toBe('kept');
+    expect(storeItem).not.toHaveBeenCalled();
+  });
+
+  it('swaps the link when there was no saved copy to lose', async () => {
+    const item = bookmark({ ogImage: 'https://cdn/old.jpg' });
+    itemsMap[item.id] = item;
+    canDownloadImages.mockResolvedValue(false);
+
+    await expect(
+      replaceBookmarkImage(item, 'https://cdn/new.jpg'),
+    ).resolves.toBe('replaced');
+    expect(storeItem.mock.calls[0][0].ogImage).toBe('https://cdn/new.jpg');
+  });
+
   it('does nothing when the bookmark vanished meanwhile', async () => {
+    canDownloadImages.mockResolvedValue(false);
     await expect(
       replaceBookmarkImage(bookmark(), 'https://x/new.png'),
-    ).resolves.toBe(false);
+    ).resolves.toBe('gone');
     expect(storeItem).not.toHaveBeenCalled();
   });
 });

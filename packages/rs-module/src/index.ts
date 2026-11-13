@@ -29,16 +29,22 @@ import type { MigrateResult } from './vendor/rs-migrate.js';
 
 export { recoverLegacyBinaryStringEncoding } from './legacy/binary-recovery.js';
 export type {
+  DownloadedImage,
+  ImageDownloadCode,
   LinkEvent,
   LinkMetadata,
   SockethubInfo,
 } from './link-metadata.js';
 export {
   DEFAULT_SOCKETHUB_ENDPOINT,
+  downloadLinkImage,
   fetchLinkMetadata,
   fetchSockethubInfo,
+  ImageDownloadError,
+  imageExtension,
   isPlaceholderImage,
   normalizeMetadata,
+  supportsImageDownload,
 } from './link-metadata.js';
 export { migrator, wrapCodeBlock } from './migrations.js';
 export { noteTitleFromBody, truncateTitle } from './note-title.js';
