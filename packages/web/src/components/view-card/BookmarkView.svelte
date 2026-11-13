@@ -123,11 +123,15 @@
   // Prefer the locally-stored copy of the OG image when we have it (fetched
   // via Authorization header so it works on all RS servers); otherwise fall
   // back to the live ogImage URL the bookmark was originally tagged with.
-  const imageSrc = $derived(
+  const savedSrc = $derived(
     (item.filePath ? ($blobUrls[item.filePath] || null) : null) ||
       item.ogImage ||
       null,
   );
+  // The image that failed to load, if any. Remembered by source rather than
+  // by hiding the element, which would keep a replacement hidden too.
+  let failedSrc = $state('');
+  const imageSrc = $derived(savedSrc === failedSrc ? null : savedSrc);
 
   // Pass mimeType so the blob is tagged with the clean type from item
   // metadata rather than the server's Content-Type. Older uploads may still
@@ -264,7 +268,7 @@
       class="view-image"
       src={imageSrc}
       alt=""
-      onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
+      onerror={() => (failedSrc = imageSrc ?? '')}
     />
   </div>
 {/if}

@@ -9,9 +9,16 @@
   // Fetch bytes only once the card approaches the viewport.
   let entered = $state(false);
 
-  const imageSrc = $derived(
-    (item.filePath ? ($blobUrls[item.filePath] || null) : null) || item.ogImage || null
-  );
+  // The image that failed to load, if any. Remembered by source rather than
+  // by hiding the element: the card outlives its image (a refreshed preview
+  // swaps it), and a hidden element would swallow the replacement too.
+  let failedSrc = $state('');
+
+  const imageSrc = $derived.by(() => {
+    const src =
+      (item.filePath ? ($blobUrls[item.filePath] || null) : null) || item.ogImage || null;
+    return src === failedSrc ? null : src;
+  });
 
   // Load from the remote when connected, otherwise the local cache, so
   // offline-captured files still render. Pass mimeType so the blob is tagged
@@ -41,7 +48,7 @@
         alt=""
         loading="lazy"
         decoding="async"
-        onerror={(e) => (e.currentTarget as HTMLImageElement).style.display = 'none'}
+        onerror={() => (failedSrc = imageSrc ?? '')}
       />
     </div>
   {/if}
