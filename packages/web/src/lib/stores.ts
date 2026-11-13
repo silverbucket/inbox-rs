@@ -1221,15 +1221,17 @@ export function storeItem(
 /**
  * Read the live item inside its queue and write what `update` returns —
  * nothing when it returns null (item gone, or no change). No other save for
- * the id can land between the read and the write.
+ * the id can land between the read and the write. `fileData` is stored as
+ * the file at the written item's `filePath`.
  */
 export function updateItem<T extends InboxItem>(
   id: string,
   update: (current: InboxItem | undefined) => T | null,
+  fileData?: ArrayBuffer,
 ): Promise<T | null> {
   return runForItem(id, async () => {
     const next = update(get(items)[id]);
-    if (next) await writeItem(next);
+    if (next) await writeItem(next, fileData);
     return next;
   });
 }

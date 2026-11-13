@@ -18,13 +18,15 @@
  * well under one heavyweight regression. Collection-linked calendar sync adds
  * ~40 KB of eager app code (the sync engine and the calendar chip every card
  * can show); its network-only link sheet stays out of the precache. 1.45 MB
- * keeps the same margin.
+ * keeps the same margin. Item links, link notes on cards and keeping a copy
+ * of each saved link's image (all ordinary app code, no new dependency) used
+ * that margin up to the last 3 KB; 1.5 MB restores it.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const BUDGET_BYTES = 1.45 * 1024 * 1024;
+const BUDGET_BYTES = 1.5 * 1024 * 1024;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const swPath = path.resolve(__dirname, '../packages/web/dist/sw.js');

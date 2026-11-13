@@ -15,6 +15,7 @@ vi.mock('../lib/stores', async () => {
   const { writable: w } = await import('svelte/store');
   return {
     connected: w(false),
+    blobLoadFailures: w(new Set<string>()),
     blobUrls: w<Record<string, string>>({}),
     loadFileBlobUrl: vi.fn(),
     setItemPinned: vi.fn().mockResolvedValue(undefined),

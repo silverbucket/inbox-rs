@@ -232,3 +232,148 @@ export async function fetchLinkMetadata(
   }
   return null;
 }
+
+const MEDIA_CONTEXT = [
+  'https://www.w3.org/ns/activitystreams',
+  'https://sockethub.org/ns/context/v1.jsonld',
+  'https://sockethub.org/ns/context/platform/media/v1.jsonld',
+];
+
+/** Sockethub's fixed failure codes for an image download. */
+const IMAGE_DOWNLOAD_CODES = [
+  'invalid-url',
+  'not-found',
+  'origin-refused',
+  'origin-error',
+  'timeout',
+  'too-large',
+  'not-image',
+  'fetch-failed',
+] as const;
+
+/** Why an image could not be downloaded; `unknown` is any other failure. */
+export type ImageDownloadCode =
+  | (typeof IMAGE_DOWNLOAD_CODES)[number]
+  | 'unknown';
+
+export class ImageDownloadError extends Error {
+  readonly code: ImageDownloadCode;
+  constructor(code: ImageDownloadCode, message: string) {
+    super(message);
+    this.name = 'ImageDownloadError';
+    this.code = code;
+  }
+}
+
+export interface DownloadedImage {
+  /** The image's URL after redirects. */
+  url: string;
+  /** Read from the bytes by Sockethub, not from the origin's header. */
+  mimeType: string;
+  data: ArrayBuffer;
+}
+
+const IMAGE_EXTENSIONS: Record<string, string> = {
+  'image/avif': 'avif',
+  'image/gif': 'gif',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/svg+xml': 'svg',
+  'image/vnd.microsoft.icon': 'ico',
+  'image/webp': 'webp',
+  'image/x-icon': 'ico',
+};
+
+/** File extension for a downloaded image's type, without the dot. */
+export function imageExtension(mimeType: string): string | undefined {
+  return IMAGE_EXTENSIONS[mimeType.toLowerCase()];
+}
+
+/** True when this Sockethub server can download images for its clients. */
+export function supportsImageDownload(info: SockethubInfo | null): boolean {
+  return !!info?.platforms.some((platform) => platform.id === 'media');
+}
+
+function imageDownloadError(message: string): ImageDownloadError {
+  const code = /^(?:Error: )?image download failed \(([a-z-]+)\)/.exec(
+    message,
+  )?.[1];
+  return new ImageDownloadError(
+    (IMAGE_DOWNLOAD_CODES as readonly string[]).includes(code ?? '')
+      ? (code as ImageDownloadCode)
+      : 'unknown',
+    message,
+  );
+}
+
+function decodeBase64(data: string): ArrayBuffer {
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+/**
+ * Download an image's bytes through Sockethub's `media` platform, which a
+ * web page cannot do itself when the image host sends no CORS headers.
+ * `pageUrl` is the page that references the image; `imageUrl` may be
+ * relative to it. Rejects with an {@link ImageDownloadError} when Sockethub
+ * reports a failure.
+ */
+export async function downloadLinkImage(
+  pageUrl: string,
+  imageUrl: string,
+  endpoint: string = DEFAULT_SOCKETHUB_ENDPOINT,
+  signal: AbortSignal = AbortSignal.timeout(FETCH_TIMEOUT_MS),
+): Promise<DownloadedImage> {
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      // Always fresh: Sockethub does not replay a large response, so a
+      // reused id would answer 410 instead of downloading again.
+      'X-Request-Id': crypto.randomUUID(),
+    },
+    body: JSON.stringify({
+      '@context': MEDIA_CONTEXT,
+      type: 'download',
+      actor: { id: pageUrl, type: 'website' },
+      object: { type: 'image', url: imageUrl },
+    }),
+    signal,
+  });
+  if (!response.ok) {
+    throw new Error(`Media server responded with ${response.status}`);
+  }
+
+  const text = await response.text();
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    let payload: unknown;
+    try {
+      payload = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const result = payload as Record<string, unknown>;
+    if (typeof result.error === 'string' && result.error) {
+      throw imageDownloadError(result.error);
+    }
+    const object = (result.object ?? {}) as Record<string, unknown>;
+    const mimeType = asNonEmptyString(object.mediaType)?.toLowerCase();
+    const data = asNonEmptyString(object.data);
+    if (!mimeType?.startsWith('image/') || !data) break;
+    let bytes: ArrayBuffer;
+    try {
+      bytes = decodeBase64(data);
+    } catch {
+      break;
+    }
+    return {
+      url: asNonEmptyString(object.url) ?? imageUrl,
+      mimeType,
+      data: bytes,
+    };
+  }
+  throw new ImageDownloadError('unknown', 'Media server sent no image');
+}

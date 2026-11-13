@@ -8,7 +8,9 @@
     refreshBookmark,
     replaceBookmarkImage,
   } from '../../lib/enrich';
+  import { bookmarkImageSrc } from '../../lib/item-utils';
   import {
+    blobLoadFailures,
     blobUrls,
     connected,
     loadFileBlobUrl,
@@ -32,7 +34,7 @@
 
   let showLightbox = $state(false);
   let fetchingPreview = $state(false);
-  let previewStatus = $state<'' | 'none' | 'current' | 'offline'>('');
+  let previewStatus = $state<'' | 'none' | 'current' | 'offline' | 'image-kept'>('');
   let previewError = $state('');
   // A different image the page now has. Shown beside the saved one for the
   // user to pick: the saved image may be the only copy of a page that has
@@ -103,8 +105,9 @@
   async function useOfferedImage() {
     applyingImage = true;
     try {
-      await replaceBookmarkImage(item, imageOffer);
+      const result = await replaceBookmarkImage(item, imageOffer);
       imageOffer = '';
+      if (result === 'kept') previewStatus = 'image-kept';
     } catch (e) {
       console.warn('Replacing the preview image failed:', e);
       previewError = describeLinkPreviewError(e);
@@ -121,13 +124,11 @@
     }
   }
 
-  // Prefer the locally-stored copy of the OG image when we have it (fetched
-  // via Authorization header so it works on all RS servers); otherwise fall
-  // back to the live ogImage URL the bookmark was originally tagged with.
+  // The locally-stored copy of the OG image when the bookmark has one
+  // (fetched via Authorization header so it works on all RS servers);
+  // otherwise the live ogImage URL it was originally tagged with.
   const savedSrc = $derived(
-    (item.filePath ? ($blobUrls[item.filePath] || null) : null) ||
-      item.ogImage ||
-      null,
+    bookmarkImageSrc(item, $blobUrls, $blobLoadFailures),
   );
   // The image that failed to load, if any. Remembered by source rather than
   // by hiding the element, which would keep a replacement hidden too.
@@ -142,6 +143,9 @@
     // Load from the remote when connected, otherwise the local cache, so
     // offline-captured files still render; retries on reconnect.
     void $connected;
+    // Read this path's URL so the effect also reruns when the blob cache
+    // evicts it: a stored copy has no remote fallback to show meanwhile.
+    void (item.filePath && $blobUrls[item.filePath]);
     if (item.filePath) loadFileBlobUrl(item.filePath, item.mimeType);
   });
 </script>
@@ -201,6 +205,8 @@
       <span class="status-text">No preview available</span>
     {:else if previewStatus === 'current'}
       <span class="status-text">Preview is up to date</span>
+    {:else if previewStatus === 'image-kept'}
+      <span class="status-text">Couldn’t save the new image — kept the saved one</span>
     {:else if previewStatus === 'offline'}
       <span class="status-text">You’re offline — try again when connected</span>
     {/if}

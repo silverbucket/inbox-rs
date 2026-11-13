@@ -1,4 +1,8 @@
-import type { InboxItem, InboxItemType } from '@inbox-rs/rs-module';
+import type {
+  BookmarkItem,
+  InboxItem,
+  InboxItemType,
+} from '@inbox-rs/rs-module';
 import { linkNote } from './link-note';
 import { storeItem } from './stores';
 
@@ -80,4 +84,22 @@ export function todoNote(item: InboxItem): string | null {
   const firstLine = notes.split('\n')[0].trim();
   if (!firstLine) return null;
   return firstLine.length > 80 ? `${firstLine.slice(0, 80)}...` : firstLine;
+}
+
+/**
+ * The image a bookmark shows. One that has its own stored copy shows only
+ * that copy, so viewing it never contacts the image's original host; the
+ * remote URL is used when there is no copy, or the copy could not be
+ * loaded. Null while the copy is still loading.
+ */
+export function bookmarkImageSrc(
+  item: Pick<BookmarkItem, 'filePath' | 'ogImage'>,
+  blobUrls: Record<string, string>,
+  blobLoadFailures: ReadonlySet<string>,
+): string | null {
+  if (!item.filePath) return item.ogImage || null;
+  return (
+    blobUrls[item.filePath] ||
+    (blobLoadFailures.has(item.filePath) ? item.ogImage || null : null)
+  );
 }

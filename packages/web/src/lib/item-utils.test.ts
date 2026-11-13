@@ -14,6 +14,7 @@ const { storeItem } = vi.hoisted(() => {
 vi.mock('./stores', () => ({ storeItem }));
 
 import {
+  bookmarkImageSrc,
   makeReference,
   makeTodo,
   TYPE_ICON_PATHS,
@@ -416,5 +417,31 @@ describe('makeReference', () => {
 
     const stored = storeItem.mock.calls[0][0] as Record<string, unknown>;
     expect(stored.collectionId).toBe('col-42');
+  });
+});
+
+describe('bookmarkImageSrc', () => {
+  const remote = 'https://cdn.example.com/hero.jpg';
+  const stored = { filePath: 'files/b1.jpg', ogImage: remote };
+
+  it('shows the remote image when the bookmark has no stored copy', () => {
+    expect(bookmarkImageSrc({ ogImage: remote }, {}, new Set())).toBe(remote);
+    expect(bookmarkImageSrc({}, {}, new Set())).toBeNull();
+  });
+
+  it('shows the stored copy once it is loaded', () => {
+    expect(
+      bookmarkImageSrc(stored, { 'files/b1.jpg': 'blob:copy' }, new Set()),
+    ).toBe('blob:copy');
+  });
+
+  it('does not contact the remote host while the stored copy loads', () => {
+    expect(bookmarkImageSrc(stored, {}, new Set())).toBeNull();
+  });
+
+  it('falls back to the remote image when the stored copy cannot be loaded', () => {
+    expect(bookmarkImageSrc(stored, {}, new Set(['files/b1.jpg']))).toBe(
+      remote,
+    );
   });
 });

@@ -11,6 +11,7 @@ const { moveItemToCollection, storeItem } = vi.hoisted(() => ({
 vi.mock('../lib/stores', async () => {
   const { writable } = await import('svelte/store');
   return {
+    blobLoadFailures: writable(new Set<string>()),
     blobUrls: writable({ 'files/image-1.jpg': 'blob:image-1' }),
     connected: writable(false),
     collections: writable({}),
