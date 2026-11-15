@@ -25,6 +25,7 @@ schemas.
 | `desktop/footer-layout.spec.ts` | footer stays hit-testable above the fixed sidebar (expanded, collapsed, short and long pages), one-row layout in both shells, overflowing sidebar still reachable |
 | `mobile/mobile-layout.spec.ts` | 768 px breakpoint promotes header to grid, logo shrinks, touch targets sized, footer stacks into two rows without wrapping the build date |
 | `mobile/touch-interactions.spec.ts` | `tap()` (touch dispatch) opens menus and navigates |
+| `mobile/lightbox-zoom.spec.ts` | the page only scrolls (no double-tap or pinch zoom); the image lightbox zooms by double-tap and by pinch, and pans by drag (pinch and drag are Chromium-only) |
 | `mobile/modal-scroll-lock.spec.ts` | iOS body-scroll-lock fixed on open, restored on close |
 | `mobile/mobile-pwa.spec.ts` | media-scoped `theme-color` metas resolve to the right value under dark/light |
 

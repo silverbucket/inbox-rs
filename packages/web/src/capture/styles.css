@@ -78,6 +78,12 @@ body {
   height: 100%;
 }
 
+html {
+  /* Same as the main app's global.css: scroll only, no page zoom, no tap flash. */
+  touch-action: pan-x pan-y;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   background: var(--bg);
   color: var(--ink);

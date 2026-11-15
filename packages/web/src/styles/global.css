@@ -138,6 +138,14 @@ html {
   overflow-x: hidden;
   height: 100%;
   -webkit-text-size-adjust: 100%;
+  /* Feel like an installed app on touch screens: the interface scrolls but
+     never zooms (no double-tap or pinch zoom, no tap delay) and tapped
+     controls don't flash grey.
+     touch-action is not inherited, but an element's effective value is the
+     intersection with its ancestors', so the root covers the whole app.
+     Images keep pinch-zoom through the lightbox, which handles it itself. */
+  touch-action: pan-x pan-y;
+  -webkit-tap-highlight-color: transparent;
   /* Block the browser's two-finger-swipe back/forward navigation: nothing in
      the app scrolls horizontally at the root, so a touchpad swipe would
      otherwise chain to the viewport and navigate history. Set on both html

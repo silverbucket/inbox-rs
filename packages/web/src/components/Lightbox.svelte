@@ -55,6 +55,154 @@
     if (e.key === 'Escape') onclose();
   }
 
+  // ── Zoom ────────────────────────────────────────────────────────────────
+  // The page itself no longer pinch-zooms (global.css), so the lightbox does
+  // it for the image: pinch to scale around the fingers, drag to pan while
+  // zoomed, double-tap to toggle. Pointer events cover touch, pen and mouse.
+  const MAX_SCALE = 5;
+  const DOUBLE_TAP_SCALE = 2.5;
+  const DOUBLE_TAP_MS = 300;
+  const TAP_SLOP = 10;
+
+  let imgEl = $state<HTMLImageElement>();
+  let scale = $state(1);
+  let tx = $state(0);
+  let ty = $state(0);
+  /** True while fingers are down, so the transform tracks them unanimated. */
+  let gesturing = $state(false);
+
+  const pointers = new Map<number, { x: number; y: number }>();
+  let lastMid: { x: number; y: number } | null = null;
+  let lastDist = 0;
+  let moved = false;
+  let downAt = { x: 0, y: 0 };
+  /** Set by a pan/pinch so the click that ends it doesn't close the lightbox. */
+  let suppressClick = false;
+  let lastTap: { t: number; x: number; y: number } | null = null;
+
+  // A different image starts unzoomed.
+  $effect(() => {
+    src;
+    scale = 1;
+    tx = 0;
+    ty = 0;
+  });
+
+  /** Keep the zoomed image covering the viewport rather than drifting off it. */
+  function clampOffset(s: number, x: number, y: number): [number, number] {
+    if (!imgEl) return [0, 0];
+    const maxX = Math.max(0, (imgEl.offsetWidth * s - window.innerWidth) / 2);
+    const maxY = Math.max(0, (imgEl.offsetHeight * s - window.innerHeight) / 2);
+    return [Math.min(maxX, Math.max(-maxX, x)), Math.min(maxY, Math.max(-maxY, y))];
+  }
+
+  /**
+   * Scale to `next`, keeping the image point that was under `from` under `to`
+   * (the same point for a double-tap; the moving finger midpoint for a pinch).
+   */
+  function zoomTo(next: number, from: { x: number; y: number }, to = from) {
+    if (!imgEl) return;
+    const s = Math.min(MAX_SCALE, Math.max(1, next));
+    const r = imgEl.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    const k = s / scale;
+    [tx, ty] = clampOffset(s, tx + (to.x - cx) - (from.x - cx) * k, ty + (to.y - cy) - (from.y - cy) * k);
+    scale = s;
+  }
+
+  function midpoint() {
+    const [a, b] = [...pointers.values()];
+    return {
+      mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+      dist: Math.hypot(a.x - b.x, a.y - b.y),
+    };
+  }
+
+  function isControl(target: EventTarget | null): boolean {
+    return target instanceof Element && !!target.closest('.lightbox-toolbar, .lightbox-close');
+  }
+
+  function onPointerDown(e: PointerEvent) {
+    if (isControl(e.target) || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    if (pointers.size === 0) {
+      moved = false;
+      suppressClick = false;
+      downAt = { x: e.clientX, y: e.clientY };
+    }
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) {
+      const m = midpoint();
+      lastMid = m.mid;
+      lastDist = m.dist;
+      moved = true;
+      suppressClick = true;
+    }
+    gesturing = true;
+  }
+
+  function onPointerMove(e: PointerEvent) {
+    const prev = pointers.get(e.pointerId);
+    if (!prev) return;
+    const point = { x: e.clientX, y: e.clientY };
+    pointers.set(e.pointerId, point);
+
+    if (pointers.size >= 2) {
+      const m = midpoint();
+      if (lastMid && lastDist > 0) zoomTo(scale * (m.dist / lastDist), lastMid, m.mid);
+      lastMid = m.mid;
+      lastDist = m.dist;
+      return;
+    }
+
+    // Only a zoomed image pans, and only once the finger leaves the tap slop
+    // (so a slightly wobbly double-tap still zooms back out).
+    if (scale <= 1) return;
+    if (!moved) {
+      if (Math.hypot(point.x - downAt.x, point.y - downAt.y) < TAP_SLOP) return;
+      // Capture so the drag survives leaving the image.
+      (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+      moved = true;
+      suppressClick = true;
+    }
+    [tx, ty] = clampOffset(scale, tx + point.x - prev.x, ty + point.y - prev.y);
+  }
+
+  function onPointerUp(e: PointerEvent) {
+    if (!pointers.delete(e.pointerId)) return;
+    lastMid = null;
+    lastDist = 0;
+    if (pointers.size > 0) return;
+    gesturing = false;
+
+    // Double-tap (or double-click) on the image toggles zoom at that point.
+    if (e.type === 'pointerup' && !moved && e.target === imgEl) {
+      const now = performance.now();
+      const point = { x: e.clientX, y: e.clientY };
+      if (
+        lastTap &&
+        now - lastTap.t < DOUBLE_TAP_MS &&
+        Math.hypot(point.x - lastTap.x, point.y - lastTap.y) < TAP_SLOP * 3
+      ) {
+        lastTap = null;
+        zoomTo(scale > 1 ? 1 : DOUBLE_TAP_SCALE, point);
+        return;
+      }
+      lastTap = { t: now, ...point };
+    } else {
+      lastTap = null;
+    }
+  }
+
+  function onOverlayClick(e: MouseEvent) {
+    e.stopPropagation();
+    if (suppressClick) {
+      suppressClick = false;
+      return;
+    }
+    onclose();
+  }
+
   async function fetchFileData(): Promise<{ data: ArrayBuffer; mime: string }> {
     const mime = mimeType || 'application/octet-stream';
 
@@ -254,9 +402,21 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="lightbox-overlay" onclick={(e) => { e.stopPropagation(); onclose(); }}>
+<div
+  class="lightbox-overlay"
+  onclick={onOverlayClick}
+  onpointerdown={onPointerDown}
+  onpointermove={onPointerMove}
+  onpointerup={onPointerUp}
+  onpointercancel={onPointerUp}
+>
   <img
+    bind:this={imgEl}
     class="lightbox-img"
+    class:gesturing
+    class:zoomed={scale > 1}
+    style:transform="translate({tx}px, {ty}px) scale({scale})"
+    draggable="false"
     {src}
     alt={alt}
     onclick={(e) => e.stopPropagation()}
@@ -303,6 +463,8 @@
     padding: 2rem;
     cursor: zoom-out;
     overscroll-behavior: contain;
+    /* The lightbox handles pinch, pan and double-tap itself. */
+    touch-action: none;
   }
 
   .lightbox-img {
@@ -311,10 +473,29 @@
     object-fit: contain;
     border-radius: 8px;
     cursor: default;
+    transition: transform 0.2s ease;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  .lightbox-img.zoomed {
+    cursor: grab;
+  }
+
+  .lightbox-img.gesturing {
+    transition: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lightbox-img {
+      transition: none;
+    }
   }
 
   .lightbox-toolbar {
     position: fixed;
+    z-index: 1;
     bottom: 1.5rem;
     display: flex;
     gap: 0.5rem;
@@ -363,6 +544,7 @@
 
   .lightbox-close {
     position: fixed;
+    z-index: 1;
     top: 1rem;
     right: 1.5rem;
     background: none;
