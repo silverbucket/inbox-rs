@@ -241,7 +241,7 @@ export function applyStoredCalendarAccounts(
 ): void {
   const raw = Object.values(records).filter(isRecord);
   // Records saved under an older id formula move to their current id: the
-  // current one is stored below (it is missing), then the old one removed.
+  // current one is stored (if missing), and only then the old one removed.
   const stored = raw.map((r) => ({
     ...r,
     id: calendarAccountId(r.url, r.username),
@@ -249,9 +249,11 @@ export function applyStoredCalendarAccounts(
   const storedIds = new Set(
     raw.filter((r, i) => r.id === stored[i].id).map((r) => r.id),
   );
-  const movedFrom = raw
-    .filter((r, i) => r.id !== stored[i].id)
-    .map((r) => r.id);
+  const movedFrom = new Map<string, string[]>();
+  raw.forEach((r, i) => {
+    const id = stored[i].id;
+    if (r.id !== id) movedFrom.set(id, [...(movedFrom.get(id) ?? []), r.id]);
+  });
   everyAccount.update((accounts) => {
     const next = accounts.map((a) => {
       const record = stored.find((r) => r.id === a.id);
@@ -259,17 +261,24 @@ export function applyStoredCalendarAccounts(
     });
     const known = new Set(next.map((a) => a.id));
     for (const record of stored) {
-      if (!known.has(record.id)) next.push(merge(undefined, record));
+      if (known.has(record.id)) continue;
+      known.add(record.id);
+      next.push(merge(undefined, record));
     }
     return next;
   });
+  const sync = backend;
+  if (!sync) return;
   for (const account of get(everyAccount)) {
-    if (!storedIds.has(account.id)) push(account);
-  }
-  for (const id of movedFrom) {
-    void backend?.remove(id).catch((err) => {
-      console.error('Failed to remove the old calendar account record', err);
-    });
+    const saved = storedIds.has(account.id)
+      ? Promise.resolve()
+      : sync.store(toRecord(account));
+    const oldIds = movedFrom.get(account.id) ?? [];
+    void saved
+      .then(() => Promise.all(oldIds.map((id) => sync.remove(id))))
+      .catch((err) => {
+        console.error('Failed to sync the calendar account', err);
+      });
   }
 }
 

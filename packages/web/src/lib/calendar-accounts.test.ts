@@ -161,7 +161,7 @@ describe('syncing accounts between devices', () => {
     ).not.toBe(calendarAccountId('https://cal.example.org/dav/alice', 'nick'));
   });
 
-  it('moves a record saved under the old lowercased id to its current id', () => {
+  it('moves a record saved under the old lowercased id to its current id', async () => {
     const url = 'https://cal.example.org/dav/Nick/';
     // Synced before path case counted, under a different id.
     const old = { ...RECORD, id: 'cal-oldid', url };
@@ -176,6 +176,7 @@ describe('syncing accounts between devices', () => {
     expect(backend.store).toHaveBeenCalledWith(
       expect.objectContaining({ id, url }),
     );
+    await new Promise((r) => setTimeout(r));
     expect(backend.remove).toHaveBeenCalledWith('cal-oldid');
 
     // A device still on the old formula writing the old id changes nothing.
@@ -184,6 +185,30 @@ describe('syncing accounts between devices', () => {
     expect(get(calendarAccounts)[0].label).toBe('Renamed');
     applyCalendarAccountChange(old.id, null);
     expect(get(calendarAccounts)).toHaveLength(1);
+  });
+
+  it('lists an account once when storage holds its old and new records', () => {
+    const url = 'https://cal.example.org/dav/Nick/';
+    const id = calendarAccountId(url, 'nick');
+    const current = { ...RECORD, id, url };
+    applyStoredCalendarAccounts({
+      'cal-oldid': { ...current, id: 'cal-oldid' },
+      [id]: current,
+    });
+    expect(get(allCalendarAccounts).map((a) => a.id)).toEqual([id]);
+  });
+
+  it('keeps the old record when its replacement fails to save', async () => {
+    const url = 'https://cal.example.org/dav/Nick/';
+    const backend = fakeBackend();
+    backend.store.mockRejectedValueOnce(new Error('offline'));
+    vi.spyOn(console, 'error').mockImplementationOnce(() => {});
+    applyStoredCalendarAccounts({
+      'cal-oldid': { ...RECORD, id: 'cal-oldid', url },
+    });
+    await new Promise((r) => setTimeout(r));
+    expect(backend.store).toHaveBeenCalled();
+    expect(backend.remove).not.toHaveBeenCalled();
   });
 
   it('never sends the password to storage', () => {
