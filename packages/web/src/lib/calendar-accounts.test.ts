@@ -155,6 +155,37 @@ describe('syncing accounts between devices', () => {
     );
   });
 
+  it('keeps accounts apart whose server paths differ only by case', () => {
+    expect(
+      calendarAccountId('https://cal.example.org/dav/Alice', 'nick'),
+    ).not.toBe(calendarAccountId('https://cal.example.org/dav/alice', 'nick'));
+  });
+
+  it('moves a record saved under the old lowercased id to its current id', () => {
+    const url = 'https://cal.example.org/dav/Nick/';
+    // Synced before path case counted, under a different id.
+    const old = { ...RECORD, id: 'cal-oldid', url };
+    // This device knew the account (and its password) from before.
+    seedAccount({ url });
+    const backend = fakeBackend();
+    applyStoredCalendarAccounts({ [old.id]: old });
+
+    const id = calendarAccountId(url, 'nick');
+    expect(get(allCalendarAccounts).map((a) => a.id)).toEqual([id]);
+    expect(get(calendarAccounts)[0].password).toBe('secret');
+    expect(backend.store).toHaveBeenCalledWith(
+      expect.objectContaining({ id, url }),
+    );
+    expect(backend.remove).toHaveBeenCalledWith('cal-oldid');
+
+    // A device still on the old formula writing the old id changes nothing.
+    applyCalendarAccountChange(old.id, { ...old, label: 'Renamed' });
+    expect(get(allCalendarAccounts).map((a) => a.id)).toEqual([id]);
+    expect(get(calendarAccounts)[0].label).toBe('Renamed');
+    applyCalendarAccountChange(old.id, null);
+    expect(get(calendarAccounts)).toHaveLength(1);
+  });
+
   it('never sends the password to storage', () => {
     const backend = fakeBackend();
     const account = seedAccount({ syncCalendarIds: [CAL_WORK.id] });
