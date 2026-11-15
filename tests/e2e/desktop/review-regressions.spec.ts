@@ -1,9 +1,19 @@
 import { expect, test } from '../helpers/fixtures';
+import { seedRsSession } from '../helpers/pwa';
 
+// Asserts an exact group count ("1 of 2 groups"), so it runs on a per-test
+// account: the worker's shared `rsUser` may already hold groups that earlier
+// specs left behind (#384).
 test('collection actions disclose on phones and Show all resets actual filter scope', async ({
-  connectedPage: page,
+  context,
+  freshRsUser,
+  freshRsToken,
   webOrigin,
 }) => {
+  await seedRsSession(context, freshRsUser, freshRsToken, {
+    clientOrigin: webOrigin,
+  });
+  const page = await context.newPage();
   await page.goto(`${webOrigin}/#/collections`);
   for (const name of ['Work', 'Home']) {
     await page
