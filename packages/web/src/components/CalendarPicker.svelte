@@ -2,9 +2,11 @@
   import { trapFocus } from '../lib/actions';
   import {
     calendarAccounts,
+    pausedCalendarAccounts,
     type CalendarChoice,
   } from '../lib/calendar-accounts';
   import type { ScheduleKind } from '../lib/schedule';
+  import PausedCalendarAccounts from './PausedCalendarAccounts.svelte';
 
   let {
     kind,
@@ -35,8 +37,10 @@
     return components.includes(kind);
   }
 
+  let passwordSheetOpen = $state(false);
+
   function handleEscape(e: KeyboardEvent) {
-    if (e.key !== 'Escape') return;
+    if (e.key !== 'Escape' || passwordSheetOpen) return;
     onclose();
   }
 </script>
@@ -74,11 +78,14 @@
         </button>
       {/each}
     {:else}
-      <p class="empty">
-        No calendar accounts yet. Add one from the user menu → Calendar
-        accounts, then events post straight to your calendar.
-      </p>
+      {#if $pausedCalendarAccounts.length === 0}
+        <p class="empty">
+          No calendar accounts yet. Add one from the user menu → Calendar
+          accounts, then events post straight to your calendar.
+        </p>
+      {/if}
     {/each}
+    <PausedCalendarAccounts bind:sheetOpen={passwordSheetOpen} />
   </div>
 </div>
 

@@ -5,7 +5,7 @@
   import { alertPermission } from '../lib/alerts';
   import { trapFocus } from '../lib/actions';
   import { columnSets } from '../lib/board-actions';
-  import { calendarAccounts } from '../lib/calendar-accounts';
+  import { allCalendarAccounts, pausedCalendarAccounts } from '../lib/calendar-accounts';
   import { needsLinkPreview } from '../lib/enrich';
   import { layout } from '../lib/layout';
   import { buildDate, versionLabel } from '../lib/build-info';
@@ -45,7 +45,7 @@
     switch (section.id) {
       case 'appearance': return `${theme === 'system' ? 'System' : theme[0].toUpperCase() + theme.slice(1)} · ${accent}`;
       case 'links': return $userSettings.linkPreviews === false ? 'Off' : 'On';
-      case 'calendars': return `${$calendarAccounts.length} account${$calendarAccounts.length === 1 ? '' : 's'}`;
+      case 'calendars': return `${$allCalendarAccounts.length} account${$allCalendarAccounts.length === 1 ? '' : 's'}`;
       case 'notifications': return $alertPermission === 'granted' ? 'Allowed' : 'Not allowed';
       case 'columns': return `${$columnSets.length} set${$columnSets.length === 1 ? '' : 's'}`;
       case 'data': return `${itemList.length} item${itemList.length === 1 ? '' : 's'}`;
@@ -58,7 +58,7 @@
     switch (section.id) {
       case 'appearance': return $layout === 'classic' ? 'Top-tab navigation' : 'Sidebar navigation';
       case 'links': return `${missingPreviews} links still to fetch`;
-      case 'calendars': return $calendarAccounts.length ? `${$calendarAccounts.reduce((n,a)=>n+a.calendars.length,0)} calendars` : 'Add a calendar account';
+      case 'calendars': return $pausedCalendarAccounts.length ? `${$pausedCalendarAccounts.length} need${$pausedCalendarAccounts.length === 1 ? 's' : ''} a password on this device` : $allCalendarAccounts.length ? `${$allCalendarAccounts.reduce((n,a)=>n+a.calendars.length,0)} calendars` : 'Add a calendar account';
       case 'notifications': return 'Alerts when a todo is due';
       case 'columns': return 'Shared columns for item boards';
       case 'data': return 'Export or restore a backup';

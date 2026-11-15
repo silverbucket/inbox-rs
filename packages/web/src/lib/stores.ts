@@ -9,6 +9,11 @@ import { migrator, wrapCodeBlock } from '@inbox-rs/rs-module';
 import type { Readable, Writable } from 'svelte/store';
 import { derived, get, writable } from 'svelte/store';
 import { columnOf } from './boards';
+import {
+  applyCalendarAccountChange,
+  applyStoredCalendarAccounts,
+  attachCalendarAccountBackend,
+} from './calendar-accounts';
 import { replayCardDrafts } from './card-draft-recovery';
 import { cleanForStorage } from './clean-for-storage';
 import { pinItemsFirst } from './collection-todos';
@@ -440,6 +445,22 @@ async function loadGroups() {
   );
 }
 
+async function loadCalendarAccounts() {
+  const inbox = getInbox();
+  if (typeof inbox?.getAllCalendarAccounts !== 'function') return;
+  try {
+    applyStoredCalendarAccounts(await inbox.getAllCalendarAccounts());
+  } catch (e) {
+    console.error('[inbox] loadCalendarAccounts failed:', e);
+  }
+}
+
+attachCalendarAccountBackend({
+  store: (record) =>
+    requireInbox().storeCalendarAccount(cleanForStorage(record)),
+  remove: (id) => requireInbox().removeCalendarAccount(id),
+});
+
 // Single in-flight load promise so the cached preload (queueMicrotask at
 // module init) and the post-connect reload don't run concurrent loaders
 // against the same five stores. Each entry-point waits for any pending load
@@ -453,6 +474,7 @@ function runLoaders(): Promise<void> {
     loadUserSettings(),
     loadCollections(),
     loadGroups(),
+    loadCalendarAccounts(),
   ])
     .then(() => undefined)
     .finally(startup.localLoaded);
@@ -862,6 +884,14 @@ if (inboxRef) {
           delete next[key];
           return next;
         });
+      }
+    } else if (path.startsWith('calendar-accounts/')) {
+      // A missing value is only a removal when it comes from the server.
+      if (value || event.origin === 'remote') {
+        applyCalendarAccountChange(
+          path.slice('calendar-accounts/'.length),
+          value ?? null,
+        );
       }
     } else if (path === 'config/app') {
       // Startup cache replay must never overwrite a loaded or edited config.

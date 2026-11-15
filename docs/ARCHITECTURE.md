@@ -72,18 +72,23 @@ is the one path that downloads the image itself and stores it as a file.
 CalDAV discovery and publishing go through the same endpoint. The relevant
 handling:
 
-- Credentials live on the device, in `localStorage`, and are deliberately
-  **not** synced through remoteStorage — data there syncs in plaintext, so
-  each device connects its own calendar account.
+- An account's server, username, relay endpoint and calendar list sync
+  through remoteStorage (`calendar-accounts/`), so every device shows the
+  same setup. The app password is deliberately **not** synced — data there
+  syncs in plaintext — so each device keeps its own copy in `localStorage`
+  and asks for it once. Until then the account is listed but nothing syncs
+  from that device.
 - They are sent with each request and held by the relay only for the life of
   that request: encrypted, in a request-scoped store that is purged on
   teardown. Nothing is persisted server-side, and nothing is written to your
   storage.
-- You are nonetheless trusting whoever runs the relay for that window. Two
-  things bound it: the endpoint is **pinned per account at connect time**, so
-  a synced settings change on a compromised device cannot redirect
-  credential-bearing traffic; and the UI insists on app-specific passwords,
-  which are scoped and revocable at the provider.
+- You are nonetheless trusting whoever runs the relay for that window. The
+  relay endpoint syncs with the account, so anyone able to write to your
+  storage could point an account at another relay; that is accepted, since
+  write access to your storage is already a full compromise of your data.
+  The UI insists on app-specific passwords, which are scoped and revocable
+  at the provider. Staging builds can use their own relay per account,
+  falling back to the main one when unset.
 - Accepted trade-off: `localStorage` is readable by any same-origin script, so
   an XSS compromise could exfiltrate stored app passwords. Client-side
   encryption without a per-session passphrase would only obfuscate, since the

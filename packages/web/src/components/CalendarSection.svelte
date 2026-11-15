@@ -5,6 +5,8 @@
     type CalendarChoice,
     calendarAccounts,
     choiceForCalendar,
+    entryInCalendar,
+    pausedCalendarAccounts,
   } from '../lib/calendar-accounts';
   import { cardCalendar, relativeTime, shortDate } from '../lib/calendar-card';
   import {
@@ -21,6 +23,7 @@
   import { collections, restoreItem, updateItem } from '../lib/stores';
   import { showToast } from '../lib/toast';
   import CalendarPicker from './CalendarPicker.svelte';
+  import CalendarPasswordSheet from './CalendarPasswordSheet.svelte';
 
   /**
    * The card view's Calendar block: which calendar the card is on, how
@@ -76,6 +79,18 @@
     if (item.importedAt) parts.push(`imported here ${shortDate(item.importedAt)}`);
     return parts.map((p, i) => (i === 0 ? p.charAt(0).toUpperCase() + p.slice(1) : p));
   });
+
+  /** The account behind this calendar, when it still needs its password here. */
+  const pausedAccount = $derived(
+    info?.url && !info.connected
+      ? $pausedCalendarAccounts.find((a) =>
+          a.calendars.some(
+            (c) => c.id === info.url || entryInCalendar(info.url, c.id),
+          ),
+        )
+      : undefined,
+  );
+  let askPassword = $state(false);
 
   const statusLine = $derived.by(() => {
     if (!info) return '';
@@ -204,6 +219,13 @@
       </p>
     {/if}
 
+    {#if pausedAccount}
+      <p class="line muted">
+        {pausedAccount.label} isn't connected on this device yet.
+        <button type="button" class="link-btn" onclick={() => (askPassword = true)}>Enter password</button>
+      </p>
+    {/if}
+
     {#if info.error}
       <div class="problem" role="status">
         <span>{info.error}</span>
@@ -251,6 +273,10 @@
       {/if}
     {/if}
   </section>
+
+  {#if askPassword && pausedAccount}
+    <CalendarPasswordSheet account={pausedAccount} onclose={() => (askPassword = false)} />
+  {/if}
 
   {#if pickerOpen}
     <CalendarPicker

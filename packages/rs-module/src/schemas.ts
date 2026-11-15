@@ -315,6 +315,37 @@ export const collectionSchema = {
   required: ['id', 'name', 'itemIds', 'createdAt'],
 };
 
+export const calendarAccountSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    label: { type: 'string' },
+    url: { type: 'string' },
+    username: { type: 'string' },
+    endpoint: { type: 'string' },
+    stagingEndpoint: { type: 'string' },
+    calendars: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          color: { type: 'string' },
+          components: {
+            type: 'array',
+            items: { type: 'string', enum: ['event', 'task'] },
+          },
+        },
+        required: ['id', 'name', 'components'],
+      },
+    },
+    hiddenCalendarIds: { type: 'array', items: { type: 'string' } },
+    defaultCalendarId: { type: 'string' },
+  },
+  required: ['id', 'label', 'url', 'username', 'calendars'],
+};
+
 export const collectionGroupSchema = {
   type: 'object',
   properties: {

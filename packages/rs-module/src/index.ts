@@ -7,6 +7,7 @@ import {
   appConfigSchema,
   audioMetaSchema,
   bookmarkSchema,
+  calendarAccountSchema,
   collectionGroupSchema,
   collectionSchema,
   documentMetaSchema,
@@ -19,6 +20,8 @@ import {
 } from './schemas.js';
 import type {
   AppConfig,
+  CalendarAccountCalendar,
+  CalendarAccountRecord,
   Collection,
   CollectionGroup,
   InboxItem,
@@ -85,6 +88,8 @@ export type {
   AudioItem,
   BoardColumn,
   BookmarkItem,
+  CalendarAccountCalendar,
+  CalendarAccountRecord,
   Collection,
   CollectionCalendarLink,
   CollectionGroup,
@@ -130,6 +135,9 @@ export interface InboxModuleExports {
   getGroupById(id: string): Promise<CollectionGroup | undefined>;
   storeGroup(group: CollectionGroup): Promise<void>;
   removeGroup(id: string): Promise<void>;
+  getAllCalendarAccounts(): Promise<Record<string, CalendarAccountRecord>>;
+  storeCalendarAccount(account: CalendarAccountRecord): Promise<void>;
+  removeCalendarAccount(id: string): Promise<void>;
   onChange(handler: (event: unknown) => void): void;
   runAllMigrations(): Promise<MigrateResult[]>;
 }
@@ -192,6 +200,7 @@ const InboxModule = {
     privateClient.declareType('user-settings', userSettingsSchema);
     privateClient.declareType('collection', collectionSchema);
     privateClient.declareType('collection-group', collectionGroupSchema);
+    privateClient.declareType('calendar-account', calendarAccountSchema);
 
     return {
       exports: {
@@ -409,6 +418,31 @@ const InboxModule = {
 
         async removeGroup(id: string): Promise<void> {
           await privateClient.remove(`groups/${id}`);
+        },
+
+        async getAllCalendarAccounts(): Promise<
+          Record<string, CalendarAccountRecord>
+        > {
+          // See `getAll` above for why we pass `maxAge: false`.
+          const accounts = (await privateClient.getAll(
+            'calendar-accounts/',
+            false,
+          )) as Record<string, CalendarAccountRecord> | undefined;
+          return accounts || {};
+        },
+
+        async storeCalendarAccount(
+          account: CalendarAccountRecord,
+        ): Promise<void> {
+          await privateClient.storeObject(
+            'calendar-account',
+            `calendar-accounts/${account.id}`,
+            account,
+          );
+        },
+
+        async removeCalendarAccount(id: string): Promise<void> {
+          await privateClient.remove(`calendar-accounts/${id}`);
         },
 
         onChange(handler: (event: unknown) => void): void {

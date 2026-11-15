@@ -19,6 +19,7 @@
   } from '../lib/plan';
   import { showToast } from '../lib/toast';
   import AlertsPermissionBanner from './AlertsPermissionBanner.svelte';
+  import CalendarPasswordBanner from './CalendarPasswordBanner.svelte';
   import TodoRow from './TodoRow.svelte';
   import TodoQuickAdd from './TodoQuickAdd.svelte';
   import TodosToday from './TodosToday.svelte';
@@ -411,6 +412,7 @@
     {/if}
   </header>
   <AlertsPermissionBanner />
+  <CalendarPasswordBanner />
   <!--
     Toolbar: count + Fab (the Fab is an inline pill on desktop, position:fixed
     and out of flow on mobile). Rendered BELOW the quick-add in the populated

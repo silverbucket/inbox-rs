@@ -1,30 +1,37 @@
 /**
- * Calendar accounts — device-local by design.
+ * Calendar accounts — shared between devices, except the password.
  *
- * Credentials (CalDAV app passwords) live in localStorage on this device
- * only. They are deliberately NOT synced through remoteStorage: user data
- * there syncs in plaintext, and per-request relay through sockethub means
- * no server ever stores them. Each device that wants to post to a calendar
- * connects its own account.
+ * An account's server, username, relay and calendar list sync through
+ * remoteStorage, so every device (and the staging and release apps alike)
+ * shows the same setup. The CalDAV app password does not: storage syncs in
+ * plaintext, so each device keeps its own copy in localStorage and asks for
+ * it once. Until then the account is "paused" here — listed, but nothing
+ * syncs from this device, exactly as if the account lived on another one.
+ *
+ * `calendarAccounts` holds only the accounts this device can use, so sync
+ * and pickers need no password checks. `pausedCalendarAccounts` holds the
+ * rest, for the places that offer to enter the password.
  *
  * Accepted trade-off: localStorage is readable by any same-origin script,
  * so an XSS compromise could exfiltrate the stored app passwords. Client-
  * side encryption without a per-session passphrase would only obfuscate
- * (the key would be equally reachable). Mitigations instead: the UI
- * insists on app-specific passwords (scoped, revocable at the provider),
- * and the relay endpoint is pinned per account at connect time so synced
- * settings can never redirect credential traffic (see `endpoint`).
+ * (the key would be equally reachable). The UI insists on app-specific
+ * passwords instead (scoped, revocable at the provider).
  *
  * The discovered calendar list is cached per account so pickers render
  * instantly; "Refresh" in settings re-runs discovery.
  */
-import { derived, get, writable } from 'svelte/store';
+import type { CalendarAccountRecord } from '@inbox-rs/rs-module';
+import { derived, get, type Readable, writable } from 'svelte/store';
 import type { RemoteCalendar } from './caldav';
 import { DEFAULT_SOCKETHUB_ENDPOINT } from './link-metadata';
 import type { ScheduleKind } from './schedule';
 
 const STORAGE_KEY = 'inbox-rs:calendar-accounts';
 const LAST_USED_KEY = 'inbox-rs:last-calendar';
+const PROMPT_DISMISSED_KEY = 'inbox-rs:calendar-password-prompt-dismissed';
+
+const isStagingBuild = typeof __STAGING__ !== 'undefined' && __STAGING__;
 
 export interface CalendarAccount {
   id: string;
@@ -32,17 +39,15 @@ export interface CalendarAccount {
   label: string;
   url: string;
   username: string;
+  /** Device-local, never synced. Empty until entered on this device. */
   password: string;
   /**
-   * The sockethub relay endpoint, pinned at connect time. Credential-bearing
-   * requests must NOT resolve the relay from the synced `sockethubUrl`
-   * setting at call time: settings sync through remoteStorage, so a
-   * compromised linked device could silently redirect this device's
-   * credential traffic. Pinning here (device-local, set only by the explicit
-   * local connect action) closes that path — changing relays means
-   * re-adding the account.
+   * The sockethub relay endpoint the account's requests go through. Synced
+   * with the account, so every device uses the same relay.
    */
   endpoint: string;
+  /** Relay for staging builds. Unset falls back to `endpoint`. */
+  stagingEndpoint?: string;
   /** Cached discovery result. */
   calendars: RemoteCalendar[];
   /** Deny-list so newly discovered calendars default to visible. */
@@ -50,32 +55,80 @@ export interface CalendarAccount {
   /** Preferred calendar for this account (settings ★). */
   defaultCalendarId?: string;
   /**
-   * Legacy: calendars whose every task used to sync into unfiled todos.
-   * Now only marks calendars that still need linking to a collection
-   * (Settings → Calendars offers it); calendar-sync.ts no longer imports
-   * from them.
+   * Legacy and device-local: calendars whose every task used to sync into
+   * unfiled todos. Now only marks calendars that still need linking to a
+   * collection (Settings → Calendars offers it); calendar-sync.ts no longer
+   * imports from them.
    */
   syncCalendarIds?: string[];
 }
 
-/** The pinned relay for an account (default fallback for legacy entries). */
-export function accountEndpoint(account: CalendarAccount): string {
-  return account.endpoint || DEFAULT_SOCKETHUB_ENDPOINT;
+/** Fields that stay on this device. */
+const LOCAL_FIELDS = new Set(['password', 'syncCalendarIds']);
+
+/** The relay an account's requests go through in this build. */
+export function accountEndpoint(
+  account: Pick<CalendarAccount, 'endpoint' | 'stagingEndpoint'>,
+  staging: boolean = isStagingBuild,
+): string {
+  return (
+    (staging && account.stagingEndpoint) ||
+    account.endpoint ||
+    DEFAULT_SOCKETHUB_ENDPOINT
+  );
+}
+
+/**
+ * The same server and username always give the same id, so an account added
+ * on two devices is one synced record instead of two.
+ */
+export function calendarAccountId(url: string, username: string): string {
+  const key = `${url.trim().toLowerCase().replace(/\/+$/, '')}\n${username.trim().toLowerCase()}`;
+  // cyrb53: a small, well-spread string hash. Not security-relevant.
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < key.length; i++) {
+    const ch = key.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  const hash = 4294967296 * (2097151 & h2) + (h1 >>> 0);
+  return `cal-${hash.toString(36)}`;
+}
+
+/** One entry per account, keyed by server and username. */
+function dedupe(accounts: CalendarAccount[]): CalendarAccount[] {
+  const byId = new Map<string, CalendarAccount>();
+  for (const account of accounts) {
+    const id = calendarAccountId(account.url, account.username);
+    const seen = byId.get(id);
+    // Two copies of one account: keep the one this device can use.
+    if (!seen || (!seen.password && account.password)) {
+      byId.set(id, { ...account, id });
+    }
+  }
+  return [...byId.values()];
 }
 
 function load(): CalendarAccount[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    // Accounts saved before they synced carry random ids.
+    return Array.isArray(parsed) ? dedupe(parsed) : [];
   } catch {
     return [];
   }
 }
 
-export const calendarAccounts = writable<CalendarAccount[]>(load());
+/** Every account known here, usable or not. */
+const everyAccount = writable<CalendarAccount[]>(load());
 
-calendarAccounts.subscribe((accounts) => {
+everyAccount.subscribe((accounts) => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
   } catch (err) {
@@ -83,16 +136,136 @@ calendarAccounts.subscribe((accounts) => {
   }
 });
 
+/** The accounts this device has a password for. */
+export const calendarAccounts = {
+  subscribe: derived(everyAccount, (accounts) =>
+    accounts.filter((a) => !!a.password),
+  ).subscribe,
+  set: everyAccount.set,
+};
+
+/** Accounts set up on another device that still need their password here. */
+export const pausedCalendarAccounts: Readable<CalendarAccount[]> = derived(
+  everyAccount,
+  (accounts) => accounts.filter((a) => !a.password),
+);
+
+export const allCalendarAccounts: Readable<CalendarAccount[]> = everyAccount;
+
 export const hasCalendarAccounts = derived(
   calendarAccounts,
   (accounts) => accounts.length > 0,
 );
 
+// ---- Sync through remoteStorage ----
+
+export interface CalendarAccountBackend {
+  store(record: CalendarAccountRecord): Promise<void>;
+  remove(id: string): Promise<void>;
+}
+
+let backend: CalendarAccountBackend | null = null;
+
+/** Where account changes are saved for other devices (wired up in stores.ts). */
+export function attachCalendarAccountBackend(
+  next: CalendarAccountBackend | null,
+): void {
+  backend = next;
+}
+
+function toRecord(account: CalendarAccount): CalendarAccountRecord {
+  const { password: _password, syncCalendarIds: _legacy, ...record } = account;
+  return record;
+}
+
+function push(account: CalendarAccount): void {
+  if (!backend) return;
+  void backend.store(toRecord(account)).catch((err) => {
+    console.error('Failed to sync the calendar account', err);
+  });
+}
+
+function isRecord(value: unknown): value is CalendarAccountRecord {
+  if (!value || typeof value !== 'object') return false;
+  const r = value as Partial<CalendarAccountRecord>;
+  return (
+    typeof r.id === 'string' &&
+    typeof r.url === 'string' &&
+    typeof r.username === 'string' &&
+    Array.isArray(r.calendars)
+  );
+}
+
+/** A synced record over the local copy: the device keeps its own fields. */
+function merge(
+  local: CalendarAccount | undefined,
+  record: CalendarAccountRecord,
+): CalendarAccount {
+  return {
+    ...record,
+    label: record.label || local?.label || record.url,
+    endpoint: record.endpoint ?? '',
+    password: local?.password ?? '',
+    ...(local?.syncCalendarIds
+      ? { syncCalendarIds: local.syncCalendarIds }
+      : {}),
+  };
+}
+
+/**
+ * Take the stored accounts as loaded from remoteStorage. Accounts only this
+ * device knows (connected before accounts synced, or while offline) are
+ * saved for the others. A record missing from the load is never treated as
+ * removed: the cache may simply not have synced yet. Removals arrive through
+ * `applyCalendarAccountChange`.
+ */
+export function applyStoredCalendarAccounts(
+  records: Record<string, unknown>,
+): void {
+  const stored = Object.values(records).filter(isRecord);
+  const storedIds = new Set(stored.map((r) => r.id));
+  everyAccount.update((accounts) => {
+    const next = accounts.map((a) => {
+      const record = stored.find((r) => r.id === a.id);
+      return record ? merge(a, record) : a;
+    });
+    const known = new Set(next.map((a) => a.id));
+    for (const record of stored) {
+      if (!known.has(record.id)) next.push(merge(undefined, record));
+    }
+    return next;
+  });
+  for (const account of get(everyAccount)) {
+    if (!storedIds.has(account.id)) push(account);
+  }
+}
+
+/** One account changed on another device; `null` means it was removed. */
+export function applyCalendarAccountChange(id: string, value: unknown): void {
+  everyAccount.update((accounts) => {
+    if (!isRecord(value)) return accounts.filter((a) => a.id !== id);
+    const local = accounts.find((a) => a.id === value.id);
+    return local
+      ? accounts.map((a) => (a.id === value.id ? merge(a, value) : a))
+      : [...accounts, merge(undefined, value)];
+  });
+}
+
+// ---- Changes made on this device ----
+
 export function addCalendarAccount(
   account: Omit<CalendarAccount, 'id'>,
 ): CalendarAccount {
-  const created: CalendarAccount = { ...account, id: crypto.randomUUID() };
-  calendarAccounts.update((accounts) => [...accounts, created]);
+  const id = calendarAccountId(account.url, account.username);
+  const existing = get(everyAccount).find((a) => a.id === id);
+  // Re-adding a known account refreshes it; its calendar choices survive.
+  const created: CalendarAccount = { ...existing, ...account, id };
+  everyAccount.update((accounts) =>
+    existing
+      ? accounts.map((a) => (a.id === id ? created : a))
+      : [...accounts, created],
+  );
+  push(created);
   return created;
 }
 
@@ -100,13 +273,60 @@ export function updateCalendarAccount(
   id: string,
   patch: Partial<Omit<CalendarAccount, 'id'>>,
 ): void {
-  calendarAccounts.update((accounts) =>
+  everyAccount.update((accounts) =>
     accounts.map((a) => (a.id === id ? { ...a, ...patch } : a)),
   );
+  if (Object.keys(patch).every((key) => LOCAL_FIELDS.has(key))) return;
+  const updated = get(everyAccount).find((a) => a.id === id);
+  if (updated) push(updated);
 }
 
+/** Save (or with '' forget) the password on this device only. */
+export function setCalendarAccountPassword(id: string, password: string): void {
+  updateCalendarAccount(id, { password });
+}
+
+/** Remove the account from every device. */
 export function removeCalendarAccount(id: string): void {
-  calendarAccounts.update((accounts) => accounts.filter((a) => a.id !== id));
+  everyAccount.update((accounts) => accounts.filter((a) => a.id !== id));
+  if (!backend) return;
+  void backend.remove(id).catch((err) => {
+    console.error('Failed to remove the synced calendar account', err);
+  });
+}
+
+// ---- The one-time "enter your password" prompt ----
+
+function loadDismissed(): string[] {
+  try {
+    const parsed = JSON.parse(
+      localStorage.getItem(PROMPT_DISMISSED_KEY) ?? '[]',
+    );
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+const dismissedPrompts = writable<string[]>(loadDismissed());
+
+/** Paused accounts the user hasn't been asked about on this device yet. */
+export const accountsAwaitingPassword: Readable<CalendarAccount[]> = derived(
+  [pausedCalendarAccounts, dismissedPrompts],
+  ([$paused, $dismissed]) => $paused.filter((a) => !$dismissed.includes(a.id)),
+);
+
+/** Stop offering the password prompt for these accounts on this device. */
+export function dismissPasswordPrompt(ids: string[]): void {
+  dismissedPrompts.update((current) => {
+    const next = [...new Set([...current, ...ids])];
+    try {
+      localStorage.setItem(PROMPT_DISMISSED_KEY, JSON.stringify(next));
+    } catch {
+      // session-only dismissal is fine
+    }
+    return next;
+  });
 }
 
 export interface CalendarChoice {

@@ -6,6 +6,7 @@
   import {
     type CalendarChoice,
     calendarAccounts,
+    pausedCalendarAccounts,
     choiceForCalendar,
   } from '../lib/calendar-accounts';
   import {
@@ -22,6 +23,7 @@
   import { formatScheduled, isOverdue } from '../lib/schedule';
   import { collections, items } from '../lib/stores';
   import { showToast } from '../lib/toast';
+  import PausedCalendarAccounts from './PausedCalendarAccounts.svelte';
 
   /**
    * Link a collection to a calendar — or, from Settings, a calendar to a
@@ -215,8 +217,10 @@
     if (SettingsComponent) showSettings = true;
   }
 
+  let passwordSheetOpen = $state(false);
+
   function handleEscape(e: KeyboardEvent) {
-    if (e.key !== 'Escape' || showSettings) return;
+    if (e.key !== 'Escape' || showSettings || passwordSheetOpen) return;
     // The sheet is on top: forms underneath must not also close.
     e.stopPropagation();
     if (saving) return;
@@ -312,10 +316,15 @@
         </button>
       </div>
     {:else if groups.length === 0}
-      <p class="note">Connect a calendar account to link it here. Your app password stays on this device.</p>
+      {#if $pausedCalendarAccounts.length > 0}
+        <p class="note">Your calendar accounts were set up on another device. Enter a password to link one here.</p>
+        <PausedCalendarAccounts bind:sheetOpen={passwordSheetOpen} />
+      {:else}
+        <p class="note">Connect a calendar account to link it here. Your app password stays on this device.</p>
+      {/if}
       <div class="footer">
         <button type="button" class="btn ghost" onclick={onclose}>Not now</button>
-        <button type="button" class="btn primary" onclick={openSettings}>Connect an account</button>
+        <button type="button" class="btn primary" onclick={openSettings}>{$pausedCalendarAccounts.length > 0 ? 'Add another account' : 'Connect an account'}</button>
       </div>
     {:else}
       {#if !initialCollection}
@@ -361,6 +370,7 @@
               {/each}
             {/each}
           </div>
+          <PausedCalendarAccounts bind:sheetOpen={passwordSheetOpen} />
         </div>
       {:else if choice}
         <div class="linked-card compact" style="--cal-color: {choice.calendar.color || 'var(--accent)'}">
