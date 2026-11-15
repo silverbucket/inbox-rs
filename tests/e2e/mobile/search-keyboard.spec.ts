@@ -8,14 +8,14 @@
  */
 
 import type { InboxItem } from '@inbox-rs/rs-module';
-import { putInboxItem } from '../helpers/armadietto';
+import { putInboxItem, type RsUser } from '../helpers/armadietto';
 import { expect, test } from '../helpers/fixtures';
 
 const COUNT = 14;
 
 async function openSearch(
   page: import('@playwright/test').Page,
-  rsUser: string,
+  rsUser: RsUser,
   rsToken: string,
   webOrigin: string,
 ) {
