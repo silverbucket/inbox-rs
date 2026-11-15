@@ -1,7 +1,7 @@
 <svg viewBox="0 0 155 40" xmlns="http://www.w3.org/2000/svg">
   <style>
     .word { fill: #6366f1 }
-    @media (prefers-color-scheme: light) { .word { fill: #1f2328 } }
+    @media (prefers-color-scheme: light) { .word { fill: #6e7781 } }
     @media (prefers-color-scheme: dark)  { .word { fill: #e4e6eb } }
   </style>
 
