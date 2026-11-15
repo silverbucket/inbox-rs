@@ -8,7 +8,7 @@
  * the double-tap test runs on every mobile project.
  */
 
-import { putInboxFile, putInboxItem } from '../helpers/armadietto';
+import { putInboxFile, putInboxItem, type RsUser } from '../helpers/armadietto';
 import { expect, test } from '../helpers/fixtures';
 import { seedRsSession } from '../helpers/pwa';
 
@@ -32,7 +32,7 @@ async function zoom(page: Page): Promise<number> {
 async function openLightbox(
   page: Page,
   context: import('@playwright/test').BrowserContext,
-  user: string,
+  user: RsUser,
   token: string,
   webOrigin: string,
 ) {

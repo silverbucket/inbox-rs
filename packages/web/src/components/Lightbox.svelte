@@ -80,14 +80,6 @@
   let suppressClick = false;
   let lastTap: { t: number; x: number; y: number } | null = null;
 
-  // A different image starts unzoomed.
-  $effect(() => {
-    src;
-    scale = 1;
-    tx = 0;
-    ty = 0;
-  });
-
   /** Keep the zoomed image covering the viewport rather than drifting off it. */
   function clampOffset(s: number, x: number, y: number): [number, number] {
     if (!imgEl) return [0, 0];
@@ -398,7 +390,11 @@
 
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<!-- Rotating the phone changes how far a zoomed image may sit off-centre. -->
+<svelte:window
+  onkeydown={handleKeydown}
+  onresize={() => { [tx, ty] = clampOffset(scale, tx, ty); }}
+/>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
