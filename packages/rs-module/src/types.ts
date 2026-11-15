@@ -299,6 +299,37 @@ export interface CollectionCalendarLink {
   color?: string;
 }
 
+/**
+ * A calendar (CalDAV) account, shared between the user's devices so each one
+ * shows the same accounts and calendars. The password is deliberately absent:
+ * storage syncs in plaintext, so every device keeps its own copy and asks for
+ * it once.
+ */
+export interface CalendarAccountRecord {
+  /** Derived from the server and username, so the same account added on two
+   *  devices lands in one record. */
+  id: string;
+  label: string;
+  url: string;
+  username: string;
+  /** Sockethub HTTP actions endpoint the account's requests go through.
+   *  Empty means the app's default server. */
+  endpoint?: string;
+  /** Endpoint staging builds use instead. Unset falls back to `endpoint`. */
+  stagingEndpoint?: string;
+  calendars: CalendarAccountCalendar[];
+  hiddenCalendarIds?: string[];
+  defaultCalendarId?: string;
+}
+
+export interface CalendarAccountCalendar {
+  /** The calendar's CalDAV href. */
+  id: string;
+  name: string;
+  color?: string;
+  components: Array<'event' | 'task'>;
+}
+
 export interface CollectionGroup {
   id: string;
   name: string;

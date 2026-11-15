@@ -24,7 +24,7 @@ The web app also supports a custom Sockethub endpoint. The relay contacts the ta
 
 ## Optional calendars and audio transcription
 
-If you connect a CalDAV calendar in the web app, calendar requests pass through the Sockethub relay selected when that account is connected. The relay receives the calendar server address, username, app password, and calendar data needed for the request, and forwards requests to your calendar provider. Calendar credentials are stored locally on that device and are not synced through remoteStorage. You can remove the calendar account in settings and revoke its app password at your provider.
+If you connect a CalDAV calendar in the web app, calendar requests pass through the Sockethub relay saved with that account. The relay receives the calendar server address, username, app password, and calendar data needed for the request, and forwards requests to your calendar provider. The calendar server address, username, relay address, and calendar names are saved to your remoteStorage so your other devices show the same accounts. The app password is stored locally on each device and is never synced through remoteStorage. You can remove the calendar account in settings and revoke its app password at your provider.
 
 Audio transcription runs locally on your device using downloaded model files. Audio is not sent to an external transcription service. Audio and resulting text you save can still be stored with your chosen remoteStorage provider.
 

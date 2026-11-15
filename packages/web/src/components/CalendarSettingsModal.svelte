@@ -7,9 +7,10 @@
   import {
     accountEndpoint,
     addCalendarAccount,
-    calendarAccounts,
+    allCalendarAccounts,
     entryInCalendar,
     removeCalendarAccount,
+    setCalendarAccountPassword,
     updateCalendarAccount,
     type CalendarAccount,
   } from '../lib/calendar-accounts';
@@ -26,6 +27,8 @@
   import { resolveSockethubEndpoint } from '../lib/enrich';
   import { DEFAULT_SOCKETHUB_ENDPOINT } from '../lib/link-metadata';
   import { showToast } from '../lib/toast';
+  import { isStagingBuild } from '../lib/build-info';
+  import CalendarPasswordSheet from './CalendarPasswordSheet.svelte';
 
   let {
     onclose,
@@ -77,7 +80,7 @@
   // compromised linked device could have rewritten that setting — showing
   // the destination (and flagging a non-default relay) makes a redirected
   // connect visible at the moment it matters. Recomputed when the add form
-  // opens; the chosen value is pinned on the account afterwards.
+  // opens; the chosen value is saved with the account afterwards.
   let connectEndpoint = $state(resolveSockethubEndpoint());
   const endpointHost = $derived.by(() => {
     try {
@@ -108,9 +111,8 @@
       username: username.trim(),
       password,
     };
-    // The endpoint shown in the form is the one used and then pinned on the
-    // account — later credential-bearing requests never re-resolve the
-    // synced setting (see CalendarAccount.endpoint).
+    // The endpoint shown in the form is the one used and then saved with
+    // the account (see CalendarAccount.endpoint).
     const endpoint = connectEndpoint;
     try {
       const calendars = await fetchCalendars(creds, endpoint);
@@ -187,8 +189,70 @@
     confirmRemoveId = null;
   }
 
+  /** The account whose password sheet is open. */
+  let passwordAccountId = $state<string | null>(null);
+  const passwordAccount = $derived(
+    $allCalendarAccounts.find((a) => a.id === passwordAccountId),
+  );
+
+  function forgetPassword(account: CalendarAccount) {
+    setCalendarAccountPassword(account.id, '');
+    showToast(`${account.label} no longer syncs from this device`);
+  }
+
+  // The relay is part of the synced account. Staging builds edit their own
+  // override, which falls back to the main relay while unset.
+  let relayEditId = $state<string | null>(null);
+  let relayDraft = $state('');
+  let relayError = $state('');
+
+  function hostOf(url: string): string {
+    try {
+      return new URL(url).host;
+    } catch {
+      return url;
+    }
+  }
+
+  function editRelay(account: CalendarAccount) {
+    relayEditId = account.id;
+    relayError = '';
+    relayDraft = isStagingBuild
+      ? (account.stagingEndpoint ?? '')
+      : account.endpoint === DEFAULT_SOCKETHUB_ENDPOINT
+        ? ''
+        : account.endpoint;
+  }
+
+  function saveRelay(account: CalendarAccount) {
+    const next = relayDraft.trim();
+    if (next) {
+      let ok = false;
+      try {
+        ok = /^https?:$/.test(new URL(next).protocol);
+      } catch {
+        // falls through to the message below
+      }
+      if (!ok) {
+        relayError = 'Enter the full address, starting with https://';
+        return;
+      }
+    }
+    updateCalendarAccount(
+      account.id,
+      isStagingBuild
+        ? { stagingEndpoint: next || undefined }
+        : { endpoint: next || DEFAULT_SOCKETHUB_ENDPOINT },
+    );
+    relayEditId = null;
+  }
+
   function handleEscape(e: KeyboardEvent) {
-    if (e.key !== 'Escape' || linkCalendarId) return;
+    if (e.key !== 'Escape' || linkCalendarId || passwordAccountId) return;
+    if (relayEditId) {
+      relayEditId = null;
+      return;
+    }
     if (showAdd) {
       showAdd = false;
       return;
@@ -198,6 +262,14 @@
 </script>
 
 <svelte:window onkeydown={handleEscape} />
+
+{#if passwordAccount}
+  <CalendarPasswordSheet
+    account={passwordAccount}
+    onclose={() => (passwordAccountId = null)}
+    {onconnected}
+  />
+{/if}
 
 {#if linkCalendarId}
   <LinkCalendarSheet
@@ -232,14 +304,25 @@
       Link a calendar to a collection: its upcoming events and open tasks
       arrive there, and edits sync both ways. Connected over CalDAV through
       <a href="https://sockethub.org" target="_blank" rel="noreferrer">Sockethub</a>;
-      your app password stays on this device.
+      your accounts and calendars sync to your other devices, and each
+      device keeps its own copy of the app password.
     </p>
 
-    {#each $calendarAccounts as account (account.id)}
-      <div class="acct">
+    {#each $allCalendarAccounts as account (account.id)}
+      {@const paused = !account.password}
+      <div class="acct" class:paused>
         <div class="acct-head">
           <span class="acct-label">{account.label}</span>
           <span class="acct-user">{account.username}</span>
+          {#if paused}
+            <button
+              type="button"
+              class="mini-btn primary"
+              onclick={() => (passwordAccountId = account.id)}
+            >
+              Enter password
+            </button>
+          {:else}
           <button
             type="button"
             class="mini-btn"
@@ -248,16 +331,60 @@
           >
             {refreshingId === account.id ? 'Refreshing…' : 'Refresh'}
           </button>
+          {/if}
           <button
             type="button"
             class="mini-btn danger"
             onclick={() => handleRemove(account.id)}
             onmouseleave={() => (confirmRemoveId = null)}
           >
-            {confirmRemoveId === account.id ? 'Really remove?' : 'Remove'}
+            {confirmRemoveId === account.id ? 'Remove from all devices?' : 'Remove'}
           </button>
         </div>
-        {#each account.calendars as cal (cal.id)}
+        {#if relayEditId === account.id}
+          <form class="relay-form" onsubmit={(e) => { e.preventDefault(); saveRelay(account); }}>
+            <label class="flabel" for="relay-{account.id}">
+              {isStagingBuild ? 'Relay for staging' : 'Relay (Sockethub server)'}
+            </label>
+            <input
+              id="relay-{account.id}"
+              type="url"
+              bind:value={relayDraft}
+              placeholder={isStagingBuild ? accountEndpoint(account, false) : DEFAULT_SOCKETHUB_ENDPOINT}
+            />
+            <p class="hint">
+              {#if isStagingBuild}
+                Used by the staging app only. Leave empty to use the same
+                relay as the main app ({hostOf(accountEndpoint(account, false))}).
+              {:else}
+                Used on all your devices. Leave empty for the app's default.
+              {/if}
+            </p>
+            {#if relayError}<p class="error">{relayError}</p>{/if}
+            <div class="relay-actions">
+              <button type="button" class="mini-btn" onclick={() => (relayEditId = null)}>Cancel</button>
+              <button type="submit" class="mini-btn primary">Save</button>
+            </div>
+          </form>
+        {:else}
+          <p class="acct-meta">
+            <span>
+              Relay: {hostOf(accountEndpoint(account))}{#if isStagingBuild}{account.stagingEndpoint ? ' (staging only)' : ' (same as the main app)'}{/if}
+            </span>
+            <button type="button" class="meta-btn" onclick={() => editRelay(account)}>Change</button>
+            {#if !paused}
+              <button type="button" class="meta-btn" onclick={() => forgetPassword(account)}>Forget password on this device</button>
+            {/if}
+          </p>
+        {/if}
+        {#if paused}
+          <p class="paused-note">
+            Set up on another device. Enter the password to sync
+            {account.calendars.length === 1 ? 'its calendar' : `its ${account.calendars.length} calendars`}
+            from this device too: {account.calendars.map((c) => c.name).join(', ')}.
+          </p>
+        {/if}
+        {#each paused ? [] : account.calendars as cal (cal.id)}
           {@const hidden = account.hiddenCalendarIds?.includes(cal.id)}
           {@const linked = linkedCollection(cal.id, $collections)}
           {@const calStatus = $calendarSyncStatus[cal.id]}
@@ -731,6 +858,70 @@
 
   .vis-label input {
     accent-color: var(--accent);
+  }
+
+  .acct-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.2rem 0.7rem;
+    margin: 0.3rem 0 0.2rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+
+  .acct-meta span {
+    overflow-wrap: anywhere;
+  }
+
+  .meta-btn {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+
+  .meta-btn:hover {
+    color: var(--text);
+  }
+
+  .paused-note {
+    margin: 0.3rem 0 0;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--text-muted);
+  }
+
+  .relay-form {
+    margin: 0.5rem 0 0.3rem;
+  }
+
+  .relay-form input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 1rem;
+  }
+
+  .relay-form input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .relay-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    margin-top: 0.4rem;
   }
 
   .empty {
