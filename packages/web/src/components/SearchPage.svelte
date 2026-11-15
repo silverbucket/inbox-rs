@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { InboxItem } from '@inbox-rs/rs-module';
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { inview } from '../lib/actions';
   import { isTodoLike, parseQuery, searchItemsWithTerms } from '../lib/search';
   import { collections, groups, items } from '../lib/stores';
@@ -35,6 +35,7 @@
   // svelte-ignore state_referenced_locally
   let text = $state(query);
   let inputEl = $state<HTMLInputElement | null>(null);
+  let formEl = $state<HTMLFormElement | null>(null);
 
   // The route is the source of truth; when it changes underneath us (a
   // pasted link, browser history), adopt its text. Edits flow the other way
@@ -70,11 +71,47 @@
     visibleCards = PAGE;
     visibleTodos = PAGE;
     onquerychange(next);
+    // Results replace the hint, so the page may only now be tall enough.
+    if (fieldFocused) void tick().then(pinFieldToTop);
   }
 
   function clear() {
     setText('');
     inputEl?.focus();
+  }
+
+  // Phones: the software keyboard covers the lower half of the screen, so
+  // the field has to get out of the way of its own results.
+  const onPhone = () => window.matchMedia('(max-width: 600px)').matches;
+  let fieldFocused = $state(false);
+
+  /** Scroll the header away so the field sits at the top and results get the rest. */
+  function pinFieldToTop() {
+    if (!onPhone() || !formEl) return;
+    const offset = formEl.getBoundingClientRect().top - stickyTop(formEl);
+    if (offset > 1) window.scrollBy({ top: offset, behavior: 'instant' });
+  }
+
+  function stickyTop(el: HTMLElement): number {
+    return Number.parseFloat(getComputedStyle(el).top) || 0;
+  }
+
+  async function handleFocus() {
+    fieldFocused = true;
+    // Wait for the focused min-height to apply, so there is room to scroll.
+    await tick();
+    pinFieldToTop();
+  }
+
+  /** The keyboard's Search key: put the keyboard away to show the results. */
+  function handleSubmit(e: SubmitEvent) {
+    e.preventDefault();
+    if (onPhone()) inputEl?.blur();
+  }
+
+  /** Dragging the results means reading them: put the keyboard away. */
+  function handleResultsTouchMove() {
+    if (document.activeElement === inputEl) inputEl?.blur();
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -114,8 +151,8 @@
   }
 </script>
 
-<div class="search-page">
-  <form class="search-form" role="search" onsubmit={(e) => e.preventDefault()}>
+<div class="search-page" class:field-focused={fieldFocused}>
+  <form bind:this={formEl} class="search-form" role="search" onsubmit={handleSubmit}>
     <div class="search-box">
       <svg aria-hidden="true" class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="11" cy="11" r="8"></circle>
@@ -135,6 +172,8 @@
         enterkeyhint="search"
         oninput={(e) => setText(e.currentTarget.value)}
         onkeydown={handleKeydown}
+        onfocus={handleFocus}
+        onblur={() => (fieldFocused = false)}
       />
       {#if text}
         <button type="button" class="search-clear" aria-label="Clear search" onclick={clear}>
@@ -158,6 +197,8 @@
       <p class="empty-sub">Try fewer words, or check the spelling.</p>
     </div>
   {:else}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="results" ontouchmove={handleResultsTouchMove}>
     <div class="status-bar" role="status">
       <span class="status-count">{results.length}</span>
       {results.length === 1 ? 'result' : 'results'} for “{text.trim()}”
@@ -236,6 +277,7 @@
         </div>
       </section>
     {/if}
+    </div>
   {/if}
 </div>
 
@@ -249,6 +291,35 @@
   .search-form {
     display: flex;
     justify-content: center;
+  }
+
+  .results {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  @media (max-width: 600px) {
+    /* The field stays put while results scroll beneath it. Full-bleed and
+       opaque so cards don't show through beside the pill. */
+    .search-form {
+      position: sticky;
+      top: env(safe-area-inset-top, 0px);
+      z-index: 5;
+      margin: -0.5rem -1rem;
+      padding: 0.5rem 1rem;
+      background: var(--bg);
+    }
+
+    /* Tall enough that the header can always scroll off above the field,
+       however few results there are. */
+    .search-page.field-focused {
+      min-height: 100vh;
+    }
+
+    .results {
+      gap: 0.6rem;
+    }
   }
 
   .search-box {
