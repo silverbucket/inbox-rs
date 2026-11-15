@@ -81,9 +81,14 @@ export function accountEndpoint(
 /**
  * The same server and username always give the same id, so an account added
  * on two devices is one synced record instead of two.
+ *
+ * Only the scheme and host ignore case (`URL` lowercases them): paths are
+ * case-sensitive, so `/dav/Alice` and `/dav/alice` are two accounts. The
+ * username does ignore case — CalDAV logins do in practice, and phones
+ * capitalise its first letter, which must not split one account into two.
  */
 export function calendarAccountId(url: string, username: string): string {
-  const key = `${url.trim().toLowerCase().replace(/\/+$/, '')}\n${username.trim().toLowerCase()}`;
+  const key = `${serverKey(url)}\n${username.trim().toLowerCase()}`;
   // cyrb53: a small, well-spread string hash. Not security-relevant.
   let h1 = 0xdeadbeef;
   let h2 = 0x41c6ce57;
@@ -98,6 +103,18 @@ export function calendarAccountId(url: string, username: string): string {
   h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
   const hash = 4294967296 * (2097151 & h2) + (h1 >>> 0);
   return `cal-${hash.toString(36)}`;
+}
+
+function serverKey(url: string): string {
+  const trimmed = url.trim();
+  let server = trimmed;
+  try {
+    const parsed = new URL(trimmed);
+    server = `${parsed.protocol}//${parsed.host}${parsed.pathname}${parsed.search}`;
+  } catch {
+    // Not a full URL: hash it as typed.
+  }
+  return server.replace(/\/+$/, '');
 }
 
 /** One entry per account, keyed by server and username. */
@@ -222,8 +239,21 @@ function merge(
 export function applyStoredCalendarAccounts(
   records: Record<string, unknown>,
 ): void {
-  const stored = Object.values(records).filter(isRecord);
-  const storedIds = new Set(stored.map((r) => r.id));
+  const raw = Object.values(records).filter(isRecord);
+  // Records saved under an older id formula move to their current id: the
+  // current one is stored (if missing), and only then the old one removed.
+  const stored = raw.map((r) => ({
+    ...r,
+    id: calendarAccountId(r.url, r.username),
+  }));
+  const storedIds = new Set(
+    raw.filter((r, i) => r.id === stored[i].id).map((r) => r.id),
+  );
+  const movedFrom = new Map<string, string[]>();
+  raw.forEach((r, i) => {
+    const id = stored[i].id;
+    if (r.id !== id) movedFrom.set(id, [...(movedFrom.get(id) ?? []), r.id]);
+  });
   everyAccount.update((accounts) => {
     const next = accounts.map((a) => {
       const record = stored.find((r) => r.id === a.id);
@@ -231,12 +261,24 @@ export function applyStoredCalendarAccounts(
     });
     const known = new Set(next.map((a) => a.id));
     for (const record of stored) {
-      if (!known.has(record.id)) next.push(merge(undefined, record));
+      if (known.has(record.id)) continue;
+      known.add(record.id);
+      next.push(merge(undefined, record));
     }
     return next;
   });
+  const sync = backend;
+  if (!sync) return;
   for (const account of get(everyAccount)) {
-    if (!storedIds.has(account.id)) push(account);
+    const saved = storedIds.has(account.id)
+      ? Promise.resolve()
+      : sync.store(toRecord(account));
+    const oldIds = movedFrom.get(account.id) ?? [];
+    void saved
+      .then(() => Promise.all(oldIds.map((id) => sync.remove(id))))
+      .catch((err) => {
+        console.error('Failed to sync the calendar account', err);
+      });
   }
 }
 
@@ -244,10 +286,15 @@ export function applyStoredCalendarAccounts(
 export function applyCalendarAccountChange(id: string, value: unknown): void {
   everyAccount.update((accounts) => {
     if (!isRecord(value)) return accounts.filter((a) => a.id !== id);
-    const local = accounts.find((a) => a.id === value.id);
+    // A device on an older id formula may still write the old id.
+    const record = {
+      ...value,
+      id: calendarAccountId(value.url, value.username),
+    };
+    const local = accounts.find((a) => a.id === record.id);
     return local
-      ? accounts.map((a) => (a.id === value.id ? merge(a, value) : a))
-      : [...accounts, merge(undefined, value)];
+      ? accounts.map((a) => (a.id === record.id ? merge(a, record) : a))
+      : [...accounts, merge(undefined, record)];
   });
 }
 

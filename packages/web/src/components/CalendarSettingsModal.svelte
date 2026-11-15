@@ -469,6 +469,8 @@
           bind:value={serverUrl}
           placeholder="caldav.fastmail.com"
           autocomplete="url"
+          autocapitalize="none"
+          spellcheck="false"
         />
         <label class="flabel" for="cal-user">Username</label>
         <input
@@ -477,6 +479,8 @@
           bind:value={username}
           placeholder="you@example.com"
           autocomplete="username"
+          autocapitalize="none"
+          spellcheck="false"
         />
         <label class="flabel" for="cal-pass">App password</label>
         <input
