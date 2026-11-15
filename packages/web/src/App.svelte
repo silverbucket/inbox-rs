@@ -430,6 +430,9 @@
   });
 
   function navToSearch() {
+    // On a phone the open sidebar stacks above the page and would push the
+    // search field (and its results) most of the way down the screen.
+    if (isTouch) sidebarShell?.collapseSidebar();
     if (route.page === 'search') searchFocusNonce += 1;
     else navTo('search');
   }
