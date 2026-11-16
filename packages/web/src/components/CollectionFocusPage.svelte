@@ -501,6 +501,20 @@
     }
   }
 
+  /* Touch: the two small toolbar buttons keep their look but take a
+     finger-sized tap (44px), through an invisible area around them. */
+  @media (hover: none) {
+    .focus-toolbar .btn-back {
+      position: relative;
+    }
+
+    .focus-toolbar .btn-back::after {
+      content: '';
+      position: absolute;
+      inset: -8px -5px;
+    }
+  }
+
   /* The narrowest phones: the view names alone. */
   @media (max-width: 360px) {
     .view-switch svg {

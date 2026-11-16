@@ -87,9 +87,9 @@
     onclick={(e) => e.stopPropagation()}
   >
     <div class="toolbar">
-      <button type="button" class="bx-btn bx-small" onclick={onexit} title="Back (Esc)">
+      <button type="button" class="bx-btn bx-small back" onclick={onexit} aria-label="Back" title="Back (Esc)">
         <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-        Back
+        <span class="back-label">Back</span>
       </button>
       <span class="crumb">Collections › {group?.name ?? 'Group'}</span>
     </div>
@@ -265,6 +265,23 @@
     .open-one {
       flex-basis: 100%;
       margin-left: 0;
+    }
+
+    /* Same arrow-only Back as a collection's board has on phones. */
+    .back-label {
+      display: none;
+    }
+
+    .back {
+      position: relative;
+      min-height: 2.1rem;
+      padding: 0 0.65rem;
+    }
+
+    .back::after {
+      content: '';
+      position: absolute;
+      inset: -6px;
     }
 
     /* A long board name wraps instead of pushing the page sideways. */
