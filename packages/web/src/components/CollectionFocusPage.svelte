@@ -155,12 +155,12 @@
   >
     {#if collection}
       <div class="focus-toolbar">
-        <button type="button" class="btn-back" onclick={onexit} title="Back (Esc)">
+        <button type="button" class="btn-back" onclick={onexit} aria-label="Back" title="Back (Esc)">
           <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="19" y1="12" x2="5" y2="12"></line>
             <polyline points="12 19 5 12 12 5"></polyline>
           </svg>
-          Back
+          <span class="back-label">Back</span>
         </button>
         {#if group}
           <span class="crumb-group">
@@ -482,6 +482,29 @@
 
     .view-switch button {
       padding: 0.35rem 0.6rem;
+    }
+  }
+
+  /* Phones: Back is its arrow alone. The row was exactly full with some
+     system fonts, which pushed the settings button to the screen's edge. */
+  @media (max-width: 480px) {
+    .back-label {
+      display: none;
+    }
+
+    .focus-toolbar .btn-back:first-child {
+      padding: 0.45rem 0.6rem;
+    }
+
+    .view-switch {
+      min-width: 0;
+    }
+  }
+
+  /* The narrowest phones: the view names alone. */
+  @media (max-width: 360px) {
+    .view-switch svg {
+      display: none;
     }
   }
 </style>

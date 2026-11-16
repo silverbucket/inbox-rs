@@ -53,8 +53,10 @@ test('the board toolbar fits a phone and the column strip jumps to a column', as
   ]) {
     const box = await control.boundingBox();
     if (!box) throw new Error('toolbar control not laid out');
-    expect(box.x).toBeGreaterThanOrEqual(0);
-    expect(box.x + box.width).toBeLessThanOrEqual(width);
+    // Inside the panel's side padding, not merely on screen: a row that
+    // is exactly full still looks broken, with a button on the very edge.
+    expect(box.x).toBeGreaterThanOrEqual(8);
+    expect(box.x + box.width).toBeLessThanOrEqual(width - 8);
     const hit = await control.evaluate(
       (el, [x, y]) => {
         const at = document.elementFromPoint(x, y);
