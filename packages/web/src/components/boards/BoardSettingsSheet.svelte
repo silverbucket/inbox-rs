@@ -137,6 +137,7 @@
   <Sheet title="Set up a board" subtitle="Collection: {collection.name}" {onclose} width="34rem">
     <p class="bx-lead">
       A board lays a collection out in columns, so you can move things along as they progress.
+      In the previews below, a ✓ marks the column where ticked todos end up.
     </p>
 
     {#if $columnSets.length}
@@ -159,7 +160,7 @@
                 <button type="button" class="bx-btn bx-small bx-primary" aria-label="Use {s.name}" onclick={() => choose(s.id)}>Use this board</button>
                 <span class="bx-muted">
                   {#if users.length}
-                    This collection and {collectionsPhrase(users)} will share these columns. Change one and it changes in {users.length === 1 ? 'both' : 'all of them'}.
+                    This collection and {collectionsPhrase(users)} will share these columns. Change a column and it changes in {users.length === 1 ? 'both' : 'all of them'}.
                   {:else}
                     This collection will be the first to use this board.
                   {/if}
@@ -189,7 +190,7 @@
           <span class="bx-muted">Name your own columns.</span>
         </button>
       </div>
-      <p class="bx-note explain">A ✓ marks the column where ticked todos end up. You can rename, add or remove columns at any time.</p>
+      <p class="bx-note explain">You can rename, add or remove columns at any time.</p>
     </section>
 
     {#snippet footer()}

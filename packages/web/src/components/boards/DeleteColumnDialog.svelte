@@ -37,6 +37,8 @@
         columnOf(i, set) === columnId,
     ),
   );
+  const liveUsers = $derived(users.filter((c) => !c.archived).map((c) => c.name));
+  const usersPhrase = $derived(collectionsPhrase(liveUsers));
   const holders = $derived([
     ...new Set(affected.map((i) => $collections[i.collectionId as string]?.name).filter(Boolean)),
   ]);
@@ -92,7 +94,7 @@
 
 <Sheet title="Delete “{column?.name ?? 'column'}”?" {onclose} {layer} width="28rem">
   <p class="bx-note">
-    {#if users.length > 1}{users.length} collections use the {set.name} board, so the column goes from all of them.{/if}
+    {#if liveUsers.length > 1}{usersPhrase.charAt(0).toUpperCase() + usersPhrase.slice(1)} use the {set.name} board, so the column goes from {liveUsers.length === 2 ? 'both' : 'all of them'}.{/if}
     {#if affected.length === 0}
       It's empty, so nothing else changes.
     {:else}

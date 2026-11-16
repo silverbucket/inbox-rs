@@ -70,6 +70,7 @@
     void run(async () => {
       await saveSet(copy);
       selectedId = copy.id;
+      showToast(`Made the ${copy.name} board. No collection uses it yet.`);
     }, 'Couldn’t duplicate the board');
   }
 
@@ -182,11 +183,11 @@
             onchange={(e) => rename((e.currentTarget as HTMLInputElement).value)}
           />
         </div>
-        <button type="button" class="bx-btn" title="A new board with these columns, not used by any collection yet" onclick={duplicate}>Make a copy</button>
+        <button type="button" class="bx-btn" title="A new board with these columns, not used by any collection yet" onclick={duplicate}>Make a copy of this board</button>
       </div>
 
       <div>
-        <span class="bx-label">Columns <span class="bx-muted plain">· left to right{u.length > 1 ? ` · changes apply to all ${u.length} collections` : ''}</span></span>
+        <span class="bx-label">Columns <span class="bx-muted plain">· left to right{u.length === 2 ? ' · changes apply to both collections' : u.length > 2 ? ` · changes apply to all ${u.length} collections` : ''}</span></span>
         <ul class="bx-rows">
           {#each set.columns as c, i (c.id)}
             <li class="col-row">

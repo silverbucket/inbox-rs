@@ -117,7 +117,7 @@
         </div>
       {:else}
         <div class="scope">
-          <span class="bx-label inline">Showing collections</span>
+          <span class="bx-label inline">Showing collections <span class="hint">· tap one to hide it</span></span>
           <div class="bx-chips">
             {#each onBoard as c (c.id)}
               {@const n = $collectionItems[c.id]?.length ?? 0}
@@ -237,6 +237,12 @@
 
   .inline {
     margin: 0;
+  }
+
+  .hint {
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
   }
 
   .empty {
