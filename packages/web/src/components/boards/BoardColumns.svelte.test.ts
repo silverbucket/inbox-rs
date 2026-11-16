@@ -121,8 +121,8 @@ describe('BoardColumns', () => {
   it('adds a card to a column, asking which collection when several', async () => {
     render([], { addTargets: [a, b] });
     (
-      [...column('Idea').querySelectorAll('button')].find((x) =>
-        x.textContent?.includes('Add to Idea'),
+      [...column('Idea').querySelectorAll('button')].find(
+        (x) => x.getAttribute('aria-label') === 'Add to Idea',
       ) as HTMLButtonElement
     ).click();
     flushSync();

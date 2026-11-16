@@ -42,7 +42,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.3rem 0;
+    gap: 0.3rem 0.35rem;
   }
 
   li {
@@ -56,11 +56,11 @@
   }
 
   /* A quiet chevron between columns says "left to right" without words. */
-  li:not(:last-child)::after {
+  li + li::before {
     content: '';
     width: 0.32rem;
     height: 0.32rem;
-    margin: 0 0.55rem 0 0.3rem;
+    margin: 0 0.5rem 0 0.15rem;
     border-top: 1.5px solid var(--text-muted);
     border-right: 1.5px solid var(--text-muted);
     transform: rotate(45deg);

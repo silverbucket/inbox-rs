@@ -66,9 +66,7 @@
 
   /** What an empty column is for, said once, where the cards would be. */
   function emptyHint(columnId: string): string {
-    const col = set.columns.find((c) => c.id === columnId);
     if (columnId === BOARD_UNSORTED) return 'New items land here first.';
-    if (col?.done) return 'Ticked todos move here.';
     return 'Nothing here yet.';
   }
 
@@ -327,12 +325,6 @@
         {:else}
           <h3 id="col-{set.id}-{column.id}">{column.name}</h3>
         {/if}
-        {#if column.done}
-          <span class="tag" title="Ticked todos move here">
-            <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-            Finished
-          </span>
-        {/if}
         <span class="count" aria-label="{cards.length} {cards.length === 1 ? 'item' : 'items'}">{cards.length}</span>
         {#if canAddColumns && column.id !== BOARD_UNSORTED}
           <button
@@ -347,6 +339,12 @@
           </button>
         {/if}
       </header>
+      {#if column.done}
+        <p class="finished">
+          <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          Finished <span class="finished-why">· ticked todos move here</span>
+        </p>
+      {/if}
       {#if menuFor === column.id}
         {@const at = set.columns.findIndex((c) => c.id === column.id)}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -372,6 +370,7 @@
               renaming = { id: column.id, value: column.name };
             }}
           >Rename</button>
+          <span class="menu-label">Colour</span>
           <div class="swatches" role="group" aria-label="Colour">
             {#each COLUMN_COLORS as color (color)}
               <button type="button" class="sw" aria-label="Use colour {color}" aria-pressed={column.color === color} style="background: {color}" onclick={() => recolor(column.id, color)}></button>
@@ -467,7 +466,8 @@
         {/each}
       </ul>
 
-      {#if cards.length === 0}
+      <!-- The Finished column says what it's for under its name already. -->
+      {#if cards.length === 0 && !column.done}
         <p class="empty">{emptyHint(column.id)}</p>
       {/if}
 
@@ -525,9 +525,10 @@
           <button
             type="button"
             class="add"
+            aria-label="Add to {column.name}"
             onclick={() => startAdd(column.id)}
           >
-            + {addTargets.length > 1 ? `Add to ${column.name}` : 'Add'}
+            + Add
           </button>
         {/if}
       {/if}
@@ -654,8 +655,11 @@
   }
 
   .column {
-    flex: 0 0 16.5rem;
-    max-width: 85vw;
+    /* Share the width when the columns fit, so a five-column board fills a
+       laptop screen instead of running off its edge; scroll once they
+       can't get any narrower. */
+    flex: 1 0 13.5rem;
+    max-width: min(20rem, 85vw);
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -685,6 +689,7 @@
   }
 
   .add-column {
+    flex: 0 0 9.5rem;
     background: transparent;
     border: 1px dashed var(--border);
     align-self: flex-start;
@@ -809,16 +814,22 @@
     color: var(--danger-text);
   }
 
+  .menu-label {
+    padding: 0.4rem 0.6rem 0;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+
   .swatches {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    padding: 0.35rem 0.6rem 0.5rem;
+    display: grid;
+    grid-template-columns: repeat(5, 1.5rem);
+    gap: 0.4rem;
+    padding: 0.35rem 0.6rem 0.55rem;
   }
 
   .sw {
-    width: 1.25rem;
-    height: 1.25rem;
+    width: 1.5rem;
+    height: 1.5rem;
     padding: 0;
     border: 2px solid transparent;
     border-radius: 5px;
@@ -852,7 +863,8 @@
     min-width: 0;
     font-size: 0.9rem;
     font-weight: 700;
-    overflow-wrap: anywhere;
+    /* Wrap between words; only a single word too long for the column breaks. */
+    overflow-wrap: break-word;
   }
 
   .dot {
@@ -863,16 +875,17 @@
     flex-shrink: 0;
   }
 
-  .tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.2rem;
-    font-size: 0.7rem;
+  .finished {
+    margin: -0.25rem 0 0;
+    line-height: 1.35;
+    font-size: 0.75rem;
     font-weight: 600;
     color: var(--success, #0f766e);
-    background: color-mix(in srgb, var(--success, #0f766e) 12%, transparent);
-    border-radius: 999px;
-    padding: 0.1rem 0.45rem;
+  }
+
+  .finished-why {
+    font-weight: 500;
+    color: var(--text-muted);
   }
 
   .count {
@@ -1115,12 +1128,34 @@
     font-size: 1rem;
   }
 
+  .add-input:focus,
+  .add-select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
   .add-todo {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.4rem;
     font-size: 0.8rem;
     color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .add-todo input {
+    accent-color: var(--accent);
+  }
+
+  @media (hover: none) {
+    .add-todo {
+      min-height: 2.75rem;
+    }
+
+    .add-todo input {
+      width: 1.2rem;
+      height: 1.2rem;
+    }
   }
 
   .add-actions {

@@ -137,6 +137,17 @@
   }
 
   let paletteFor = $state<string | null>(null);
+  // Arriving with a starting point already picked (from a collection's
+  // setup sheet), don't ask the same question again; just say what it is.
+  // svelte-ignore state_referenced_locally
+  let showStart = $state(!initial);
+  const startName = $derived(
+    start === 'blank'
+      ? 'Blank'
+      : start === 'copy'
+        ? `A copy of ${$columnSets.find((s) => s.id === copyFrom)?.name ?? 'your board'}`
+        : `The ${template} template`,
+  );
   // Picking who else uses the board is optional: opened from a collection,
   // it's already for that one, and the rest stays folded away.
   // svelte-ignore state_referenced_locally
@@ -259,6 +270,12 @@
       <!-- Your own boards sit beside the built-in templates: both are just
            starting points, and a board you made is as reusable as Watch list. -->
       <span class="bx-label">Start from</span>
+      {#if !showStart}
+        <p class="started">
+          <strong>{startName}</strong>
+          <button type="button" class="bx-link" onclick={() => (showStart = true)}>Change</button>
+        </p>
+      {:else}
       {#if $columnSets.length}
         <div class="bx-chips" role="group" aria-label="Your boards">
           <span class="group-name">Yours</span>
@@ -274,6 +291,7 @@
         {/each}
         <button type="button" class="bx-chip" aria-pressed={start === 'blank'} onclick={useBlank}>Blank</button>
       </div>
+      {/if}
       {#if copied}
         <p class="bx-note sub">A separate copy of {copied.name}. Changes here don't affect {copiedUsers.length ? copiedUsers.join(', ') : 'it'}.</p>
       {/if}
@@ -298,9 +316,9 @@
                 oninput={(e) => renameColumn(c.id, (e.currentTarget as HTMLInputElement).value)}
               />
               {#if c.done}
-                <span class="finished-tag">
+                <span class="finished-tag" title="Finished column">
                   <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  Finished
+                  <span class="finished-word">Finished</span>
                 </span>
               {/if}
               <span class="order">
@@ -408,6 +426,14 @@
     font-size: 0.78rem;
     font-weight: 600;
     color: var(--text-muted);
+  }
+
+  .started {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin: 0;
+    font-size: 0.9rem;
   }
 
   .col-name {
@@ -543,8 +569,14 @@
   /* Phones: each column stays one row, and the Finished tag gives way to
      the sentence below the list that says the same thing. */
   @media (max-width: 520px) {
-    .finished-tag {
+    /* Just the tick: the name needs the room, and the sentence under the
+       list spells it out. */
+    .finished-word {
       display: none;
+    }
+
+    .finished-tag {
+      padding: 0.25rem;
     }
 
     .bx-rows > li {

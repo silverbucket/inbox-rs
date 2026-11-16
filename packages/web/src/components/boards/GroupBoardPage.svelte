@@ -126,6 +126,12 @@
               </button>
             {/each}
           </div>
+          <span class="open-one">
+            <span class="bx-muted">Open</span>
+            {#each shown as c (c.id)}
+              <button type="button" class="bx-link" aria-label="Open {c.name}" onclick={() => onfocuscollection(c.id)}>{c.name}</button>
+            {/each}
+          </span>
         </div>
         {#if offBoard.length}
           <p class="bx-note">
@@ -142,11 +148,6 @@
         <p class="bx-note">
           New cards ask which collection they belong to. Moving a card changes its column, never its collection.
         </p>
-        <div class="open-one">
-          {#each shown as c (c.id)}
-            <button type="button" class="bx-link" onclick={() => onfocuscollection(c.id)}>Open {c.name}</button>
-          {/each}
-        </div>
       {/if}
     {/if}
   </div>
@@ -255,7 +256,9 @@
   .open-one {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.9rem;
+    align-items: baseline;
+    gap: 0.3rem 0.7rem;
+    margin-left: auto;
   }
 
   @media (max-width: 600px) {

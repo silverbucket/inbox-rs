@@ -61,6 +61,7 @@ test('renaming a collection keeps its board and column set', async ({
   await page.getByRole('button', { name: 'Watch list', exact: true }).click();
   // A name typed first survives picking a different starting point.
   await page.locator('#set-name').fill(setName);
+  await page.getByRole('button', { name: 'Change', exact: true }).click();
   await page.getByRole('button', { name: 'Blank', exact: true }).click();
   await expect(page.locator('#set-name')).toHaveValue(setName);
   const firstColumn = page

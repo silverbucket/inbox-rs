@@ -403,10 +403,10 @@
               <svg class="cal-badge-icon" aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>{collection.calendar.name} calendar
             </button>
           {/if}
-          {#if boardSetName}<span class="board-badge" title="Board: {boardSetName}">{boardSetName}</span>{/if}
+          {#if boardSetName}<span class="board-badge" title="Board: {boardSetName}"><svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><rect x="3" y="4" width="5" height="16" rx="1"></rect><rect x="10" y="4" width="5" height="11" rx="1"></rect><rect x="17" y="4" width="4" height="7" rx="1"></rect></svg>{boardSetName}</span>{/if}
           {#if collection.offPlan}<span class="board-badge list" title={collection.planColumnId
               ? 'Its todos stay off the Todos page, except one board column’s'
-              : 'Its todos stay off the Todos page'}>Off Todos</span>{/if}
+              : 'Its todos stay off the Todos page'}>Hidden from Todos</span>{/if}
           {#if sameNameInGroup}<span class="name-warn">same name as another collection here</span>{/if}
         </span>
       {/if}
@@ -919,19 +919,22 @@
     margin-top: 0.15rem;
   }
 
+  /* Same chip as the board's own header: icon, sentence case. */
   .board-badge {
-    font-size: 0.62rem;
-    font-weight: 700;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-    color: var(--accent-text);
-    background: var(--accent-subtler);
-    border-radius: 4px;
-    padding: 0.05rem 0.35rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.05rem 0.5rem;
+    white-space: nowrap;
   }
 
   .board-badge.list {
-    color: var(--text-muted);
+    border-color: transparent;
     background: var(--surface-tint);
   }
 
@@ -1318,7 +1321,9 @@
     }
     .color-indicator { grid-column: 2; grid-row: 1 / 3; }
     .chevron { grid-column: 3; grid-row: 1 / 3; }
-    .header-info { grid-column: 4 / 6; grid-row: 1; }
+    /* Tags drop under the name instead of squeezing it into two lines. */
+    .header-info { grid-column: 4 / 6; grid-row: 1; flex-wrap: wrap; row-gap: 0.25rem; }
+    .title-line { max-width: 100%; }
     .header-info h3 { white-space: normal; overflow-wrap: anywhere; }
     .actions-toggle {
       grid-column: 6;

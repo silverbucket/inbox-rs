@@ -213,6 +213,34 @@
     padding: 0.3rem 0.45rem;
   }
 
+  /* Phones: source on one line, destination under it, so long column
+     names never collapse into a stack of single words. */
+  @media (max-width: 520px) {
+    .bx-rows > li {
+      flex-wrap: wrap;
+    }
+
+    .bx-rows > li .bx-grow {
+      flex-basis: calc(100% - 1.5rem);
+    }
+
+    .map {
+      flex: 1;
+      width: auto;
+      max-width: none;
+    }
+
+    .auto:empty {
+      display: none;
+    }
+
+    .fromto {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.6rem;
+    }
+  }
+
   .bx-rows > li.empty {
     opacity: 0.8;
     background: var(--bg);

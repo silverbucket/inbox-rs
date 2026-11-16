@@ -171,7 +171,7 @@
 
   {#if set}
     {@const u = users(set)}
-    <section class="detail" aria-label="{set.name} column set">
+    <section class="detail" aria-label="{set.name} board">
       <div class="row">
         <div class="bx-grow">
           <label class="bx-label" for="set-name-edit">Board name</label>
@@ -183,26 +183,7 @@
           />
         </div>
         <button type="button" class="bx-btn" onclick={duplicate}>Duplicate</button>
-        {#if confirmDelete}
-          <button type="button" class="bx-btn bx-danger" onclick={removeSet}>Delete {set.name}</button>
-          <button type="button" class="bx-btn" onclick={() => (confirmDelete = false)}>Keep</button>
-        {:else}
-          <button type="button" class="bx-btn bx-danger" onclick={() => (confirmDelete = true)}>Delete board…</button>
-        {/if}
       </div>
-      {#if confirmDelete}
-        {@const all = Object.values($collections).filter((c) => c.boardSetId === set.id)}
-        {@const archived = all.length - u.length}
-        {@const lists = all.filter((c) => c.offPlan && c.planColumnId)}
-        <p class="bx-warn">
-          {all.length
-            ? `${all.length} ${all.length === 1 ? 'collection loses its board' : 'collections lose their boards'}${archived ? ` (${archived} archived)` : ''}; their items keep their columns in case you set it up again.`
-            : 'No collection uses this board.'}
-          {#if lists.length}
-            {lists.map((c) => c.name).join(', ')} {lists.length === 1 ? 'keeps' : 'keep'} todos off the Todos page except one column's; without the board, none of {lists.length === 1 ? 'its' : 'their'} todos show there until you change that under Edit collection.
-          {/if}
-        </p>
-      {/if}
 
       <div>
         <span class="bx-label">Columns <span class="bx-muted plain">· left to right{u.length > 1 ? ` · changes apply to all ${u.length} collections` : ''}</span></span>
@@ -297,6 +278,29 @@
           <p class="bx-note">No collection uses this board yet.</p>
         {/if}
       </div>
+      <div class="danger-zone">
+        {#if confirmDelete}
+          {@const all = Object.values($collections).filter((c) => c.boardSetId === set.id)}
+          {@const archived = all.length - u.length}
+          {@const lists = all.filter((c) => c.offPlan && c.planColumnId)}
+          <p class="bx-warn">
+            {all.length
+              ? `${all.length} ${all.length === 1 ? 'collection loses its board' : 'collections lose their boards'}${archived ? ` (${archived} archived)` : ''}; their items keep their columns in case you set it up again.`
+              : 'No collection uses this board.'}
+            {#if lists.length}
+              {lists.map((c) => c.name).join(', ')} {lists.length === 1 ? 'keeps' : 'keep'} todos off the Todos page except one column's; without the board, none of {lists.length === 1 ? 'its' : 'their'} todos show there until you change that under Edit collection.
+            {/if}
+          </p>
+        {/if}
+        <div class="row">
+          {#if confirmDelete}
+            <button type="button" class="bx-btn bx-danger" onclick={removeSet}>Delete {set.name}</button>
+            <button type="button" class="bx-btn" onclick={() => (confirmDelete = false)}>Keep</button>
+          {:else}
+            <button type="button" class="bx-btn bx-quiet bx-danger" onclick={() => (confirmDelete = true)}>Delete this board…</button>
+          {/if}
+        </div>
+      </div>
     </section>
   {/if}
 </div>
@@ -317,6 +321,14 @@
 {/if}
 
 <style>
+  .danger-zone {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--border);
+  }
+
   .finished-tag {
     padding: 0.1rem 0.45rem;
     border-radius: 999px;

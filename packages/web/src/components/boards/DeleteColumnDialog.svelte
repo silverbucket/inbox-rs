@@ -50,13 +50,19 @@
     add(set.columns[at - 1]?.id, 'the column before');
     add(set.columns[at + 1]?.id, 'the column after');
     add(BOARD_UNSORTED, 'sort them later');
-    add(doneColumn(set)?.id, 'done column');
+    add(doneColumn(set)?.id, 'the Finished column');
     return out;
   });
 
   const isOpenTodo = (i: (typeof affected)[number]) => (i.isTodo || i.type === 'todo') && !i.completed;
   // svelte-ignore state_referenced_locally
-  let target = $state(options.find((o) => o.hint === 'the column after')?.id ?? options[0]?.id ?? BOARD_UNSORTED);
+  // The next column along, unless that's the Finished one: sending open
+  // items there by default would be a surprise.
+  let target = $state(
+    options.find((o) => o.hint === 'the column after' && o.id !== doneColumn(set)?.id)?.id ??
+      options[0]?.id ??
+      BOARD_UNSORTED,
+  );
   let busy = $state(false);
   /** Lists showing this column on the plan; their plan column moves with the items. */
   const planLists = $derived(
@@ -90,7 +96,7 @@
     {#if affected.length === 0}
       It's empty, so nothing else changes.
     {:else}
-      Its {affected.length} {affected.length === 1 ? 'item' : 'items'}{holders.length ? ` — in ${holders.join(', ')} —` : ''} need a new home. Nothing is deleted except the column, and no todo is checked or unchecked.
+      Choose where its {affected.length} {affected.length === 1 ? 'item' : 'items'}{holders.length ? ` (in ${holders.join(', ')})` : ''} should go. Only the column is deleted: items stay in their collections, and no todo is ticked or unticked.
     {/if}
   </p>
   {#if planLists.length > 0}
@@ -133,7 +139,7 @@
   {#snippet footer()}
     <button type="button" class="bx-btn" onclick={onclose}>Cancel</button>
     <button type="button" class="bx-btn bx-primary" disabled={busy} onclick={confirm}>
-      {affected.length ? `Move ${affected.length} & delete column` : 'Delete column'}
+      {affected.length ? `Move ${affected.length} ${affected.length === 1 ? 'item' : 'items'} and delete` : 'Delete column'}
     </button>
   {/snippet}
 </Sheet>

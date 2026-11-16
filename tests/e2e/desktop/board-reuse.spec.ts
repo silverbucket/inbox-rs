@@ -100,9 +100,7 @@ test('a board made for one collection can be shared with or copied to another', 
   await openBoardPicker(drums);
   await page.getByRole('button', { name: `Copy ${setName}` }).click();
   const dialog = page.getByRole('dialog', { name: 'New board' });
-  await expect(
-    dialog.getByRole('button', { name: setName, exact: true }),
-  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(dialog.getByText(`A copy of ${setName}`)).toBeVisible();
   await expect(page.locator('#set-name')).toHaveValue(`${setName} copy`);
   await expect(dialog.getByText(`A separate copy of ${setName}`)).toBeVisible();
   await expect(

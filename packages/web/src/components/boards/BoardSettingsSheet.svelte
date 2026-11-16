@@ -57,10 +57,14 @@
       .map((c) => c.name);
   }
 
-  const templates = SET_TEMPLATES.map((t) => ({
-    name: t.name,
-    columns: t.columns.map(([name, color, done]) => ({ id: name, name, color, done })),
-  }));
+  // A starter you already have a board of (same name) would only show up
+  // twice, once above as yours and once here: offer it once.
+  const templates = $derived(
+    SET_TEMPLATES.filter((t) => !$columnSets.some((s) => s.name === t.name)).map((t) => ({
+      name: t.name,
+      columns: t.columns.map(([name, color, done]) => ({ id: name, name, color, done })),
+    })),
+  );
 
   async function run(action: () => Promise<unknown>, fail: string) {
     try {
@@ -88,8 +92,8 @@
       }
       showToast(
         collection?.offPlan
-          ? `Board removed. ${collection.name}'s todos are still kept off the Todos page; change that under Edit collection.`
-          : 'Board removed. Items remember their columns if you set it up again.',
+          ? `Board removed from ${collection.name}. Its todos are still kept off the Todos page; change that under Edit collection.`
+          : `Board removed from ${collection?.name}. Items remember their columns if you set it up again.`,
       );
       onclose();
     }, 'Couldn’t remove the board');
@@ -160,7 +164,7 @@
     {/if}
 
     <section aria-labelledby="pick-new">
-      <h3 class="bx-label" id="pick-new">{$columnSets.length ? 'Or start a new one' : 'Pick a starting point'}</h3>
+      <h3 class="bx-label" id="pick-new">{$columnSets.length ? 'Or start fresh from a template' : 'Pick a template to start from'}</h3>
       <div class="bx-options">
         {#each templates as t (t.name)}
           <button type="button" class="bx-option" aria-label={t.name} onclick={() => (creating = { kind: 'template', name: t.name })}>
@@ -228,17 +232,21 @@
             checked={!!planColumn}
             onchange={(e) => void run(() => setOffPlan(collectionId, true, (e.currentTarget as HTMLInputElement).checked ? planOptions[0].id : undefined), 'Couldn’t save that')}
           />
-          <span>Except todos in</span>
+          <span class="except-text">
+            <span>Still show the todos in one column</span>
+            <span class="bx-muted">They appear on the Todos page under Someday.</span>
+          </span>
+        </label>
+        {#if planColumn}
           <select
-            class="bx-select inline"
+            class="bx-select except-pick"
             aria-label="Column whose todos still show on the Todos page"
-            value={planColumn || planOptions[0].id}
+            value={planColumn}
             onchange={(e) => void run(() => setOffPlan(collectionId, true, (e.currentTarget as HTMLSelectElement).value), 'Couldn’t save that')}
           >
             {#each planOptions as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
           </select>
-          <span class="bx-muted">· shown under Someday</span>
-        </label>
+        {/if}
       {/if}
     </section>
 
@@ -247,8 +255,12 @@
       {#if doneColumn(set)}Ticking a todo moves it to {doneColumn(set)?.name}.{:else}Mark a column as Finished (under Edit columns) and ticked todos move there instead of disappearing.{/if}
     </p>
 
+    <p class="bx-note">
+      Removing the board only changes how {collection.name} is laid out. Its items stay, and {set.name} stays available for other collections.
+    </p>
+
     {#snippet footer()}
-      <button type="button" class="bx-btn bx-quiet bx-danger remove" onclick={turnOff}>Remove board</button>
+      <button type="button" class="bx-btn bx-quiet bx-danger remove" onclick={turnOff}>Remove board from {collection.name}</button>
       <button type="button" class="bx-btn bx-primary" onclick={onclose}>Done</button>
     {/snippet}
   </Sheet>
@@ -290,15 +302,25 @@
     width: auto;
   }
 
-  .bx-select.inline {
-    padding: 0.2rem 0.4rem;
+
+  .except-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
+  .except-pick {
+    width: auto;
+    max-width: 100%;
+    margin-left: 1.55rem;
+    align-self: flex-start;
+    padding: 0.3rem 0.5rem;
   }
 
   .except {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.45rem;
+    align-items: flex-start;
+    gap: 0.55rem;
     padding-top: 0.6rem;
     border-top: 1px solid var(--border);
     font-size: 0.86rem;
@@ -306,6 +328,7 @@
   }
 
   .except input[type='checkbox'] {
+    margin-top: 0.2rem;
     accent-color: var(--accent);
   }
 
