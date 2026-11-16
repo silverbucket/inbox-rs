@@ -142,7 +142,7 @@
     {#if from && to}
       <div>
         <span class="bx-label">Where should the items go?</span>
-        <p class="bx-note above">Choose where the items from each column should go. Matching names are selected for you.{#if fromDone && toDone && fromDone.name.trim().toLowerCase() !== toDone.name.trim().toLowerCase()}{' '}{fromDone.name} goes to {toDone.name}: each is its board's Finished column.{/if}</p>
+        <p class="bx-note above">Choose where the items from each column should go. Matching names are selected for you.{#if fromDone && toDone && fromDone.name.trim().toLowerCase() !== toDone.name.trim().toLowerCase()}{' '}{fromDone.name} goes to {toDone.name}, since both are Finished columns.{/if}</p>
         <ul class="bx-rows">
           {#each from.columns as c (c.id)}
             {@const n = counts.get(c.id) ?? 0}

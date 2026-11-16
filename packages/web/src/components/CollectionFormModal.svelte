@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Collection, CollectionGroup } from '@inbox-rs/rs-module';
+  import ByScreen from './boards/ByScreen.svelte';
   import { get } from 'svelte/store';
   import { appConfig, collections, groups, sortedGroups, storeGroup, updateConfig } from '../lib/stores';
   import LinkCalendarSheet from './LazyLinkCalendarSheet.svelte';
@@ -221,7 +222,7 @@
   <label class="check">
     <input type="checkbox" bind:checked={offPlan} />
     <span>
-      <span class="check-title">Keep its todos off the Todos page</span>
+      <span class="check-title">Keep its todos off <ByScreen wide="the Todos page" phone="Today and Plan" /></span>
       <span class="check-hint">For collections where todos aren't tasks to schedule.</span>
     </span>
   </label>

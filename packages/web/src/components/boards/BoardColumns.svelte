@@ -142,7 +142,7 @@
     if (column.done) return 'When you tick a todo, it moves here';
     const current = set.columns.find((c) => c.done);
     return current
-      ? `Ticked todos will move here instead of to ${current.name}`
+      ? `Ticked todos will move here, not to ${current.name}`
       : 'Ticked todos will move here instead of disappearing';
   }
 

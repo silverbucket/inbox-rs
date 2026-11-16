@@ -17,6 +17,7 @@
   import { openColumnSet } from '../../lib/settings-request';
   import { collections, items } from '../../lib/stores';
   import { showToast } from '../../lib/toast';
+  import ByScreen from './ByScreen.svelte';
   import ColumnsPreview from './ColumnsPreview.svelte';
   import MoveSetDialog from './MoveSetDialog.svelte';
   import NewSetDialog, { type SetStart } from './NewSetDialog.svelte';
@@ -215,10 +216,10 @@
     </section>
 
     <section class="bx-panel" aria-labelledby="todos-page">
-      <span class="bx-label tight" id="todos-page">Todos page</span>
+      <span class="bx-label tight" id="todos-page"><ByScreen wide="Todos page" phone="Today and Plan" /></span>
       <label class="bx-setting">
         <span class="bx-setting-text">
-          <span class="bx-setting-title">Keep this collection's todos off the Todos page</span>
+          <span class="bx-setting-title">Keep this collection's todos off <ByScreen wide="the Todos page" phone="Today and Plan" /></span>
           <span class="bx-muted">For collections where todos aren't tasks to schedule.</span>
         </span>
         <input
@@ -239,7 +240,7 @@
           />
           <span class="except-text">
             <span>Still show the todos from one column</span>
-            <span class="bx-muted">{planColumn ? 'They appear on the Todos page under Someday.' : 'You pick the column; its todos appear on the Todos page under Someday.'}</span>
+            <span class="bx-muted">{planColumn ? 'They appear' : 'You pick the column; its todos appear'} <ByScreen wide="on the Todos page under Someday." phone="in Plan, under Someday." /></span>
           </span>
         </label>
         {#if planColumn}

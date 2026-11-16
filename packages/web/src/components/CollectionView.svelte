@@ -40,6 +40,7 @@
   } from '../lib/stores';
   import { fileItem } from '../lib/triage-actions';
   import { columnSets } from '../lib/board-actions';
+  import ByScreen from './boards/ByScreen.svelte';
   import { showToast } from '../lib/toast';
   import InboxCard from './InboxCard.svelte';
   import CaptureBar from './CaptureBar.svelte';
@@ -405,8 +406,8 @@
           {/if}
           {#if boardSetName}<span class="board-badge" title="Board: {boardSetName}"><svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><rect x="3" y="4" width="5" height="16" rx="1"></rect><rect x="10" y="4" width="5" height="11" rx="1"></rect><rect x="17" y="4" width="4" height="7" rx="1"></rect></svg><span class="bb-text">{boardSetName}</span></span>{/if}
           {#if collection.offPlan}<span class="board-badge list" title={collection.planColumnId
-              ? 'Its todos stay off the Todos page, except one board column’s'
-              : 'Its todos stay off the Todos page'}><svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 5.2A9.8 9.8 0 0 1 12 5c5.5 0 9 5 10 7a13 13 0 0 1-2.9 3.7M6.3 6.4A13.300 13.300 0 0 0 2 12c1 2 4.500 7 10 7a9.600 9.600 0 0 0 4.400-1.100M9.900 9.900a3 3 0 0 0 4.200 4.200"></path></svg>Hidden from Todos</span>{/if}
+              ? 'Its todos stay off the Todos page (Today and Plan on a phone), except one board column’s'
+              : 'Its todos stay off the Todos page (Today and Plan on a phone)'}><svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 5.2A9.8 9.8 0 0 1 12 5c5.5 0 9 5 10 7a13 13 0 0 1-2.9 3.7M6.3 6.4A13.300 13.300 0 0 0 2 12c1 2 4.500 7 10 7a9.600 9.600 0 0 0 4.400-1.100M9.900 9.900a3 3 0 0 0 4.200 4.200"></path></svg>Hidden from <ByScreen wide="Todos" phone="Plan" /></span>{/if}
           {#if sameNameInGroup}<span class="name-warn">same name as another collection here</span>{/if}
         </span>
       {/if}
