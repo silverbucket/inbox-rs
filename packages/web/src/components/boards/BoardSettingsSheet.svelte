@@ -16,8 +16,9 @@
   import { openColumnSet } from '../../lib/settings-request';
   import { collections, items } from '../../lib/stores';
   import { showToast } from '../../lib/toast';
+  import { SET_TEMPLATES } from '../../lib/boards';
   import MoveSetDialog from './MoveSetDialog.svelte';
-  import NewSetDialog from './NewSetDialog.svelte';
+  import NewSetDialog, { type SetStart } from './NewSetDialog.svelte';
   import Sheet from './Sheet.svelte';
   import './boards.css';
 
@@ -47,7 +48,16 @@
   );
 
   let switching = $state(false);
-  let creating = $state(false);
+  /** The starting point the new-board dialog opens on, when it's open. */
+  let creating = $state<SetStart | null>(null);
+
+  /** "used by Guitar, Piano" for a set on offer, so sharing has a face. */
+  function usedBy(setId: string): string {
+    const names = Object.values($collections)
+      .filter((c) => c.boardSetId === setId && !c.archived)
+      .map((c) => c.name);
+    return names.length ? `used by ${names.join(', ')}` : 'not used yet';
+  }
 
   async function run(action: () => Promise<unknown>, fail: string) {
     try {
@@ -70,7 +80,7 @@
       await setCollectionView(collectionId, 'grid');
       // Still a list without its board: say so, since its todos stay hidden.
       if (collection?.offPlan) {
-        showToast(`Board off. ${collection.name} is still a list, so its todos stay off the plan; untick “It's a list” to bring them back.`);
+        showToast(`Board off. ${collection.name} is still a list, so its todos stay off the plan; untick “It's a list” under Edit collection to bring them back.`);
       }
       onclose();
     }, 'Couldn’t turn the board off');
@@ -95,17 +105,19 @@
   <MoveSetDialog {collectionId} onclose={() => (switching = false)} />
 {:else if creating}
   <NewSetDialog
+    title="New board"
+    start={creating}
     preselect={[collectionId]}
     layer={230}
-    onclose={() => (creating = false)}
+    onclose={() => (creating = null)}
     oncreated={() => {
       void run(() => setCollectionView(collectionId, 'board'), 'Couldn’t open the board');
       onclose();
     }}
   />
 {:else}
-  <!-- Shown with or without a board: a list keeps its todos off the plan
-       either way, so turning the board off mustn't hide the way back. -->
+  <!-- Only offered once there's a board, beside the plan column it gates.
+       Without one it lives in the collection's edit form alone. -->
   {#snippet listToggle(col: NonNullable<typeof collection>)}
     <label class="toggle">
       <input
@@ -120,22 +132,36 @@
     {#if !collection}
       <p class="bx-note">This collection no longer exists.</p>
     {:else if !set}
-      <p class="bx-note">Pick a column set to lay {collection.name} out as a board. Sets are shared: collections on the same set can share a board.</p>
       {#if $columnSets.length}
-        <ul class="bx-rows">
-          {#each $columnSets as s (s.id)}
-            <li>
-              <span class="bx-grow">
-                <strong>{s.name}</strong>
-                <span class="strip" aria-hidden="true">{#each s.columns as c (c.id)}<i style="background: {c.color}"></i>{/each}</span>
-              </span>
-              <button type="button" class="bx-btn bx-small" onclick={() => choose(s.id)}>Use</button>
-            </li>
-          {/each}
-        </ul>
+        <div>
+          <span class="bx-label">Your boards</span>
+          <ul class="bx-rows">
+            {#each $columnSets as s (s.id)}
+              <li>
+                <span class="bx-grow">
+                  <strong>{s.name}</strong> <span class="bx-muted">· {usedBy(s.id)}</span>
+                  <span class="strip" aria-hidden="true">{#each s.columns as c (c.id)}<i style="background: {c.color}"></i>{/each}</span>
+                </span>
+                <button type="button" class="bx-btn bx-small" aria-label="Share {s.name}" onclick={() => choose(s.id)}>Share</button>
+                <button type="button" class="bx-btn bx-small" aria-label="Copy {s.name}" onclick={() => (creating = { kind: 'copy', id: s.id })}>Copy</button>
+              </li>
+            {/each}
+          </ul>
+        </div>
+        <p class="bx-note">
+          <strong>Share</strong>: {collection.name} keeps the same columns as the others — editing them changes every collection on that board.<br />
+          <strong>Copy</strong>: {collection.name} gets its own columns to change freely.
+        </p>
       {/if}
-      <button type="button" class="bx-btn" onclick={() => (creating = true)}>New column set…</button>
-      {@render listToggle(collection)}
+      <div>
+        <span class="bx-label">{$columnSets.length ? 'Or start fresh' : 'Start from'}</span>
+        <div class="bx-chips" role="group" aria-label="Start fresh">
+          <button type="button" class="bx-chip" onclick={() => (creating = { kind: 'blank' })}>Blank</button>
+          {#each SET_TEMPLATES as t (t.name)}
+            <button type="button" class="bx-chip" onclick={() => (creating = { kind: 'template', name: t.name })}>{t.name}</button>
+          {/each}
+        </div>
+      </div>
     {:else}
       <div>
         <span class="bx-label">Column set</span>
@@ -197,8 +223,12 @@
     {/if}
 
     {#snippet footer()}
-      {#if set}<button type="button" class="bx-btn bx-danger" onclick={turnOff}>Turn off board</button>{/if}
-      <button type="button" class="bx-btn bx-primary" onclick={onclose}>Done</button>
+      {#if set}
+        <button type="button" class="bx-btn bx-danger" onclick={turnOff}>Turn off board</button>
+        <button type="button" class="bx-btn bx-primary" onclick={onclose}>Done</button>
+      {:else}
+        <button type="button" class="bx-btn" onclick={onclose}>Cancel</button>
+      {/if}
     {/snippet}
   </Sheet>
 {/if}

@@ -8,7 +8,7 @@
  * closed the modal and threw the typing away.
  *
  * Driven with real mouse input on the dialog from the report — a board's
- * "New column set" — because a synthetic click has no press to stray from.
+ * "New board" — because a synthetic click has no press to stray from.
  * The second half pins that a deliberate click on the backdrop still closes.
  *
  * Runs in its own account: the collection and group it creates would
@@ -42,9 +42,9 @@ test('dragging a text selection off a modal leaves it open; clicking the backdro
 
   await page.getByRole('button', { name: `Focus on ${collection}` }).click();
   await page.getByRole('button', { name: 'Board', exact: true }).click();
-  await page.getByRole('button', { name: 'New column set…' }).click();
+  await page.getByRole('button', { name: 'Watch list', exact: true }).click();
 
-  const dialog = page.getByRole('dialog', { name: 'New column set' });
+  const dialog = page.getByRole('dialog', { name: 'New board' });
   const name = page.locator('#set-name');
   await name.fill('My own stages');
 

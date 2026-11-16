@@ -41,7 +41,7 @@ test('a card from the bottom of a long column drops into a short one beside it',
     .first()
     .click({ force: true });
   await page.getByRole('button', { name: /Columns/ }).click();
-  await page.getByRole('button', { name: 'New column set…' }).click();
+  await page.getByRole('button', { name: 'Pipeline', exact: true }).click();
   await page.getByRole('button', { name: 'Pipeline', exact: true }).click();
   await page.locator('.bx-primary').last().click();
   const done = page.getByRole('button', { name: 'Done', exact: true });

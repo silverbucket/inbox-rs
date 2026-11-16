@@ -1,3 +1,11 @@
+<script lang="ts" module>
+  /** Where a new set's columns come from. */
+  export type SetStart =
+    | { kind: 'template'; name: string }
+    | { kind: 'copy'; id: string }
+    | { kind: 'blank' };
+</script>
+
 <script lang="ts">
   /**
    * Create a column set: from a template, a copy of another set, or blank;
@@ -22,11 +30,16 @@
   import './boards.css';
 
   let {
+    title = 'New column set',
+    start: initial = undefined,
     preselect = [],
     layer = 340,
     onclose,
     oncreated,
   }: {
+    title?: string;
+    /** The starting point to open on (default: the first template). */
+    start?: SetStart;
     /** Collections to tick from the start. */
     preselect?: string[];
     layer?: number;
@@ -110,6 +123,20 @@
     columns = [...columns, { id: newId(), name: 'New column', color: nextColumnColor(columns) }];
   }
 
+  // svelte-ignore state_referenced_locally
+  if (initial?.kind === 'template') useTemplate(initial.name);
+  else if (initial?.kind === 'copy') useCopy(initial.id);
+  else if (initial?.kind === 'blank') useBlank();
+
+  const copied = $derived(start === 'copy' ? $columnSets.find((s) => s.id === copyFrom) : undefined);
+  const copiedUsers = $derived(
+    copied
+      ? Object.values($collections)
+          .filter((c) => c.boardSetId === copied.id && !c.archived)
+          .map((c) => c.name)
+      : [],
+  );
+
   const live = $derived(
     Object.values($collections)
       .filter((c) => !c.archived)
@@ -168,7 +195,7 @@
       await saveSet(set);
       createdSetId = set.id;
       await setCollectionsBoard(fresh, set.id);
-      showToast(`Created ${set.name}`);
+      showToast(`Saved ${set.name}. Other collections can use it too — pick it when you turn on their board.`);
       if (queue.length) switchQueue = queue;
       else finish();
     } catch (error) {
@@ -191,30 +218,32 @@
     }}
   />
 {:else}
-  <Sheet title="New column set" {onclose} {layer} width="36rem">
+  <Sheet {title} {onclose} {layer} width="36rem">
     <div>
       <label class="bx-label" for="set-name">Name</label>
       <input id="set-name" class="bx-input" bind:value={name} placeholder="e.g. Release" />
     </div>
 
     <div>
-      <span class="bx-label">Start from</span>
-      <div class="bx-chips" role="group" aria-label="Start from">
-        <button type="button" class="bx-chip" aria-pressed={start === 'template'} onclick={() => useTemplate(template)}>Template</button>
-        <button type="button" class="bx-chip" aria-pressed={start === 'copy'} disabled={!$columnSets.length} onclick={() => useCopy(copyFrom || $columnSets[0]?.id)}>Copy a set</button>
-        <button type="button" class="bx-chip" aria-pressed={start === 'blank'} onclick={useBlank}>Blank</button>
-      </div>
-      {#if start === 'template'}
-        <div class="bx-chips sub" role="group" aria-label="Template">
-          {#each SET_TEMPLATES as t (t.name)}
-            <button type="button" class="bx-chip" aria-pressed={template === t.name} onclick={() => useTemplate(t.name)}>{t.name}</button>
+      <!-- Your own sets sit beside the built-in templates: both are just
+           starting points, and a set you made is as reusable as Watch list. -->
+      {#if $columnSets.length}
+        <span class="bx-label">Start from · your boards</span>
+        <div class="bx-chips" role="group" aria-label="Your boards">
+          {#each $columnSets as s (s.id)}
+            <button type="button" class="bx-chip" aria-pressed={start === 'copy' && copyFrom === s.id} onclick={() => useCopy(s.id)}>{s.name}</button>
           {/each}
         </div>
-      {:else if start === 'copy'}
-        <select class="bx-select sub" aria-label="Set to copy" value={copyFrom} onchange={(e) => useCopy((e.currentTarget as HTMLSelectElement).value)}>
-          {#each $columnSets as s (s.id)}<option value={s.id}>{s.name}</option>{/each}
-        </select>
+        <span class="bx-label sub">Built-in</span>
+      {:else}
+        <span class="bx-label">Start from</span>
       {/if}
+      <div class="bx-chips" role="group" aria-label="Built-in">
+        <button type="button" class="bx-chip" aria-pressed={start === 'blank'} onclick={useBlank}>Blank</button>
+        {#each SET_TEMPLATES as t (t.name)}
+          <button type="button" class="bx-chip" aria-pressed={start === 'template' && template === t.name} onclick={() => useTemplate(t.name)}>{t.name}</button>
+        {/each}
+      </div>
     </div>
 
     <div>
@@ -239,6 +268,9 @@
         {/each}
       </ul>
       <button type="button" class="bx-link add" onclick={addColumn}>+ Add column</button>
+      {#if copied}
+        <p class="bx-note">A separate copy of {copied.name}. Changes here don't affect {copiedUsers.length ? copiedUsers.join(', ') : 'it'}.</p>
+      {/if}
       <p class="bx-note">You can rename, recolour, reorder and delete columns later in Settings › Column sets.</p>
     </div>
 
