@@ -2,6 +2,7 @@ import type { ColumnSet, InboxItem } from '@inbox-rs/rs-module';
 import { describe, expect, it } from 'vitest';
 import {
   BOARD_UNSORTED,
+  collectionsPhrase,
   columnOf,
   columnsFromSpecs,
   copySet,
@@ -222,5 +223,17 @@ describe('liveSetId', () => {
   it('is nothing for a collection still pointing at a deleted set', () => {
     expect(liveSetId({ boardSetId: 'deleted' }, [set])).toBeUndefined();
     expect(liveSetId({}, [set])).toBeUndefined();
+  });
+});
+
+describe('collectionsPhrase', () => {
+  it('says what the names are', () => {
+    expect(collectionsPhrase(['Movies'])).toBe('the Movies collection');
+    expect(collectionsPhrase(['Movies', 'Books'])).toBe(
+      'the Movies and Books collections',
+    );
+    expect(collectionsPhrase(['Movies', 'Books', 'Podcasts'])).toBe(
+      'the Movies, Books and Podcasts collections',
+    );
   });
 });

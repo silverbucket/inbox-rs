@@ -16,6 +16,7 @@
   import { columnSets, saveSet, setCollectionsBoard } from '../../lib/board-actions';
   import {
     COLUMN_COLORS,
+    collectionsPhrase,
     columnsFromSpecs,
     liveSetId,
     makeSet,
@@ -260,7 +261,7 @@
     }}
   />
 {:else}
-  <Sheet {title} subtitle={forNames ? `for ${forNames}` : undefined} {onclose} {layer} width="36rem">
+  <Sheet {title} subtitle={forNames ? `${preselect.length === 1 ? 'Collection' : 'Collections'}: ${forNames}` : undefined} {onclose} {layer} width="36rem">
     <div>
       <label class="bx-label" for="set-name">Board name</label>
       <input id="set-name" class="bx-input" bind:value={name} placeholder="e.g. Practice" />
@@ -293,7 +294,7 @@
       </div>
       {/if}
       {#if copied}
-        <p class="bx-note sub">A separate copy of {copied.name}. Changes here don't affect {copiedUsers.length ? copiedUsers.join(', ') : 'it'}.</p>
+        <p class="bx-note sub">A separate copy of the {copied.name} board. Changes here don't affect {copiedUsers.length ? collectionsPhrase(copiedUsers) : 'it'}.</p>
       {/if}
     </div>
 
@@ -318,7 +319,7 @@
               {#if c.done}
                 <span class="finished-tag" title="Finished column">
                   <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  <span class="finished-word">Finished</span>
+                  <span class="finished-word">Finished</span><span class="finished-why">· ticked todos go here</span>
                 </span>
               {/if}
               <span class="order">
@@ -478,6 +479,14 @@
     border-radius: 4px;
   }
 
+  /* Only on phones, where the sentence that explains Finished is below
+     the fold when the dialog opens. */
+  .finished-why {
+    display: none;
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+
   .finished-tag {
     display: inline-flex;
     align-items: center;
@@ -586,6 +595,11 @@
     /* The name needs the row; "Finished" sits under it as a caption. */
     .bx-rows > li {
       flex-wrap: wrap;
+    }
+
+    .finished-why {
+      display: inline;
+      margin-left: 0.15rem;
     }
 
     .finished-tag {

@@ -7,7 +7,7 @@
    */
   import { BOARD_UNSORTED, type ColumnSet } from '@inbox-rs/rs-module';
   import { columnSets, moveCollectionToSet } from '../../lib/board-actions';
-  import { columnOf, isAutoMatch, mapPlanColumn, matchColumns, moveTarget, withColumn } from '../../lib/boards';
+  import { collectionsPhrase, columnOf, isAutoMatch, mapPlanColumn, matchColumns, moveTarget, withColumn } from '../../lib/boards';
   import { collections, items } from '../../lib/stores';
   import { showToast } from '../../lib/toast';
   import ColumnsPreview from './ColumnsPreview.svelte';
@@ -82,6 +82,7 @@
     return parts.length ? `${parts.join(', ')}.` : 'No items to move.';
   });
 
+  const othersPhrase = $derived(collectionsPhrase(others));
   const fromDone = $derived(from?.columns.find((c) => c.done));
   const toDone = $derived(to?.columns.find((c) => c.done));
 
@@ -101,8 +102,8 @@
       const { planColumnDropped } = await moveCollectionToSet(collectionId, dest.id, from ? mapping : {}, explicit);
       showToast(
         planColumnDropped
-          ? `${collection?.name ?? 'Collection'} now uses ${dest.name}. None of its todos show on the Todos page until you pick a column again in Board settings.`
-          : `${collection?.name ?? 'Collection'} now uses ${dest.name}`,
+          ? `This collection now uses the ${dest.name} board. None of its todos show on the Todos page until you pick a column again in Board settings.`
+          : `This collection now uses the ${dest.name} board.`,
       );
       onclose();
     } catch (error) {
@@ -114,7 +115,7 @@
   }
 </script>
 
-<Sheet title="Switch to a different board" subtitle={collection?.name} {onclose} {layer} width="34rem">
+<Sheet title="Switch to a different board" subtitle={collection ? `Collection: ${collection.name}` : undefined} {onclose} {layer} width="34rem">
   {#if !collection}
     <p class="bx-note">This collection no longer exists.</p>
   {:else if targets.length === 0}
@@ -122,7 +123,7 @@
   {:else}
     <div class="fromto">
       <div>
-        <span class="bx-label">Now on</span>
+        <span class="bx-label">Current board</span>
         <strong>{from?.name ?? 'No board'}</strong>
       </div>
       <div class="grow">
@@ -142,7 +143,7 @@
     {#if from && to}
       <div>
         <span class="bx-label">Where should the items go?</span>
-        <p class="bx-note above">Choose where the items from each column should go. Matching names are selected for you.{#if fromDone && toDone && fromDone.name.trim().toLowerCase() !== toDone.name.trim().toLowerCase()}{' '}{fromDone.name} goes to {toDone.name}, since both are Finished columns.{/if}</p>
+        <p class="bx-note above">Choose where the items from each column should go. Matching names are selected for you.{#if fromDone && toDone && fromDone.name.trim().toLowerCase() !== toDone.name.trim().toLowerCase()}{' '}Items in {fromDone.name} go to {toDone.name}: each is where its board puts ticked todos.{/if}</p>
         <ul class="bx-rows">
           {#each from.columns as c (c.id)}
             {@const n = counts.get(c.id) ?? 0}
@@ -170,7 +171,7 @@
       </div>
       <p class="bx-note">
         <strong>After switching:</strong> {result}
-        {#if others.length}{others.join(', ')}, also on {from.name}, {others.length === 1 ? 'isn’t' : 'aren’t'} affected.{/if}
+        {#if others.length}{othersPhrase.charAt(0).toUpperCase() + othersPhrase.slice(1)} {others.length === 1 ? 'stays' : 'stay'} on the {from.name} board.{/if}
       </p>
       {#if collection.offPlan && planColumnName}
         <p class="bx-note">
@@ -181,7 +182,7 @@
           {/if}
         </p>
       {/if}
-      <p class="bx-note">Nothing is deleted. Items remember their {from.name} column in case you switch {collection.name} back later.</p>
+      <p class="bx-note">Nothing is deleted. Items remember their columns on the {from.name} board, in case you switch this collection back later.</p>
     {/if}
   {/if}
 

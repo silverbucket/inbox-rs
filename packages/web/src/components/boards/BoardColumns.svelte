@@ -79,11 +79,40 @@
     Object.values($collections).filter((c) => c.boardSetId === set.id && !c.archived).length,
   );
 
+  /** The button that opened the menu, so Escape can hand focus back to it. */
+  let menuTrigger: HTMLElement | null = null;
+
+  /** Escape closes the menu and returns focus; arrows, Home and End move
+   *  between its actions, as a menu's keyboard pattern promises. */
+  function onMenuKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      menuFor = null;
+      menuTrigger?.focus();
+      return;
+    }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+    const items = [
+      ...(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('button:not(:disabled)'),
+    ];
+    if (!items.length) return;
+    e.preventDefault();
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const next =
+      e.key === 'Home'
+        ? 0
+        : e.key === 'End'
+          ? items.length - 1
+          : (at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+    items[next].focus();
+  }
+
   function openMenu(e: MouseEvent, columnId: string) {
     if (menuFor === columnId) {
       menuFor = null;
       return;
     }
+    menuTrigger = e.currentTarget as HTMLElement;
     // Fixed to the button: the board scrolls sideways and would clip a
     // menu positioned inside it.
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -371,12 +400,7 @@
           aria-label="{column.name} column"
           tabindex="-1"
           style="top: {menuPos.top}px; left: {menuPos.left}px"
-          onkeydown={(e) => {
-            if (e.key === 'Escape') {
-              e.stopPropagation();
-              menuFor = null;
-            }
-          }}
+          onkeydown={onMenuKeydown}
         >
           <button
             type="button"

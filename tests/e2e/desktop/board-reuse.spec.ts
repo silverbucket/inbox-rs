@@ -91,7 +91,9 @@ test('a board made for one collection can be shared with or copied to another', 
   // Piano: the picker offers it by name, with who uses it — and uses it too.
   await openBoardPicker(piano);
   const picker = page.getByRole('dialog', { name: 'Set up a board' });
-  await expect(picker.getByText(`used by ${guitar}`)).toBeVisible();
+  await expect(
+    picker.getByText(`used by the ${guitar} collection`),
+  ).toBeVisible();
   await picker.getByRole('button', { name: `Use ${setName}` }).click();
   await expect(page.getByText('Practising', { exact: true })).toBeVisible();
   await back();
@@ -102,7 +104,9 @@ test('a board made for one collection can be shared with or copied to another', 
   const dialog = page.getByRole('dialog', { name: 'New board' });
   await expect(dialog.getByText(`A copy of ${setName}`)).toBeVisible();
   await expect(page.locator('#set-name')).toHaveValue(`${setName} copy`);
-  await expect(dialog.getByText(`A separate copy of ${setName}`)).toBeVisible();
+  await expect(
+    dialog.getByText(`A separate copy of the ${setName} board`),
+  ).toBeVisible();
   await expect(
     dialog.getByRole('textbox', { name: 'Column name' }).first(),
   ).toHaveValue('Practising');

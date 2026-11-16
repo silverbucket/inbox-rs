@@ -5,7 +5,7 @@
    * nothing is deleted but the column.
    */
   import { BOARD_UNSORTED, type ColumnSet } from '@inbox-rs/rs-module';
-  import { columnOf, doneColumn } from '../../lib/boards';
+  import { collectionsPhrase, columnOf, doneColumn } from '../../lib/boards';
   import { deleteColumn } from '../../lib/board-actions';
   import { collections, items } from '../../lib/stores';
   import { showToast } from '../../lib/toast';
@@ -96,7 +96,7 @@
     {#if affected.length === 0}
       It's empty, so nothing else changes.
     {:else}
-      Choose where its {affected.length} {affected.length === 1 ? 'item' : 'items'}{holders.length ? ` (in ${holders.join(', ')})` : ''} should go. Only the column is deleted: items stay in their collections, and no todo is ticked or unticked.
+      Choose where its {affected.length} {affected.length === 1 ? 'item' : 'items'}{holders.length ? ` (in ${collectionsPhrase(holders as string[])})` : ''} should go. Only the column is deleted: items stay in their collections, and no todo is ticked or unticked.
     {/if}
   </p>
   {#if planLists.length > 0}

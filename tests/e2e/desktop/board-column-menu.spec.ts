@@ -58,6 +58,27 @@ test('a column is renamed and made the Finished column from its own menu', async
   await page.getByRole('heading', { name: 'To read', exact: true }).click();
   await expect(page.getByRole('menu')).toHaveCount(0);
 
+  // By keyboard: arrows move through the actions, and Escape closes the
+  // menu and puts focus back on the button that opened it.
+  const options = page.getByRole('button', {
+    name: 'Column options for Reading',
+  });
+  await options.click();
+  await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(
+    page.getByRole('menuitem', { name: 'Delete column…' }),
+  ).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(options).toBeFocused();
+  // Escape closed the menu only, not the collection it sits in.
+  await expect(
+    page.getByRole('heading', { name: 'Reading', exact: true }),
+  ).toBeVisible();
+
   // Rename "Reading" in place.
   await page
     .getByRole('button', { name: 'Column options for Reading' })

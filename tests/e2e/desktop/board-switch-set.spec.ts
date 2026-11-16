@@ -83,7 +83,9 @@ test('switching a collection to another board closes the dialog and sticks', asy
     .click();
 
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByText(`${movies} now uses ${reading}`)).toBeVisible();
+  await expect(
+    page.getByText(`This collection now uses the ${reading} board.`),
+  ).toBeVisible();
   await expect(page.getByText('Couldn’t switch the board')).toHaveCount(0);
 
   await expect

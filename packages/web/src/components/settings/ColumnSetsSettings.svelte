@@ -159,7 +159,7 @@
         <li>
           <button type="button" class="set" class:on={s.id === selectedId} aria-current={s.id === selectedId} onclick={() => (selectedId = s.id)}>
             <span class="set-name">{s.name}</span>
-            <span class="bx-muted">{u.length ? u.map((c) => c.name).join(', ') : 'Not used yet'}</span>
+            <span class="bx-muted">{u.length ? `${u.length === 1 ? 'Collection' : 'Collections'}: ${u.map((c) => c.name).join(', ')}` : 'Not used by any collection yet'}</span>
             <span class="strip" aria-hidden="true">
               {#each s.columns as c (c.id)}<i style="background: {c.color}"></i>{/each}
             </span>
@@ -182,7 +182,7 @@
             onchange={(e) => rename((e.currentTarget as HTMLInputElement).value)}
           />
         </div>
-        <button type="button" class="bx-btn" onclick={duplicate}>Duplicate</button>
+        <button type="button" class="bx-btn" title="A new board with these columns, not used by any collection yet" onclick={duplicate}>Make a copy</button>
       </div>
 
       <div>

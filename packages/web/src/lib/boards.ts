@@ -275,6 +275,18 @@ export function liveSetId(
     : undefined;
 }
 
+/**
+ * Collection names as a phrase that says what they are: "the Movies
+ * collection", "the Movies and Books collections". A bare name in a
+ * sentence ("also used by Movies") reads as a topic, not as something
+ * the reader made.
+ */
+export function collectionsPhrase(names: string[]): string {
+  if (names.length === 0) return 'no collections';
+  if (names.length === 1) return `the ${names[0]} collection`;
+  return `the ${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} collections`;
+}
+
 /** Collections on a set, in the given order. */
 export function collectionsOnSet(
   set: ColumnSet,

@@ -117,7 +117,7 @@
         </div>
       {:else}
         <div class="scope">
-          <span class="bx-label inline">Showing</span>
+          <span class="bx-label inline">Showing collections</span>
           <div class="bx-chips">
             {#each onBoard as c (c.id)}
               {@const n = $collectionItems[c.id]?.length ?? 0}
@@ -127,7 +127,7 @@
             {/each}
           </div>
           <span class="open-one">
-            <span class="bx-muted">Open</span>
+            <span class="bx-muted">Go to collection</span>
             {#each shown as c (c.id)}
               <button type="button" class="bx-link" aria-label="Open {c.name}" onclick={() => onfocuscollection(c.id)}>{c.name}</button>
             {/each}
@@ -135,8 +135,8 @@
         </div>
         {#if offBoard.length}
           <p class="bx-note">
-            Not shown: {offBoard.map((c) => c.name).join(', ')} — {offBoard.every((c) => !c.boardSetId) ? 'no board yet' : `not on the ${set.name} board`}.
-            <button type="button" class="bx-link" onclick={() => openColumnSet(set.id)}>Add to this board…</button>
+            {offBoard.length === 1 ? 'Collection' : 'Collections'} not shown: {offBoard.map((c) => c.name).join(', ')} ({offBoard.every((c) => !c.boardSetId) ? 'no board yet' : offBoard.length === 1 ? 'it uses a different board' : 'not on this board'}).
+            <button type="button" class="bx-link" onclick={() => openColumnSet(set.id)}>Add a collection to this board…</button>
           </p>
         {/if}
 

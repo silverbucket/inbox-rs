@@ -208,7 +208,7 @@
               <span class="alt-sub">{ownItems.length} {ownItems.length === 1 ? 'item' : 'items'}</span>
               <button type="button" class="board-chip" onclick={() => (boardSettings = true)} title="Board settings">
                 <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="4" width="5" height="16" rx="1"></rect><rect x="10" y="4" width="5" height="11" rx="1"></rect><rect x="17" y="4" width="4" height="7" rx="1"></rect></svg>
-                {set.name}
+                Board: {set.name}
               </button>
             </div>
             <BoardColumns {set} items={ownItems} {lookupCollection} addTargets={[collection]} canAddColumns {onselect} />

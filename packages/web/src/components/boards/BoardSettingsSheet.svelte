@@ -13,7 +13,7 @@
     setCollectionView,
     setOffPlan,
   } from '../../lib/board-actions';
-  import { BOARD_UNSORTED, columnOf, doneColumn, SET_TEMPLATES } from '../../lib/boards';
+  import { BOARD_UNSORTED, collectionsPhrase, columnOf, doneColumn, SET_TEMPLATES } from '../../lib/boards';
   import { openColumnSet } from '../../lib/settings-request';
   import { collections, items } from '../../lib/stores';
   import { showToast } from '../../lib/toast';
@@ -35,6 +35,7 @@
         )
       : [],
   );
+  const sharedNames = $derived(collectionsPhrase(sharedWith.map((c) => c.name)));
   const otherBoards = $derived($columnSets.filter((s) => s.id !== set?.id));
   const counts = $derived.by(() => {
     const out = new Map<string, number>();
@@ -93,8 +94,8 @@
       }
       showToast(
         collection?.offPlan
-          ? `Board removed from ${collection.name}. Its todos are still kept off the Todos page; change that under Edit collection.`
-          : `Board removed from ${collection?.name}. Items remember their columns if you set it up again.`,
+          ? 'Board removed. This collection’s todos are still kept off the Todos page; change that under Edit collection.'
+          : 'Board removed. Items remember their columns if you set it up again.',
       );
       onclose();
     }, 'Couldn’t remove the board');
@@ -102,7 +103,7 @@
   const privateCopy = () =>
     run(async () => {
       const copy = await makePrivateCopy(collectionId);
-      if (copy) showToast(`${collection?.name} now has its own board: ${copy.name}`);
+      if (copy) showToast(`This collection now has its own board, “${copy.name}”.`);
     }, 'Couldn’t copy the board');
 
   function editBoard() {
@@ -133,7 +134,7 @@
     <p class="bx-note">This collection no longer exists.</p>
   </Sheet>
 {:else if !set}
-  <Sheet title="Set up a board" subtitle="for {collection.name}" {onclose} width="34rem">
+  <Sheet title="Set up a board" subtitle="Collection: {collection.name}" {onclose} width="34rem">
     <p class="bx-lead">
       A board lays a collection out in columns, so you can move things along as they progress.
     </p>
@@ -148,7 +149,7 @@
               <div class="opt-head">
                 <span class="bx-grow">
                   <span class="bx-option-title">{s.name}</span>
-                  <span class="bx-muted">{users.length ? `used by ${users.join(', ')}` : 'not used yet'}</span>
+                  <span class="bx-muted">{users.length ? `used by ${collectionsPhrase(users)}` : 'not used by any collection yet'}</span>
                 </span>
               </div>
               <ColumnsPreview columns={s.columns} />
@@ -158,14 +159,14 @@
                 <button type="button" class="bx-btn bx-small bx-primary" aria-label="Use {s.name}" onclick={() => choose(s.id)}>Use this board</button>
                 <span class="bx-muted">
                   {#if users.length}
-                    {collection.name} and {users.join(', ')} will have the same columns. Change a column and it changes for {users.length === 1 ? 'both' : 'all of them'}.
+                    This collection and {collectionsPhrase(users)} will share these columns. Change one and it changes in {users.length === 1 ? 'both' : 'all of them'}.
                   {:else}
-                    {collection.name} will be the first collection on it.
+                    This collection will be the first to use this board.
                   {/if}
                 </span>
                 <button type="button" class="bx-btn bx-small" aria-label="Copy {s.name}" onclick={() => (creating = { kind: 'copy', id: s.id })}>Make a copy</button>
                 <span class="bx-muted">
-                  {collection.name} gets its own columns, starting from these.{#if users.length}{' '}Changing them won't affect {users.join(', ')}.{/if}
+                  This collection gets its own copy of these columns.{#if users.length}{' '}Changing it won't affect {collectionsPhrase(users)}.{/if}
                 </span>
               </div>
             </li>
@@ -188,7 +189,7 @@
           <span class="bx-muted">Name your own columns.</span>
         </button>
       </div>
-      <p class="bx-note explain">You can rename, add or remove columns at any time.</p>
+      <p class="bx-note explain">A ✓ marks the column where ticked todos end up. You can rename, add or remove columns at any time.</p>
     </section>
 
     {#snippet footer()}
@@ -196,7 +197,7 @@
     {/snippet}
   </Sheet>
 {:else}
-  <Sheet title="Board settings" subtitle={collection.name} {onclose} width="34rem">
+  <Sheet title="Board settings" subtitle="Collection: {collection.name}" {onclose} width="34rem">
     <section class="bx-panel" aria-labelledby="this-board">
       <div class="opt-head">
         <span class="bx-grow">
@@ -210,8 +211,8 @@
         <p class="bx-callout">
           <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"></path><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"></path></svg>
           <span>
-            Also used by {sharedWith.map((c) => c.name).join(', ')}, so column changes apply to {sharedWith.length === 1 ? 'both' : 'all of them'}.
-            <button type="button" class="bx-link inline" onclick={privateCopy}>Give {collection.name} its own copy</button>
+            {sharedNames.charAt(0).toUpperCase() + sharedNames.slice(1)} {sharedWith.length === 1 ? 'uses' : 'use'} this board too, so changing a column changes it in {sharedWith.length === 1 ? 'both' : 'all of them'}.
+            <button type="button" class="bx-link inline" onclick={privateCopy}>Give this collection its own copy</button>
           </span>
         </p>
       {/if}
@@ -245,7 +246,7 @@
           />
           <span class="except-text">
             <span>Still show the todos from one column</span>
-            <span class="bx-muted">{planColumn ? 'They appear' : 'You pick the column; its todos appear'} <ByScreen wide="on the Todos page under Someday." phone="in Plan, under Someday." /></span>
+            <span class="bx-muted">{planColumn ? 'They show' : 'Tick this to pick a column. Its todos will show'} <ByScreen wide="on the Todos page under Someday." phone="in Plan, under Someday." /></span>
           </span>
         </label>
         {#if planColumn}
@@ -267,11 +268,11 @@
     </p>
 
     <p class="bx-note">
-      Removing the board only changes how {collection.name} is laid out. Its items stay, and {set.name} stays available for other collections.
+      Removing the board deletes nothing. This collection keeps all its items, and other collections can still use the {set.name} board.
     </p>
 
     {#snippet footer()}
-      <button type="button" class="bx-btn bx-quiet bx-danger remove" onclick={turnOff}>Remove board from {collection.name}</button>
+      <button type="button" class="bx-btn bx-quiet bx-danger remove" onclick={turnOff}>Remove board from this collection</button>
       <button type="button" class="bx-btn bx-primary" onclick={onclose}>Done</button>
     {/snippet}
   </Sheet>
