@@ -67,7 +67,7 @@ test('renaming a collection keeps its board and column set', async ({
     .getByRole('textbox', { name: 'Column name' })
     .first();
   await firstColumn.fill('Learning');
-  await page.getByRole('button', { name: 'Create', exact: true }).click();
+  await page.getByRole('button', { name: 'Create board', exact: true }).click();
   await expect(page.getByText('Learning', { exact: true })).toBeVisible();
 
   // Rename straight away, as a user would.

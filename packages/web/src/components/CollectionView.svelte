@@ -403,10 +403,10 @@
               <svg class="cal-badge-icon" aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>{collection.calendar.name} calendar
             </button>
           {/if}
-          {#if boardSetName}<span class="board-badge" title="Board columns: {boardSetName}">{boardSetName}</span>{/if}
+          {#if boardSetName}<span class="board-badge" title="Board: {boardSetName}">{boardSetName}</span>{/if}
           {#if collection.offPlan}<span class="board-badge list" title={collection.planColumnId
-              ? 'A list: its todos stay off the Todos plan, except its plan column’s'
-              : 'A list: its todos stay off the Todos plan'}>List</span>{/if}
+              ? 'Its todos stay off the Todos page, except one board column’s'
+              : 'Its todos stay off the Todos page'}>Off Todos</span>{/if}
           {#if sameNameInGroup}<span class="name-warn">same name as another collection here</span>{/if}
         </span>
       {/if}

@@ -7,11 +7,17 @@
    * keyboard). A todo's checkbox completes it; on a set with a done column
    * the todo then shows there instead of disappearing. Notes and links have
    * no checkbox: moving them is the whole action.
+   *
+   * Where columns can be edited (`canAddColumns`), each one's header menu
+   * renames, recolours, reorders, marks Finished or deletes it in place, so
+   * nobody has to go looking in Settings to change the board they're on.
    */
   import type { Collection, ColumnSet, InboxItem } from '@inbox-rs/rs-module';
   import { autofocus } from '../../lib/actions';
-  import { addToColumn, moveItemToColumn, updateColumns } from '../../lib/board-actions';
-  import { BOARD_UNSORTED, groupByColumn, nextColumnColor, newId } from '../../lib/boards';
+  import { addToColumn, moveItemToColumn, setDoneColumn, updateColumns } from '../../lib/board-actions';
+  import { BOARD_UNSORTED, COLUMN_COLORS, groupByColumn, nextColumnColor, newId } from '../../lib/boards';
+  import { collections } from '../../lib/stores';
+  import DeleteColumnDialog from './DeleteColumnDialog.svelte';
   import { kindOf } from '../../lib/kinds';
   import { linkNote } from '../../lib/link-note';
   import { now } from '../../lib/now';
@@ -58,11 +64,112 @@
   let addingColumn = $state(false);
   let newColumnName = $state('');
 
-  function hintFor(columnId: string): string {
+  /** What an empty column is for, said once, where the cards would be. */
+  function emptyHint(columnId: string): string {
     const col = set.columns.find((c) => c.id === columnId);
-    if (columnId === BOARD_UNSORTED) return 'New items land here';
-    if (col?.done) return 'Checked todos land here';
-    return '';
+    if (columnId === BOARD_UNSORTED) return 'New items land here first.';
+    if (col?.done) return 'Ticked todos move here.';
+    return 'Nothing here yet.';
+  }
+
+  // ── Column menu: edit the board where you are ──
+  let menuFor = $state<string | null>(null);
+  let menuPos = $state({ top: 0, left: 0 });
+  let renaming = $state<{ id: string; value: string } | null>(null);
+  let deleting = $state<string | null>(null);
+  const sharedBy = $derived(
+    Object.values($collections).filter((c) => c.boardSetId === set.id && !c.archived).length,
+  );
+
+  function openMenu(e: MouseEvent, columnId: string) {
+    if (menuFor === columnId) {
+      menuFor = null;
+      return;
+    }
+    // Fixed to the button: the board scrolls sideways and would clip a
+    // menu positioned inside it.
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const width = 232;
+    menuPos = {
+      top: r.bottom + 4,
+      left: Math.max(8, Math.min(r.right - width, window.innerWidth - width - 8)),
+    };
+    menuFor = columnId;
+  }
+
+  async function editColumns(next: typeof set.columns, fail: string) {
+    try {
+      await updateColumns(set.id, next);
+    } catch (error) {
+      console.error(fail, error);
+      showToast(fail);
+    }
+  }
+
+  function commitRename() {
+    const r = renaming;
+    renaming = null;
+    const value = r?.value.trim();
+    if (!r || !value || value === set.columns.find((c) => c.id === r.id)?.name) return;
+    void editColumns(
+      set.columns.map((c) => (c.id === r.id ? { ...c, name: value } : c)),
+      'Couldn’t rename that column',
+    );
+  }
+
+  function shiftColumn(id: string, by: -1 | 1) {
+    const cols = [...set.columns];
+    const at = cols.findIndex((c) => c.id === id);
+    const to = at + by;
+    // Unsorted stays first.
+    if (at < 1 || to < 1 || to >= cols.length) return;
+    [cols[at], cols[to]] = [cols[to], cols[at]];
+    void editColumns(cols, 'Couldn’t move that column');
+  }
+
+  function recolor(id: string, color: string) {
+    void editColumns(
+      set.columns.map((c) => (c.id === id ? { ...c, color } : c)),
+      'Couldn’t recolour that column',
+    );
+  }
+
+  async function toggleFinished(id: string) {
+    menuFor = null;
+    const current = set.columns.find((c) => c.done)?.id;
+    try {
+      await setDoneColumn(set.id, current === id ? undefined : id);
+    } catch (error) {
+      console.error('Failed to change the Finished column', error);
+      showToast('Couldn’t change the Finished column');
+    }
+  }
+
+  // ── Phones: one column at a time, with a strip to jump between them ──
+  let boardEl = $state<HTMLElement>();
+  let activeColumn = $state<string>(BOARD_UNSORTED);
+
+  function jumpTo(columnId: string) {
+    const el = boardEl?.querySelector<HTMLElement>(`[data-column="${CSS.escape(columnId)}"]`);
+    if (!boardEl || !el) return;
+    boardEl.scrollTo({ left: el.offsetLeft - boardEl.offsetLeft, behavior: 'smooth' });
+    activeColumn = columnId;
+  }
+
+  function onBoardScroll() {
+    if (!boardEl) return;
+    menuFor = null;
+    const left = boardEl.getBoundingClientRect().left;
+    let best = activeColumn;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const el of boardEl.querySelectorAll<HTMLElement>('[data-column]')) {
+      const d = Math.abs(el.getBoundingClientRect().left - left);
+      if (d < bestDistance) {
+        bestDistance = d;
+        best = el.dataset.column ?? best;
+      }
+    }
+    activeColumn = best;
   }
 
   const isTodo = (i: InboxItem) => !!i.isTodo || i.type === 'todo';
@@ -164,7 +271,24 @@
   }
 </script>
 
-<div class="board" role="list" aria-label="{set.name} board">
+<svelte:window
+  onclick={(e) => {
+    if (menuFor && !(e.target as HTMLElement | null)?.closest('.col-menu, .menu-btn')) menuFor = null;
+  }}
+  onresize={() => (menuFor = null)}
+/>
+
+<div class="board-wrap">
+<nav class="jump" aria-label="Jump to a column">
+  {#each set.columns as column (column.id)}
+    <button type="button" class:on={activeColumn === column.id} aria-current={activeColumn === column.id ? 'true' : undefined} onclick={() => jumpTo(column.id)}>
+      <span class="dot" style="--col: {column.color}" aria-hidden="true"></span>
+      {column.name}
+      <span class="jump-n">{(byColumn.get(column.id) ?? []).length}</span>
+    </button>
+  {/each}
+</nav>
+<div class="board" role="list" aria-label="{set.name} board" bind:this={boardEl} onscroll={onBoardScroll}>
   {#each set.columns as column (column.id)}
     {@const cards = byColumn.get(column.id) ?? []}
     {@const isOpen = expanded.has(column.id)}
@@ -175,6 +299,7 @@
       class:over={overColumn === column.id}
       role="listitem"
       aria-labelledby="col-{set.id}-{column.id}"
+      data-column={column.id}
       style="--col: {column.color}"
       ondragover={(e) => onDragOver(e, column.id)}
       ondragleave={() => {
@@ -184,12 +309,96 @@
     >
       <header class="col-head">
         <span class="dot" aria-hidden="true"></span>
-        <h3 id="col-{set.id}-{column.id}">{column.name}</h3>
-        {#if column.done}<span class="tag">done</span>{/if}
-        <span class="count">{cards.length}</span>
+        {#if renaming?.id === column.id}
+          <input
+            use:autofocus
+            class="rename"
+            aria-label="Column name"
+            bind:value={renaming.value}
+            onblur={commitRename}
+            onkeydown={(e) => {
+              if (e.key === 'Enter') commitRename();
+              else if (e.key === 'Escape') {
+                e.stopPropagation();
+                renaming = null;
+              }
+            }}
+          />
+        {:else}
+          <h3 id="col-{set.id}-{column.id}">{column.name}</h3>
+        {/if}
+        {#if column.done}
+          <span class="tag" title="Ticked todos move here">
+            <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            Finished
+          </span>
+        {/if}
+        <span class="count" aria-label="{cards.length} {cards.length === 1 ? 'item' : 'items'}">{cards.length}</span>
+        {#if canAddColumns && column.id !== BOARD_UNSORTED}
+          <button
+            type="button"
+            class="menu-btn"
+            aria-label="Column options for {column.name}"
+            aria-haspopup="menu"
+            aria-expanded={menuFor === column.id}
+            onclick={(e) => openMenu(e, column.id)}
+          >
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>
+          </button>
+        {/if}
       </header>
-      {#if hintFor(column.id)}
-        <p class="hint">{hintFor(column.id)}</p>
+      {#if menuFor === column.id}
+        {@const at = set.columns.findIndex((c) => c.id === column.id)}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="col-menu"
+          role="menu"
+          aria-label="{column.name} column"
+          tabindex="-1"
+          style="top: {menuPos.top}px; left: {menuPos.left}px"
+          onkeydown={(e) => {
+            if (e.key === 'Escape') {
+              e.stopPropagation();
+              menuFor = null;
+            }
+          }}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            use:autofocus
+            onclick={() => {
+              menuFor = null;
+              renaming = { id: column.id, value: column.name };
+            }}
+          >Rename</button>
+          <div class="swatches" role="group" aria-label="Colour">
+            {#each COLUMN_COLORS as color (color)}
+              <button type="button" class="sw" aria-label="Use colour {color}" aria-pressed={column.color === color} style="background: {color}" onclick={() => recolor(column.id, color)}></button>
+            {/each}
+          </div>
+          <button type="button" role="menuitem" disabled={at < 2} onclick={() => shiftColumn(column.id, -1)}>Move left</button>
+          <button type="button" role="menuitem" disabled={at === set.columns.length - 1} onclick={() => shiftColumn(column.id, 1)}>Move right</button>
+          <button type="button" role="menuitemcheckbox" aria-checked={!!column.done} class="two-line" onclick={() => toggleFinished(column.id)}>
+            <span class="mi-title">
+              {column.done ? 'Finished column' : 'Make this the Finished column'}
+              {#if column.done}<svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>{/if}
+            </span>
+            <span class="mi-hint">Ticked todos move here instead of disappearing</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            class="danger"
+            onclick={() => {
+              menuFor = null;
+              deleting = column.id;
+            }}
+          >Delete column…</button>
+          {#if sharedBy > 1}
+            <p class="menu-note">Changes apply to all {sharedBy} collections on {set.name}.</p>
+          {/if}
+        </div>
       {/if}
 
       <ul class="cards">
@@ -258,6 +467,10 @@
         {/each}
       </ul>
 
+      {#if cards.length === 0}
+        <p class="empty">{emptyHint(column.id)}</p>
+      {/if}
+
       {#if cards.length > LIMIT}
         <button
           type="button"
@@ -302,7 +515,7 @@
                 {/each}
               </select>
             {/if}
-            <label class="add-todo"><input type="checkbox" bind:checked={addAsTodo} /> Todo</label>
+            <label class="add-todo"><input type="checkbox" bind:checked={addAsTodo} /> Todo <span class="add-todo-hint">· gets a checkbox</span></label>
             <div class="add-actions">
               <button type="button" class="ghost" onclick={() => (addingTo = null)}>Cancel</button>
               <button type="submit" class="primary" disabled={!addTitle.trim()}>Add</button>
@@ -344,7 +557,7 @@
               }
             }}
           />
-          <p class="hint">Added to {set.name}, so every collection on it gets the column.</p>
+          {#if sharedBy > 1}<p class="hint">Every collection on {set.name} gets this column.</p>{/if}
           <div class="add-actions">
             <button type="button" class="ghost" onclick={() => (addingColumn = false)}>Cancel</button>
             <button type="submit" class="primary" disabled={!newColumnName.trim()}>Add column</button>
@@ -356,8 +569,68 @@
     </div>
   {/if}
 </div>
+</div>
+
+{#if deleting}
+  <DeleteColumnDialog {set} columnId={deleting} onclose={() => (deleting = null)} />
+{/if}
 
 <style>
+  .board-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    min-width: 0;
+  }
+
+  /* Phones show one column at a time; this strip says which, how many
+     there are, and takes you to any of them in one tap. */
+  .jump {
+    display: none;
+    gap: 0.4rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 0 -1rem;
+    padding: 0 1rem 0.1rem;
+  }
+
+  .jump::-webkit-scrollbar {
+    display: none;
+  }
+
+  .jump button {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 2.25rem;
+    padding: 0 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .jump button.on {
+    border-color: var(--text);
+    color: var(--text);
+  }
+
+  .jump-n {
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 768px) {
+    .jump {
+      display: flex;
+    }
+  }
+
   .board {
     display: flex;
     gap: 0.85rem;
@@ -370,6 +643,16 @@
     scroll-snap-type: x proximity;
   }
 
+  @media (max-width: 768px) {
+    .board {
+      /* Bleed to the screen edge so the next column peeks in. */
+      margin: 0 -1rem;
+      padding: 0 1rem 0.75rem;
+      scroll-padding-left: 1rem;
+      scroll-snap-type: x mandatory;
+    }
+  }
+
   .column {
     flex: 0 0 16.5rem;
     max-width: 85vw;
@@ -378,14 +661,22 @@
     gap: 0.5rem;
     padding: 0.7rem;
     border: 1px solid var(--border);
+    border-top: 3px solid var(--col);
     border-radius: var(--radius);
     background: var(--surface-tint);
     scroll-snap-align: start;
   }
 
+  @media (max-width: 768px) {
+    .column {
+      flex-basis: min(19rem, 84vw);
+    }
+  }
+
   .column.unsorted {
     background: transparent;
     border-style: dashed;
+    border-top-style: solid;
   }
 
   .column.over {
@@ -395,13 +686,164 @@
 
   .add-column {
     background: transparent;
-    border-style: dashed;
+    border: 1px dashed var(--border);
+    align-self: flex-start;
   }
 
   .col-head {
     display: flex;
     align-items: center;
     gap: 0.45rem;
+    min-height: 1.75rem;
+  }
+
+  .rename {
+    flex: 1;
+    min-width: 0;
+    padding: 0.2rem 0.4rem;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  .menu-btn {
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    margin-right: -0.25rem;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .menu-btn:hover,
+  .menu-btn[aria-expanded='true'] {
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  @media (hover: none) {
+    .menu-btn {
+      width: 2.25rem;
+      height: 2.25rem;
+    }
+  }
+
+  .col-menu {
+    position: fixed;
+    z-index: 160;
+    width: 232px;
+    display: flex;
+    flex-direction: column;
+    padding: 0.3rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    box-shadow: 0 12px 32px -8px var(--shadow);
+  }
+
+  .col-menu:focus {
+    outline: none;
+  }
+
+  .col-menu > button {
+    display: flex;
+    align-items: center;
+    min-height: 2.1rem;
+    padding: 0.35rem 0.6rem;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    font-size: 0.86rem;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .col-menu > button:hover:not(:disabled),
+  .col-menu > button:focus-visible {
+    background: var(--surface-tint);
+    outline: none;
+  }
+
+  .col-menu > button:disabled {
+    color: var(--text-muted);
+    opacity: 0.55;
+    cursor: default;
+  }
+
+  .col-menu > button.two-line {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+  }
+
+  .mi-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .mi-title svg {
+    color: var(--success, #0f766e);
+  }
+
+  .mi-hint {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+
+  .col-menu > button.danger {
+    margin-top: 0.25rem;
+    border-top: 1px solid var(--border);
+    border-radius: 0 0 6px 6px;
+    color: var(--danger-text);
+  }
+
+  .swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    padding: 0.35rem 0.6rem 0.5rem;
+  }
+
+  .sw {
+    width: 1.25rem;
+    height: 1.25rem;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+
+  .sw[aria-pressed='true'] {
+    border-color: var(--text);
+  }
+
+  .menu-note {
+    margin: 0.3rem 0 0;
+    padding: 0.45rem 0.6rem 0.3rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+
+  .empty {
+    margin: 0;
+    padding: 0.9rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    text-align: center;
+    color: var(--text-muted);
   }
 
   .col-head h3 {
@@ -422,19 +864,30 @@
   }
 
   .tag {
-    font-size: 0.62rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    border: 1px solid var(--border);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--success, #0f766e);
+    background: color-mix(in srgb, var(--success, #0f766e) 12%, transparent);
     border-radius: 999px;
-    padding: 0 0.35rem;
+    padding: 0.1rem 0.45rem;
   }
 
   .count {
-    font-size: 0.78rem;
+    min-width: 1.35rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 999px;
+    background: var(--surface);
+    font-size: 0.74rem;
+    font-weight: 600;
+    text-align: center;
     color: var(--text-muted);
+  }
+
+  .add-todo-hint {
+    opacity: 0.8;
   }
 
   .hint {

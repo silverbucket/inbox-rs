@@ -1,7 +1,7 @@
 /**
  * A collection can be left pointing at a board that no longer exists — the
  * set was deleted on another device, say. Setting up a new board for it
- * must simply work: no "move to another set" step for a board that isn't
+ * must simply work: no "switch to a different board" step for a board that isn't
  * there, and the collection ends up on the new set on the server.
  *
  * Runs on its own fresh account: it rewrites the config on the server
@@ -66,7 +66,7 @@ test('a collection whose board was deleted elsewhere gets a new board in one ste
   await openBoard();
   await page.getByRole('button', { name: 'Blank', exact: true }).click();
   await page.locator('#set-name').fill(oldSet);
-  await page.getByRole('button', { name: 'Create', exact: true }).click();
+  await page.getByRole('button', { name: 'Create board', exact: true }).click();
   await expect
     .poll(
       async () =>
@@ -97,9 +97,9 @@ test('a collection whose board was deleted elsewhere gets a new board in one ste
   await openBoard();
   await page.getByRole('button', { name: 'Watch list', exact: true }).click();
   await page.locator('#set-name').fill(newSet);
-  await page.getByRole('button', { name: 'Create', exact: true }).click();
+  await page.getByRole('button', { name: 'Create board', exact: true }).click();
   await expect(
-    page.getByRole('dialog', { name: /Move .* to another set/ }),
+    page.getByRole('dialog', { name: 'Switch to a different board' }),
   ).toHaveCount(0);
   await expect(page.getByText('Want to watch', { exact: true })).toBeVisible();
 

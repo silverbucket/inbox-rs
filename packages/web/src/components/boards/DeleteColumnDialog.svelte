@@ -86,7 +86,7 @@
 
 <Sheet title="Delete “{column?.name ?? 'column'}”?" {onclose} {layer} width="28rem">
   <p class="bx-note">
-    {#if users.length > 1}{set.name} is shared, so the column goes from all {users.length} collections.{/if}
+    {#if users.length > 1}{users.length} collections use the {set.name} board, so the column goes from all of them.{/if}
     {#if affected.length === 0}
       It's empty, so nothing else changes.
     {:else}
@@ -96,9 +96,9 @@
   {#if planLists.length > 0}
     <p class="bx-note">
       {#if target === BOARD_UNSORTED}
-        <strong>{planLists.map((c) => c.name).join(', ')}</strong> {planLists.length === 1 ? 'shows' : 'show'} this column on the Todos plan. Unsorted can't take its place, so {planLists.length === 1 ? 'that list has' : 'those lists have'} no todos on the plan until you pick a plan column again under Columns.
+        <strong>{planLists.map((c) => c.name).join(', ')}</strong> {planLists.length === 1 ? 'shows' : 'show'} only this column's todos on the Todos page. Unsorted can't take its place, so none of {planLists.length === 1 ? 'its' : 'their'} todos will show there until you pick a column again in Board settings.
       {:else}
-        {planLists.map((c) => c.name).join(', ')} {planLists.length === 1 ? 'shows' : 'show'} this column on the Todos plan; {set.columns.find((c) => c.id === target)?.name} takes its place.
+        {planLists.map((c) => c.name).join(', ')} {planLists.length === 1 ? 'shows' : 'show'} only this column's todos on the Todos page; {set.columns.find((c) => c.id === target)?.name} takes its place.
       {/if}
     </p>
   {/if}
@@ -109,8 +109,8 @@
   {/if}
   {#if affected.length > 0 || planLists.length > 0}
     <div>
-      <span class="bx-label">{affected.length ? 'Move its items to' : 'Replace it on the plan with'}</span>
-      <div class="opts" role="radiogroup" aria-label={affected.length ? 'Move its items to' : 'Replace it on the plan with'}>
+      <span class="bx-label">{affected.length ? 'Move its items to' : 'Show on the Todos page instead'}</span>
+      <div class="opts" role="radiogroup" aria-label={affected.length ? 'Move its items to' : 'Show on the Todos page instead'}>
         {#each options as o (o.id)}
           {@const c = set.columns.find((x) => x.id === o.id)}
           <button

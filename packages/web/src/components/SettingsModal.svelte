@@ -47,7 +47,7 @@
       case 'links': return $userSettings.linkPreviews === false ? 'Off' : 'On';
       case 'calendars': return `${$allCalendarAccounts.length} account${$allCalendarAccounts.length === 1 ? '' : 's'}`;
       case 'notifications': return $alertPermission === 'granted' ? 'Allowed' : 'Not allowed';
-      case 'columns': return `${$columnSets.length} set${$columnSets.length === 1 ? '' : 's'}`;
+      case 'columns': return `${$columnSets.length} board${$columnSets.length === 1 ? '' : 's'}`;
       case 'data': return `${itemList.length} item${itemList.length === 1 ? '' : 's'}`;
       case 'apps': return 'Set up capture';
       case 'account': return $connectionStatus;
@@ -60,7 +60,7 @@
       case 'links': return `${missingPreviews} links still to fetch`;
       case 'calendars': return $pausedCalendarAccounts.length ? `${$pausedCalendarAccounts.length} need${$pausedCalendarAccounts.length === 1 ? 's' : ''} a password on this device` : $allCalendarAccounts.length ? `${$allCalendarAccounts.reduce((n,a)=>n+a.calendars.length,0)} calendars` : 'Add a calendar account';
       case 'notifications': return 'Alerts when a todo is due';
-      case 'columns': return 'Shared columns for item boards';
+      case 'columns': return 'Columns for laying out collections';
       case 'data': return 'Export or restore a backup';
       case 'apps': return 'Quick Capture, browser, and email';
       case 'account': return $userAddress || 'Connect storage';

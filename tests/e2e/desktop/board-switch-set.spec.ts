@@ -2,7 +2,7 @@
  * Switching a collection to another board finishes cleanly: the dialog
  * closes, the collection says which board it now uses, and the server
  * agrees. The move used to succeed and then trip over its own success
- * message, leaving the dialog open under "Couldn't move that collection".
+ * message, leaving the dialog open under an error toast.
  */
 
 import type { Collection } from '@inbox-rs/rs-module';
@@ -59,24 +59,32 @@ test('switching a collection to another board closes the dialog and sticks', asy
       .click();
     await page.getByRole('button', { name: template, exact: true }).click();
     await page.locator('#set-name').fill(set);
-    await page.getByRole('button', { name: 'Create', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Create board', exact: true })
+      .click();
     await expect(page.getByText(`Saved ${set}.`)).toBeVisible();
     await page.getByRole('button', { name: 'Back', exact: true }).click();
   }
 
   // Movies switches to the Reading board.
   await page.getByRole('button', { name: `Focus on ${movies}` }).click();
-  await page.getByRole('button', { name: /Columns/ }).click();
-  await page.getByRole('button', { name: 'Switch to another set…' }).click();
-  const dialog = page.getByRole('dialog', { name: /Move .* to another set/ });
+  await page.getByRole('button', { name: 'Board settings' }).first().click();
+  await page
+    .getByRole('button', { name: 'Switch to a different board…' })
+    .click();
+  const dialog = page.getByRole('dialog', {
+    name: 'Switch to a different board',
+  });
   await dialog
-    .getByLabel('To', { exact: true })
+    .getByLabel('Switch to', { exact: true })
     .selectOption({ label: reading });
-  await dialog.getByRole('button', { name: 'Move', exact: true }).click();
+  await dialog
+    .getByRole('button', { name: 'Switch board', exact: true })
+    .click();
 
   await expect(dialog).toHaveCount(0);
   await expect(page.getByText(`${movies} now uses ${reading}`)).toBeVisible();
-  await expect(page.getByText('Couldn’t move that collection')).toHaveCount(0);
+  await expect(page.getByText('Couldn’t switch the board')).toHaveCount(0);
 
   await expect
     .poll(

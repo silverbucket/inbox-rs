@@ -6,14 +6,11 @@
    * moving back restores them.
    */
   import { BOARD_UNSORTED, type ColumnSet } from '@inbox-rs/rs-module';
-  import {
-    columnSets,
-    makePrivateCopy,
-    moveCollectionToSet,
-  } from '../../lib/board-actions';
+  import { columnSets, moveCollectionToSet } from '../../lib/board-actions';
   import { columnOf, isAutoMatch, mapPlanColumn, matchColumns, moveTarget, withColumn } from '../../lib/boards';
   import { collections, items } from '../../lib/stores';
   import { showToast } from '../../lib/toast';
+  import ColumnsPreview from './ColumnsPreview.svelte';
   import Sheet from './Sheet.svelte';
   import './boards.css';
 
@@ -81,7 +78,7 @@
       const name = to.columns.find((c) => c.id === id)?.name ?? 'Unsorted';
       return `${n} ${n === 1 ? 'item' : 'items'} to ${name}`;
     });
-    return parts.length ? parts.join(' · ') : 'No items to move.';
+    return parts.length ? `${parts.join(', ')}.` : 'No items to move.';
   });
 
   let busy = $state(false);
@@ -100,47 +97,32 @@
       const { planColumnDropped } = await moveCollectionToSet(collectionId, dest.id, from ? mapping : {}, explicit);
       showToast(
         planColumnDropped
-          ? `${collection?.name ?? 'Collection'} now uses ${dest.name}. Pick its plan column again under Columns — until then none of its todos show on the plan.`
+          ? `${collection?.name ?? 'Collection'} now uses ${dest.name}. None of its todos show on the Todos page until you pick a column again in Board settings.`
           : `${collection?.name ?? 'Collection'} now uses ${dest.name}`,
       );
       onclose();
     } catch (error) {
       console.error('Failed to move collection to set', error);
-      showToast('Couldn’t move that collection');
-    } finally {
-      busy = false;
-    }
-  }
-
-  async function copyInstead() {
-    if (busy) return;
-    busy = true;
-    try {
-      const copy = await makePrivateCopy(collectionId);
-      if (copy) showToast(`${collection?.name} now has its own copy: ${copy.name}`);
-      onclose();
-    } catch (error) {
-      console.error('Failed to copy set', error);
-      showToast('Couldn’t copy that set');
+      showToast('Couldn’t switch the board');
     } finally {
       busy = false;
     }
   }
 </script>
 
-<Sheet title="Move {collection?.name ?? 'collection'} to another set" {onclose} {layer} width="34rem">
+<Sheet title="Switch to a different board" subtitle={collection?.name} {onclose} {layer} width="34rem">
   {#if !collection}
     <p class="bx-note">This collection no longer exists.</p>
   {:else if targets.length === 0}
-    <p class="bx-note">There's no other column set yet. Create one in Settings › Column sets first.</p>
+    <p class="bx-note">This is your only board, so there's nothing to switch to yet. Set up a board on another collection, or add one in Settings › Boards, and it will be offered here.</p>
   {:else}
     <div class="fromto">
       <div>
-        <span class="bx-label">From</span>
-        <strong>{from?.name ?? 'No set'}</strong>
+        <span class="bx-label">Now on</span>
+        <strong>{from?.name ?? 'No board'}</strong>
       </div>
       <div class="grow">
-        <label class="bx-label" for="move-to">To</label>
+        <label class="bx-label" for="move-to">Switch to</label>
         <select id="move-to" class="bx-select" bind:value={toId}>
           {#each targets as s (s.id)}
             <option value={s.id}>{s.name}</option>
@@ -149,9 +131,14 @@
       </div>
     </div>
 
+    {#if to}
+      <ColumnsPreview columns={to.columns} />
+    {/if}
+
     {#if from && to}
       <div>
-        <span class="bx-label">Match the columns <span class="bx-muted">· same names match on their own</span></span>
+        <span class="bx-label">Where should the items go?</span>
+        <p class="bx-note above">Each column on the left moves into the column you pick on the right. Columns with the same name are matched for you.</p>
         <ul class="bx-rows">
           {#each from.columns as c (c.id)}
             {@const n = counts.get(c.id) ?? 0}
@@ -161,7 +148,7 @@
               <span aria-hidden="true">→</span>
               <select
                 class="bx-select map"
-                aria-label="Move {c.name} to"
+                aria-label="Items in {c.name} go to"
                 value={mapping[c.id] ?? BOARD_UNSORTED}
                 onchange={(e) => {
                   mapping = { ...mapping, [c.id]: (e.currentTarget as HTMLSelectElement).value };
@@ -172,38 +159,39 @@
                   <option value={t.id}>{t.name}</option>
                 {/each}
               </select>
-              {#if isAutoMatch(c, to, mapping[c.id] ?? BOARD_UNSORTED)}<span class="auto">auto</span>{/if}
+              <span class="auto">{#if c.id !== BOARD_UNSORTED && isAutoMatch(c, to, mapping[c.id] ?? BOARD_UNSORTED)}same name{/if}</span>
             </li>
           {/each}
         </ul>
       </div>
       <p class="bx-note">
-        <strong>Result:</strong> {result}
-        {#if others > 0}The {others} other {from.name} {others === 1 ? 'collection isn’t' : 'collections aren’t'} affected.{/if}
+        <strong>After switching:</strong> {result}
+        {#if others > 0}The {others} other {others === 1 ? 'collection' : 'collections'} on {from.name} {others === 1 ? 'isn’t' : 'aren’t'} affected.{/if}
       </p>
       {#if collection.offPlan && planColumnName}
         <p class="bx-note">
           {#if planTarget}
-            {collection.name}'s todos in {planColumnName} show on the plan; after the move, its {to.columns.find((c) => c.id === planTarget)?.name} todos will.
+            {collection.name}'s todos in {planColumnName} show on the Todos page; after switching, its {to.columns.find((c) => c.id === planTarget)?.name} todos will.
           {:else}
-            <strong>{planColumnName}</strong> maps to Unsorted, so {collection.name} (a list) will have no todos on the plan until you pick a plan column again.
+            <strong>{planColumnName}</strong> goes to Unsorted, so none of {collection.name}'s todos will show on the Todos page until you pick a column again in Board settings.
           {/if}
         </p>
       {/if}
-      <p class="bx-note">Items remember their {from.name} column — move {collection.name} back and they return to where they were.</p>
-      {#if others > 0}
-        <button type="button" class="bx-link" disabled={busy} onclick={copyInstead}>Make a private copy of {from.name} instead</button>
-      {/if}
+      <p class="bx-note">Nothing is lost: switch {collection.name} back to {from.name} and every item returns to the column it was in.</p>
     {/if}
   {/if}
 
   {#snippet footer()}
     <button type="button" class="bx-btn" onclick={onclose}>Cancel</button>
-    <button type="button" class="bx-btn bx-primary" disabled={!to || busy} onclick={move}>Move</button>
+    <button type="button" class="bx-btn bx-primary" disabled={!to || busy} onclick={move}>Switch board</button>
   {/snippet}
 </Sheet>
 
 <style>
+  .above {
+    margin-bottom: 0.5rem;
+  }
+
   .fromto {
     display: flex;
     align-items: flex-end;
@@ -220,8 +208,8 @@
   }
 
   .map {
-    width: auto;
-    max-width: 11rem;
+    width: 9.5rem;
+    max-width: 42vw;
     padding: 0.3rem 0.45rem;
   }
 
@@ -231,6 +219,7 @@
   }
 
   .auto {
+    width: 4.6rem;
     font-size: 0.68rem;
     font-weight: 700;
     color: var(--text-muted);

@@ -221,8 +221,8 @@
   <label class="check">
     <input type="checkbox" bind:checked={offPlan} />
     <span>
-      <span class="check-title">It's a list</span>
-      <span class="check-hint">Like Movies or a reading list: its todos stay off the Todos plan.</span>
+      <span class="check-title">Keep its todos off the Todos page</span>
+      <span class="check-hint">For lists like movies or books, where todos aren't tasks to schedule.</span>
     </span>
   </label>
   {#if isEdit && collection}

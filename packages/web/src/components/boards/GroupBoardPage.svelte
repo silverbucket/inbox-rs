@@ -87,7 +87,10 @@
     onclick={(e) => e.stopPropagation()}
   >
     <div class="toolbar">
-      <button type="button" class="bx-btn bx-small" onclick={onexit} title="Back (Esc)">← Back</button>
+      <button type="button" class="bx-btn bx-small" onclick={onexit} title="Back (Esc)">
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        Back
+      </button>
       <span class="crumb">Collections › {group?.name ?? 'Group'}</span>
     </div>
 
@@ -95,10 +98,10 @@
       <p class="bx-note">This group doesn't exist — it may have been deleted.</p>
     {:else}
       <div class="head">
-        <h2>{group.name} <span class="bx-muted">{members.length} collections · {itemTotal} items</span></h2>
-        {#if setsUsed.length > 0}
+        <h2>{group.name} <span class="bx-muted">{members.length} {members.length === 1 ? 'collection' : 'collections'} · {itemTotal} {itemTotal === 1 ? 'item' : 'items'}{setsUsed.length === 1 && set ? ` · ${set.name} board` : ''}</span></h2>
+        {#if setsUsed.length > 1}
           <label class="by">
-            Board by
+            Board
             <select class="bx-select" value={set?.id} onchange={(e) => (chosenId = (e.currentTarget as HTMLSelectElement).value)}>
               {#each setsUsed as s (s.id)}<option value={s.id}>{s.name}</option>{/each}
             </select>
@@ -109,8 +112,8 @@
       {#if !set}
         <div class="empty">
           <p>None of {group.name}'s collections has a board yet.</p>
-          <p class="bx-note">Give some of them the same column set — a Pipeline, say — and they share one board here.</p>
-          <button type="button" class="bx-btn bx-primary" onclick={() => openColumnSet()}>Set up column sets</button>
+          <p class="bx-note">Open a collection and choose the Board view to set one up. Collections that use the same board show together here.</p>
+          <button type="button" class="bx-btn bx-primary" onclick={() => openColumnSet()}>Manage boards</button>
         </div>
       {:else}
         <div class="scope">
@@ -126,8 +129,8 @@
         </div>
         {#if offBoard.length}
           <p class="bx-note">
-            Not on this board: {offBoard.map((c) => c.name).join(', ')} — {offBoard.every((c) => !c.boardSetId) ? 'no column set' : `not on ${set.name}`} ·
-            <button type="button" class="bx-link" onclick={() => openColumnSet(set.id)}>Assign…</button>
+            Not shown: {offBoard.map((c) => c.name).join(', ')} — {offBoard.every((c) => !c.boardSetId) ? 'no board yet' : `not on the ${set.name} board`}.
+            <button type="button" class="bx-link" onclick={() => openColumnSet(set.id)}>Add to this board…</button>
           </p>
         {/if}
 
@@ -137,8 +140,7 @@
           <p class="bx-note">Pick at least one collection above to fill the board.</p>
         {/if}
         <p class="bx-note">
-          “Add” asks which collection the new item goes in. Dragging only changes the column — never the collection.
-          Edit columns in Settings › Column sets; changes apply to every collection using {set.name}.
+          New cards ask which collection they belong to. Moving a card changes its column, never its collection.
         </p>
         <div class="open-one">
           {#each shown as c (c.id)}
@@ -199,14 +201,17 @@
   }
 
   .head h2 {
-    flex: 1;
+    flex: 1 1 14rem;
     margin: 0;
-    font-size: 1.2rem;
+    font-size: 1.3rem;
+    letter-spacing: -0.015em;
   }
 
   .head h2 .bx-muted {
     margin-left: 0.35rem;
     font-weight: 500;
+    letter-spacing: 0;
+    white-space: nowrap;
   }
 
   .by {

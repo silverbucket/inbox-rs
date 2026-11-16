@@ -9,6 +9,7 @@
 
   let {
     title,
+    subtitle = undefined,
     onclose,
     layer = 220,
     width = '30rem',
@@ -16,6 +17,8 @@
     footer,
   }: {
     title: string;
+    /** One quiet line under the title: what this is about. */
+    subtitle?: string;
     onclose: () => void;
     layer?: number;
     width?: string;
@@ -48,7 +51,10 @@
     {onkeydown}
   >
     <header class="head">
-      <h2 id={titleId}>{title}</h2>
+      <div class="titles">
+        <h2 id={titleId}>{title}</h2>
+        {#if subtitle}<p class="subtitle">{subtitle}</p>{/if}
+      </div>
       <button type="button" class="close" aria-label="Close" onclick={onclose}>
         <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
       </button>
@@ -90,14 +96,25 @@
 
   .head {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.6rem;
   }
 
-  .head h2 {
+  .titles {
     flex: 1;
+    min-width: 0;
+  }
+
+  .head h2 {
     margin: 0;
-    font-size: 1.05rem;
+    font-size: 1.1rem;
+    letter-spacing: -0.01em;
+  }
+
+  .subtitle {
+    margin: 0.15rem 0 0;
+    font-size: 0.82rem;
+    color: var(--text-muted);
   }
 
   .close {
