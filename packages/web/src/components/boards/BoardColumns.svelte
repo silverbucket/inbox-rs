@@ -66,7 +66,6 @@
 
   /** What an empty column is for, said once, where the cards would be. */
   function emptyHint(columnId: string): string {
-    if (columnId === BOARD_UNSORTED) return 'New items land here first.';
     if (set.columns.find((c) => c.id === columnId)?.done) return 'Ticked todos land here.';
     return 'Nothing here yet.';
   }
@@ -340,12 +339,9 @@
           </button>
         {/if}
       </header>
-      {#if column.done}
-        <p class="finished">
-          <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-          Finished column
-        </p>
-      {/if}
+      <!-- One line under every heading, so cards and "+ Add" line up
+           across columns whether or not a column has something to say. -->
+      <p class="col-sub" class:finished={column.done}>{#if column.done}<svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Finished column{:else if column.id === BOARD_UNSORTED}New items land here first{/if}</p>
       {#if menuFor === column.id}
         {@const at = set.columns.findIndex((c) => c.id === column.id)}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -877,12 +873,24 @@
     flex-shrink: 0;
   }
 
-  .finished {
+  .col-sub {
     margin: -0.25rem 0 0;
-    line-height: 1.35;
+    min-height: 1.05rem;
     font-size: 0.75rem;
+    line-height: 1.4;
+    color: var(--text-muted);
+  }
+
+  .col-sub.finished {
     font-weight: 600;
     color: var(--success, #0f766e);
+  }
+
+  /* Phones show one column at a time: nothing to line up with. */
+  @media (max-width: 768px) {
+    .col-sub:empty {
+      display: none;
+    }
   }
 
 

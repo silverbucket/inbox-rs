@@ -250,6 +250,7 @@ button.bx-option:focus-visible {
 .bx-setting-title {
   font-size: 0.9rem;
   font-weight: 600;
+  text-wrap: balance;
 }
 
 .bx-switch {

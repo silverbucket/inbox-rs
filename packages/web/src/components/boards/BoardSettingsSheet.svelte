@@ -233,7 +233,7 @@
             onchange={(e) => void run(() => setOffPlan(collectionId, true, (e.currentTarget as HTMLInputElement).checked ? planOptions[0].id : undefined), 'Couldn’t save that')}
           />
           <span class="except-text">
-            <span>Still show the todos in one column</span>
+            <span>Still show the todos from one board column</span>
             <span class="bx-muted">They appear on the Todos page under Someday.</span>
           </span>
         </label>

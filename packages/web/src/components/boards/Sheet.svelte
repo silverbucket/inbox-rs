@@ -147,7 +147,11 @@
     overscroll-behavior: contain;
     /* Room for focus rings and hover halos that would otherwise be clipped. */
     margin: -0.25rem -1.2rem;
-    padding: 0.25rem 1.2rem;
+    padding: 0.25rem 1.2rem 1.4rem;
+    /* Content that runs under the footer fades out instead of being sliced
+       mid-line: "there is more below". The bottom padding keeps the last
+       line clear of the fade once you've scrolled to the end. */
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 1.4rem), transparent);
   }
 
   .body > :global(*) {
