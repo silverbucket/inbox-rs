@@ -50,4 +50,11 @@
     padding: 0.1rem 0.3rem;
   }
   .action:hover { color: var(--accent-text-hover); }
+
+  /* Phones: sit above the tab bar instead of covering it. */
+  @media (max-width: 768px) {
+    .toast {
+      bottom: calc(5.75rem + env(safe-area-inset-bottom));
+    }
+  }
 </style>

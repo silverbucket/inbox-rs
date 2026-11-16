@@ -147,7 +147,7 @@
 <div class="column-sets">
   <aside class="sets">
     <div class="sets-head">
-      <p class="bx-note">A board is a set of columns for laying out a collection. Collections on the same board share its columns.</p>
+      <p class="bx-note">Collections on the same board share its columns: change a column here and it changes for all of them.</p>
       <button type="button" class="bx-btn bx-small new-board" onclick={() => (creating = true)}>+ New board</button>
     </div>
     {#if $columnSets.length === 0}
@@ -190,11 +190,11 @@
         <ul class="bx-rows">
           {#each set.columns as c, i (c.id)}
             <li class="col-row">
-              <button type="button" class="swatch-btn" aria-label="Colour of {c.name}" aria-expanded={paletteFor === c.id} onclick={() => (paletteFor = paletteFor === c.id ? null : c.id)}>
+              <button type="button" class="swatch-btn" title="Change colour" aria-label="Colour of {c.name}" aria-expanded={paletteFor === c.id} onclick={() => (paletteFor = paletteFor === c.id ? null : c.id)}>
                 <span class="bx-swatch big" style="background: {c.color}"></span>
               </button>
               {#if c.id === BOARD_UNSORTED}
-                <span class="bx-grow">Unsorted <span class="bx-muted">· new items land here first</span></span>
+                <span class="bx-grow unsorted-row">Unsorted <span class="bx-muted">new items land here first</span></span>
               {:else}
                 <input
                   class="bx-input col-name"
@@ -205,13 +205,14 @@
                 {#if c.done}<span class="finished-tag">✓ Finished</span>{/if}
               {/if}
               <span class="bx-muted count">{counts.get(c.id) ?? 0} {counts.get(c.id) === 1 ? 'item' : 'items'}</span>
-              <span class="order">
+              <span class="order" class:fixed={c.id === BOARD_UNSORTED}>
                 <button type="button" class="icon" aria-label="Move {c.name} earlier" disabled={i < 2} onclick={() => shift(c.id, -1)}><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg></button>
                 <button type="button" class="icon" aria-label="Move {c.name} later" disabled={i === 0 || i === set.columns.length - 1} onclick={() => shift(c.id, 1)}><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
               </span>
               <button
                 type="button"
                 class="icon"
+                class:fixed={c.id === BOARD_UNSORTED}
                 aria-label={c.id === BOARD_UNSORTED ? 'Unsorted can’t be deleted' : `Delete column ${c.name}`}
                 disabled={c.id === BOARD_UNSORTED}
                 onclick={() => (deletingColumn = c.id)}
@@ -462,6 +463,11 @@
     display: inline-flex;
   }
 
+  /* Unsorted can't move or go: keep the row aligned, show no dead buttons. */
+  .fixed {
+    visibility: hidden;
+  }
+
   .icon {
     width: 1.9rem;
     height: 1.9rem;
@@ -517,12 +523,23 @@
     }
   }
 
+  .unsorted-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.5rem;
+  }
+
+  .swatch-btn:hover {
+    border-color: var(--text-muted);
+  }
+
   .swatch-btn {
     display: grid;
     place-items: center;
     width: 1.9rem;
     height: 1.9rem;
-    border: 0;
+    border: 1px solid var(--border);
     border-radius: 6px;
     background: none;
     cursor: pointer;

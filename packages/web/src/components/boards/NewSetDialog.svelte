@@ -303,10 +303,10 @@
         {#each columns as c, i (c.id)}
           <li>
             {#if c.id === BOARD_UNSORTED}
-              <span class="bx-swatch big" style="background: {c.color}"></span>
-              <span class="bx-grow">Unsorted <span class="bx-muted">· new items land here first</span></span>
+              <span class="swatch-slot"><span class="bx-swatch big" style="background: {c.color}"></span></span>
+              <span class="bx-grow unsorted-row">Unsorted <span class="bx-muted">new items land here first</span></span>
             {:else}
-              <button type="button" class="swatch-btn" aria-label="Colour of {c.name}" aria-expanded={paletteFor === c.id} onclick={() => (paletteFor = paletteFor === c.id ? null : c.id)}>
+              <button type="button" class="swatch-btn" title="Change colour" aria-label="Colour of {c.name}" aria-expanded={paletteFor === c.id} onclick={() => (paletteFor = paletteFor === c.id ? null : c.id)}>
                 <span class="bx-swatch big" style="background: {c.color}"></span>
               </button>
               <input
@@ -442,20 +442,34 @@
     padding: 0.3rem 0.5rem;
   }
 
+  .swatch-slot {
+    display: grid;
+    place-items: center;
+    width: 1.8rem;
+    flex-shrink: 0;
+  }
+
+  .unsorted-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.5rem;
+  }
+
   .swatch-btn {
     display: grid;
     place-items: center;
     width: 1.8rem;
     height: 1.8rem;
-    margin: 0 -0.3rem;
-    border: 0;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
     border-radius: 6px;
     background: none;
     cursor: pointer;
   }
 
   .swatch-btn:hover {
-    background: var(--surface-tint);
+    border-color: var(--text-muted);
   }
 
   :global(.bx-swatch.big) {

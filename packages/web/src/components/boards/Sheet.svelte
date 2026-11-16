@@ -160,5 +160,14 @@
       max-height: 92vh;
       overflow-y: auto;
     }
+
+    /* The actions stay in reach however long the sheet is. */
+    .foot {
+      position: sticky;
+      bottom: -1.1rem;
+      margin: 0 -1.2rem -1.1rem;
+      padding: 0.75rem 1.2rem calc(0.9rem + env(safe-area-inset-bottom));
+      background: var(--surface);
+    }
   }
 </style>

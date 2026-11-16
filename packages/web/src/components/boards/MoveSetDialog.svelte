@@ -138,7 +138,7 @@
     {#if from && to}
       <div>
         <span class="bx-label">Where should the items go?</span>
-        <p class="bx-note above">Each column on the left moves into the column you pick on the right. Columns with the same name are matched for you.</p>
+        <p class="bx-note above">Each column on the left moves into the column you pick on the right. Columns with the same name are matched for you, and Finished goes to Finished.</p>
         <ul class="bx-rows">
           {#each from.columns as c (c.id)}
             {@const n = counts.get(c.id) ?? 0}
