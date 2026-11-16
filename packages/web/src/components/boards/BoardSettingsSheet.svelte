@@ -150,22 +150,27 @@
                   <span class="bx-option-title">{s.name}</span>
                   <span class="bx-muted">{users.length ? `used by ${users.join(', ')}` : 'not used yet'}</span>
                 </span>
-                <button type="button" class="bx-btn bx-small bx-primary" aria-label="Use {s.name}" onclick={() => choose(s.id)}>Use</button>
-                <button type="button" class="bx-btn bx-small" aria-label="Copy {s.name}" onclick={() => (creating = { kind: 'copy', id: s.id })}>Copy</button>
               </div>
               <ColumnsPreview columns={s.columns} />
+              <!-- Each choice says what it does, in a sentence of its own,
+                   beside the button that does it. -->
+              <div class="choices">
+                <button type="button" class="bx-btn bx-small bx-primary" aria-label="Use {s.name}" onclick={() => choose(s.id)}>Use this board</button>
+                <span class="bx-muted">
+                  {#if users.length}
+                    {collection.name} and {users.join(', ')} will have the same columns. Change a column and it changes for {users.length === 1 ? 'both' : 'all of them'}.
+                  {:else}
+                    {collection.name} will be the first collection on it.
+                  {/if}
+                </span>
+                <button type="button" class="bx-btn bx-small" aria-label="Copy {s.name}" onclick={() => (creating = { kind: 'copy', id: s.id })}>Make a copy</button>
+                <span class="bx-muted">
+                  {collection.name} gets its own columns, starting from these.{#if users.length}{' '}Changing them won't affect {users.join(', ')}.{/if}
+                </span>
+              </div>
             </li>
           {/each}
         </ul>
-        <p class="bx-note explain">
-          {#if $columnSets.length === 1 && usersOf($columnSets[0].id).length}
-            {@const names = usersOf($columnSets[0].id)}
-            <strong>Use</strong> shares this board with {names.join(', ')}: change a column and it changes for {names.length === 1 ? 'both' : 'all of them'}.
-          {:else}
-            <strong>Use</strong> shares a board with the collections already on it: change a column and it changes for all of them.
-          {/if}
-          <strong>Copy</strong> gives {collection.name} its own columns to change freely.
-        </p>
       </section>
     {/if}
 
@@ -297,6 +302,36 @@
 
   .explain {
     margin-top: 0.55rem;
+  }
+
+  .choices {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .choices .bx-btn {
+    justify-self: stretch;
+    white-space: nowrap;
+  }
+
+  /* Phones: each button with its sentence under it. */
+  @media (max-width: 520px) {
+    .choices {
+      grid-template-columns: 1fr;
+      gap: 0.3rem;
+    }
+
+    .choices .bx-btn {
+      justify-self: start;
+    }
+
+    .choices .bx-muted + .bx-btn {
+      margin-top: 0.45rem;
+    }
   }
 
   .tight {
