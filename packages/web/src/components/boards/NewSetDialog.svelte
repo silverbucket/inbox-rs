@@ -583,14 +583,17 @@
   /* Phones: each column stays one row, and the Finished tag gives way to
      the sentence below the list that says the same thing. */
   @media (max-width: 520px) {
-    /* Just the tick: the name needs the room, and the sentence under the
-       list spells it out. */
-    .finished-word {
-      display: none;
+    /* The name needs the row; "Finished" sits under it as a caption. */
+    .bx-rows > li {
+      flex-wrap: wrap;
     }
 
     .finished-tag {
-      padding: 0.25rem;
+      order: 9;
+      flex-basis: 100%;
+      margin: -0.15rem 0 0 2.25rem;
+      padding: 0;
+      background: none;
     }
 
     .bx-rows > li {

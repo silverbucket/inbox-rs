@@ -67,6 +67,7 @@
   /** What an empty column is for, said once, where the cards would be. */
   function emptyHint(columnId: string): string {
     if (columnId === BOARD_UNSORTED) return 'New items land here first.';
+    if (set.columns.find((c) => c.id === columnId)?.done) return 'Ticked todos land here.';
     return 'Nothing here yet.';
   }
 
@@ -342,7 +343,7 @@
       {#if column.done}
         <p class="finished">
           <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-          Finished <span class="finished-why">· ticked todos move here</span>
+          Finished column
         </p>
       {/if}
       {#if menuFor === column.id}
@@ -466,8 +467,7 @@
         {/each}
       </ul>
 
-      <!-- The Finished column says what it's for under its name already. -->
-      {#if cards.length === 0 && !column.done}
+      {#if cards.length === 0}
         <p class="empty">{emptyHint(column.id)}</p>
       {/if}
 
@@ -651,6 +651,8 @@
       padding: 0 1rem 0.75rem;
       scroll-padding-left: 1rem;
       scroll-snap-type: x mandatory;
+      /* One column in view at a time: let each be as tall as its cards. */
+      align-items: flex-start;
     }
   }
 
@@ -883,10 +885,6 @@
     color: var(--success, #0f766e);
   }
 
-  .finished-why {
-    font-weight: 500;
-    color: var(--text-muted);
-  }
 
   .count {
     min-width: 1.35rem;

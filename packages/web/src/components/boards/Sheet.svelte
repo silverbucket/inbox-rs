@@ -88,6 +88,10 @@
     border-radius: var(--radius);
     background: var(--surface);
     box-shadow: 0 16px 48px var(--shadow);
+    /* Never taller than the screen: the body scrolls between a title and
+       actions that stay put, so the buttons are always in reach. */
+    max-height: 88vh;
+    min-height: 0;
   }
 
   .sheet:focus {
@@ -137,6 +141,17 @@
     display: flex;
     flex-direction: column;
     gap: 0.9rem;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Room for focus rings and hover halos that would otherwise be clipped. */
+    margin: -0.25rem -1.2rem;
+    padding: 0.25rem 1.2rem;
+  }
+
+  .body > :global(*) {
+    flex-shrink: 0;
   }
 
   .foot {
@@ -146,6 +161,7 @@
     gap: 0.5rem;
     padding-top: 0.75rem;
     border-top: 1px solid var(--border);
+    flex-shrink: 0;
   }
 
   @media (max-width: 600px) {
@@ -158,16 +174,6 @@
       max-width: none;
       border-radius: var(--radius) var(--radius) 0 0;
       max-height: 92vh;
-      overflow-y: auto;
-    }
-
-    /* The actions stay in reach however long the sheet is. */
-    .foot {
-      position: sticky;
-      bottom: -1.1rem;
-      margin: 0 -1.2rem -1.1rem;
-      padding: 0.75rem 1.2rem calc(0.9rem + env(safe-area-inset-bottom));
-      background: var(--surface);
     }
   }
 </style>

@@ -274,7 +274,7 @@
               </li>
             {/each}
           </ul>
-          <p class="bx-note">Removing a collection takes its board away; items remember their column in case you add it back.</p>
+          <p class="bx-note gap">Removing a collection takes its board away; items remember their column in case you add it back.</p>
         {:else}
           <p class="bx-note">No collection uses this board yet.</p>
         {/if}
@@ -322,6 +322,10 @@
 {/if}
 
 <style>
+  .gap {
+    margin-top: 0.5rem;
+  }
+
   .danger-zone {
     display: flex;
     flex-direction: column;

@@ -262,6 +262,11 @@
   }
 
   @media (max-width: 600px) {
+    .open-one {
+      flex-basis: 100%;
+      margin-left: 0;
+    }
+
     .overlay {
       padding: 0;
     }
