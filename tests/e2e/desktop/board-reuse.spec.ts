@@ -82,7 +82,7 @@ test('a board made for one collection can be shared with or copied to another', 
   // Saving says the board is reusable.
   await expect(
     page.getByText(
-      `Saved ${setName}. Other collections can use this board too.`,
+      `Created the ${setName} board. Other collections can use it too.`,
     ),
   ).toBeVisible();
   await expect(page.getByText('Practising', { exact: true })).toBeVisible();

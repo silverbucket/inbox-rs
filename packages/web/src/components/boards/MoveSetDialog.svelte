@@ -58,12 +58,13 @@
     }
     return out;
   });
+  /** The other collections on the board being left, by name. */
   const others = $derived(
     from
-      ? Object.values($collections).filter(
-          (c) => c.boardSetId === from.id && c.id !== collectionId && !c.archived,
-        ).length
-      : 0,
+      ? Object.values($collections)
+          .filter((c) => c.boardSetId === from.id && c.id !== collectionId && !c.archived)
+          .map((c) => c.name)
+      : [],
   );
   const result = $derived.by(() => {
     if (!to) return '';
@@ -80,6 +81,9 @@
     });
     return parts.length ? `${parts.join(', ')}.` : 'No items to move.';
   });
+
+  const fromDone = $derived(from?.columns.find((c) => c.done));
+  const toDone = $derived(to?.columns.find((c) => c.done));
 
   let busy = $state(false);
   const planColumnName = $derived(
@@ -138,7 +142,7 @@
     {#if from && to}
       <div>
         <span class="bx-label">Where should the items go?</span>
-        <p class="bx-note above">Choose where the items from each column should go. Matching names are selected for you, and Finished goes to Finished.</p>
+        <p class="bx-note above">Choose where the items from each column should go. Matching names are selected for you.{#if fromDone && toDone && fromDone.name.trim().toLowerCase() !== toDone.name.trim().toLowerCase()}{' '}{fromDone.name} goes to {toDone.name}: each is its board's Finished column.{/if}</p>
         <ul class="bx-rows">
           {#each from.columns as c (c.id)}
             {@const n = counts.get(c.id) ?? 0}
@@ -166,7 +170,7 @@
       </div>
       <p class="bx-note">
         <strong>After switching:</strong> {result}
-        {#if others > 0}The {others} other {others === 1 ? 'collection' : 'collections'} on {from.name} {others === 1 ? 'isn’t' : 'aren’t'} affected.{/if}
+        {#if others.length}{others.join(', ')}, also on {from.name}, {others.length === 1 ? 'isn’t' : 'aren’t'} affected.{/if}
       </p>
       {#if collection.offPlan && planColumnName}
         <p class="bx-note">
@@ -177,7 +181,7 @@
           {/if}
         </p>
       {/if}
-      <p class="bx-note">Nothing is deleted. Items keep a note of their {from.name} column, which is used if you switch {collection.name} back and a column has no match.</p>
+      <p class="bx-note">Nothing is deleted. Items remember their {from.name} column in case you switch {collection.name} back later.</p>
     {/if}
   {/if}
 

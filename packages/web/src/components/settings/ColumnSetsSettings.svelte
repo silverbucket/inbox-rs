@@ -270,11 +270,11 @@
                 <span class="bx-dot" style="background: {c.color || 'var(--text-muted)'}"></span>
                 <span class="bx-grow">{c.name} <span class="bx-muted">{c.groupId ? ($groups[c.groupId]?.name ?? '') : ''} · {itemCount(c.id)} items</span></span>
                 <button type="button" class="bx-btn bx-small" onclick={() => (movingCollection = { id: c.id })}>Switch board…</button>
-                <button type="button" class="bx-btn bx-small" onclick={() => removeCollection(c.id)}>Remove</button>
+                <button type="button" class="bx-btn bx-small" aria-label="Remove board from {c.name}" onclick={() => removeCollection(c.id)}>Remove board</button>
               </li>
             {/each}
           </ul>
-          <p class="bx-note gap">Removing a collection takes its board away; items remember their column in case you add it back.</p>
+          <p class="bx-note gap">Removing this board from a collection keeps its items. Their column positions are remembered if you add the board back.</p>
         {:else}
           <p class="bx-note">No collection uses this board yet.</p>
         {/if}

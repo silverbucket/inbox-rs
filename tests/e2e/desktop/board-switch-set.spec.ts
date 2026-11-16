@@ -62,7 +62,7 @@ test('switching a collection to another board closes the dialog and sticks', asy
     await page
       .getByRole('button', { name: 'Create board', exact: true })
       .click();
-    await expect(page.getByText(`Saved ${set}.`)).toBeVisible();
+    await expect(page.getByText(`Created the ${set} board.`)).toBeVisible();
     await page.getByRole('button', { name: 'Back', exact: true }).click();
   }
 

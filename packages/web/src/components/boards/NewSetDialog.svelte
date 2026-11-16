@@ -237,7 +237,7 @@
       await saveSet(set);
       createdSetId = set.id;
       await setCollectionsBoard(fresh, set.id);
-      showToast(`Saved ${set.name}. Other collections can use this board too.`);
+      showToast(`Created the ${set.name} board. Other collections can use it too.`);
       if (queue.length) switchQueue = queue;
       else finish();
     } catch (error) {

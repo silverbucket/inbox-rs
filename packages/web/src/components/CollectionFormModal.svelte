@@ -222,7 +222,7 @@
     <input type="checkbox" bind:checked={offPlan} />
     <span>
       <span class="check-title">Keep its todos off the Todos page</span>
-      <span class="check-hint">For lists like movies or books, where todos aren't tasks to schedule.</span>
+      <span class="check-hint">For collections where todos aren't tasks to schedule.</span>
     </span>
   </label>
   {#if isEdit && collection}

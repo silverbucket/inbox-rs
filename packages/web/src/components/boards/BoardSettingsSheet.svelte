@@ -157,7 +157,12 @@
           {/each}
         </ul>
         <p class="bx-note explain">
-          <strong>Use</strong> keeps {collection.name} on the same columns as the collections above: change a column and it changes for all of them.
+          {#if $columnSets.length === 1 && usersOf($columnSets[0].id).length}
+            {@const names = usersOf($columnSets[0].id)}
+            <strong>Use</strong> shares this board with {names.join(', ')}: change a column and it changes for {names.length === 1 ? 'both' : 'all of them'}.
+          {:else}
+            <strong>Use</strong> shares a board with the collections already on it: change a column and it changes for all of them.
+          {/if}
           <strong>Copy</strong> gives {collection.name} its own columns to change freely.
         </p>
       </section>
@@ -213,8 +218,8 @@
       <span class="bx-label tight" id="todos-page">Todos page</span>
       <label class="bx-setting">
         <span class="bx-setting-text">
-          <span class="bx-setting-title">Keep these todos off the Todos page</span>
-          <span class="bx-muted">For lists like movies or books, where todos aren't tasks to schedule.</span>
+          <span class="bx-setting-title">Keep this collection's todos off the Todos page</span>
+          <span class="bx-muted">For collections where todos aren't tasks to schedule.</span>
         </span>
         <input
           type="checkbox"
@@ -233,8 +238,8 @@
             onchange={(e) => void run(() => setOffPlan(collectionId, true, (e.currentTarget as HTMLInputElement).checked ? planOptions[0].id : undefined), 'Couldn’t save that')}
           />
           <span class="except-text">
-            <span>Still show the todos from one board column</span>
-            <span class="bx-muted">They appear on the Todos page under Someday.</span>
+            <span>Still show the todos from one column</span>
+            <span class="bx-muted">{planColumn ? 'They appear on the Todos page under Someday.' : 'You pick the column; its todos appear on the Todos page under Someday.'}</span>
           </span>
         </label>
         {#if planColumn}

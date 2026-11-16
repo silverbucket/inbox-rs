@@ -135,6 +135,17 @@
     );
   }
 
+  /** What making (or having) this the Finished column means, said truthfully
+   *  for the board as it is: ticked todos only "disappear" when no column
+   *  is Finished yet. */
+  function finishedHint(column: (typeof set.columns)[number]): string {
+    if (column.done) return 'When you tick a todo, it moves here';
+    const current = set.columns.find((c) => c.done);
+    return current
+      ? `Ticked todos will move here instead of to ${current.name}`
+      : 'Ticked todos will move here instead of disappearing';
+  }
+
   async function toggleFinished(id: string) {
     menuFor = null;
     const current = set.columns.find((c) => c.done)?.id;
@@ -389,7 +400,7 @@
               {column.done ? 'Finished column' : 'Make this the Finished column'}
               {#if column.done}<svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>{/if}
             </span>
-            <span class="mi-hint">Ticked todos move here instead of disappearing</span>
+            <span class="mi-hint">{finishedHint(column)}</span>
           </button>
           <button
             type="button"
