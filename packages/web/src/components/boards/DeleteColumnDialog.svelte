@@ -94,7 +94,7 @@
 
 <Sheet title="Delete “{column?.name ?? 'column'}”?" {onclose} {layer} width="28rem">
   <p class="bx-note">
-    {#if liveUsers.length > 1}{usersPhrase.charAt(0).toUpperCase() + usersPhrase.slice(1)} use the {set.name} board, so the column goes from {liveUsers.length === 2 ? 'both' : 'all of them'}.{/if}
+    {#if liveUsers.length > 1}{usersPhrase.charAt(0).toUpperCase() + usersPhrase.slice(1)} use the {set.name} board, so deleting this column removes it from {liveUsers.length === 2 ? 'both' : 'all of them'}.{/if}
     {#if affected.length === 0}
       It's empty, so nothing else changes.
     {:else}

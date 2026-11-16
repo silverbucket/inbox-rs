@@ -143,13 +143,13 @@
     {#if from && to}
       <div>
         <span class="bx-label">Where should the items go?</span>
-        <p class="bx-note above">Choose where the items from each column should go. Matching names are selected for you.{#if fromDone && toDone && fromDone.name.trim().toLowerCase() !== toDone.name.trim().toLowerCase()}{' '}Ticked todos end up in {toDone.name} on the new board, so items in {fromDone.name} go there.{/if}</p>
+        <p class="bx-note above">Choose where the items from each column should go. Matching names are selected for you.{#if fromDone && toDone && fromDone.name.trim().toLowerCase() !== toDone.name.trim().toLowerCase()}{' '}{fromDone.name} is where ticked todos go now (✓); on the new board that is {toDone.name}, so its items go there.{/if}</p>
         <ul class="bx-rows">
           {#each from.columns as c (c.id)}
             {@const n = counts.get(c.id) ?? 0}
             <li class:empty={!n}>
               <span class="bx-swatch" style="background: {c.color}"></span>
-              <span class="bx-grow">{c.name} <span class="bx-muted">{n ? `${n} item${n > 1 ? 's' : ''}` : 'empty'}</span></span>
+              <span class="bx-grow">{c.name}{#if c.done}{' '}<svg class="tick" role="img" aria-label="Finished column" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>{/if} <span class="bx-muted">{n ? `${n} item${n > 1 ? 's' : ''}` : 'empty'}</span></span>
               <span aria-hidden="true">→</span>
               <select
                 class="bx-select map"
@@ -193,6 +193,10 @@
 </Sheet>
 
 <style>
+  .tick {
+    color: var(--success, #0f766e);
+  }
+
   .above {
     margin-bottom: 0.5rem;
   }
