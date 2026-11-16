@@ -134,7 +134,7 @@
 {:else if !set}
   <Sheet title="Set up a board" subtitle="for {collection.name}" {onclose} width="34rem">
     <p class="bx-lead">
-      A board lays {collection.name} out in columns, so you can move things along as they progress.
+      A board lays a collection out in columns, so you can move things along as they progress.
     </p>
 
     {#if $columnSets.length}
