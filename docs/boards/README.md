@@ -40,7 +40,7 @@ makes it the Finished column. Before, all of that meant a trip to Settings.
 
 ## Board settings
 
-"It's a list — keep its todos off the Todos plan" is now a labelled switch, "Keep these todos off the Todos page", with a line saying who it is for. A board shared with other collections says so, and offers a separate copy.
+"It's a list — keep its todos off the Todos plan" is now a labelled switch, "Keep this collection's todos off the Todos page", with a line saying what it is for. A board shared with other collections says so, and offers a separate copy.
 
 | Before | After |
 | --- | --- |
@@ -80,7 +80,7 @@ Each column stays on one row, and the Create button is always in reach.
 | ![Before: phone: creating a board](img/before-phone-new-board.png) | ![After: phone: creating a board](img/after-phone-new-board.png) |
 ## Phone: board settings
 
-The same settings as on desktop, in a sheet that fits.
+The same settings as on desktop, in a sheet that fits. A phone has no page called Todos, so the wording names its two tabs, Today and Plan.
 
 | Before | After |
 | --- | --- |
