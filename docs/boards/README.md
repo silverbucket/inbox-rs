@@ -47,7 +47,7 @@ makes it the Finished column. Before, all of that meant a trip to Settings.
 | ![Before: board settings](img/before-settings.png) | ![After: board settings](img/after-settings.png) |
 ## Using a board again
 
-A board made for one collection is offered first to the next, with the collections that already use it. **Use** keeps the same columns as them; **Copy** gives this collection its own.
+A board made for one collection is offered first to the next, with the collections that already use it. Two buttons each say what they do: "Use this board" shares its columns with those collections, and "Make a copy" gives this collection its own.
 
 | Before | After |
 | --- | --- |
