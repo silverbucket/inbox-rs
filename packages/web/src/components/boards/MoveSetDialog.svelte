@@ -91,14 +91,17 @@
   const planTarget = $derived(to ? mapPlanColumn(collection?.planColumnId, to, mapping) : undefined);
 
   async function move() {
-    if (!to || busy) return;
+    // Once the move lands, this set is the collection's own and no longer a
+    // destination, so `to` goes undefined: keep hold of it for the message.
+    const dest = to;
+    if (!dest || busy) return;
     busy = true;
     try {
-      const { planColumnDropped } = await moveCollectionToSet(collectionId, to.id, from ? mapping : {}, explicit);
+      const { planColumnDropped } = await moveCollectionToSet(collectionId, dest.id, from ? mapping : {}, explicit);
       showToast(
         planColumnDropped
-          ? `${collection?.name ?? 'Collection'} now uses ${to.name}. Pick its plan column again under Columns — until then none of its todos show on the plan.`
-          : `${collection?.name ?? 'Collection'} now uses ${to.name}`,
+          ? `${collection?.name ?? 'Collection'} now uses ${dest.name}. Pick its plan column again under Columns — until then none of its todos show on the plan.`
+          : `${collection?.name ?? 'Collection'} now uses ${dest.name}`,
       );
       onclose();
     } catch (error) {

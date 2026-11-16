@@ -262,6 +262,19 @@ export function isAutoMatch(
   );
 }
 
+/**
+ * The set a collection's board really uses. A reference to a set that no
+ * longer exists (deleted here or on another device) is no board at all.
+ */
+export function liveSetId(
+  col: Pick<Collection, 'boardSetId'>,
+  sets: ColumnSet[],
+): string | undefined {
+  return col.boardSetId && sets.some((s) => s.id === col.boardSetId)
+    ? col.boardSetId
+    : undefined;
+}
+
 /** Collections on a set, in the given order. */
 export function collectionsOnSet(
   set: ColumnSet,

@@ -13,7 +13,7 @@
     setDoneColumn,
     updateColumns,
   } from '../../lib/board-actions';
-  import { COLUMN_COLORS, copySet, newId, nextColumnColor } from '../../lib/boards';
+  import { COLUMN_COLORS, copySet, liveSetId, newId, nextColumnColor } from '../../lib/boards';
   import { focusedColumnSetId } from '../../lib/settings-request';
   import { collections, groups, items } from '../../lib/stores';
   import { showToast } from '../../lib/toast';
@@ -134,7 +134,8 @@
     if (!set) return;
     const col = $collections[id];
     if (!col) return;
-    if (col.boardSetId) {
+    // Pointing at a deleted set is no board: join directly, nothing to match.
+    if (liveSetId(col, $columnSets)) {
       movingCollection = { id, to: set.id };
     } else {
       void run(() => setCollectionsBoard([id], set.id), 'Couldn’t add that collection');
@@ -259,7 +260,7 @@
             {#each candidates as c (c.id)}
               <li>
                 <span class="bx-dot" style="background: {c.color || 'var(--text-muted)'}"></span>
-                <span class="bx-grow">{c.name} <span class="bx-muted">{c.boardSetId ? `uses ${setName(c.boardSetId) ?? 'a set'}` : 'no set yet'}</span></span>
+                <span class="bx-grow">{c.name} <span class="bx-muted">{liveSetId(c, $columnSets) ? `uses ${setName(c.boardSetId) ?? 'a set'}` : 'no set yet'}</span></span>
                 <button type="button" class="bx-btn bx-small" onclick={() => addCollection(c.id)}>Add</button>
               </li>
             {:else}

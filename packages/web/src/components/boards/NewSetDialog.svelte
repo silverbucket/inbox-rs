@@ -17,6 +17,7 @@
   import {
     COLUMN_COLORS,
     columnsFromSpecs,
+    liveSetId,
     makeSet,
     newId,
     nextColumnColor,
@@ -148,10 +149,12 @@
       : live,
   );
   const setName = (id: string | undefined) => $columnSets.find((s) => s.id === id)?.name;
+  // A collection still pointing at a deleted set has no board to switch from.
+  const onSet = (c: (typeof live)[number]) => liveSetId(c, $columnSets);
   // A failed create may have saved the set already; collections it reached
   // are on it, not switching from another set.
   const switching = $derived(
-    live.filter((c) => picked.has(c.id) && c.boardSetId && c.boardSetId !== createdSetId),
+    live.filter((c) => picked.has(c.id) && onSet(c) && onSet(c) !== createdSetId),
   );
   const groupOptions = $derived(
     Object.values($groups)
@@ -181,7 +184,7 @@
     // Decide who joins directly and who switches sets before any write:
     // once a collection is on the new set it no longer looks "unset".
     const fresh = live
-      .filter((c) => picked.has(c.id) && (!c.boardSetId || c.boardSetId === createdSetId))
+      .filter((c) => picked.has(c.id) && (!onSet(c) || onSet(c) === createdSetId))
       .map((c) => c.id);
     const queue = switching.map((c) => c.id);
     try {
@@ -292,7 +295,7 @@
               <input type="checkbox" checked={picked.has(c.id)} onchange={() => toggle(c.id)} />
               <span class="bx-dot" style="background: {c.color || 'var(--text-muted)'}"></span>
               <span class="bx-grow">{c.name}</span>
-              {#if c.boardSetId}
+              {#if onSet(c)}
                 <span class="uses">uses {setName(c.boardSetId) ?? 'a set'}</span>
               {:else}
                 <span class="bx-muted">no set yet</span>

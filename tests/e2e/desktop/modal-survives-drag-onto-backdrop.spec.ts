@@ -41,7 +41,10 @@ test('dragging a text selection off a modal leaves it open; clicking the backdro
   await page.keyboard.press('Enter');
 
   await page.getByRole('button', { name: `Focus on ${collection}` }).click();
-  await page.getByRole('button', { name: 'Board', exact: true }).click();
+  await page
+    .getByRole('group', { name: 'View' })
+    .getByRole('button', { name: 'Board', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Watch list', exact: true }).click();
 
   const dialog = page.getByRole('dialog', { name: 'New board' });
