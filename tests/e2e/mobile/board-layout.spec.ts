@@ -35,6 +35,12 @@ test('the board toolbar fits a phone and the column strip jumps to a column', as
     .click();
   await page.getByRole('button', { name: 'Watch list', exact: true }).click();
   await page.getByRole('button', { name: 'Create board', exact: true }).click();
+  // The sheet covers the toolbar until it closes.
+  await expect(page.getByRole('dialog', { name: 'New board' })).toHaveCount(0);
+  await expect(
+    page.locator('section.column').first(),
+    'the board is showing',
+  ).toBeVisible();
 
   // Every toolbar control is fully on screen and is what a tap there hits.
   const width = page.viewportSize()?.width ?? 0;

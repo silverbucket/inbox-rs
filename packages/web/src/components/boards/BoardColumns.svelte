@@ -88,8 +88,11 @@
     // menu positioned inside it.
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const width = 232;
+    // Tall enough for every action; near the bottom of a short screen the
+    // menu moves up to stay on it (and scrolls if even that isn't enough).
+    const height = 360;
     menuPos = {
-      top: r.bottom + 4,
+      top: Math.max(8, Math.min(r.bottom + 4, window.innerHeight - height - 8)),
       left: Math.max(8, Math.min(r.right - width, window.innerWidth - width - 8)),
     };
     menuFor = columnId;
@@ -142,6 +145,17 @@
       showToast('Couldn’t change the Finished column');
     }
   }
+
+  // Close on a click anywhere else. Capture phase: the focus panel this
+  // board sits in stops clicks from bubbling up to the window.
+  $effect(() => {
+    if (!menuFor) return;
+    const close = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement | null)?.closest('.col-menu, .menu-btn')) menuFor = null;
+    };
+    window.addEventListener('click', close, true);
+    return () => window.removeEventListener('click', close, true);
+  });
 
   // ── Phones: one column at a time, with a strip to jump between them ──
   let boardEl = $state<HTMLElement>();
@@ -269,12 +283,7 @@
   }
 </script>
 
-<svelte:window
-  onclick={(e) => {
-    if (menuFor && !(e.target as HTMLElement | null)?.closest('.col-menu, .menu-btn')) menuFor = null;
-  }}
-  onresize={() => (menuFor = null)}
-/>
+<svelte:window onresize={() => (menuFor = null)} />
 
 <div class="board-wrap">
 <nav class="jump" aria-label="Jump to a column">
@@ -744,6 +753,8 @@
     position: fixed;
     z-index: 160;
     width: 232px;
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     padding: 0.3rem;

@@ -177,7 +177,7 @@
           {/if}
         </p>
       {/if}
-      <p class="bx-note">Nothing is lost: switch {collection.name} back to {from.name} and every item returns to the column it was in.</p>
+      <p class="bx-note">Nothing is deleted. Items keep a note of their {from.name} column, which is used if you switch {collection.name} back and a column has no match.</p>
     {/if}
   {/if}
 

@@ -267,6 +267,11 @@
       margin-left: 0;
     }
 
+    /* A long board name wraps instead of pushing the page sideways. */
+    .head h2 .bx-muted {
+      white-space: normal;
+    }
+
     .overlay {
       padding: 0;
     }

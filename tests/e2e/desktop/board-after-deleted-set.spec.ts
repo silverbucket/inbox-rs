@@ -27,6 +27,7 @@ async function serverConfig(user: RsUser, token: string) {
   return r.ok
     ? ((await r.json()) as {
         columnSets?: Array<{ id: string; name: string }>;
+        collectionViews?: Record<string, string>;
       })
     : {};
 }
@@ -69,10 +70,16 @@ test('a collection whose board was deleted elsewhere gets a new board in one ste
   await page.getByRole('button', { name: 'Create board', exact: true }).click();
   await expect
     .poll(
-      async () =>
-        (await serverConfig(rsUser, rsToken)).columnSets?.some(
-          (s) => s.name === oldSet,
-        ),
+      async () => {
+        // Both of the setup's config writes must have landed (the set, then
+        // the collection's Board view): deleting the set while the second
+        // is still on its way would let that write put the set back.
+        const config = await serverConfig(rsUser, rsToken);
+        return (
+          !!config.columnSets?.some((s) => s.name === oldSet) &&
+          Object.values(config.collectionViews ?? {}).includes('board')
+        );
+      },
       { timeout: 20_000 },
     )
     .toBe(true);

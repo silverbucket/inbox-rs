@@ -49,6 +49,15 @@ test('a column is renamed and made the Finished column from its own menu', async
   await page.getByRole('button', { name: 'Reading list', exact: true }).click();
   await page.getByRole('button', { name: 'Create board', exact: true }).click();
 
+  // The menu closes on a click elsewhere on the board (the panel it sits in
+  // swallows clicks before they reach the window).
+  await page
+    .getByRole('button', { name: 'Column options for Reading' })
+    .click();
+  await expect(page.getByRole('menu')).toBeVisible();
+  await page.getByRole('heading', { name: 'To read', exact: true }).click();
+  await expect(page.getByRole('menu')).toHaveCount(0);
+
   // Rename "Reading" in place.
   await page
     .getByRole('button', { name: 'Column options for Reading' })

@@ -60,7 +60,7 @@
   // items there by default would be a surprise.
   let target = $state(
     options.find((o) => o.hint === 'the column after' && o.id !== doneColumn(set)?.id)?.id ??
-      options[0]?.id ??
+      options.find((o) => o.id !== doneColumn(set)?.id)?.id ??
       BOARD_UNSORTED,
   );
   let busy = $state(false);
