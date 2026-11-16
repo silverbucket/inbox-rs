@@ -50,7 +50,7 @@ test('renaming a collection keeps its board and column set', async ({
   // Set up a board with the user's own column names.
   await page.getByRole('button', { name: `Focus on ${before}` }).click();
   await page.getByRole('button', { name: 'Board', exact: true }).click();
-  await page.getByRole('button', { name: 'New column set…' }).click();
+  await page.getByRole('button', { name: 'Watch list', exact: true }).click();
   // A name typed first survives picking a different starting point.
   await page.locator('#set-name').fill(setName);
   await page.getByRole('button', { name: 'Blank', exact: true }).click();
