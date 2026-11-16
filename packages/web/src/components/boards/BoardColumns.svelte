@@ -5,7 +5,7 @@
    *
    * Cards move by dragging (pointer) or with their "Move to" menu (touch and
    * keyboard). A todo's checkbox completes it; on a set with a done column
-   * the todo then shows there instead of disappearing. Notes and links have
+   * the todo then shows there; without one it stays where it is. Notes and links have
    * no checkbox: moving them is the whole action.
    *
    * Where columns can be edited (`canAddColumns`), each one's header menu
@@ -165,14 +165,14 @@
   }
 
   /** What making (or having) this the Finished column means, said truthfully
-   *  for the board as it is: ticked todos only "disappear" when no column
-   *  is Finished yet. */
+   *  for the board as it is: with no Finished column a ticked todo stays in
+   *  its column, so there is nothing it moves "instead of". */
   function finishedHint(column: (typeof set.columns)[number]): string {
     if (column.done) return 'When you tick a todo, it moves here';
     const current = set.columns.find((c) => c.done);
     return current
       ? `Ticked todos will move here, not to ${current.name}`
-      : 'Ticked todos will move here instead of disappearing';
+      : 'Ticked todos will move here. Now they stay where they are';
   }
 
   async function toggleFinished(id: string) {

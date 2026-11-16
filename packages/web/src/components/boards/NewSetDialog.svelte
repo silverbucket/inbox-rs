@@ -356,7 +356,7 @@
           {#each columns.filter((c) => c.id !== BOARD_UNSORTED) as c (c.id)}
             <option value={c.id}>{c.name || 'Untitled'}</option>
           {/each}
-          <option value="">Nowhere (hide it)</option>
+          <option value="">Nowhere (it stays where it is)</option>
         </select>
       </label>
     </div>

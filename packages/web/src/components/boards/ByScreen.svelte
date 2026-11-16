@@ -15,8 +15,9 @@
     display: none;
   }
 
-  /* Same breakpoint as the phone tab bar (App.svelte). */
-  @media (max-width: 768px) {
+  /* Same breakpoint as the phone tab bar (MobileTabBar.svelte): wider than
+     this, the header still says "Todos". */
+  @media (max-width: 600px) {
     .wide {
       display: none;
     }

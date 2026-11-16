@@ -223,7 +223,7 @@
     <input type="checkbox" bind:checked={offPlan} />
     <span>
       <span class="check-title">Keep its todos off <ByScreen wide="the Todos page" phone="Today and Plan" /></span>
-      <span class="check-hint">For collections where todos aren't tasks to schedule.</span>
+      <span class="check-hint">For collections where todos aren't tasks to schedule.{#if offPlan && collection?.planColumnId}{' '}One board column's todos still show; change that in Board settings.{/if}</span>
     </span>
   </label>
   {#if isEdit && collection}

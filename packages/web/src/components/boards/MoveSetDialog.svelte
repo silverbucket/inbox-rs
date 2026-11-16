@@ -143,7 +143,7 @@
     {#if from && to}
       <div>
         <span class="bx-label">Where should the items go?</span>
-        <p class="bx-note above">Choose where the items from each column should go. Matching names are selected for you.{#if fromDone && toDone && fromDone.name.trim().toLowerCase() !== toDone.name.trim().toLowerCase()}{' '}{fromDone.name} is where ticked todos go now (✓); on the new board that is {toDone.name}, so its items go there.{/if}</p>
+        <p class="bx-note above">Choose where the items from each column should go. Matching names are selected for you.{#if fromDone && toDone && mapping[fromDone.id] === toDone.id && fromDone.name.trim().toLowerCase() !== toDone.name.trim().toLowerCase()}{' '}{fromDone.name} is where ticked todos go now (✓); on the new board that is {toDone.name}, so its items go there.{/if}</p>
         <ul class="bx-rows">
           {#each from.columns as c (c.id)}
             {@const n = counts.get(c.id) ?? 0}

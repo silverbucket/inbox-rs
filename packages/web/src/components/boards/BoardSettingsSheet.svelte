@@ -265,7 +265,7 @@
 
     <p class="bx-note">
       New items land in Unsorted.
-      {#if doneColumn(set)}Ticking a todo moves it to {doneColumn(set)?.name}.{:else}Mark a column as Finished (under Edit columns) and ticked todos move there instead of disappearing.{/if}
+      {#if doneColumn(set)}Ticking a todo moves it to {doneColumn(set)?.name}.{:else}Ticked todos stay in their column. Mark a column as Finished (under Edit columns) and they move there.{/if}
     </p>
 
     <p class="bx-note">

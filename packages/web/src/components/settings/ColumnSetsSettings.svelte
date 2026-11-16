@@ -240,7 +240,7 @@
             {#each set.columns.filter((c) => c.id !== BOARD_UNSORTED) as c (c.id)}
               <option value={c.id}>{c.name}</option>
             {/each}
-            <option value="">Nowhere (hide it)</option>
+            <option value="">Nowhere (it stays where it is)</option>
           </select>
         </label>
         <p class="bx-note">New items land in Unsorted, which can’t be deleted.</p>
