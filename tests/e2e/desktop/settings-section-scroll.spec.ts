@@ -27,8 +27,14 @@ test('an open Settings section stays clear of the title bar and fades at the bot
   const sectionHead = section.locator('.section-head');
 
   // Opening the section lands its header fully below the title bar: the
-  // icon is what a click on it hits, not the bar. Measured and hit-tested
-  // in one step, retried until the slide and reveal scroll settle.
+  // icon is what a click on it hits, not the bar. Checked once the slide
+  // has finished and its reveal scroll (run on introend) has applied, then
+  // measured and hit-tested in one step.
+  await section.evaluate(async (el) => {
+    await Promise.all(el.getAnimations().map((a) => a.finished));
+    for (let i = 0; i < 2; i++)
+      await new Promise((r) => requestAnimationFrame(r));
+  });
   await expect
     .poll(() =>
       sectionHead.locator('.sec-icon').evaluate((icon) => {
