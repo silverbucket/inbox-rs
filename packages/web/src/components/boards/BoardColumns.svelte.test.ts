@@ -148,6 +148,68 @@ describe('BoardColumns', () => {
     );
   });
 
+  function openAdd(name: string) {
+    (
+      [...column(name).querySelectorAll('button')].find(
+        (x) => x.getAttribute('aria-label') === `Add to ${name}`,
+      ) as HTMLButtonElement
+    ).click();
+    flushSync();
+    return host.querySelector(
+      `[aria-label="New card in ${name}"]`,
+    ) as HTMLInputElement;
+  }
+  const type = (input: HTMLInputElement, text: string) => {
+    input.value = text;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+  };
+  const submit = () =>
+    (host.querySelector('form.add-form') as HTMLFormElement).requestSubmit();
+
+  // #364: the field was cleared only once the write settled, wiping a title
+  // typed in the meantime, so its Enter added nothing.
+  it('keeps a title typed while the previous add is still saving', async () => {
+    let finish!: () => void;
+    vi.mocked(addToColumn).mockImplementationOnce(
+      () => new Promise((resolve) => (finish = () => resolve({} as InboxItem))),
+    );
+    render([]);
+    const input = openAdd('Idea');
+    type(input, 'First');
+    submit();
+    flushSync();
+    expect(input.value).toBe('');
+    type(input, 'Second');
+    finish();
+    await Promise.resolve();
+    await Promise.resolve();
+    flushSync();
+    expect(input.value).toBe('Second');
+    submit();
+    await Promise.resolve();
+    expect(addToColumn).toHaveBeenLastCalledWith(
+      'a',
+      set,
+      'idea',
+      'Second',
+      false,
+    );
+  });
+
+  it('gives the title back when the add fails', async () => {
+    vi.mocked(addToColumn).mockRejectedValueOnce(new Error('down'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    render([]);
+    const input = openAdd('Idea');
+    type(input, 'Lost?');
+    submit();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(input.value).toBe('Lost?');
+    });
+  });
+
   it('adds a column when allowed', async () => {
     render([], { canAddColumns: true });
     (
