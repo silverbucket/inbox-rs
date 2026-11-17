@@ -1068,6 +1068,38 @@ describe('an image that could not be copied', () => {
   });
 });
 
+describe('a newly chosen image that could not be copied', () => {
+  it('is linked with the reason kept: gone on the bookmark, others for the session', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const item = bookmark({ ogImage: 'https://cdn/old' });
+    itemsMap[item.id] = item;
+    canDownloadImages.mockResolvedValue(true);
+    downloadLinkImage.mockRejectedValueOnce(
+      new ImageDownloadError('not-found', 'HTTP 404'),
+    );
+    await expect(replaceBookmarkImage(item, 'https://cdn/dead')).resolves.toBe(
+      'replaced',
+    );
+    expect(itemsMap[item.id]).toMatchObject({
+      ogImage: 'https://cdn/dead',
+      imageGone: 'https://cdn/dead',
+    });
+
+    downloadLinkImage.mockRejectedValueOnce(
+      new ImageDownloadError('timeout', 'slow'),
+    );
+    await replaceBookmarkImage(
+      itemsMap[item.id] as BookmarkItem,
+      'https://cdn/slow',
+    );
+    expect((itemsMap[item.id] as BookmarkItem).imageGone).toBeUndefined();
+    expect(get(imageCopyFailures)).toEqual({
+      b1: { image: 'https://cdn/slow', code: 'timeout' },
+    });
+    warn.mockRestore();
+  });
+});
+
 describe('image downloads', () => {
   it('run one at a time, even when several are asked for at once', async () => {
     canDownloadImages.mockResolvedValue(true);

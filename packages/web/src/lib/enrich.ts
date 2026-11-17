@@ -436,8 +436,10 @@ export async function replaceBookmarkImage(
   item: BookmarkItem,
   image: string,
 ): Promise<'replaced' | 'kept' | 'gone'> {
+  let failure: ImageDownloadCode | undefined;
   const file = await downloadBookmarkImage(item, image).catch((e) => {
     console.warn('Downloading the new preview image failed:', image, e);
+    failure = downloadFailure(e);
     return null;
   });
   let oldFile: string | undefined;
@@ -468,12 +470,20 @@ export async function replaceBookmarkImage(
             filePath: file.filePath,
             mimeType: file.mimeType,
           }
-        : { ...rest, ogImage: image };
+        : {
+            ...rest,
+            ogImage: image,
+            // Linked without a copy: keep why, as keepBookmarkImage does.
+            ...(failure === 'not-found' ? { imageGone: image } : {}),
+          };
     },
     file?.data,
   );
   if (kept) return 'kept';
   if (!updated) return 'gone';
+  if (failure && failure !== 'not-found') {
+    noteImageCopyFailure(item.id, { image, code: failure });
+  }
   if (oldFile && oldFile !== (updated as BookmarkItem).filePath) {
     void removeFile(oldFile);
   }
