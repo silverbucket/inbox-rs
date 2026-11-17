@@ -6,14 +6,11 @@
    * moving back restores them.
    */
   import { BOARD_UNSORTED, type ColumnSet } from '@inbox-rs/rs-module';
-  import {
-    columnSets,
-    makePrivateCopy,
-    moveCollectionToSet,
-  } from '../../lib/board-actions';
-  import { columnOf, isAutoMatch, mapPlanColumn, matchColumns, moveTarget, withColumn } from '../../lib/boards';
+  import { columnSets, moveCollectionToSet } from '../../lib/board-actions';
+  import { collectionsPhrase, columnOf, isAutoMatch, mapPlanColumn, matchColumns, moveTarget, withColumn } from '../../lib/boards';
   import { collections, items } from '../../lib/stores';
   import { showToast } from '../../lib/toast';
+  import ColumnsPreview from './ColumnsPreview.svelte';
   import Sheet from './Sheet.svelte';
   import './boards.css';
 
@@ -61,12 +58,13 @@
     }
     return out;
   });
+  /** The other collections on the board being left, by name. */
   const others = $derived(
     from
-      ? Object.values($collections).filter(
-          (c) => c.boardSetId === from.id && c.id !== collectionId && !c.archived,
-        ).length
-      : 0,
+      ? Object.values($collections)
+          .filter((c) => c.boardSetId === from.id && c.id !== collectionId && !c.archived)
+          .map((c) => c.name)
+      : [],
   );
   const result = $derived.by(() => {
     if (!to) return '';
@@ -81,8 +79,12 @@
       const name = to.columns.find((c) => c.id === id)?.name ?? 'Unsorted';
       return `${n} ${n === 1 ? 'item' : 'items'} to ${name}`;
     });
-    return parts.length ? parts.join(' · ') : 'No items to move.';
+    return parts.length ? `${parts.join(', ')}.` : 'No items to move.';
   });
+
+  const othersPhrase = $derived(collectionsPhrase(others));
+  const fromDone = $derived(from?.columns.find((c) => c.done));
+  const toDone = $derived(to?.columns.find((c) => c.done));
 
   let busy = $state(false);
   const planColumnName = $derived(
@@ -91,53 +93,41 @@
   const planTarget = $derived(to ? mapPlanColumn(collection?.planColumnId, to, mapping) : undefined);
 
   async function move() {
-    if (!to || busy) return;
+    // Once the move lands, this set is the collection's own and no longer a
+    // destination, so `to` goes undefined: keep hold of it for the message.
+    const dest = to;
+    if (!dest || busy) return;
     busy = true;
     try {
-      const { planColumnDropped } = await moveCollectionToSet(collectionId, to.id, from ? mapping : {}, explicit);
+      const { planColumnDropped } = await moveCollectionToSet(collectionId, dest.id, from ? mapping : {}, explicit);
       showToast(
         planColumnDropped
-          ? `${collection?.name ?? 'Collection'} now uses ${to.name}. Pick its plan column again under Columns — until then none of its todos show on the plan.`
-          : `${collection?.name ?? 'Collection'} now uses ${to.name}`,
+          ? `This collection now uses the ${dest.name} board. None of its todos show on the Todos page until you pick a column again in Board settings.`
+          : `This collection now uses the ${dest.name} board.`,
       );
       onclose();
     } catch (error) {
       console.error('Failed to move collection to set', error);
-      showToast('Couldn’t move that collection');
-    } finally {
-      busy = false;
-    }
-  }
-
-  async function copyInstead() {
-    if (busy) return;
-    busy = true;
-    try {
-      const copy = await makePrivateCopy(collectionId);
-      if (copy) showToast(`${collection?.name} now has its own copy: ${copy.name}`);
-      onclose();
-    } catch (error) {
-      console.error('Failed to copy set', error);
-      showToast('Couldn’t copy that set');
+      showToast('Couldn’t switch the board');
     } finally {
       busy = false;
     }
   }
 </script>
 
-<Sheet title="Move {collection?.name ?? 'collection'} to another set" {onclose} {layer} width="34rem">
+<Sheet title="Switch to a different board" subtitle={collection ? `Collection: ${collection.name}` : undefined} {onclose} {layer} width="34rem">
   {#if !collection}
     <p class="bx-note">This collection no longer exists.</p>
   {:else if targets.length === 0}
-    <p class="bx-note">There's no other column set yet. Create one in Settings › Column sets first.</p>
+    <p class="bx-note">This is your only board, so there's nothing to switch to yet. Set up a board on another collection, or add one in Settings › Boards, and it will be offered here.</p>
   {:else}
     <div class="fromto">
       <div>
-        <span class="bx-label">From</span>
-        <strong>{from?.name ?? 'No set'}</strong>
+        <span class="bx-label">Current board</span>
+        <strong>{from?.name ?? 'No board'}</strong>
       </div>
       <div class="grow">
-        <label class="bx-label" for="move-to">To</label>
+        <label class="bx-label" for="move-to">Switch to</label>
         <select id="move-to" class="bx-select" bind:value={toId}>
           {#each targets as s (s.id)}
             <option value={s.id}>{s.name}</option>
@@ -146,19 +136,24 @@
       </div>
     </div>
 
+    {#if to}
+      <ColumnsPreview columns={to.columns} />
+    {/if}
+
     {#if from && to}
       <div>
-        <span class="bx-label">Match the columns <span class="bx-muted">· same names match on their own</span></span>
+        <span class="bx-label">Where should the items go?</span>
+        <p class="bx-note above">Choose where the items from each column should go. Matching names are selected for you.{#if fromDone && toDone && mapping[fromDone.id] === toDone.id && fromDone.name.trim().toLowerCase() !== toDone.name.trim().toLowerCase()}{' '}{fromDone.name} is where ticked todos go now (✓); on the new board that is {toDone.name}, so its items go there.{/if}</p>
         <ul class="bx-rows">
           {#each from.columns as c (c.id)}
             {@const n = counts.get(c.id) ?? 0}
             <li class:empty={!n}>
               <span class="bx-swatch" style="background: {c.color}"></span>
-              <span class="bx-grow">{c.name} <span class="bx-muted">{n ? `${n} item${n > 1 ? 's' : ''}` : 'empty'}</span></span>
+              <span class="bx-grow">{c.name}{#if c.done}{' '}<svg class="tick" role="img" aria-label="Finished column" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>{/if} <span class="bx-muted">{n ? `${n} item${n > 1 ? 's' : ''}` : 'empty'}</span></span>
               <span aria-hidden="true">→</span>
               <select
                 class="bx-select map"
-                aria-label="Move {c.name} to"
+                aria-label="Items in {c.name} go to"
                 value={mapping[c.id] ?? BOARD_UNSORTED}
                 onchange={(e) => {
                   mapping = { ...mapping, [c.id]: (e.currentTarget as HTMLSelectElement).value };
@@ -169,38 +164,43 @@
                   <option value={t.id}>{t.name}</option>
                 {/each}
               </select>
-              {#if isAutoMatch(c, to, mapping[c.id] ?? BOARD_UNSORTED)}<span class="auto">auto</span>{/if}
+              <span class="auto">{#if c.id !== BOARD_UNSORTED && isAutoMatch(c, to, mapping[c.id] ?? BOARD_UNSORTED)}same name{/if}</span>
             </li>
           {/each}
         </ul>
       </div>
       <p class="bx-note">
-        <strong>Result:</strong> {result}
-        {#if others > 0}The {others} other {from.name} {others === 1 ? 'collection isn’t' : 'collections aren’t'} affected.{/if}
+        <strong>After switching:</strong> {result}
+        {#if others.length}{othersPhrase.charAt(0).toUpperCase() + othersPhrase.slice(1)} {others.length === 1 ? 'stays' : 'stay'} on the {from.name} board.{/if}
       </p>
       {#if collection.offPlan && planColumnName}
         <p class="bx-note">
           {#if planTarget}
-            {collection.name}'s todos in {planColumnName} show on the plan; after the move, its {to.columns.find((c) => c.id === planTarget)?.name} todos will.
+            {collection.name}'s todos in {planColumnName} show on the Todos page; after switching, its {to.columns.find((c) => c.id === planTarget)?.name} todos will.
           {:else}
-            <strong>{planColumnName}</strong> maps to Unsorted, so {collection.name} (a list) will have no todos on the plan until you pick a plan column again.
+            <strong>{planColumnName}</strong> goes to Unsorted, so none of {collection.name}'s todos will show on the Todos page until you pick a column again in Board settings.
           {/if}
         </p>
       {/if}
-      <p class="bx-note">Items remember their {from.name} column — move {collection.name} back and they return to where they were.</p>
-      {#if others > 0}
-        <button type="button" class="bx-link" disabled={busy} onclick={copyInstead}>Make a private copy of {from.name} instead</button>
-      {/if}
+      <p class="bx-note">Nothing is deleted. Items remember their columns on the {from.name} board, in case you switch this collection back later.</p>
     {/if}
   {/if}
 
   {#snippet footer()}
     <button type="button" class="bx-btn" onclick={onclose}>Cancel</button>
-    <button type="button" class="bx-btn bx-primary" disabled={!to || busy} onclick={move}>Move</button>
+    <button type="button" class="bx-btn bx-primary" disabled={!to || busy} onclick={move}>Switch board</button>
   {/snippet}
 </Sheet>
 
 <style>
+  .tick {
+    color: var(--success, #0f766e);
+  }
+
+  .above {
+    margin-bottom: 0.5rem;
+  }
+
   .fromto {
     display: flex;
     align-items: flex-end;
@@ -217,9 +217,37 @@
   }
 
   .map {
-    width: auto;
-    max-width: 11rem;
+    width: 9.5rem;
+    max-width: 42vw;
     padding: 0.3rem 0.45rem;
+  }
+
+  /* Phones: source on one line, destination under it, so long column
+     names never collapse into a stack of single words. */
+  @media (max-width: 520px) {
+    .bx-rows > li {
+      flex-wrap: wrap;
+    }
+
+    .bx-rows > li .bx-grow {
+      flex-basis: calc(100% - 1.5rem);
+    }
+
+    .map {
+      flex: 1;
+      width: auto;
+      max-width: none;
+    }
+
+    .auto:empty {
+      display: none;
+    }
+
+    .fromto {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.6rem;
+    }
   }
 
   .bx-rows > li.empty {
@@ -228,6 +256,7 @@
   }
 
   .auto {
+    width: 4.6rem;
     font-size: 0.68rem;
     font-weight: 700;
     color: var(--text-muted);

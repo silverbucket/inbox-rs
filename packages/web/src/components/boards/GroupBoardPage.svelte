@@ -87,7 +87,10 @@
     onclick={(e) => e.stopPropagation()}
   >
     <div class="toolbar">
-      <button type="button" class="bx-btn bx-small" onclick={onexit} title="Back (Esc)">← Back</button>
+      <button type="button" class="bx-btn bx-small back" onclick={onexit} aria-label="Back" title="Back (Esc)">
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        <span class="back-label">Back</span>
+      </button>
       <span class="crumb">Collections › {group?.name ?? 'Group'}</span>
     </div>
 
@@ -95,10 +98,10 @@
       <p class="bx-note">This group doesn't exist — it may have been deleted.</p>
     {:else}
       <div class="head">
-        <h2>{group.name} <span class="bx-muted">{members.length} collections · {itemTotal} items</span></h2>
-        {#if setsUsed.length > 0}
+        <h2>{group.name} <span class="bx-muted">{members.length} {members.length === 1 ? 'collection' : 'collections'} · {itemTotal} {itemTotal === 1 ? 'item' : 'items'}{setsUsed.length === 1 && set ? ` · ${set.name} board` : ''}</span></h2>
+        {#if setsUsed.length > 1}
           <label class="by">
-            Board by
+            Board
             <select class="bx-select" value={set?.id} onchange={(e) => (chosenId = (e.currentTarget as HTMLSelectElement).value)}>
               {#each setsUsed as s (s.id)}<option value={s.id}>{s.name}</option>{/each}
             </select>
@@ -109,12 +112,12 @@
       {#if !set}
         <div class="empty">
           <p>None of {group.name}'s collections has a board yet.</p>
-          <p class="bx-note">Give some of them the same column set — a Pipeline, say — and they share one board here.</p>
-          <button type="button" class="bx-btn bx-primary" onclick={() => openColumnSet()}>Set up column sets</button>
+          <p class="bx-note">Open a collection and choose the Board view to set one up. Collections that use the same board show together here.</p>
+          <button type="button" class="bx-btn bx-primary" onclick={() => openColumnSet()}>Manage boards</button>
         </div>
       {:else}
         <div class="scope">
-          <span class="bx-label inline">Showing</span>
+          <span class="bx-label inline">Showing collections <span class="hint">· select one to hide it</span></span>
           <div class="bx-chips">
             {#each onBoard as c (c.id)}
               {@const n = $collectionItems[c.id]?.length ?? 0}
@@ -123,11 +126,17 @@
               </button>
             {/each}
           </div>
+          <span class="open-one">
+            <span class="bx-muted">Go to collection</span>
+            {#each shown as c (c.id)}
+              <button type="button" class="bx-link" aria-label="Open {c.name}" onclick={() => onfocuscollection(c.id)}>{c.name}</button>
+            {/each}
+          </span>
         </div>
         {#if offBoard.length}
           <p class="bx-note">
-            Not on this board: {offBoard.map((c) => c.name).join(', ')} — {offBoard.every((c) => !c.boardSetId) ? 'no column set' : `not on ${set.name}`} ·
-            <button type="button" class="bx-link" onclick={() => openColumnSet(set.id)}>Assign…</button>
+            {offBoard.length === 1 ? 'Collection' : 'Collections'} not shown: {offBoard.map((c) => c.name).join(', ')} ({offBoard.every((c) => !c.boardSetId) ? 'no board yet' : offBoard.length === 1 ? 'it uses a different board' : 'not on this board'}).
+            <button type="button" class="bx-link" onclick={() => openColumnSet(set.id)}>Add a collection to this board…</button>
           </p>
         {/if}
 
@@ -137,14 +146,8 @@
           <p class="bx-note">Pick at least one collection above to fill the board.</p>
         {/if}
         <p class="bx-note">
-          “Add” asks which collection the new item goes in. Dragging only changes the column — never the collection.
-          Edit columns in Settings › Column sets; changes apply to every collection using {set.name}.
+          New cards ask which collection they belong to. Moving a card changes its column, never its collection.
         </p>
-        <div class="open-one">
-          {#each shown as c (c.id)}
-            <button type="button" class="bx-link" onclick={() => onfocuscollection(c.id)}>Open {c.name}</button>
-          {/each}
-        </div>
       {/if}
     {/if}
   </div>
@@ -199,14 +202,17 @@
   }
 
   .head h2 {
-    flex: 1;
+    flex: 1 1 14rem;
     margin: 0;
-    font-size: 1.2rem;
+    font-size: 1.3rem;
+    letter-spacing: -0.015em;
   }
 
   .head h2 .bx-muted {
     margin-left: 0.35rem;
     font-weight: 500;
+    letter-spacing: 0;
+    white-space: nowrap;
   }
 
   .by {
@@ -233,6 +239,12 @@
     margin: 0;
   }
 
+  .hint {
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
   .empty {
     display: flex;
     flex-direction: column;
@@ -250,10 +262,39 @@
   .open-one {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.9rem;
+    align-items: baseline;
+    gap: 0.3rem 0.7rem;
+    margin-left: auto;
   }
 
   @media (max-width: 600px) {
+    .open-one {
+      flex-basis: 100%;
+      margin-left: 0;
+    }
+
+    /* Same arrow-only Back as a collection's board has on phones. */
+    .back-label {
+      display: none;
+    }
+
+    .back {
+      position: relative;
+      min-height: 2.1rem;
+      padding: 0 0.65rem;
+    }
+
+    .back::after {
+      content: '';
+      position: absolute;
+      inset: -6px;
+    }
+
+    /* A long board name wraps instead of pushing the page sideways. */
+    .head h2 .bx-muted {
+      white-space: normal;
+    }
+
     .overlay {
       padding: 0;
     }

@@ -50,7 +50,7 @@
     {#if onboard}
       <button type="button" class="btn-board" onclick={onboard} title="Open {group.name} as one board">
         <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="5" height="16" rx="1"></rect><rect x="10" y="4" width="5" height="11" rx="1"></rect><rect x="17" y="4" width="4" height="7" rx="1"></rect></svg>
-        Board
+        View as board
       </button>
     {/if}
     <div class="group-actions">

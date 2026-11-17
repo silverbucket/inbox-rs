@@ -40,12 +40,12 @@ test('a card from the bottom of a long column drops into a short one beside it',
     .getByRole('button', { name: 'Focus on Projects' })
     .first()
     .click({ force: true });
-  await page.getByRole('button', { name: /Columns/ }).click();
+  await page
+    .getByRole('group', { name: 'View' })
+    .getByRole('button', { name: 'Board', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Pipeline', exact: true }).click();
-  await page.getByRole('button', { name: 'Pipeline', exact: true }).click();
-  await page.locator('.bx-primary').last().click();
-  const done = page.getByRole('button', { name: 'Done', exact: true });
-  if (await done.isVisible()) await done.click();
+  await page.getByRole('button', { name: 'Create board', exact: true }).click();
 
   const columns = page.locator('section.column');
   const unsorted = columns.first();

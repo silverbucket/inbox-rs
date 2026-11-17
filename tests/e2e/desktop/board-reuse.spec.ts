@@ -60,7 +60,7 @@ test('a board made for one collection can be shared with or copied to another', 
       .getByRole('button', { name: 'Board', exact: true })
       .click();
     await expect(
-      page.getByRole('dialog', { name: `Board · ${name}` }),
+      page.getByRole('dialog', { name: 'Set up a board' }),
     ).toBeVisible();
   }
   const back = () =>
@@ -78,20 +78,23 @@ test('a board made for one collection can be shared with or copied to another', 
     .getByRole('textbox', { name: 'Column name' })
     .first()
     .fill('Practising');
-  await page.getByRole('button', { name: 'Create', exact: true }).click();
+  await page.getByRole('button', { name: 'Create board', exact: true }).click();
   // Saving says the board is reusable.
   await expect(
-    page.getByText(`Saved ${setName}. Other collections can use it too`),
+    page.getByText(
+      `Created the ${setName} board. Other collections can use it too.`,
+    ),
   ).toBeVisible();
   await expect(page.getByText('Practising', { exact: true })).toBeVisible();
   await back();
 
-  // Piano: the picker offers it by name, with who uses it — and shares it.
+  // Piano: the picker offers it by name, with who uses it — and uses it too.
   await openBoardPicker(piano);
-  const picker = page.getByRole('dialog', { name: `Board · ${piano}` });
-  await expect(picker.getByText(`used by ${guitar}`)).toBeVisible();
-  await picker.getByRole('button', { name: `Share ${setName}` }).click();
-  await picker.getByRole('button', { name: 'Done', exact: true }).click();
+  const picker = page.getByRole('dialog', { name: 'Set up a board' });
+  await expect(
+    picker.getByText(`used by the ${guitar} collection`),
+  ).toBeVisible();
+  await picker.getByRole('button', { name: `Use ${setName}` }).click();
   await expect(page.getByText('Practising', { exact: true })).toBeVisible();
   await back();
 
@@ -99,15 +102,17 @@ test('a board made for one collection can be shared with or copied to another', 
   await openBoardPicker(drums);
   await page.getByRole('button', { name: `Copy ${setName}` }).click();
   const dialog = page.getByRole('dialog', { name: 'New board' });
-  await expect(
-    dialog.getByRole('button', { name: setName, exact: true }),
-  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(dialog.getByText(`A copy of ${setName}`)).toBeVisible();
   await expect(page.locator('#set-name')).toHaveValue(`${setName} copy`);
-  await expect(dialog.getByText(`A separate copy of ${setName}`)).toBeVisible();
+  await expect(
+    dialog.getByText(`A separate copy of the ${setName} board`),
+  ).toBeVisible();
   await expect(
     dialog.getByRole('textbox', { name: 'Column name' }).first(),
   ).toHaveValue('Practising');
-  await dialog.getByRole('button', { name: 'Create', exact: true }).click();
+  await dialog
+    .getByRole('button', { name: 'Create board', exact: true })
+    .click();
   await expect(page.getByText('Practising', { exact: true })).toBeVisible();
 
   // Server truth: Guitar and Piano on one set, Drums on its own copy.

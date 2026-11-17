@@ -262,6 +262,31 @@ export function isAutoMatch(
   );
 }
 
+/**
+ * The set a collection's board really uses. A reference to a set that no
+ * longer exists (deleted here or on another device) is no board at all.
+ */
+export function liveSetId(
+  col: Pick<Collection, 'boardSetId'>,
+  sets: ColumnSet[],
+): string | undefined {
+  return col.boardSetId && sets.some((s) => s.id === col.boardSetId)
+    ? col.boardSetId
+    : undefined;
+}
+
+/**
+ * Collection names as a phrase that says what they are: "the Movies
+ * collection", "the Movies and Books collections". A bare name in a
+ * sentence ("also used by Movies") reads as a topic, not as something
+ * the reader made.
+ */
+export function collectionsPhrase(names: string[]): string {
+  if (names.length === 0) return 'no collections';
+  if (names.length === 1) return `the ${names[0]} collection`;
+  return `the ${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} collections`;
+}
+
 /** Collections on a set, in the given order. */
 export function collectionsOnSet(
   set: ColumnSet,

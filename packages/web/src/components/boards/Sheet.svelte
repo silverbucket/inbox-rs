@@ -9,6 +9,7 @@
 
   let {
     title,
+    subtitle = undefined,
     onclose,
     layer = 220,
     width = '30rem',
@@ -16,6 +17,8 @@
     footer,
   }: {
     title: string;
+    /** One quiet line under the title: what this is about. */
+    subtitle?: string;
     onclose: () => void;
     layer?: number;
     width?: string;
@@ -48,7 +51,10 @@
     {onkeydown}
   >
     <header class="head">
-      <h2 id={titleId}>{title}</h2>
+      <div class="titles">
+        <h2 id={titleId}>{title}</h2>
+        {#if subtitle}<p class="subtitle">{subtitle}</p>{/if}
+      </div>
       <button type="button" class="close" aria-label="Close" onclick={onclose}>
         <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
       </button>
@@ -82,6 +88,10 @@
     border-radius: var(--radius);
     background: var(--surface);
     box-shadow: 0 16px 48px var(--shadow);
+    /* Never taller than the screen: the body scrolls between a title and
+       actions that stay put, so the buttons are always in reach. */
+    max-height: 88vh;
+    min-height: 0;
   }
 
   .sheet:focus {
@@ -90,14 +100,25 @@
 
   .head {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.6rem;
   }
 
-  .head h2 {
+  .titles {
     flex: 1;
+    min-width: 0;
+  }
+
+  .head h2 {
     margin: 0;
-    font-size: 1.05rem;
+    font-size: 1.1rem;
+    letter-spacing: -0.01em;
+  }
+
+  .subtitle {
+    margin: 0.15rem 0 0;
+    font-size: 0.82rem;
+    color: var(--text-muted);
   }
 
   .close {
@@ -120,6 +141,21 @@
     display: flex;
     flex-direction: column;
     gap: 0.9rem;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Room for focus rings and hover halos that would otherwise be clipped. */
+    margin: -0.25rem -1.2rem;
+    padding: 0.25rem 1.2rem 1.4rem;
+    /* Content that runs under the footer fades out instead of being sliced
+       mid-line: "there is more below". The bottom padding keeps the last
+       line clear of the fade once you've scrolled to the end. */
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 1.4rem), transparent);
+  }
+
+  .body > :global(*) {
+    flex-shrink: 0;
   }
 
   .foot {
@@ -129,6 +165,7 @@
     gap: 0.5rem;
     padding-top: 0.75rem;
     border-top: 1px solid var(--border);
+    flex-shrink: 0;
   }
 
   @media (max-width: 600px) {
@@ -141,7 +178,6 @@
       max-width: none;
       border-radius: var(--radius) var(--radius) 0 0;
       max-height: 92vh;
-      overflow-y: auto;
     }
   }
 </style>

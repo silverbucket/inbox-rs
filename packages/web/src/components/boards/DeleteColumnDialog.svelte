@@ -5,7 +5,7 @@
    * nothing is deleted but the column.
    */
   import { BOARD_UNSORTED, type ColumnSet } from '@inbox-rs/rs-module';
-  import { columnOf, doneColumn } from '../../lib/boards';
+  import { collectionsPhrase, columnOf, doneColumn } from '../../lib/boards';
   import { deleteColumn } from '../../lib/board-actions';
   import { collections, items } from '../../lib/stores';
   import { showToast } from '../../lib/toast';
@@ -37,6 +37,8 @@
         columnOf(i, set) === columnId,
     ),
   );
+  const liveUsers = $derived(users.filter((c) => !c.archived).map((c) => c.name));
+  const usersPhrase = $derived(collectionsPhrase(liveUsers));
   const holders = $derived([
     ...new Set(affected.map((i) => $collections[i.collectionId as string]?.name).filter(Boolean)),
   ]);
@@ -50,13 +52,19 @@
     add(set.columns[at - 1]?.id, 'the column before');
     add(set.columns[at + 1]?.id, 'the column after');
     add(BOARD_UNSORTED, 'sort them later');
-    add(doneColumn(set)?.id, 'done column');
+    add(doneColumn(set)?.id, 'the Finished column');
     return out;
   });
 
   const isOpenTodo = (i: (typeof affected)[number]) => (i.isTodo || i.type === 'todo') && !i.completed;
   // svelte-ignore state_referenced_locally
-  let target = $state(options.find((o) => o.hint === 'the column after')?.id ?? options[0]?.id ?? BOARD_UNSORTED);
+  // The next column along, unless that's the Finished one: sending open
+  // items there by default would be a surprise.
+  let target = $state(
+    options.find((o) => o.hint === 'the column after' && o.id !== doneColumn(set)?.id)?.id ??
+      options.find((o) => o.id !== doneColumn(set)?.id)?.id ??
+      BOARD_UNSORTED,
+  );
   let busy = $state(false);
   /** Lists showing this column on the plan; their plan column moves with the items. */
   const planLists = $derived(
@@ -86,19 +94,19 @@
 
 <Sheet title="Delete “{column?.name ?? 'column'}”?" {onclose} {layer} width="28rem">
   <p class="bx-note">
-    {#if users.length > 1}{set.name} is shared, so the column goes from all {users.length} collections.{/if}
+    {#if liveUsers.length > 1}{usersPhrase.charAt(0).toUpperCase() + usersPhrase.slice(1)} use the {set.name} board, so deleting this column removes it from {liveUsers.length === 2 ? 'both' : 'all of them'}.{/if}
     {#if affected.length === 0}
       It's empty, so nothing else changes.
     {:else}
-      Its {affected.length} {affected.length === 1 ? 'item' : 'items'}{holders.length ? ` — in ${holders.join(', ')} —` : ''} need a new home. Nothing is deleted except the column, and no todo is checked or unchecked.
+      Choose where its {affected.length} {affected.length === 1 ? 'item' : 'items'}{holders.length ? ` (in ${collectionsPhrase(holders as string[])})` : ''} should go. Only the column is deleted: items stay in their collections, and no todo is ticked or unticked.
     {/if}
   </p>
   {#if planLists.length > 0}
     <p class="bx-note">
       {#if target === BOARD_UNSORTED}
-        <strong>{planLists.map((c) => c.name).join(', ')}</strong> {planLists.length === 1 ? 'shows' : 'show'} this column on the Todos plan. Unsorted can't take its place, so {planLists.length === 1 ? 'that list has' : 'those lists have'} no todos on the plan until you pick a plan column again under Columns.
+        <strong>{planLists.map((c) => c.name).join(', ')}</strong> {planLists.length === 1 ? 'shows' : 'show'} only this column's todos on the Todos page. Unsorted can't take its place, so none of {planLists.length === 1 ? 'its' : 'their'} todos will show there until you pick a column again in Board settings.
       {:else}
-        {planLists.map((c) => c.name).join(', ')} {planLists.length === 1 ? 'shows' : 'show'} this column on the Todos plan; {set.columns.find((c) => c.id === target)?.name} takes its place.
+        {planLists.map((c) => c.name).join(', ')} {planLists.length === 1 ? 'shows' : 'show'} only this column's todos on the Todos page; {set.columns.find((c) => c.id === target)?.name} takes its place.
       {/if}
     </p>
   {/if}
@@ -109,8 +117,8 @@
   {/if}
   {#if affected.length > 0 || planLists.length > 0}
     <div>
-      <span class="bx-label">{affected.length ? 'Move its items to' : 'Replace it on the plan with'}</span>
-      <div class="opts" role="radiogroup" aria-label={affected.length ? 'Move its items to' : 'Replace it on the plan with'}>
+      <span class="bx-label">{affected.length ? 'Move its items to' : 'Show on the Todos page instead'}</span>
+      <div class="opts" role="radiogroup" aria-label={affected.length ? 'Move its items to' : 'Show on the Todos page instead'}>
         {#each options as o (o.id)}
           {@const c = set.columns.find((x) => x.id === o.id)}
           <button
@@ -133,7 +141,7 @@
   {#snippet footer()}
     <button type="button" class="bx-btn" onclick={onclose}>Cancel</button>
     <button type="button" class="bx-btn bx-primary" disabled={busy} onclick={confirm}>
-      {affected.length ? `Move ${affected.length} & delete column` : 'Delete column'}
+      {affected.length ? `Move ${affected.length} ${affected.length === 1 ? 'item' : 'items'} and delete` : 'Delete column'}
     </button>
   {/snippet}
 </Sheet>

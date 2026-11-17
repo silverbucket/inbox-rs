@@ -26,6 +26,9 @@
     display: flex;
     align-items: center;
     gap: 0.9rem;
+    /* Centred with left: 50%, the box would otherwise shrink to half the
+       screen and stack a short message over four lines on a phone. */
+    width: max-content;
     max-width: min(92vw, 30rem);
     padding: 0.7rem 0.9rem 0.7rem 1.1rem;
     border-radius: 0.75rem;
@@ -47,4 +50,11 @@
     padding: 0.1rem 0.3rem;
   }
   .action:hover { color: var(--accent-text-hover); }
+
+  /* Phones: sit above the tab bar instead of covering it. */
+  @media (max-width: 768px) {
+    .toast {
+      bottom: calc(5.75rem + env(safe-area-inset-bottom));
+    }
+  }
 </style>

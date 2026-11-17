@@ -2,11 +2,13 @@ import type { ColumnSet, InboxItem } from '@inbox-rs/rs-module';
 import { describe, expect, it } from 'vitest';
 import {
   BOARD_UNSORTED,
+  collectionsPhrase,
   columnOf,
   columnsFromSpecs,
   copySet,
   groupByColumn,
   isAutoMatch,
+  liveSetId,
   makeSet,
   matchColumns,
   moveTarget,
@@ -208,5 +210,30 @@ describe('moveTarget', () => {
     // A remembered column that was since deleted doesn't count.
     const gone = note('c', { boardColumns: { read: 'gone' } });
     expect(moveTarget(gone, undefined, reading, {})).toBe(BOARD_UNSORTED);
+  });
+});
+
+describe('liveSetId', () => {
+  const set = makeSet('Watch list', []);
+
+  it('is the set a collection points at, while that set exists', () => {
+    expect(liveSetId({ boardSetId: set.id }, [set])).toBe(set.id);
+  });
+
+  it('is nothing for a collection still pointing at a deleted set', () => {
+    expect(liveSetId({ boardSetId: 'deleted' }, [set])).toBeUndefined();
+    expect(liveSetId({}, [set])).toBeUndefined();
+  });
+});
+
+describe('collectionsPhrase', () => {
+  it('says what the names are', () => {
+    expect(collectionsPhrase(['Movies'])).toBe('the Movies collection');
+    expect(collectionsPhrase(['Movies', 'Books'])).toBe(
+      'the Movies and Books collections',
+    );
+    expect(collectionsPhrase(['Movies', 'Books', 'Podcasts'])).toBe(
+      'the Movies, Books and Podcasts collections',
+    );
   });
 });

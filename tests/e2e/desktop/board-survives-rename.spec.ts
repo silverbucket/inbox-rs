@@ -3,6 +3,9 @@
  * the collection keeps its column set, and the set stays on offer for other
  * collections. Asserted on the server too, since a board that only survives
  * in this browser's cache is gone on the next device.
+ *
+ * Runs on its own fresh account: it edits "the" collection on the page, so
+ * collections other specs leave in the shared account must not be there.
  */
 
 import type { Collection } from '@inbox-rs/rs-module';
@@ -12,6 +15,7 @@ import {
   type RsUser,
 } from '../helpers/armadietto';
 import { expect, test } from '../helpers/fixtures';
+import { seedRsSession } from '../helpers/pwa';
 
 async function serverConfig(user: RsUser, token: string) {
   const r = await fetch(
@@ -27,12 +31,13 @@ async function serverConfig(user: RsUser, token: string) {
 }
 
 test('renaming a collection keeps its board and column set', async ({
-  connectedPage,
+  context,
   webOrigin,
-  rsUser,
-  rsToken,
+  freshRsUser: rsUser,
+  freshRsToken: rsToken,
 }) => {
-  const page = connectedPage;
+  await seedRsSession(context, rsUser, rsToken, { clientOrigin: webOrigin });
+  const page = await context.newPage();
   const stamp = Date.now();
   const before = `Fiddle ${stamp}`;
   const after = `Fiddle Practice ${stamp}`;
@@ -49,17 +54,21 @@ test('renaming a collection keeps its board and column set', async ({
 
   // Set up a board with the user's own column names.
   await page.getByRole('button', { name: `Focus on ${before}` }).click();
-  await page.getByRole('button', { name: 'Board', exact: true }).click();
+  await page
+    .getByRole('group', { name: 'View' })
+    .getByRole('button', { name: 'Board', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Watch list', exact: true }).click();
   // A name typed first survives picking a different starting point.
   await page.locator('#set-name').fill(setName);
+  await page.getByRole('button', { name: 'Change', exact: true }).click();
   await page.getByRole('button', { name: 'Blank', exact: true }).click();
   await expect(page.locator('#set-name')).toHaveValue(setName);
   const firstColumn = page
     .getByRole('textbox', { name: 'Column name' })
     .first();
   await firstColumn.fill('Learning');
-  await page.getByRole('button', { name: 'Create', exact: true }).click();
+  await page.getByRole('button', { name: 'Create board', exact: true }).click();
   await expect(page.getByText('Learning', { exact: true })).toBeVisible();
 
   // Rename straight away, as a user would.

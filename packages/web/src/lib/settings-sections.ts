@@ -34,7 +34,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: 'links', title: 'Link previews', icon: 'link' },
   { id: 'calendars', title: 'Calendars', icon: 'calendar' },
   { id: 'notifications', title: 'Notifications', icon: 'bell' },
-  { id: 'columns', title: 'Column sets', icon: 'columns', wide: true },
+  { id: 'columns', title: 'Boards', icon: 'columns', wide: true },
   { id: 'data', title: 'Your data', icon: 'database' },
   { id: 'apps', title: 'Capture tools', icon: 'apps' },
   { id: 'about', title: 'About', icon: 'info' },

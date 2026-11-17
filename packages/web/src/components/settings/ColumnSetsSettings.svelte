@@ -13,7 +13,7 @@
     setDoneColumn,
     updateColumns,
   } from '../../lib/board-actions';
-  import { COLUMN_COLORS, copySet, newId, nextColumnColor } from '../../lib/boards';
+  import { COLUMN_COLORS, copySet, liveSetId, newId, nextColumnColor } from '../../lib/boards';
   import { focusedColumnSetId } from '../../lib/settings-request';
   import { collections, groups, items } from '../../lib/stores';
   import { showToast } from '../../lib/toast';
@@ -61,7 +61,7 @@
 
   function rename(value: string) {
     if (!set || !value.trim() || value.trim() === set.name) return;
-    void run(() => saveSet({ ...set, name: value.trim() }), 'Couldn’t rename the set');
+    void run(() => saveSet({ ...set, name: value.trim() }), 'Couldn’t rename the board');
   }
 
   function duplicate() {
@@ -70,14 +70,15 @@
     void run(async () => {
       await saveSet(copy);
       selectedId = copy.id;
-    }, 'Couldn’t duplicate the set');
+      showToast(`Made the ${copy.name} board. No collection uses it yet.`);
+    }, 'Couldn’t duplicate the board');
   }
 
   function removeSet() {
     if (!set) return;
     const id = set.id;
     confirmDelete = false;
-    void run(() => deleteSet(id), 'Couldn’t delete the set');
+    void run(() => deleteSet(id), 'Couldn’t delete the board');
   }
 
   function editColumns(next: BoardColumn[]) {
@@ -112,10 +113,9 @@
     editColumns([...set.columns, { id: newId(), name: 'New column', color: nextColumnColor(set.columns) }]);
   }
 
-  function toggleDone(id: string) {
+  function chooseDone(id: string) {
     if (!set) return;
-    const current = set.columns.find((c) => c.done)?.id;
-    void run(() => setDoneColumn(set.id, current === id ? undefined : id), 'Couldn’t change the done column');
+    void run(() => setDoneColumn(set.id, id || undefined), 'Couldn’t change the Finished column');
   }
 
   function removeCollection(id: string) {
@@ -134,7 +134,8 @@
     if (!set) return;
     const col = $collections[id];
     if (!col) return;
-    if (col.boardSetId) {
+    // Pointing at a deleted set is no board: join directly, nothing to match.
+    if (liveSetId(col, $columnSets)) {
       movingCollection = { id, to: set.id };
     } else {
       void run(() => setCollectionsBoard([id], set.id), 'Couldn’t add that collection');
@@ -147,11 +148,11 @@
 <div class="column-sets">
   <aside class="sets">
     <div class="sets-head">
-      <p class="bx-note">Shared columns for item boards. Collections using the same set can share one board.</p>
-      <button type="button" class="bx-btn bx-small" onclick={() => (creating = true)}>+ New</button>
+      <p class="bx-note">Collections on the same board share its columns: change a column here and it changes for all of them.</p>
+      <button type="button" class="bx-btn bx-small new-board" onclick={() => (creating = true)}>+ New board</button>
     </div>
     {#if $columnSets.length === 0}
-      <p class="bx-note empty">No column sets yet. Start one from a template — Watch list, Reading list, Pipeline, Trip or Release.</p>
+      <p class="bx-note empty">No boards yet. Start one here, or open a collection and choose the Board view.</p>
     {/if}
     <ul class="set-list">
       {#each $columnSets as s (s.id)}
@@ -159,7 +160,7 @@
         <li>
           <button type="button" class="set" class:on={s.id === selectedId} aria-current={s.id === selectedId} onclick={() => (selectedId = s.id)}>
             <span class="set-name">{s.name}</span>
-            <span class="bx-muted">{u.length ? u.map((c) => c.name).join(', ') : 'Not used yet'}</span>
+            <span class="bx-muted">{u.length ? `${u.length === 1 ? 'Collection' : 'Collections'}: ${u.map((c) => c.name).join(', ')}` : 'Not used by any collection yet'}</span>
             <span class="strip" aria-hidden="true">
               {#each s.columns as c (c.id)}<i style="background: {c.color}"></i>{/each}
             </span>
@@ -171,10 +172,10 @@
 
   {#if set}
     {@const u = users(set)}
-    <section class="detail" aria-label="{set.name} column set">
+    <section class="detail" aria-label="{set.name} board">
       <div class="row">
         <div class="bx-grow">
-          <label class="bx-label" for="set-name-edit">Set name</label>
+          <label class="bx-label" for="set-name-edit">Board name</label>
           <input
             id="set-name-edit"
             class="bx-input"
@@ -182,42 +183,19 @@
             onchange={(e) => rename((e.currentTarget as HTMLInputElement).value)}
           />
         </div>
-        <button type="button" class="bx-btn" onclick={duplicate}>Duplicate</button>
-        {#if confirmDelete}
-          <button type="button" class="bx-btn bx-danger" onclick={removeSet}>Delete {set.name}</button>
-          <button type="button" class="bx-btn" onclick={() => (confirmDelete = false)}>Keep</button>
-        {:else}
-          <button type="button" class="bx-btn bx-danger" onclick={() => (confirmDelete = true)}>Delete set…</button>
-        {/if}
+        <button type="button" class="bx-btn" title="A new board with these columns, not used by any collection yet" onclick={duplicate}>Make a copy of this board</button>
       </div>
-      {#if confirmDelete}
-        {@const all = Object.values($collections).filter((c) => c.boardSetId === set.id)}
-        {@const archived = all.length - u.length}
-        {@const lists = all.filter((c) => c.offPlan && c.planColumnId)}
-        <p class="bx-warn">
-          {all.length
-            ? `${all.length} ${all.length === 1 ? 'collection loses its board' : 'collections lose their boards'}${archived ? ` (${archived} archived)` : ''}; their items keep their columns in case you set it up again.`
-            : 'Nothing uses this set.'}
-          {#if lists.length}
-            {lists.map((c) => c.name).join(', ')} {lists.length === 1 ? 'is a list' : 'are lists'} showing a column on the plan; {lists.length === 1 ? 'its' : 'their'} todos leave the plan until you untick “It's a list”.
-          {/if}
-        </p>
-      {/if}
 
       <div>
-        <span class="bx-label">Columns <span class="bx-muted">· edits apply to all {u.length} {u.length === 1 ? 'collection' : 'collections'}</span></span>
+        <span class="bx-label">Columns <span class="bx-muted plain">· left to right{u.length === 2 ? ' · changes apply to both collections' : u.length > 2 ? ` · changes apply to all ${u.length} collections` : ''}</span></span>
         <ul class="bx-rows">
           {#each set.columns as c, i (c.id)}
             <li class="col-row">
-              <span class="order">
-                <button type="button" class="icon" aria-label="Move {c.name} left" disabled={i < 2} onclick={() => shift(c.id, -1)}>↑</button>
-                <button type="button" class="icon" aria-label="Move {c.name} right" disabled={i === 0 || i === set.columns.length - 1} onclick={() => shift(c.id, 1)}>↓</button>
-              </span>
-              <button type="button" class="swatch-btn" aria-label="Colour of {c.name}" aria-expanded={paletteFor === c.id} onclick={() => (paletteFor = paletteFor === c.id ? null : c.id)}>
+              <button type="button" class="swatch-btn" title="Change colour" aria-label="Colour of {c.name}" aria-expanded={paletteFor === c.id} onclick={() => (paletteFor = paletteFor === c.id ? null : c.id)}>
                 <span class="bx-swatch big" style="background: {c.color}"></span>
               </button>
               {#if c.id === BOARD_UNSORTED}
-                <span class="bx-grow">Unsorted <span class="tag">new items</span></span>
+                <span class="bx-grow unsorted-row">Unsorted <span class="bx-muted">new items land here first</span></span>
               {:else}
                 <input
                   class="bx-input col-name"
@@ -225,12 +203,17 @@
                   aria-label="Column name"
                   onchange={(e) => renameColumn(c.id, (e.currentTarget as HTMLInputElement).value)}
                 />
-                <button type="button" class="bx-chip done-chip" aria-pressed={!!c.done} title="Checked todos land in the done column" onclick={() => toggleDone(c.id)}>done</button>
+                {#if c.done}<span class="finished-tag">✓ Finished</span>{/if}
               {/if}
-              <span class="bx-muted count">{counts.get(c.id) ?? 0} items</span>
+              <span class="bx-muted count">{counts.get(c.id) ?? 0} {counts.get(c.id) === 1 ? 'item' : 'items'}</span>
+              <span class="order" class:fixed={c.id === BOARD_UNSORTED}>
+                <button type="button" class="icon" aria-label="Move {c.name} earlier" disabled={i < 2} onclick={() => shift(c.id, -1)}><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg></button>
+                <button type="button" class="icon" aria-label="Move {c.name} later" disabled={i === 0 || i === set.columns.length - 1} onclick={() => shift(c.id, 1)}><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
+              </span>
               <button
                 type="button"
                 class="icon"
+                class:fixed={c.id === BOARD_UNSORTED}
                 aria-label={c.id === BOARD_UNSORTED ? 'Unsorted can’t be deleted' : `Delete column ${c.name}`}
                 disabled={c.id === BOARD_UNSORTED}
                 onclick={() => (deletingColumn = c.id)}
@@ -246,7 +229,21 @@
           {/each}
         </ul>
         <button type="button" class="bx-link add" onclick={addColumn}>+ Add column</button>
-        <p class="bx-note">“Unsorted” is where new items land and can’t be deleted. Tag one column <strong>done</strong> and checking a todo moves it there instead of hiding it.</p>
+        <label class="finish-row">
+          <span>When a todo is ticked, move it to</span>
+          <select
+            class="bx-select"
+            aria-label="Finished column"
+            value={set.columns.find((c) => c.done)?.id ?? ''}
+            onchange={(e) => chooseDone((e.currentTarget as HTMLSelectElement).value)}
+          >
+            {#each set.columns.filter((c) => c.id !== BOARD_UNSORTED) as c (c.id)}
+              <option value={c.id}>{c.name}</option>
+            {/each}
+            <option value="">Nowhere (it stays where it is)</option>
+          </select>
+        </label>
+        <p class="bx-note">New items land in Unsorted, which can’t be deleted.</p>
       </div>
 
       <div>
@@ -259,11 +256,11 @@
             {#each candidates as c (c.id)}
               <li>
                 <span class="bx-dot" style="background: {c.color || 'var(--text-muted)'}"></span>
-                <span class="bx-grow">{c.name} <span class="bx-muted">{c.boardSetId ? `uses ${setName(c.boardSetId) ?? 'a set'}` : 'no set yet'}</span></span>
+                <span class="bx-grow">{c.name} <span class="bx-muted">{liveSetId(c, $columnSets) ? `on ${setName(c.boardSetId) ?? 'another board'}` : 'no board yet'}</span></span>
                 <button type="button" class="bx-btn bx-small" onclick={() => addCollection(c.id)}>Add</button>
               </li>
             {:else}
-              <li class="bx-muted">Every collection already uses this set.</li>
+              <li class="bx-muted">Every collection already uses this board.</li>
             {/each}
           </ul>
         {/if}
@@ -273,15 +270,38 @@
               <li>
                 <span class="bx-dot" style="background: {c.color || 'var(--text-muted)'}"></span>
                 <span class="bx-grow">{c.name} <span class="bx-muted">{c.groupId ? ($groups[c.groupId]?.name ?? '') : ''} · {itemCount(c.id)} items</span></span>
-                <button type="button" class="bx-btn bx-small" onclick={() => (movingCollection = { id: c.id })}>Move to set…</button>
-                <button type="button" class="bx-btn bx-small" onclick={() => removeCollection(c.id)}>Remove</button>
+                <button type="button" class="bx-btn bx-small" onclick={() => (movingCollection = { id: c.id })}>Switch board…</button>
+                <button type="button" class="bx-btn bx-small" aria-label="Remove board from {c.name}" onclick={() => removeCollection(c.id)}>Remove board</button>
               </li>
             {/each}
           </ul>
-          <p class="bx-note">Removing a collection turns its board off; items keep their column in case you add it back.</p>
+          <p class="bx-note gap">Removing this board from a collection keeps its items. Their column positions are remembered if you add the board back.</p>
         {:else}
-          <p class="bx-note">No collection uses this set yet.</p>
+          <p class="bx-note">No collection uses this board yet.</p>
         {/if}
+      </div>
+      <div class="danger-zone">
+        {#if confirmDelete}
+          {@const all = Object.values($collections).filter((c) => c.boardSetId === set.id)}
+          {@const archived = all.length - u.length}
+          {@const lists = all.filter((c) => c.offPlan && c.planColumnId)}
+          <p class="bx-warn">
+            {all.length
+              ? `${all.length} ${all.length === 1 ? 'collection loses its board' : 'collections lose their boards'}${archived ? ` (${archived} archived)` : ''}; their items keep their columns in case you set it up again.`
+              : 'No collection uses this board.'}
+            {#if lists.length}
+              {lists.map((c) => c.name).join(', ')} {lists.length === 1 ? 'keeps' : 'keep'} todos off the Todos page except one column's; without the board, none of {lists.length === 1 ? 'its' : 'their'} todos show there until you change that under Edit collection.
+            {/if}
+          </p>
+        {/if}
+        <div class="row">
+          {#if confirmDelete}
+            <button type="button" class="bx-btn bx-danger" onclick={removeSet}>Delete {set.name}</button>
+            <button type="button" class="bx-btn" onclick={() => (confirmDelete = false)}>Keep</button>
+          {:else}
+            <button type="button" class="bx-btn bx-quiet bx-danger" onclick={() => (confirmDelete = true)}>Delete this board…</button>
+          {/if}
+        </div>
       </div>
     </section>
   {/if}
@@ -303,6 +323,43 @@
 {/if}
 
 <style>
+  .gap {
+    margin-top: 0.5rem;
+  }
+
+  .danger-zone {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .finished-tag {
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--success, #0f766e) 12%, transparent);
+    color: var(--success, #0f766e);
+    font-size: 0.7rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .finish-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.35rem 0 0.5rem;
+    font-size: 0.86rem;
+  }
+
+  .finish-row .bx-select {
+    width: auto;
+    min-width: 9rem;
+    padding: 0.3rem 0.5rem;
+  }
+
   .column-sets {
     display: grid;
     grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
@@ -318,9 +375,14 @@
 
   .sets-head {
     display: flex;
-    align-items: flex-start;
-    gap: 0.5rem;
-    margin-bottom: 0.6rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+    margin-bottom: 0.7rem;
+  }
+
+  .new-board {
+    white-space: nowrap;
   }
 
   .empty {
@@ -396,13 +458,19 @@
     margin: 0;
   }
 
-  .col-row {
-    flex-wrap: wrap;
+  .plain {
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
   }
 
   .order {
-    display: flex;
-    flex-direction: column;
+    display: inline-flex;
+  }
+
+  /* Unsorted can't move or go: keep the row aligned, show no dead buttons. */
+  .fixed {
+    visibility: hidden;
   }
 
   .icon {
@@ -425,11 +493,50 @@
     cursor: default;
   }
 
+  .icon {
+    display: grid;
+    place-items: center;
+  }
+
   .order .icon {
-    width: 1.4rem;
-    height: 1rem;
-    font-size: 0.7rem;
-    line-height: 1;
+    width: 1.7rem;
+  }
+
+  /* Phones: name on its own row with its actions under it; column rows
+     keep to one line by dropping the item count. */
+  @media (max-width: 520px) {
+    .row:not(.tight) > .bx-grow {
+      flex-basis: 100%;
+    }
+
+    .count {
+      display: none;
+    }
+
+    .col-name {
+      min-width: 0;
+    }
+
+    .finished-tag {
+      display: none;
+    }
+
+    .bx-rows > li {
+      gap: 0.35rem;
+      padding-left: 0.4rem;
+      padding-right: 0.3rem;
+    }
+  }
+
+  .unsorted-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.5rem;
+  }
+
+  .swatch-btn:hover {
+    border-color: var(--text-muted);
   }
 
   .swatch-btn {
@@ -437,7 +544,7 @@
     place-items: center;
     width: 1.9rem;
     height: 1.9rem;
-    border: 0;
+    border: 1px solid var(--border);
     border-radius: 6px;
     background: none;
     cursor: pointer;
@@ -450,24 +557,11 @@
 
   .col-name {
     flex: 1;
-    min-width: 7rem;
+    min-width: 0;
     padding: 0.3rem 0.5rem;
   }
 
-  .done-chip {
-    min-height: 1.7rem;
-    padding: 0 0.5rem;
-    font-size: 0.72rem;
-  }
 
-  .tag {
-    margin-left: 0.35rem;
-    font-size: 0.68rem;
-    font-weight: 700;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
 
   .count {
     min-width: 4.5rem;

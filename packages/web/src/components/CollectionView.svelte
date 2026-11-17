@@ -40,6 +40,7 @@
   } from '../lib/stores';
   import { fileItem } from '../lib/triage-actions';
   import { columnSets } from '../lib/board-actions';
+  import ByScreen from './boards/ByScreen.svelte';
   import { showToast } from '../lib/toast';
   import InboxCard from './InboxCard.svelte';
   import CaptureBar from './CaptureBar.svelte';
@@ -403,10 +404,10 @@
               <svg class="cal-badge-icon" aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>{collection.calendar.name} calendar
             </button>
           {/if}
-          {#if boardSetName}<span class="board-badge" title="Board columns: {boardSetName}">{boardSetName}</span>{/if}
+          {#if boardSetName}<span class="board-badge" title="Board: {boardSetName}"><svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><rect x="3" y="4" width="5" height="16" rx="1"></rect><rect x="10" y="4" width="5" height="11" rx="1"></rect><rect x="17" y="4" width="4" height="7" rx="1"></rect></svg><span class="bb-text">Board: {boardSetName}</span></span>{/if}
           {#if collection.offPlan}<span class="board-badge list" title={collection.planColumnId
-              ? 'A list: its todos stay off the Todos plan, except its plan column’s'
-              : 'A list: its todos stay off the Todos plan'}>List</span>{/if}
+              ? 'Its todos stay off the Todos page (Today and Plan on a phone), except one board column’s'
+              : 'Its todos stay off the Todos page (Today and Plan on a phone)'}><svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 5.2A9.8 9.8 0 0 1 12 5c5.5 0 9 5 10 7a13 13 0 0 1-2.9 3.7M6.3 6.4A13.300 13.300 0 0 0 2 12c1 2 4.500 7 10 7a9.600 9.600 0 0 0 4.400-1.100M9.900 9.900a3 3 0 0 0 4.200 4.200"></path></svg><ByScreen wide="Hidden from Todos" phone="Off Today & Plan" />{#if collection.planColumnId}, except one column{/if}</span>{/if}
           {#if sameNameInGroup}<span class="name-warn">same name as another collection here</span>{/if}
         </span>
       {/if}
@@ -919,20 +920,36 @@
     margin-top: 0.15rem;
   }
 
+  /* Same chip as the board's own header: icon, sentence case. */
   .board-badge {
-    font-size: 0.62rem;
-    font-weight: 700;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-    color: var(--accent-text);
-    background: var(--accent-subtler);
-    border-radius: 4px;
-    padding: 0.05rem 0.35rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.05rem 0.5rem;
+    white-space: nowrap;
+    /* A very long board name is cut short, never pushed out of the header. */
+    min-width: 0;
+    max-width: min(100%, 16rem);
   }
 
+  .board-badge svg {
+    flex-shrink: 0;
+  }
+
+  .bb-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* A status, not a count: outlined and dashed so it can't be mistaken
+     for the filled "3 references" pills beside it. */
   .board-badge.list {
-    color: var(--text-muted);
-    background: var(--surface-tint);
+    border-style: dashed;
   }
 
   .name-warn {
@@ -1318,7 +1335,12 @@
     }
     .color-indicator { grid-column: 2; grid-row: 1 / 3; }
     .chevron { grid-column: 3; grid-row: 1 / 3; }
-    .header-info { grid-column: 4 / 6; grid-row: 1; }
+    /* Tags drop under the name instead of squeezing it into two lines. */
+    .header-info { grid-column: 4 / 6; grid-row: 1; flex-wrap: wrap; row-gap: 0.25rem; }
+    .title-line { max-width: 100%; }
+    /* The chips join the name's row one by one, so the board chip stays
+       beside the name and only what doesn't fit drops below. */
+    .col-tags { display: contents; }
     .header-info h3 { white-space: normal; overflow-wrap: anywhere; }
     .actions-toggle {
       grid-column: 6;

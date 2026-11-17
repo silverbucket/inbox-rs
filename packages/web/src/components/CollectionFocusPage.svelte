@@ -155,12 +155,12 @@
   >
     {#if collection}
       <div class="focus-toolbar">
-        <button type="button" class="btn-back" onclick={onexit} title="Back (Esc)">
+        <button type="button" class="btn-back" onclick={onexit} aria-label="Back" title="Back (Esc)">
           <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="19" y1="12" x2="5" y2="12"></line>
             <polyline points="12 19 5 12 12 5"></polyline>
           </svg>
-          Back
+          <span class="back-label">Back</span>
         </button>
         {#if group}
           <span class="crumb-group">
@@ -171,13 +171,26 @@
         <span class="toolbar-spacer"></span>
         <div class="view-switch" role="group" aria-label="View">
           {#each VIEWS as v (v.id)}
-            <button type="button" aria-pressed={view === v.id} onclick={() => chooseView(v.id)}>{v.label}</button>
+            <button type="button" aria-pressed={view === v.id} onclick={() => chooseView(v.id)}>
+              {#if v.id === 'grid'}
+                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
+              {:else if v.id === 'list'}
+                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"></path></svg>
+              {:else}
+                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="5" height="16" rx="1"></rect><rect x="10" y="4" width="5" height="11" rx="1"></rect><rect x="17" y="4" width="4" height="7" rx="1"></rect></svg>
+              {/if}
+              {v.label}
+            </button>
           {/each}
         </div>
-        <button type="button" class="btn-back" onclick={() => (boardSettings = true)} title="Board columns">
-          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="5" height="16" rx="1"></rect><rect x="10" y="4" width="5" height="11" rx="1"></rect><rect x="17" y="4" width="4" height="7" rx="1"></rect></svg>
-          Columns
-        </button>
+        <!-- Only once there is a board to set up: without one, choosing the
+             Board view is the way in. -->
+        {#if set}
+          <button type="button" class="btn-back btn-settings" onclick={() => (boardSettings = true)} aria-label="Board settings" title="Board settings">
+            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h8M16 18h4"></path><circle cx="16" cy="6" r="2"></circle><circle cx="8" cy="12" r="2"></circle><circle cx="14" cy="18" r="2"></circle></svg>
+            <span class="settings-label">Board settings</span>
+          </button>
+        {/if}
       </div>
       <!-- The card is pinned open; collapsing it (header click / ontoggle) is
            how you leave, mirroring what collapse means on the Collections
@@ -190,9 +203,19 @@
       <div class="focus-scroll">
         {#if view === 'board' && set}
           <div class="alt-view">
-            <h2 class="alt-title">{collection.name} <span class="alt-sub">{ownItems.length} {ownItems.length === 1 ? 'item' : 'items'} · {set.name}</span></h2>
+            <div class="board-head">
+              <h2 class="alt-title">{collection.name}</h2>
+              <span class="alt-sub">{ownItems.length} {ownItems.length === 1 ? 'item' : 'items'}</span>
+              <button type="button" class="board-chip" onclick={() => (boardSettings = true)} title="Board settings">
+                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="4" width="5" height="16" rx="1"></rect><rect x="10" y="4" width="5" height="11" rx="1"></rect><rect x="17" y="4" width="4" height="7" rx="1"></rect></svg>
+                Board: {set.name}
+              </button>
+            </div>
             <BoardColumns {set} items={ownItems} {lookupCollection} addTargets={[collection]} canAddColumns {onselect} />
-            <p class="alt-note">Drag cards between columns, or use a card's move button. Notes and links have no checkbox — moving them is the whole action.{#if set.columns.some((c) => c.done)} A todo checked here moves to {set.columns.find((c) => c.done)?.name} instead of disappearing.{/if}</p>
+            <p class="alt-note">
+              {isTouchDevice ? 'Move a card with its ↔ button.' : 'Drag a card to another column to move it.'}
+              {#if set.columns.some((c) => c.done)}Ticking a todo moves it to {set.columns.find((c) => c.done)?.name}.{/if}
+            </p>
           </div>
         {:else if view === 'list'}
           <div class="alt-view">
@@ -321,6 +344,9 @@
   }
 
   .view-switch button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
     padding: 0.28rem 0.65rem;
     border: 0;
     border-radius: calc(var(--radius-sm) - 2px);
@@ -347,14 +373,47 @@
 
   .alt-title {
     margin: 0;
-    font-size: 1.15rem;
+    font-size: 1.3rem;
+    letter-spacing: -0.015em;
   }
 
   .alt-sub {
-    margin-left: 0.4rem;
     font-size: 0.85rem;
     font-weight: 500;
     color: var(--text-muted);
+  }
+
+  .alt-title .alt-sub {
+    margin-left: 0.4rem;
+  }
+
+  .board-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.3rem 0.65rem;
+  }
+
+  /* Names the board this collection is on, and opens its settings. */
+  .board-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    align-self: center;
+    padding: 0.2rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .board-chip:hover {
+    color: var(--text);
+    border-color: var(--text-muted);
   }
 
   .alt-note {
@@ -404,6 +463,62 @@
     .focus-panel {
       border: none;
       border-radius: 0;
+    }
+
+    /* Everything must fit one row of a phone: the group crumb and the
+       settings button's label give way, the controls stay. */
+    .crumb-group,
+    .settings-label {
+      display: none;
+    }
+
+    .focus-toolbar {
+      gap: 0.45rem;
+    }
+
+    .btn-settings {
+      padding: 0.35rem 0.55rem;
+    }
+
+    .view-switch button {
+      padding: 0.35rem 0.6rem;
+    }
+  }
+
+  /* Phones: Back is its arrow alone. The row was exactly full with some
+     system fonts, which pushed the settings button to the screen's edge. */
+  @media (max-width: 480px) {
+    .back-label {
+      display: none;
+    }
+
+    .focus-toolbar .btn-back:first-child {
+      padding: 0.45rem 0.6rem;
+    }
+
+    .view-switch {
+      min-width: 0;
+    }
+  }
+
+  /* Touch: the two small toolbar buttons keep their look but take a
+     finger-sized tap (44px), through an invisible area around them. */
+  @media (hover: none) {
+    .focus-toolbar .btn-back {
+      position: relative;
+    }
+
+    .focus-toolbar .btn-back::after {
+      content: '';
+      position: absolute;
+      inset: -8px -5px;
+    }
+  }
+
+  /* The narrowest phones: the view names alone. */
+  @media (max-width: 360px) {
+    .view-switch svg {
+      display: none;
     }
   }
 </style>
