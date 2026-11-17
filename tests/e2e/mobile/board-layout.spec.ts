@@ -4,8 +4,26 @@
  * a column that would otherwise be several swipes away.
  */
 
+import type { Locator } from '@playwright/test';
 import { expect, test } from '../helpers/fixtures';
 import { seedRsSession } from '../helpers/pwa';
+
+/**
+ * A finger lands a little off a small button. 6px above its visible edge
+ * must still hit it: the toolbar buttons keep their look but take a 44px
+ * tap through an invisible area around them.
+ */
+async function hitsJustOutside(control: Locator): Promise<boolean> {
+  const box = await control.boundingBox();
+  if (!box) throw new Error('toolbar control not laid out');
+  return control.evaluate(
+    (el, [x, y]) => {
+      const at = document.elementFromPoint(x, y);
+      return !!at && (el === at || el.contains(at));
+    },
+    [box.x + box.width / 2, box.y - 6],
+  );
+}
 
 test('the board toolbar fits a phone and the column strip jumps to a column', async ({
   context,
@@ -77,4 +95,35 @@ test('the board toolbar fits a phone and the column strip jumps to a column', as
     .getByRole('button', { name: /Recommend/ })
     .click();
   await expect(recommend).toBeInViewport({ ratio: 0.9 });
+
+  // Both small toolbar buttons take a finger-sized tap, and a tap just
+  // outside Back still leaves the board.
+  const back = page.getByRole('button', { name: 'Back', exact: true });
+  expect(await hitsJustOutside(back), 'Back takes a 44px tap').toBe(true);
+  expect(
+    await hitsJustOutside(
+      page.getByRole('button', { name: 'Board settings' }).first(),
+    ),
+    'Board settings takes a 44px tap',
+  ).toBe(true);
+  const backBox = await back.boundingBox();
+  if (!backBox) throw new Error('Back not laid out');
+  await page.touchscreen.tap(backBox.x + backBox.width / 2, backBox.y - 6);
+  await expect(page.locator('section.column')).toHaveCount(0);
+
+  // A group's board uses the same arrow-only Back, and its toolbar fits.
+  await page.goto(`${webOrigin}/#/collections`);
+  await page.locator('.btn-board').first().click();
+  const groupBack = page.getByRole('button', { name: 'Back', exact: true });
+  await expect(groupBack).toBeVisible();
+  await expect(groupBack.locator('.back-label')).toBeHidden();
+  const groupBox = await groupBack.boundingBox();
+  if (!groupBox) throw new Error('group board Back not laid out');
+  expect(groupBox.x).toBeGreaterThanOrEqual(8);
+  expect(groupBox.x + groupBox.width).toBeLessThanOrEqual(width - 8);
+  expect(groupBox.height, 'arrow-only Back, one line').toBeLessThan(44);
+  expect(
+    await hitsJustOutside(groupBack),
+    'group board Back takes a 44px tap',
+  ).toBe(true);
 });
