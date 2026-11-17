@@ -284,10 +284,11 @@
       padding: 0 0.65rem;
     }
 
+    /* A 44px tap around the small button, as on a collection's board. */
     .back::after {
       content: '';
       position: absolute;
-      inset: -6px;
+      inset: -8px -6px;
     }
 
     /* A long board name wraps instead of pushing the page sideways. */
