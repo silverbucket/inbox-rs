@@ -305,8 +305,9 @@
     } catch (error) {
       console.error('Failed to add card', error);
       showToast('Couldn’t add that card');
-      // Give the title back unless something new was typed meanwhile.
-      if (!addTitle) addTitle = title;
+      // Give the title back to its own column's form, unless something new
+      // was typed meanwhile.
+      if (!addTitle && addingTo === columnId) addTitle = title;
     }
   }
 

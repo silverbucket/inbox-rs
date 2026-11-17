@@ -210,6 +210,23 @@ describe('BoardColumns', () => {
     });
   });
 
+  it("does not restore a failed title into another column's form", async () => {
+    let fail!: () => void;
+    vi.mocked(addToColumn).mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => (fail = () => reject(new Error('down')))),
+    );
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    render([]);
+    type(openAdd('Idea'), 'For Idea');
+    submit();
+    const other = openAdd('Shipped');
+    fail();
+    await new Promise((r) => setTimeout(r));
+    flushSync();
+    expect(other.value).toBe('');
+  });
+
   it('adds a column when allowed', async () => {
     render([], { canAddColumns: true });
     (
