@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import type { BookmarkItem } from '@inbox-rs/rs-module';
+import { type BookmarkItem, ImageDownloadError } from '@inbox-rs/rs-module';
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -65,9 +65,12 @@ import type { NoteItem } from '@inbox-rs/rs-module';
 import {
   applyLinkMetadata,
   bulkEnrichProgress,
+  bulkImageProgress,
   describeLinkPreviewError,
   enrichAllBookmarks,
   enrichBookmark,
+  imageCopyCandidates,
+  imageCopyFailures,
   isSavedLink,
   keepBookmarkImage,
   LINK_PREVIEW_ERROR,
@@ -79,8 +82,10 @@ import {
   needsLinkPreview,
   noteToBookmark,
   refreshBookmark,
+  removeStoredImageCopies,
   replaceBookmarkImage,
   resolveSockethubEndpoint,
+  saveAllBookmarkImages,
 } from './enrich';
 
 function bookmark(overrides: Partial<BookmarkItem> = {}): BookmarkItem {
@@ -101,6 +106,7 @@ afterEach(() => {
   localStorage.clear();
   for (const key of Object.keys(itemsMap)) delete itemsMap[key];
   for (const key of Object.keys(settings)) delete settings[key];
+  imageCopyFailures.set({});
 });
 
 describe('local preview settings', () => {
@@ -1007,5 +1013,225 @@ describe('enrichAllBookmarks', () => {
       storeFailed,
     );
     warn.mockRestore();
+  });
+});
+
+describe('an image that could not be copied', () => {
+  it('marks an image its site no longer has, and never downloads it again', async () => {
+    const item = bookmark({ ogImage: 'https://cdn/hero' });
+    itemsMap[item.id] = item;
+    canDownloadImages.mockResolvedValue(true);
+    downloadLinkImage.mockRejectedValue(
+      new ImageDownloadError('not-found', 'HTTP 404'),
+    );
+
+    await expect(keepBookmarkImage(item)).rejects.toThrow('HTTP 404');
+    expect(storeItem.mock.calls[0][0]).toMatchObject({
+      imageGone: 'https://cdn/hero',
+    });
+    expect(get(imageCopyFailures)).toEqual({});
+
+    const marked = itemsMap[item.id] as BookmarkItem;
+    await expect(keepBookmarkImage(marked)).resolves.toBe(false);
+    expect(downloadLinkImage).toHaveBeenCalledOnce();
+    expect(imageCopyCandidates({ b1: marked })).toEqual([]);
+  });
+
+  it('tries again once the bookmark has a different image', async () => {
+    const item = bookmark({
+      ogImage: 'https://cdn/new',
+      imageGone: 'https://cdn/old',
+    });
+    itemsMap[item.id] = item;
+    canDownloadImages.mockResolvedValue(true);
+    downloadLinkImage.mockResolvedValue(downloaded());
+    await expect(keepBookmarkImage(item)).resolves.toBe(true);
+  });
+
+  it('remembers a failure that may pass for the session only, until a copy is saved', async () => {
+    const item = bookmark({ ogImage: 'https://cdn/hero' });
+    itemsMap[item.id] = item;
+    canDownloadImages.mockResolvedValue(true);
+    downloadLinkImage.mockRejectedValueOnce(
+      new ImageDownloadError('origin-refused', 'HTTP 403'),
+    );
+
+    await expect(keepBookmarkImage(item)).rejects.toThrow('HTTP 403');
+    expect(storeItem).not.toHaveBeenCalled();
+    expect(get(imageCopyFailures)).toEqual({
+      b1: { image: 'https://cdn/hero', code: 'origin-refused' },
+    });
+
+    downloadLinkImage.mockResolvedValueOnce(downloaded());
+    await expect(keepBookmarkImage(item)).resolves.toBe(true);
+    expect(get(imageCopyFailures)).toEqual({});
+  });
+});
+
+describe('image downloads', () => {
+  it('run one at a time, even when several are asked for at once', async () => {
+    canDownloadImages.mockResolvedValue(true);
+    let running = 0;
+    let most = 0;
+    downloadLinkImage.mockImplementation(async () => {
+      most = Math.max(most, ++running);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      running--;
+      return downloaded();
+    });
+    const all = ['b1', 'b2', 'b3'].map((id) => {
+      const item = bookmark({ id, ogImage: `https://cdn/${id}` });
+      itemsMap[id] = item;
+      return item;
+    });
+
+    await expect(Promise.all(all.map(keepBookmarkImage))).resolves.toEqual([
+      true,
+      true,
+      true,
+    ]);
+    expect(most).toBe(1);
+  });
+
+  it('stay one at a time during a bulk preview pass', async () => {
+    canDownloadImages.mockResolvedValue(true);
+    let running = 0;
+    let most = 0;
+    downloadLinkImage.mockImplementation(async () => {
+      most = Math.max(most, ++running);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      running--;
+      return downloaded();
+    });
+    for (const id of ['b1', 'b2', 'b3']) {
+      itemsMap[id] = bookmark({ id, url: `https://${id}.com` });
+    }
+    fetchLinkMetadata.mockImplementation(async (url: string) => ({
+      image: `${url}/hero.jpg`,
+    }));
+
+    await enrichAllBookmarks();
+    expect(downloadLinkImage).toHaveBeenCalledTimes(3);
+    expect(most).toBe(1);
+  });
+
+  it('carry on after one fails', async () => {
+    canDownloadImages.mockResolvedValue(true);
+    downloadLinkImage
+      .mockRejectedValueOnce(new ImageDownloadError('timeout', 'slow'))
+      .mockResolvedValueOnce(downloaded());
+    const first = bookmark({ id: 'b1', ogImage: 'https://cdn/1' });
+    const second = bookmark({ id: 'b2', ogImage: 'https://cdn/2' });
+    itemsMap.b1 = first;
+    itemsMap.b2 = second;
+
+    const results = await Promise.allSettled([
+      keepBookmarkImage(first),
+      keepBookmarkImage(second),
+    ]);
+    expect(results.map((r) => r.status)).toEqual(['rejected', 'fulfilled']);
+  });
+});
+
+describe('saveAllBookmarkImages', () => {
+  it('copies every image still shown from its site and reports each outcome', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    canDownloadImages.mockResolvedValue(true);
+    const outcomes: Record<string, () => Promise<unknown>> = {
+      'https://cdn/saved': async () => downloaded(),
+      'https://cdn/gone': async () => {
+        throw new ImageDownloadError('not-found', 'HTTP 404');
+      },
+      'https://cdn/refused': async () => {
+        throw new ImageDownloadError('origin-refused', 'HTTP 403');
+      },
+      'https://cdn/large': async () => {
+        throw new ImageDownloadError('too-large', 'too big');
+      },
+      'https://cdn/slow': async () => {
+        throw new ImageDownloadError('timeout', 'slow');
+      },
+    };
+    downloadLinkImage.mockImplementation((_page: string, image: string) =>
+      outcomes[image](),
+    );
+    for (const name of Object.keys(outcomes)) {
+      const id = name.split('/').pop() as string;
+      itemsMap[id] = bookmark({ id, ogImage: name });
+    }
+    // Not candidates: a copy exists, the image is known gone, a share
+    // card, no image at all.
+    itemsMap.kept = bookmark({
+      id: 'kept',
+      ogImage: 'https://cdn/kept',
+      filePath: 'files/kept.jpg',
+      mimeType: 'image/jpeg',
+    });
+    itemsMap.dead = bookmark({
+      id: 'dead',
+      ogImage: 'https://cdn/dead',
+      imageGone: 'https://cdn/dead',
+    });
+    itemsMap.card = bookmark({
+      id: 'card',
+      ogImage: 'https://share.redd.it/preview/x',
+    });
+    itemsMap.bare = bookmark({ id: 'bare' });
+
+    await expect(saveAllBookmarkImages()).resolves.toEqual({
+      saved: 1,
+      gone: 1,
+      refused: 1,
+      tooLarge: 1,
+      other: 1,
+      total: 5,
+    });
+    expect(downloadLinkImage).toHaveBeenCalledTimes(5);
+    expect(get(bulkImageProgress)).toBeNull();
+    // Run again: the saved and the gone one have dropped out.
+    expect(
+      imageCopyCandidates(itemsMap as Record<string, BookmarkItem>)
+        .map((item) => item.id)
+        .sort(),
+    ).toEqual(['large', 'refused', 'slow']);
+    warn.mockRestore();
+  });
+
+  it('does not start while another pass is running', async () => {
+    bulkImageProgress.set({ done: 0, total: 1 });
+    await expect(saveAllBookmarkImages()).resolves.toBeNull();
+    await expect(removeStoredImageCopies()).resolves.toBeNull();
+    bulkImageProgress.set(null);
+  });
+});
+
+describe('removeStoredImageCopies', () => {
+  it('removes copies of images still linked from their site, and no others', async () => {
+    itemsMap.b1 = bookmark({
+      id: 'b1',
+      ogImage: 'https://cdn/hero',
+      filePath: 'files/b1.jpg',
+      mimeType: 'image/jpeg',
+    });
+    // The copy is this bookmark's only image.
+    itemsMap.b2 = bookmark({
+      id: 'b2',
+      filePath: 'files/b2.jpg',
+      mimeType: 'image/jpeg',
+    });
+    itemsMap.b3 = bookmark({ id: 'b3', ogImage: 'https://cdn/linked' });
+
+    await expect(removeStoredImageCopies()).resolves.toEqual({
+      removed: 1,
+      total: 1,
+    });
+    expect(storeItem).toHaveBeenCalledOnce();
+    const stored = storeItem.mock.calls[0][0];
+    expect(stored.ogImage).toBe('https://cdn/hero');
+    expect(stored.filePath).toBeUndefined();
+    expect(stored.mimeType).toBeUndefined();
+    expect(removeFile.mock.calls).toEqual([['files/b1.jpg']]);
+    expect((itemsMap.b2 as BookmarkItem).filePath).toBe('files/b2.jpg');
+    expect(get(bulkImageProgress)).toBeNull();
   });
 });

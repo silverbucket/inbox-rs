@@ -3,12 +3,20 @@
   import { convertBookmarkToImage } from '../../lib/bookmark-image';
   import {
     describeLinkPreviewError,
+    imageCopyFailures,
+    imageIsGone,
+    keepBookmarkImage,
+    keepLinkImagesEnabled,
     LINK_PREVIEW_ERROR,
+    lacksImageCopy,
+    linkPreviewsEnabled,
     needsEnrichment,
     refreshBookmark,
     replaceBookmarkImage,
+    resolveSockethubEndpoint,
   } from '../../lib/enrich';
   import { bookmarkImageSrc } from '../../lib/item-utils';
+  import { canDownloadImages } from '../../lib/link-metadata';
   import {
     blobLoadFailures,
     blobUrls,
@@ -114,6 +122,58 @@
       previewError = describeLinkPreviewError(e);
     } finally {
       applyingImage = false;
+    }
+  }
+
+  // A bookmark that still shows its image from the original site loses it
+  // when that site goes away. Say so, and offer the copy, but only where a
+  // copy is wanted and possible: copies are on and the service can download.
+  const wantsCopy = $derived.by(() => {
+    void $userSettings;
+    return lacksImageCopy(item) && linkPreviewsEnabled() && keepLinkImagesEnabled();
+  });
+  let canKeep = $state(false);
+  $effect(() => {
+    void $userSettings.sockethubUrl;
+    if (!wantsCopy) return;
+    let current = true;
+    void canDownloadImages(resolveSockethubEndpoint()).then((can) => {
+      if (current) canKeep = can;
+    });
+    return () => {
+      current = false;
+    };
+  });
+  let savingCopy = $state(false);
+  const copyFailure = $derived.by(() => {
+    const failure = $imageCopyFailures[item.id];
+    return failure && failure.image === item.ogImage ? failure.code : null;
+  });
+  const copyFailureText = $derived(
+    copyFailure === 'origin-refused'
+      ? 'The image’s site refused the download.'
+      : copyFailure === 'too-large'
+        ? 'The image is too large to save.'
+        : copyFailure === 'timeout'
+          ? 'Saving the image timed out.'
+          : 'Couldn’t save a copy of the image.',
+  );
+
+  async function saveImageCopy() {
+    try {
+      await beforeAction();
+    } catch {
+      return;
+    }
+    savingCopy = true;
+    try {
+      await keepBookmarkImage(item);
+    } catch (e) {
+      // The reason reaches the card through imageCopyFailures, or through
+      // the bookmark itself when the image is gone.
+      console.warn('Saving the preview image failed:', item.url, e);
+    } finally {
+      savingCopy = false;
     }
   }
 
@@ -280,6 +340,27 @@
     />
   </div>
 {/if}
+{#if wantsCopy && canKeep && !imageOffer}
+  <div class="image-copy" role="status">
+    {#if savingCopy}
+      <span class="status-text">Saving a copy of the image…</span>
+    {:else if imageIsGone(item)}
+      <span class="status-text"
+        >Image not saved locally: it is gone from its site.</span
+      >
+    {:else if copyFailure}
+      <span class="status-text">Image not saved locally. {copyFailureText}</span>
+      <button type="button" class="btn-link" onclick={saveImageCopy}
+        >Try again</button
+      >
+    {:else}
+      <span class="status-text">Image not saved locally</span>
+      <button type="button" class="btn-link" onclick={saveImageCopy}
+        >Save a copy</button
+      >
+    {/if}
+  </div>
+{/if}
 {#if showLightbox && imageSrc}
   <Lightbox
     src={imageSrc}
@@ -318,6 +399,18 @@
   /* Sits at the end of the row: there when wanted, out of the way otherwise. */
   .meta-row .refresh-preview {
     margin: 0 0 0 auto;
+  }
+
+  .image-copy {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.6rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .image-copy .btn-link {
+    margin: 0;
   }
 
   .image-offer {

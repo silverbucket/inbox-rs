@@ -62,6 +62,7 @@ export const bookmarkSchema = {
     body: { type: 'string' },
     filePath: { type: 'string' },
     mimeType: { type: 'string' },
+    imageGone: { type: 'string' },
     createdAt: { type: 'string' },
     ...todoFields,
     ...priorityFields,
