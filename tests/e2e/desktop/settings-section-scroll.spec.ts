@@ -27,28 +27,25 @@ test('an open Settings section stays clear of the title bar and fades at the bot
   const sectionHead = section.locator('.section-head');
 
   // Opening the section lands its header fully below the title bar: the
-  // icon is what a click on it hits, not the bar.
+  // icon is what a click on it hits, not the bar. Measured and hit-tested
+  // in one step, retried until the slide and reveal scroll settle.
   await expect
-    .poll(async () => {
-      const [bar, icon] = await Promise.all([
-        head.boundingBox(),
-        sectionHead.locator('.sec-icon').boundingBox(),
-      ]);
-      return !!bar && !!icon && icon.y >= bar.y + bar.height;
-    })
+    .poll(() =>
+      sectionHead.locator('.sec-icon').evaluate((icon) => {
+        const bar = icon
+          .closest('[role="dialog"]')
+          ?.querySelector('.modal-head')
+          ?.getBoundingClientRect();
+        const box = icon.getBoundingClientRect();
+        if (!bar || box.top < bar.bottom) return false;
+        const at = document.elementFromPoint(
+          box.left + box.width / 2,
+          box.top + box.height / 2,
+        );
+        return !!at && (icon === at || icon.contains(at));
+      }),
+    )
     .toBe(true);
-  const icon = sectionHead.locator('.sec-icon');
-  const iconBox = await icon.boundingBox();
-  if (!iconBox) throw new Error('section icon not laid out');
-  expect(
-    await icon.evaluate(
-      (el, [x, y]) => {
-        const at = document.elementFromPoint(x, y);
-        return !!at && (el === at || el.contains(at));
-      },
-      [iconBox.x + iconBox.width / 2, iconBox.y + iconBox.height / 2],
-    ),
-  ).toBe(true);
 
   // Content scrolls under the bar without showing through it.
   const background = await head.evaluate(
