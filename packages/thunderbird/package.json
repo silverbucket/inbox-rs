@@ -1,6 +1,6 @@
 {
   "name": "@inbox-rs/thunderbird",
-  "version": "2.6.10",
+  "version": "2.7.0",
   "private": true,
   "type": "module",
   "scripts": {
