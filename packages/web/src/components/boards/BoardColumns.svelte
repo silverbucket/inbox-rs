@@ -725,8 +725,9 @@
       display: block;
       flex: 1 1 0;
       min-height: 0;
-      /* Focus scrolling keeps cards clear of the sticky headers. */
-      scroll-padding-top: calc(2.75rem + 3px);
+      /* Focus scrolling keeps cards clear of the sticky headers, with
+         room for a column name that wraps to three lines. */
+      scroll-padding-top: calc(5rem + 3px);
     }
 
     /* The row, not the board, holds the columns: a scrolling flex container
