@@ -7,13 +7,15 @@
  * post-capture step that re-stores the item — the update flows to every
  * card reactively through the `items` store. Runs automatically after a
  * new link is captured, and on demand for existing bookmarks (per-card
- * button in the bookmark view, bulk action in the user menu).
+ * button in the bookmark view, bulk action in Settings → Links).
  */
 
 import {
   applySchedule,
   type BookmarkItem,
   eventSchedule,
+  type ImageDownloadCode,
+  ImageDownloadError,
   type InboxItem,
   imageExtension,
   isPlaceholderImage,
@@ -304,6 +306,20 @@ function localImagePath(id: string, mimeType: string): string | null {
 }
 
 /**
+ * Image downloads wait their turn here, one at a time. Sockethub runs only
+ * a few downloads at once across all its clients, and the time a request
+ * spends queued there counts toward its idle timeout, so a client that
+ * sends several at once gets the later ones cut off.
+ */
+let imageDownloads: Promise<unknown> = Promise.resolve();
+
+function inDownloadQueue<T>(job: () => Promise<T>): Promise<T> {
+  const run = imageDownloads.then(job, job);
+  imageDownloads = run.catch(() => {});
+  return run;
+}
+
+/**
  * Download an image for a bookmark, or null when copies are turned off or
  * this server can't download them.
  */
@@ -311,7 +327,9 @@ async function downloadBookmarkImage(item: BookmarkItem, image: string) {
   if (!keepLinkImagesEnabled()) return null;
   const endpoint = resolveSockethubEndpoint();
   if (!(await canDownloadImages(endpoint))) return null;
-  const file = await downloadLinkImage(item.url, image, endpoint);
+  const file = await inDownloadQueue(() =>
+    downloadLinkImage(item.url, image, endpoint),
+  );
   const filePath = localImagePath(item.id, file.mimeType);
   return filePath
     ? { filePath, mimeType: file.mimeType, data: file.data }
@@ -319,16 +337,78 @@ async function downloadBookmarkImage(item: BookmarkItem, image: string) {
 }
 
 /**
+ * True for a bookmark that shows its image from the original site because
+ * it has no copy of its own: the image is lost if that site goes away.
+ */
+export function lacksImageCopy(item: InboxItem): item is BookmarkItem {
+  return (
+    item.type === 'bookmark' &&
+    !!item.ogImage &&
+    !item.filePath &&
+    !isPlaceholderImage(item.ogImage)
+  );
+}
+
+/** True when the bookmark's image was already found gone from its site. */
+export function imageIsGone(item: BookmarkItem): boolean {
+  return !!item.ogImage && item.imageGone === item.ogImage;
+}
+
+/** The failure code of an image download, `unknown` for anything else. */
+function downloadFailure(error: unknown): ImageDownloadCode {
+  return error instanceof ImageDownloadError ? error.code : 'unknown';
+}
+
+/**
+ * Why the last attempt to copy a bookmark's image failed, by bookmark id,
+ * for the card to explain. Kept for this session only: these failures may
+ * pass, unlike a missing image, which is remembered on the bookmark.
+ */
+export const imageCopyFailures = writable<
+  Record<string, { image: string; code: ImageDownloadCode }>
+>({});
+
+function noteImageCopyFailure(
+  id: string,
+  failure?: { image: string; code: ImageDownloadCode },
+) {
+  imageCopyFailures.update((current) => {
+    if (!failure && !(id in current)) return current;
+    const { [id]: _previous, ...rest } = current;
+    return failure ? { ...rest, [id]: failure } : rest;
+  });
+}
+
+/**
  * Store the bookmark's preview image next to it, so the card keeps its
  * image after the page or its image host is gone. True when a copy was
  * stored; false when there is nothing to copy, a copy already exists, the
- * server can't download images, or the bookmark changed meanwhile. Rejects
- * when the download itself failed.
+ * image is known to be gone, the server can't download images, or the
+ * bookmark changed meanwhile. Rejects when the download itself failed; an
+ * image its site no longer has is then marked gone on the bookmark.
  */
 export async function keepBookmarkImage(item: BookmarkItem): Promise<boolean> {
   const image = item.ogImage;
-  if (!image || item.filePath || isPlaceholderImage(image)) return false;
-  const file = await downloadBookmarkImage(item, image);
+  if (!image || !lacksImageCopy(item) || imageIsGone(item)) return false;
+  let file: Awaited<ReturnType<typeof downloadBookmarkImage>>;
+  try {
+    file = await downloadBookmarkImage(item, image);
+  } catch (e) {
+    const code = downloadFailure(e);
+    if (code === 'not-found') {
+      await updateItem(item.id, (current) =>
+        current?.type === 'bookmark' &&
+        current.ogImage === image &&
+        !current.filePath
+          ? { ...current, imageGone: image }
+          : null,
+      );
+    } else {
+      noteImageCopyFailure(item.id, { image, code });
+    }
+    throw e;
+  }
+  noteImageCopyFailure(item.id);
   if (!file) return false;
   const updated = await updateItem(
     item.id,
@@ -356,8 +436,10 @@ export async function replaceBookmarkImage(
   item: BookmarkItem,
   image: string,
 ): Promise<'replaced' | 'kept' | 'gone'> {
+  let failure: ImageDownloadCode | undefined;
   const file = await downloadBookmarkImage(item, image).catch((e) => {
     console.warn('Downloading the new preview image failed:', image, e);
+    failure = downloadFailure(e);
     return null;
   });
   let oldFile: string | undefined;
@@ -368,7 +450,12 @@ export async function replaceBookmarkImage(
       if (!current || current.type !== 'bookmark' || current.url !== item.url) {
         return null;
       }
-      const { filePath, mimeType: _mimeType, ...rest } = current;
+      const {
+        filePath,
+        mimeType: _mimeType,
+        imageGone: _imageGone,
+        ...rest
+      } = current;
       // With copies turned off there is nothing to protect: the choice
       // was to show images from their site, so the stored one goes.
       if (!file && filePath && keepLinkImagesEnabled()) {
@@ -383,12 +470,20 @@ export async function replaceBookmarkImage(
             filePath: file.filePath,
             mimeType: file.mimeType,
           }
-        : { ...rest, ogImage: image };
+        : {
+            ...rest,
+            ogImage: image,
+            // Linked without a copy: keep why, as keepBookmarkImage does.
+            ...(failure === 'not-found' ? { imageGone: image } : {}),
+          };
     },
     file?.data,
   );
   if (kept) return 'kept';
   if (!updated) return 'gone';
+  if (failure && failure !== 'not-found') {
+    noteImageCopyFailure(item.id, { image, code: failure });
+  }
   if (oldFile && oldFile !== (updated as BookmarkItem).filePath) {
     void removeFile(oldFile);
   }
@@ -472,4 +567,134 @@ export async function enrichAllBookmarks(): Promise<{
     bulkEnrichProgress.set(null);
   }
   return { updated, failed, total };
+}
+
+/** Non-null while a bulk pass over stored image copies is running. */
+export const bulkImageProgress = writable<BulkEnrichProgress | null>(null);
+
+/** What a "Save images locally" pass did, by outcome. */
+export interface ImageCopySummary {
+  saved: number;
+  /** The image's site no longer has it. */
+  gone: number;
+  /** The image's site refused the download. */
+  refused: number;
+  tooLarge: number;
+  other: number;
+  total: number;
+}
+
+/** Bookmarks a "Save images locally" pass would download an image for. */
+export function imageCopyCandidates(
+  all: Record<string, InboxItem>,
+): BookmarkItem[] {
+  return Object.values(all).filter(
+    (item): item is BookmarkItem => lacksImageCopy(item) && !imageIsGone(item),
+  );
+}
+
+/**
+ * Save a copy of the image of every bookmark that still shows it from the
+ * original site. Returns a summary for the completion toast, or null when
+ * a pass is already running. Safe to interrupt and run again: a bookmark
+ * that got its copy, or whose image is gone, is no longer a candidate.
+ */
+export async function saveAllBookmarkImages(): Promise<ImageCopySummary | null> {
+  if (get(bulkImageProgress)) return null;
+  const candidates = imageCopyCandidates(get(items));
+  const summary: ImageCopySummary = {
+    saved: 0,
+    gone: 0,
+    refused: 0,
+    tooLarge: 0,
+    other: 0,
+    total: candidates.length,
+  };
+  bulkImageProgress.set({ done: 0, total: candidates.length });
+  try {
+    for (const item of candidates) {
+      try {
+        // The snapshot may be stale by now; copy the live bookmark.
+        const live = get(items)[item.id];
+        if (live && (await keepBookmarkImage(live as BookmarkItem))) {
+          summary.saved++;
+        } else {
+          summary.other++;
+        }
+      } catch (e) {
+        console.warn('Saving the preview image failed:', item.url, e);
+        const code = downloadFailure(e);
+        if (code === 'not-found') summary.gone++;
+        else if (code === 'origin-refused') summary.refused++;
+        else if (code === 'too-large') summary.tooLarge++;
+        else summary.other++;
+      } finally {
+        bulkImageProgress.update((p) => (p ? { ...p, done: p.done + 1 } : p));
+      }
+    }
+  } finally {
+    bulkImageProgress.set(null);
+  }
+  return summary;
+}
+
+/**
+ * Bookmarks whose stored copy can go because the image is still linked
+ * from its site. A copy with no `ogImage` is the bookmark's only image
+ * and is never a candidate.
+ */
+export function storedCopyCandidates(
+  all: Record<string, InboxItem>,
+): BookmarkItem[] {
+  return Object.values(all).filter(
+    (item): item is BookmarkItem =>
+      item.type === 'bookmark' && !!item.filePath && !!item.ogImage,
+  );
+}
+
+/**
+ * Remove the stored image copy of every bookmark that can show its image
+ * from the original site instead, to free the space. Returns how many
+ * were removed, or null when a pass is already running.
+ */
+export async function removeStoredImageCopies(): Promise<{
+  removed: number;
+  total: number;
+} | null> {
+  if (get(bulkImageProgress)) return null;
+  const candidates = storedCopyCandidates(get(items));
+  let removed = 0;
+  bulkImageProgress.set({ done: 0, total: candidates.length });
+  try {
+    for (const item of candidates) {
+      try {
+        let path: string | undefined;
+        const updated = await updateItem(item.id, (current) => {
+          if (
+            current?.type !== 'bookmark' ||
+            !current.filePath ||
+            !current.ogImage
+          ) {
+            return null;
+          }
+          const { filePath, mimeType: _mimeType, ...rest } = current;
+          path = filePath;
+          return rest;
+        });
+        // The bookmark is written first: a card must never point at a
+        // file that is already gone.
+        if (updated && path) {
+          await removeFile(path);
+          removed++;
+        }
+      } catch (e) {
+        console.warn('Removing the stored image failed:', item.url, e);
+      } finally {
+        bulkImageProgress.update((p) => (p ? { ...p, done: p.done + 1 } : p));
+      }
+    }
+  } finally {
+    bulkImageProgress.set(null);
+  }
+  return { removed, total: candidates.length };
 }

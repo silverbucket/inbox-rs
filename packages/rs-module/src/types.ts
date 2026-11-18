@@ -94,6 +94,13 @@ export interface BookmarkItem extends InboxItemBase {
   body?: string; // embedded content (tweet text, article excerpt, etc.)
   filePath?: string; // locally stored image (downloaded og:image, tweet photo, etc.)
   mimeType?: string; // mime type for filePath
+  /**
+   * The `ogImage` URL whose site answered "not found" when a copy was
+   * downloaded. It marks the image as gone only while it still equals
+   * `ogImage`, so a different image is tried afresh. Synced, so no device
+   * downloads a dead image again.
+   */
+  imageGone?: string;
 }
 
 export interface NoteItem extends InboxItemBase {

@@ -3,9 +3,17 @@ import type { BookmarkItem } from '@inbox-rs/rs-module';
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { canDownloadImages, enrichAllBookmarks, showToast } = vi.hoisted(() => ({
+const {
+  canDownloadImages,
+  enrichAllBookmarks,
+  removeStoredImageCopies,
+  saveAllBookmarkImages,
+  showToast,
+} = vi.hoisted(() => ({
   canDownloadImages: vi.fn(),
   enrichAllBookmarks: vi.fn(),
+  removeStoredImageCopies: vi.fn(),
+  saveAllBookmarkImages: vi.fn(),
   showToast: vi.fn(),
 }));
 const writeText = vi.fn();
@@ -13,6 +21,8 @@ const writeText = vi.fn();
 vi.mock('../../lib/enrich', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/enrich')>()),
   enrichAllBookmarks,
+  removeStoredImageCopies,
+  saveAllBookmarkImages,
 }));
 vi.mock('../../lib/toast', () => ({ showToast }));
 vi.mock('../../lib/link-metadata', async (importOriginal) => ({
@@ -116,6 +126,87 @@ describe('LinkSettings bulk fetch toast', () => {
     });
     expect(keepSwitch().getAttribute('aria-pressed')).toBe('false');
     expect(host.textContent).toContain('Not available');
+  });
+
+  const button = (label: string) =>
+    [...host.querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === label,
+    ) as HTMLButtonElement | undefined;
+
+  /** Three saved links: one with a copy, two still shown from their site. */
+  function withImages() {
+    (items as Writable<Record<string, BookmarkItem>>).set({
+      b1: bookmark('b1', {
+        ogImage: 'https://cdn/1',
+        filePath: 'files/b1.jpg',
+        mimeType: 'image/jpeg',
+      }),
+      b2: bookmark('b2', { ogImage: 'https://cdn/2' }),
+      b3: bookmark('b3', { ogImage: 'https://cdn/3' }),
+    });
+  }
+
+  it('offers to save images locally while copies are kept, and reports each outcome', async () => {
+    withImages();
+    saveAllBookmarkImages.mockResolvedValue({
+      saved: 1,
+      gone: 1,
+      refused: 0,
+      tooLarge: 0,
+      other: 0,
+      total: 2,
+    });
+    render();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(button('Save 2 images')).toBeDefined();
+    });
+    expect(host.textContent).not.toContain('Remove stored copies');
+
+    button('Save 2 images')?.click();
+    await vi.waitFor(() =>
+      expect(showToast).toHaveBeenCalledWith(
+        'Saved 1 of 2 images — 1 gone from their site',
+      ),
+    );
+  });
+
+  it('does not offer to save images when the service cannot download them', async () => {
+    canDownloadImages.mockResolvedValue(false);
+    withImages();
+    render();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(keepSwitch().disabled).toBe(true);
+    });
+    expect(host.textContent).not.toContain('Save images locally');
+  });
+
+  it('offers to remove stored copies once copies are turned off, and asks first', async () => {
+    withImages();
+    removeStoredImageCopies.mockResolvedValue({ removed: 1, total: 1 });
+    render();
+    await vi.waitFor(() => expect(canDownloadImages).toHaveBeenCalled());
+    flushSync();
+    keepSwitch().click();
+    flushSync();
+    expect(host.textContent).not.toContain('Save images locally');
+
+    button('Remove 1 copy…')?.click();
+    flushSync();
+    expect(host.textContent).toContain('Remove 1 stored copy?');
+    expect(removeStoredImageCopies).not.toHaveBeenCalled();
+
+    button('Keep')?.click();
+    flushSync();
+    expect(removeStoredImageCopies).not.toHaveBeenCalled();
+
+    button('Remove 1 copy…')?.click();
+    flushSync();
+    button('Remove')?.click();
+    await vi.waitFor(() =>
+      expect(showToast).toHaveBeenCalledWith('Removed 1 stored copy'),
+    );
   });
 
   it('counts link-only notes among the previews still to fetch', () => {

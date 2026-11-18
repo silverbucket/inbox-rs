@@ -175,8 +175,15 @@ type RSPrivateClient = {
     path: string,
     data: ArrayBuffer,
   ): Promise<unknown>;
-  getFile(path: string): Promise<unknown>;
+  getFile(path: string, maxAge?: false | number): Promise<unknown>;
   remove(path: string): Promise<unknown>;
+  makePath(path: string): string;
+  storage?: {
+    remote?: {
+      connected: boolean;
+      delete(path: string): Promise<{ statusCode?: number }>;
+    };
+  };
   on(event: 'change', handler: (event: unknown) => void): void;
 };
 
@@ -318,6 +325,25 @@ const InboxModule = {
         },
 
         async removeFile(path: string): Promise<void> {
+          // An app may cache files only once this device has read or
+          // written them (the web app does). `remove` works through that
+          // cache and silently skips a path it holds no copy of, which
+          // would leave a file stored by another device on the server for
+          // good. Such a file is deleted on the server directly.
+          const cached = (await privateClient.getFile(path, false)) as
+            | { data?: unknown }
+            | undefined;
+          const remote = privateClient.storage?.remote;
+          if (cached?.data === undefined && remote?.connected) {
+            const { statusCode } = await remote.delete(
+              privateClient.makePath(path),
+            );
+            // 404: already gone, which is what was asked for.
+            if (statusCode && statusCode >= 400 && statusCode !== 404) {
+              throw new Error(`Deleting ${path} failed: HTTP ${statusCode}`);
+            }
+            return;
+          }
           await privateClient.remove(path);
         },
 
