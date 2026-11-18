@@ -59,21 +59,14 @@ for (const target of targets) {
       ]);
     }
     const source = join(temporary, 'source');
-    const sourceManifest = JSON.parse(
-      readFileSync(join(source, 'package.json')),
-    );
-    assert.equal(sourceManifest.workspaces.length, 2);
-    const workspaces = Object.keys(
-      parseBunLock(readFileSync(join(source, 'bun.lock'), 'utf8')).workspaces,
-    );
-    assert.equal(workspaces.length, 3, `${target}: workspaces ${workspaces}`);
-    assert(
-      !workspaces.some(
-        (path) =>
-          path.startsWith('packages/web') ||
-          path.startsWith('tests/') ||
-          path === 'scripts',
-      ),
+    const packagePath =
+      target === 'thunderbird' ? 'packages/thunderbird' : 'packages/extension';
+    assert.deepEqual(
+      Object.keys(
+        parseBunLock(readFileSync(join(source, 'bun.lock'), 'utf8')).workspaces,
+      ).sort(),
+      ['', packagePath, 'packages/rs-module'].sort(),
+      `${target}: unexpected workspaces in the source lockfile`,
     );
     bun(['install', '--frozen-lockfile'], source);
     bun(['audit', '--audit-level=high'], source);
