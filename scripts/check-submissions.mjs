@@ -11,12 +11,13 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { archiveFiles } from './plugin-archive.mjs';
+import { parseBunLock } from './submission-lockfile.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const targets = process.argv.slice(2);
 if (!targets.length) targets.push('chromium', 'firefox', 'thunderbird');
-function npm(args, cwd) {
-  execFileSync(process.execPath, [process.env.npm_execpath, ...args], {
+function bun(args, cwd) {
+  execFileSync('bun', args, {
     cwd,
     stdio: 'inherit',
   });
@@ -58,25 +59,18 @@ for (const target of targets) {
       ]);
     }
     const source = join(temporary, 'source');
-    const sourceManifest = JSON.parse(
-      readFileSync(join(source, 'package.json')),
+    const packagePath =
+      target === 'thunderbird' ? 'packages/thunderbird' : 'packages/extension';
+    assert.deepEqual(
+      Object.keys(
+        parseBunLock(readFileSync(join(source, 'bun.lock'), 'utf8')).workspaces,
+      ).sort(),
+      ['', packagePath, 'packages/rs-module'].sort(),
+      `${target}: unexpected workspaces in the source lockfile`,
     );
-    assert.equal(sourceManifest.workspaces.length, 2);
-    const lock = JSON.parse(readFileSync(join(source, 'package-lock.json')));
-    assert(
-      !Object.keys(lock.packages).some(
-        (path) =>
-          path.startsWith('packages/web') ||
-          path.startsWith('tests/') ||
-          path === 'scripts',
-      ),
-    );
-    npm(['ci', '--no-fund'], source);
-    if (process.platform === 'linux') {
-      npm(['install', '@rollup/rollup-linux-x64-gnu', '--no-save'], source);
-    }
-    npm(['audit', '--audit-level=high'], source);
-    npm(['run', 'package:submission'], source);
+    bun(['install', '--frozen-lockfile'], source);
+    bun(['audit', '--audit-level=high'], source);
+    bun(['run', 'package:submission'], source);
     execFileSync('unzip', [
       '-q',
       join(source, 'dist/submissions', target, binaryName),
@@ -129,12 +123,11 @@ for (const target of targets) {
     if (target === 'firefox') {
       const report = JSON.parse(
         execFileSync(
-          process.execPath,
+          'bun',
           [
-            process.env.npm_execpath,
-            'exec',
-            '--no',
-            '--',
+            'run',
+            '--cwd',
+            'scripts',
             'web-ext',
             'lint',
             '--source-dir',

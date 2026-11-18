@@ -13,7 +13,7 @@
  * If you need to iterate fast against the dev server instead, override
  * `WEB_ORIGIN`:
  *
- *     WEB_ORIGIN=http://localhost:5173 npx playwright test --grep navigation
+ *     WEB_ORIGIN=http://localhost:5173 bunx playwright test --grep navigation
  *
  * …but be aware the dev server's HMR shim makes some load-state
  * assertions flakier and emits non-error console noise.

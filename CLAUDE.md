@@ -4,7 +4,7 @@
 
 This is a **client-side only** application. There is no server-side logic — Node.js is used only for build tooling. Do not introduce any server-side code, API routes, or backend logic.
 
-### Packages (npm workspaces)
+### Packages (bun workspaces)
 
 - **`@inbox-rs/web`** — Svelte 5 web app, built with Vite. Dev server on port 5173.
 - **`@inbox-rs/extension`** — Browser extension (Chrome Manifest V3 + Firefox). Built with Vite + Svelte.
@@ -20,9 +20,9 @@ All data flows directly from the browser to a **remoteStorage** server — no in
 ## Development
 
 ```bash
-npm run dev              # Start web app dev server
-npm run build            # Build rs-module + web app
-npm run build:extension  # Build browser extension
+bun run dev              # Start web app dev server
+bun run build            # Build rs-module + web app
+bun run build:extension  # Build browser extension
 ```
 
 The shared `rs-module` must be built before the web app or extension can use it.

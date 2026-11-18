@@ -34,7 +34,7 @@ This is a **client-side only** application. There is no server-side logic —
 Node.js is used only for build tooling. Do not introduce any server-side code,
 API routes, or backend logic.
 
-### Packages (npm workspaces)
+### Packages (bun workspaces)
 
 - **`@inbox-rs/web`** — Svelte 5 web app, built with Vite. Dev server on port 5173.
 - **`@inbox-rs/extension`** — Browser extension (Chrome Manifest V3 + Firefox). Built with Vite + Svelte.
@@ -50,18 +50,18 @@ All data flows directly from the browser to a **remoteStorage** server — no in
 ## Development
 
 ```bash
-npm install
-npm run build --workspace=packages/rs-module  # required once before dev/build
-npm run dev              # Starts web app dev server (auto-generates plugin metadata)
-npm run build            # Full web app build (also builds extensions + generates metadata)
-npm run build:extension  # Build browser extension only
+bun install
+bun run --cwd packages/rs-module build  # required once before dev/build
+bun run dev              # Starts web app dev server (auto-generates plugin metadata)
+bun run build            # Full web app build (also builds extensions + generates metadata)
+bun run build:extension  # Build browser extension only
 ```
 
-> `npm run dev` runs `scripts/gen-plugin-metadata.mjs` as a `predev` hook —
+> `bun run dev` runs `scripts/gen-plugin-metadata.mjs` as a `predev` hook —
 > this generates `plugin-downloads.generated.ts` without building the
 > extensions, so cold-start dev is fast.
 >
-> `npm run build` runs `scripts/package-plugins.mjs` as `prebuild` which
+> `bun run build` runs `scripts/package-plugins.mjs` as `prebuild` which
 > builds **all** extensions, packages them as ZIPs/XPIs, and then generates
 > the same metadata file.
 
@@ -73,19 +73,19 @@ npm run build:extension  # Build browser extension only
 
 ## Pre-commit checks
 
-> **Always run `npm run check` and `npm run test` before committing.** Both
+> **Always run `bun run check` and `bun run test` before committing.** Both
 > must pass.
 >
 > ```bash
-> npm run check   # biome check — lint + format + organize-imports
-> npm run test    # full vitest suite across all workspaces
+> bun run check   # biome check — lint + format + organize-imports
+> bun run test    # full vitest suite across all workspaces
 > ```
 >
-> Use `npm run check`, **not** `npm run lint`. `biome lint` only runs the
+> Use `bun run check`, **not** `bun run lint`. `biome lint` only runs the
 > linter and skips the formatter and import-sort passes — CI runs
-> `npx biome ci` (≈ `biome check`), so a passing `npm run lint` doesn't mean
-> CI will pass. If `npm run check` flags formatting or import-order issues,
-> `npx biome check --write` will auto-fix the safe ones; re-run `npm run
+> `bun run biome ci` (≈ `biome check`), so a passing `bun run lint` doesn't mean
+> CI will pass. If `bun run check` flags formatting or import-order issues,
+> `bun run biome check --write` will auto-fix the safe ones; re-run `bun run
 > check` afterwards to confirm.
 >
 > If either step fails, fix the underlying issue and re-run. Don't

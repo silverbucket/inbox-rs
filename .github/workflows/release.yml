@@ -74,19 +74,20 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_TOKEN }}
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
 
-      - run: npm ci
-      - run: npm install @rollup/rollup-linux-x64-gnu --no-save
+      - run: bun install --frozen-lockfile
 
       - name: Restore transcription asset cache
         uses: actions/cache@v4
         with:
           path: packages/web/public/ml
-          key: ${{ runner.os }}-transcription-assets-${{ hashFiles('scripts/vendor-transcription-assets.mjs', 'package-lock.json') }}
+          key: ${{ runner.os }}-transcription-assets-${{ hashFiles('scripts/vendor-transcription-assets.mjs', 'bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-transcription-assets-
 
@@ -97,7 +98,7 @@ jobs:
 
       - name: Bump version
         id: version
-        # `npm version` updates the root package.json. Per-package + manifest
+        # `bun pm version` updates the root package.json. Per-package + manifest
         # bumps are delegated to scripts/release-bump.mjs, which only bumps
         # the browser extensions when a path under their own package
         # directory, rs-module, or the lockfile changed since the previous
@@ -105,7 +106,7 @@ jobs:
         env:
           BUMP: ${{ inputs.bump }}
         run: |
-          npm version "$BUMP" --no-git-tag-version
+          bun pm version "$BUMP" --no-git-tag-version
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
@@ -121,13 +122,13 @@ jobs:
         run: echo "version=$(node -p "require('./packages/extension/package.json').version")" >> "$GITHUB_OUTPUT"
 
       - name: Build web app
-        run: npm run build
+        run: bun run build
 
       - name: Package reviewer sources for the release versions
-        run: npm run package:submissions
+        run: bun run package:submissions
 
       - name: Verify release artifacts before publishing
-        run: npm run check:submissions
+        run: bun run check:submissions
 
       - uses: actions/upload-artifact@v4
         with:
@@ -382,6 +383,10 @@ jobs:
         with:
           ref: v${{ needs.release.outputs.version }}
 
+      - uses: oven-sh/setup-bun@v2
+        if: steps.secrets.outputs.configured == 'true'
+        with:
+          bun-version-file: package.json
       - uses: actions/setup-node@v4
         if: steps.secrets.outputs.configured == 'true'
         with:
@@ -401,15 +406,15 @@ jobs:
         run: |
           # The locked scripts workspace, not a registry resolve: web-ext runs
           # with the AMO credentials in its environment.
-          npm ci --workspace=scripts --include-workspace-root=false --ignore-scripts
-          # npm exec --workspace runs from scripts/, so the paths below are absolute.
+          bun install --frozen-lockfile --filter @inbox-rs/scripts --ignore-scripts
+          # bun run --cwd runs from scripts/, so the paths below are absolute.
 
           SOURCE_DIR="$RUNNER_TEMP/firefox-${VERSION}"
           mkdir -p "$SOURCE_DIR"
           unzip -q "dist/submissions/firefox/inbox-rs-firefox-${VERSION}.xpi" -d "$SOURCE_DIR"
 
           set +e
-          npm exec --no --workspace=scripts -- web-ext sign \
+          bun run --cwd scripts web-ext sign \
             --channel=listed \
             --source-dir "$SOURCE_DIR" \
             --artifacts-dir "$RUNNER_TEMP/web-ext-artifacts" \

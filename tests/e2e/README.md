@@ -5,7 +5,7 @@ app through Chromium, exercising it as both a desktop PWA and a
 Pixel-class mobile PWA. Runs in CI on every PR
 (`.github/workflows/ci.yml`) and is a gate on the release workflow.
 
-This is its own npm workspace (`@inbox-rs/e2e`) so its dependencies
+This is its own bun workspace (`@inbox-rs/e2e`) so its dependencies
 don't leak into the runtime packages. It imports types from
 `@inbox-rs/rs-module` so the seed helpers stay in sync with the live
 schemas.
@@ -55,32 +55,32 @@ One-time setup:
 
 ```bash
 # Install workspace deps + the chromium browser (~125 MB)
-npm ci
-npm run test:e2e:install
+bun install --frozen-lockfile
+bun run test:e2e:install
 
 # Build the web app once so vite preview has something to serve
-npm run build -w packages/web
+bun run --cwd packages/web build
 ```
 
 Then:
 
 ```bash
 # Full suite
-npm run test:e2e
+bun run test:e2e
 
 # Or hand pytest-style flags down to playwright via the workspace:
-npm test -w @inbox-rs/e2e -- --grep navigation         # by name
-npm test -w @inbox-rs/e2e -- --project=mobile-chromium # mobile only
-npm test -w @inbox-rs/e2e -- --headed                  # watch the browser drive itself
-npm test -w @inbox-rs/e2e -- --debug                   # step through with the inspector
+bun run --cwd tests/e2e test --grep navigation         # by name
+bun run --cwd tests/e2e test --project=mobile-chromium # mobile only
+bun run --cwd tests/e2e test --headed                  # watch the browser drive itself
+bun run --cwd tests/e2e test --debug                   # step through with the inspector
 ```
 
 Failure artefacts (videos, traces, screenshots) land in
 `tests/e2e/test-results/`. The HTML report opens via:
 
 ```bash
-npm test -w @inbox-rs/e2e -- --reporter=html
-npm run report -w @inbox-rs/e2e
+bun run --cwd tests/e2e test --reporter=html
+bun run --cwd tests/e2e report
 ```
 
 ## Iterating against the dev server
@@ -89,7 +89,7 @@ The default `WEB_ORIGIN` is `http://localhost:4173` (the `vite preview`
 port). For tighter feedback loops you can run against `vite dev`:
 
 ```bash
-WEB_ORIGIN=http://localhost:5173 npm test -w @inbox-rs/e2e -- --grep navigation
+WEB_ORIGIN=http://localhost:5173 bun run --cwd tests/e2e test --grep navigation
 ```
 
 …but a few tests intentionally assert on production-build behaviour
@@ -103,7 +103,7 @@ source of truth.
 workflow (`release.yml`) depends on the CI workflow's success before
 publishing — see the `needs:` chain there. Failures upload the
 `playwright-report/` and `test-results/` directories so traces can be
-replayed locally with `npx playwright show-trace <trace.zip>`.
+replayed locally with `bun run --cwd tests/e2e playwright show-trace <trace.zip>`.
 
 ## Adding a test
 

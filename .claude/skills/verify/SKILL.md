@@ -8,15 +8,15 @@ description: How to build, launch, and drive the Inbox RS web app for runtime ve
 ## Launch
 
 ```bash
-NODE_OPTIONS= npm run dev        # from repo root; serves web app on http://localhost:5173
+NODE_OPTIONS= bun run dev        # from repo root; serves web app on http://localhost:5173
 ```
 
-- Prefix node/npm/npx invocations with `NODE_OPTIONS=` — the harness env
+- Prefix node/bun invocations with `NODE_OPTIONS=` — the harness env
   sometimes carries a stale `--require` preload that crashes node.
 - No remoteStorage server needed: the app is local-first and fully usable
   disconnected (data in IndexedDB). `docker-compose up` (Armadietto, port
   8000) is only needed to exercise the sync path.
-- Checks: `npm run check` (svelte-check, packages/web), `npm test` (vitest).
+- Checks: `bun run --cwd packages/web check` (svelte-check), `bun run test` (vitest).
 
 ## Drive (Playwright)
 

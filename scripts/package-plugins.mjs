@@ -28,14 +28,8 @@ const artifactNames = {
   thunderbird: `inbox-rs-thunderbird-${thunderbirdVersion}.xpi`,
 };
 
-function runNpm(args, env = {}) {
-  const npmExecPath = process.env.npm_execpath;
-
-  if (!npmExecPath) {
-    throw new Error('npm_execpath is not available; run this script via npm.');
-  }
-
-  execFileSync(process.execPath, [npmExecPath, ...args], {
+function runBun(args, env = {}) {
+  execFileSync('bun', args, {
     cwd: rootDir,
     stdio: 'inherit',
     env: { ...process.env, ...env },
@@ -64,15 +58,15 @@ ensureZipAvailable();
 rmSync(downloadsDir, { recursive: true, force: true });
 mkdirSync(downloadsDir, { recursive: true });
 
-runNpm(['run', 'build', '--workspace=packages/rs-module']);
+runBun(['run', '--cwd', 'packages/rs-module', 'build']);
 
-runNpm(['run', 'build', '--workspace=packages/extension']);
+runBun(['run', '--cwd', 'packages/extension', 'build']);
 archiveDirectory(
   join(extensionDir, 'dist'),
   join(downloadsDir, artifactNames.chromium),
 );
 
-runNpm(['run', 'build', '--workspace=packages/extension'], {
+runBun(['run', '--cwd', 'packages/extension', 'build'], {
   BROWSER: 'firefox',
 });
 archiveDirectory(
@@ -80,7 +74,7 @@ archiveDirectory(
   join(downloadsDir, artifactNames.firefox),
 );
 
-runNpm(['run', 'build', '--workspace=packages/thunderbird']);
+runBun(['run', '--cwd', 'packages/thunderbird', 'build']);
 archiveDirectory(
   join(thunderbirdDir, 'dist'),
   join(downloadsDir, artifactNames.thunderbird),

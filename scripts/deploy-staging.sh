@@ -31,8 +31,8 @@ git remote add 5apps-staging "$STAGING_REMOTE_URL" 2>/dev/null \
 
 # ── 4. Build. STAGING_BUILD=1 turns on sourcemaps + the __STAGING__ debug flag
 #       (see packages/web/vite.config.ts). ──────────────────────────────────────
-npm install
-STAGING_BUILD=1 npm run build
+bun install --frozen-lockfile
+STAGING_BUILD=1 bun run build
 
 # Preserve immutable assets used by any older installed shell, then verify the
 # stable loader and its release manifest before publishing the new tree.

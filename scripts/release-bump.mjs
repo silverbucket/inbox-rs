@@ -11,7 +11,7 @@
  * an existing version, so burning a version number on a no-op release
  * costs us a real version we can't reuse later. This script bumps each
  * extension only when something under its package directory, the shared
- * rs-module, or `package-lock.json` changed since the previous tag — see
+ * rs-module, or `bun.lock` changed since the previous tag — see
  * `classifyChanges` below for why the lockfile counts. That's a path
  * check, not a comparison of the built artifact, so it deliberately
  * over-bumps (a test-only edit still burns a version) rather than risk
@@ -40,8 +40,8 @@ const rootDir = resolve(scriptDir, '..');
  * changed since the previous release tag.
  *
  * - rs-module changes propagate to BOTH extensions (they bundle it).
- * - Lockfile changes propagate to BOTH extensions: `npm ci` runs before
- *   the extension build, so a lockfile-only update (`npm audit fix`,
+ * - Lockfile changes propagate to BOTH extensions: `bun install --frozen-lockfile` runs before
+ *   the extension build, so a lockfile-only update (`bun update`,
  *   transitive resolution refresh, etc.) can bump bundled libs like
  *   `webextension-polyfill`/`remotestoragejs` and produce a different
  *   ZIP/XPI under an unchanged manifest version. Stores reject that;
@@ -62,7 +62,7 @@ export function classifyChanges(changedFiles) {
   const inThunderbird = changedFiles.some((f) =>
     f.startsWith('packages/thunderbird/'),
   );
-  const inLockfile = changedFiles.some((f) => f === 'package-lock.json');
+  const inLockfile = changedFiles.some((f) => f === 'bun.lock');
   return {
     rsModuleChanged: inRsModule,
     lockfileChanged: inLockfile,
@@ -138,7 +138,7 @@ function setVersionInFile(absPath, version) {
 }
 
 function formatFiles(files) {
-  execFileSync('npx', ['biome', 'format', '--write', ...files], {
+  execFileSync('bun', ['run', 'biome', 'format', '--write', ...files], {
     cwd: rootDir,
     stdio: 'inherit',
   });
@@ -186,12 +186,12 @@ export function main(argv = process.argv) {
 
   if (!classification.extensionNeedsBump) {
     console.log(
-      '[release-bump] extension version pinned — no changes to packages/extension/, packages/rs-module/, or package-lock.json',
+      '[release-bump] extension version pinned — no changes to packages/extension/, packages/rs-module/, or bun.lock',
     );
   }
   if (!classification.thunderbirdNeedsBump) {
     console.log(
-      '[release-bump] thunderbird version pinned — no changes to packages/thunderbird/, packages/rs-module/, or package-lock.json',
+      '[release-bump] thunderbird version pinned — no changes to packages/thunderbird/, packages/rs-module/, or bun.lock',
     );
   }
 

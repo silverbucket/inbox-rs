@@ -47,7 +47,7 @@ re-uploading a different artifact under an existing version.
 release by `git diff`-ing against the previous tag. The check is on **paths**,
 not on the content of the built artifact: `classifyChanges` asks whether any
 changed path starts with `packages/extension/`, `packages/thunderbird/` or
-`packages/rs-module/`, plus an exact match on `package-lock.json`.
+`packages/rs-module/`, plus an exact match on `bun.lock`.
 
 | Change since previous tag | Chromium + Firefox | Thunderbird |
 |---|---|---|
@@ -55,7 +55,7 @@ changed path starts with `packages/extension/`, `packages/thunderbird/` or
 | `packages/extension/**` | bumps | pinned |
 | `packages/thunderbird/**` | pinned | bumps |
 | `packages/rs-module/**` | bumps | bumps |
-| `package-lock.json` | bumps | bumps |
+| `bun.lock` | bumps | bumps |
 | Root config / docs / `.github/` / `scripts/` | pinned | pinned |
 
 Because it matches on paths, a change that can't reach the shipped
@@ -70,9 +70,9 @@ you change the rules, change the tests in lockstep.
 
 #### Why the lockfile counts
 
-`npm ci` runs before the extensions get built. The extensions bundle
+`bun install --frozen-lockfile` runs before the extensions get built. The extensions bundle
 caret-pinned libs (`webextension-polyfill`, `remotestoragejs`,
-`rs-migrate`), so a routine `npm audit fix` can re-resolve any of them
+`rs-migrate`), so a routine `bun update` can re-resolve any of them
 and produce a different `.zip`/`.xpi` without touching a source file.
 Treating any lockfile change as extension-affecting over-bumps in the
 case of web-only deps; that's still cheaper than a failed publish.
@@ -80,12 +80,12 @@ case of web-only deps; that's still cheaper than a failed publish.
 ## Workflow stages
 
 1. **Preflight** — refuse to release unless CI passed for the current SHA.
-2. **`npm ci`** + the rollup native-bin workaround.
-3. **Bump root** — `npm version <bump> --no-git-tag-version`.
+2. **`bun install --frozen-lockfile`**.
+3. **Bump root** — `bun pm version <bump> --no-git-tag-version`.
 4. **Bump per-package** — `node scripts/release-bump.mjs $VERSION`
    (the policy table above).
 5. **Commit + tag + push to `master`.**
-6. **Build the web app** — `npm run build`. Its `prebuild` hook builds
+6. **Build the web app** — `bun run build`. Its `prebuild` hook builds
    each extension, zips it under its own version, and regenerates
    `packages/web/src/lib/plugin-downloads.generated.ts`.
 7. **Deploy to 5apps** — `git subtree split` on `packages/web/dist`,
@@ -197,7 +197,7 @@ git diff --name-only "$PREV..HEAD"
 ```
 
 Apply the policy table to the second list. For mechanical confirmation:
-`npm test --workspace=scripts`.
+`bun run --cwd scripts test`.
 
 ### After it lands
 
@@ -242,7 +242,7 @@ real, fix `release-bump.mjs` and re-release.
 All CI jobs and release builds use Node.js 24. The **Extension submissions** CI
 job builds release downloads and matching reviewer source ZIPs for Chromium,
 Firefox and Thunderbird. It extracts every source ZIP into an empty directory,
-runs `npm ci`, audits the scoped dependency tree (high/critical findings fail),
+runs `bun install --frozen-lockfile`, audits the scoped dependency tree (high/critical findings fail),
 rebuilds, and compares every file with both the submission binary and the public
 download. No retained dependency may change version, resolution or integrity
 when the monorepo lockfile is pruned for a source archive.
@@ -267,15 +267,15 @@ The successful CI preflight includes browser smoke tests. Store uploads happen
 afterwards, in the [publish jobs](#store-publishing).
 
 ```sh
-npm run package:submissions        # all three targets
-npm run check:submissions          # clean rebuilds, audit, comparison, Firefox lint
-npx playwright install chromium
-npm run test:extensions            # Chromium + Firefox; generates screenshots
+bun run package:submissions        # all three targets
+bun run check:submissions          # clean rebuilds, audit, comparison, Firefox lint
+bun run --cwd scripts playwright install chromium
+bun run test:extensions            # Chromium + Firefox; generates screenshots
 ```
 
-For only the browser extensions, use `npm run package:browsers` and
-`npm run check:submissions -- chromium firefox`. For Thunderbird, use
-`npm run package:thunderbird` and `npm run check:submissions -- thunderbird`.
+For only the browser extensions, use `bun run package:browsers` and
+`bun run check:submissions -- chromium firefox`. For Thunderbird, use
+`bun run package:thunderbird` and `bun run check:submissions -- thunderbird`.
 
 Artifacts live in `dist/submissions/<target>/` and screenshots in
 `dist/submissions/screenshots/`; all are ignored build output. Use matching

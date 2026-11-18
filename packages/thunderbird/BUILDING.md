@@ -1,16 +1,16 @@
 # Thunderbird review packages
 
-From the repository root, with Node.js 24, npm 11 and Info-ZIP zip/unzip installed:
+From the repository root, with Node.js 24, Bun 1.4 and Info-ZIP zip/unzip installed:
 
 ```sh
-npm ci
-npm run package:thunderbird
-npm run check:submissions -- thunderbird
+bun install --frozen-lockfile
+bun run package:thunderbird
+bun run check:submissions -- thunderbird
 ```
 
 Upload the matching XPI and source ZIP from `dist/submissions/thunderbird/` to
 ATN. The source ZIP contains a root README with standalone reviewer commands
-(`npm ci` and `npm run package:submission`), exact build environment details,
+(`bun install --frozen-lockfile` and `bun run package:submission`), exact build environment details,
 source for Thunderbird and rs-module, and a scoped lockfile. No Git checkout,
 Thunderbird installation, account or remoteStorage server is needed to rebuild.
 
