@@ -9,7 +9,7 @@
     "report": "playwright show-report"
   },
   "dependencies": {
-    "@inbox-rs/rs-module": "*"
+    "@inbox-rs/rs-module": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",

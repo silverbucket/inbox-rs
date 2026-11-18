@@ -92,7 +92,7 @@ export default defineConfig({
       stderr: 'pipe',
     },
     {
-      command: 'npm run preview -w packages/web -- --port 4173 --strictPort',
+      command: 'bun run --cwd packages/web preview --port 4173 --strictPort',
       url: WEB_ORIGIN,
       cwd: '../..',
       reuseExistingServer: !process.env.CI,

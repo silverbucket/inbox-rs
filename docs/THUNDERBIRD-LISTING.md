@@ -77,7 +77,7 @@ https://github.com/remotestorage/armadietto.
 
 ## Screenshots to upload
 
-Run `npm run build:thunderbird` then `npm run screenshots:thunderbird` for
+Run `bun run build:thunderbird` then `bun run screenshots:thunderbird` for
 `thunderbird-setup.png`, `thunderbird-connected.png` and
 `thunderbird-save-popup.png` in `dist/submissions/screenshots/` (1280×800).
 The same command creates `chromium-promo-440x280.png` from the repository logo.
@@ -99,7 +99,7 @@ is listing copy and a capture checklist, not evidence that the listing was edite
 
 ## Prepare the submission
 
-Run `npm run package:thunderbird`. Upload the matching XPI and source ZIP from
+Run `bun run package:thunderbird`. Upload the matching XPI and source ZIP from
 `dist/submissions/thunderbird/`. The source ZIP includes its own root
 README with installation and build instructions, a lockfile and a build environment
 record. Do not upload an old XPI with sources from the current checkout.
@@ -120,7 +120,7 @@ https://extensionworkshop.com/documentation/publish/source-code-submission/.
 
 ## Validation status (2026-10-18)
 
-The scoped source-only rebuild passed `npm run check:submissions` for Chromium,
+The scoped source-only rebuild passed `bun run check:submissions` for Chromium,
 Firefox and Thunderbird: every unpacked file and each whole installable ZIP/XPI
 matched byte for byte. Scoped dependency audits passed at the high threshold.
 The source includes vendored rs-migrate v1.0.2 (MIT), with no rs-migrate registry
@@ -134,7 +134,7 @@ storage hosts. It also listed 4 extended code, 1 extended manual, 11 standard
 code and 10 standard manual review items; those are human review prompts,
 not completed manual checks.
 
-`npm run screenshots:thunderbird` captures setup, connected setup and the email
+`bun run screenshots:thunderbird` captures setup, connected setup and the email
 save popup at 1280×800 using the built UI and fictional Thunderbird API stubs.
 These are UI previews, not screenshots of a real Thunderbird installation.
 A real Thunderbird toolbar/OAuth/save check and live store listing updates

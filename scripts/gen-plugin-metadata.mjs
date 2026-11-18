@@ -8,7 +8,7 @@
  * (which may lag the web release if no extension code changed since the
  * previous tag — see scripts/release-bump.mjs).
  *
- * Used as the `predev` hook so `npm run dev` works immediately after checkout.
+ * Used as the `predev` hook so `bun run dev` works immediately after checkout.
  * The full `package-plugins.mjs` script (used in `prebuild`) also calls this
  * after actually building the extension artifacts.
  */

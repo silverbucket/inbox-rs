@@ -6,11 +6,11 @@
   "scripts": {
     "dev": "vite build --watch",
     "build": "vite build",
-    "package": "npm run package:thunderbird --prefix ../..",
+    "package": "bun run --cwd ../.. package:thunderbird",
     "test": "vitest run"
   },
   "dependencies": {
-    "@inbox-rs/rs-module": "*"
+    "@inbox-rs/rs-module": "workspace:*"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.0",

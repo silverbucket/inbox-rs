@@ -27,7 +27,7 @@ git checkout master
 git pull
 
 # ── 2. Bump versions ─────────────────────────────────────────────────────────
-npm version "$BARE_VERSION" --no-git-tag-version
+bun pm version "$BARE_VERSION" --no-git-tag-version
 
 for pkg in packages/*/package.json; do
   node -e "
@@ -57,8 +57,8 @@ git tag "${VERSION}"
 git push --set-upstream origin master --tags
 
 # ── 4. Build ─────────────────────────────────────────────────────────────────
-npm install
-npm run build
+bun install --frozen-lockfile
+bun run build
 
 # Preserve immutable assets used by any older installed shell, then verify the
 # stable loader and its release manifest before publishing the new tree.

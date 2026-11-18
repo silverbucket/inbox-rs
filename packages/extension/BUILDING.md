@@ -1,20 +1,20 @@
 # Browser extension review packages
 
-From the repository root, with Node.js 24, npm 11 and Info-ZIP zip/unzip installed:
+From the repository root, with Node.js 24, Bun 1.4 and Info-ZIP zip/unzip installed:
 
 ```sh
-npm ci
-npm run package:browsers
-npm run check:submissions -- chromium firefox
-npx playwright install chromium
-npm run test:extensions
+bun install --frozen-lockfile
+bun run package:browsers
+bun run check:submissions -- chromium firefox
+bun run --cwd scripts playwright install chromium
+bun run test:extensions
 ```
 
 Each browser gets its own binary and matching source ZIP in
 `dist/submissions/chromium/` or `dist/submissions/firefox/`. Upload the Firefox
 XPI and Firefox source ZIP together to AMO. The Chromium ZIP is the Chrome Web
 Store upload. Source ZIPs contain a root README with the simpler reviewer
-commands (`npm ci` and `npm run package:submission`), exact environment details,
+commands (`bun install --frozen-lockfile` and `bun run package:submission`), exact environment details,
 scoped workspace manifests and a scoped lockfile.
 
 The source archive rebuild must produce identical unpacked files and whole installable archives. Dependency

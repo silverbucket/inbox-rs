@@ -3,22 +3,23 @@
   "version": "2.6.9",
   "private": true,
   "license": "GPL-3.0-or-later",
+  "packageManager": "bun@1.4.4",
   "workspaces": [
     "packages/*",
     "scripts",
     "tests/e2e"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace=packages/web",
-    "build": "npm run build --workspace=packages/web",
-    "vendor:transcription-assets": "npm run vendor:transcription-assets --workspace=packages/web",
-    "vendor:transcription-assets:refresh": "npm run vendor:transcription-assets:refresh --workspace=packages/web",
+    "dev": "bun run --cwd packages/web dev",
+    "build": "bun run --cwd packages/web build",
+    "vendor:transcription-assets": "bun run --cwd packages/web vendor:transcription-assets",
+    "vendor:transcription-assets:refresh": "bun run --cwd packages/web vendor:transcription-assets:refresh",
     "package:plugins": "node scripts/package-plugins.mjs",
-    "build:extension": "npm run build --workspace=packages/extension",
-    "build:thunderbird": "npm run build --workspace=packages/thunderbird",
-    "test": "npm run test --workspace=packages/rs-module && npm run test --workspace=packages/extension && npm run test --workspace=packages/thunderbird && npm run test --workspace=packages/web && npm run test --workspace=scripts",
-    "test:e2e": "npm run test --workspace=@inbox-rs/e2e",
-    "test:e2e:install": "npm run test:install --workspace=@inbox-rs/e2e",
+    "build:extension": "bun run --cwd packages/extension build",
+    "build:thunderbird": "bun run --cwd packages/thunderbird build",
+    "test": "bun run --cwd packages/rs-module test && bun run --cwd packages/extension test && bun run --cwd packages/thunderbird test && bun run --cwd packages/web test && bun run --cwd scripts test",
+    "test:e2e": "bun run --cwd tests/e2e test",
+    "test:e2e:install": "bun run --cwd tests/e2e test:install",
     "lint": "biome lint",
     "format": "biome format --write",
     "check": "biome check",
@@ -33,14 +34,8 @@
     "@biomejs/biome": "2.4.13"
   },
   "overrides": {
-    "onnx-proto": {
-      "protobufjs": "^8.8.1"
-    },
-    "@xenova/transformers": {
-      "sharp": "^0.35.5"
-    },
-    "fx-runner": {
-      "shell-quote": "^1.12.0"
-    }
+    "protobufjs": "^8.8.1",
+    "sharp": "^0.35.5",
+    "shell-quote": "^1.12.0"
   }
 }

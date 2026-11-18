@@ -31,19 +31,20 @@ jobs:
           # would break the deploy.
           fetch-depth: 0
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
 
-      - run: npm ci
-      - run: npm install @rollup/rollup-linux-x64-gnu --no-save
+      - run: bun install --frozen-lockfile
 
       - name: Restore transcription asset cache
         uses: actions/cache@v4
         with:
           path: packages/web/public/ml
-          key: ${{ runner.os }}-transcription-assets-${{ hashFiles('scripts/vendor-transcription-assets.mjs', 'package-lock.json') }}
+          key: ${{ runner.os }}-transcription-assets-${{ hashFiles('scripts/vendor-transcription-assets.mjs', 'bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-transcription-assets-
 
@@ -58,7 +59,7 @@ jobs:
         # (see packages/web/vite.config.ts).
         env:
           STAGING_BUILD: '1'
-        run: npm run build
+        run: bun run build
 
       - name: Setup SSH for 5apps
         env:

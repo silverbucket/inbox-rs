@@ -154,10 +154,13 @@ outbound request, how the relay handles credentials, and the storage layout.
 
 ## Quick start
 
+Needs Node.js 24 and [Bun](https://bun.sh) (the version is pinned in
+`package.json`'s `packageManager`).
+
 ```bash
-npm install
+bun install
 docker compose up -d   # Local remoteStorage server (Armadietto) on :8000
-npm run dev            # Web app on http://localhost:5173
+bun run dev               # Web app on http://localhost:5173
 ```
 
 Sign up a test user at `http://localhost:8000/signup`, then connect the app with
@@ -166,15 +169,15 @@ loading, Firefox builds, and the full setup, and
 [`docs/RELEASING.md`](docs/RELEASING.md) for the release runbook.
 
 ```bash
-npm run build             # Web app + packaged plugin downloads into packages/web/dist/
-npm run build:extension   # Browser extension only
-npm run build:thunderbird # Thunderbird extension only
-npm test                  # Unit tests (all packages)
-npm run test:e2e          # Playwright end-to-end suite
-npm run check             # Biome lint + format
+bun run build             # Web app + packaged plugin downloads into packages/web/dist/
+bun run build:extension   # Browser extension only
+bun run build:thunderbird # Thunderbird extension only
+bun run test              # Unit tests (all packages)
+bun run test:e2e          # Playwright end-to-end suite
+bun run check             # Biome lint + format
 ```
 
-`npm run build` emits a self-contained `packages/web/dist/` for static hosting,
+`bun run build` emits a self-contained `packages/web/dist/` for static hosting,
 including the plugin artifacts. The browser and Thunderbird extensions carry
 separate version namespaces, so their filenames don't move in lockstep:
 

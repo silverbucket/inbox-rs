@@ -15,15 +15,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
 
-      - run: npm ci
+      - run: bun install --frozen-lockfile
 
       - name: Biome (lint, format, organize imports)
-        run: npx biome ci
+        run: bun run biome ci
 
   typecheck:
     name: Typecheck (web)
@@ -31,26 +33,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
 
-      - run: npm ci
-      # svelte-check loads svelte.config.js, which pulls in Vite/rollup —
-      # same optional-deps workaround as the build job.
-      - run: npm install @rollup/rollup-linux-x64-gnu --no-save
+      - run: bun install --frozen-lockfile
 
-      - run: npm run build --workspace=@inbox-rs/rs-module
+      - run: bun run --cwd packages/rs-module build
 
       # svelte-check needs the generated plugin-downloads module that the web
-      # app imports; it's produced by the dev/build hooks, not by `npm ci`.
+      # app imports; it's produced by the dev/build hooks, not by `bun install`.
       # Generate it directly (lightweight — reads package.json versions only).
       - name: Generate plugin metadata
         run: node scripts/gen-plugin-metadata.mjs
 
       - name: svelte-check (app code)
-        run: npm run check --workspace=@inbox-rs/web
+        run: bun run --cwd packages/web check
 
   build:
     name: Build
@@ -58,26 +59,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
 
-      - run: npm ci
-      - run: npm install @rollup/rollup-linux-x64-gnu --no-save
+      - run: bun install --frozen-lockfile
 
       - name: Restore transcription asset cache
         uses: actions/cache@v4
         with:
           path: packages/web/public/ml
-          key: ${{ runner.os }}-transcription-assets-${{ hashFiles('scripts/vendor-transcription-assets.mjs', 'package-lock.json') }}
+          key: ${{ runner.os }}-transcription-assets-${{ hashFiles('scripts/vendor-transcription-assets.mjs', 'bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-transcription-assets-
 
-      - run: npm run build
+      - run: bun run build
 
       - name: Precache budget guard
-        run: npm run check:precache --workspace=@inbox-rs/web
+        run: bun run --cwd packages/web check:precache
 
       # Stash the built web app so the e2e job doesn't pay for a second
       # cold build — Vite + plugin packaging is the slow step here.
@@ -95,19 +97,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
 
-      - run: npm ci
-      - run: npm install @rollup/rollup-linux-x64-gnu --no-save
+      - run: bun install --frozen-lockfile
 
       - name: Restore transcription asset cache
         uses: actions/cache@v4
         with:
           path: packages/web/public/ml
-          key: ${{ runner.os }}-transcription-assets-${{ hashFiles('scripts/vendor-transcription-assets.mjs', 'package-lock.json') }}
+          key: ${{ runner.os }}-transcription-assets-${{ hashFiles('scripts/vendor-transcription-assets.mjs', 'bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-transcription-assets-
 
@@ -116,9 +119,9 @@ jobs:
       # Build only rs-module (not the full web app) to keep this job fast
       # and parallel with the build job.
       - name: Build rs-module
-        run: npm run build --workspace=packages/rs-module
+        run: bun run --cwd packages/rs-module build
 
-      - run: npm test
+      - run: bun run test
 
   e2e:
     name: End-to-end (PWA)
@@ -127,18 +130,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
 
-      - run: npm ci
+      - run: bun install --frozen-lockfile
 
-      # Same npm-optional-deps workaround as the build job: rollup's
-      # native binary isn't installed by `npm ci` on Linux due to
-      # https://github.com/npm/cli/issues/4828, and `vite preview`
-      # loads rollup at runtime to serve the prebuilt dist.
-      - run: npm install @rollup/rollup-linux-x64-gnu --no-save
 
       # Pull the prebuilt dist from the build job — `vite preview` will
       # serve straight out of it.
@@ -149,7 +149,7 @@ jobs:
           path: packages/web/dist
 
       - name: Install Playwright browser
-        run: npm run test:e2e:install
+        run: bun run test:e2e:install
 
       # Pre-pull the Armadietto image so Playwright's webServer wait
       # doesn't double-count the container build.
@@ -157,7 +157,7 @@ jobs:
         run: docker compose build armadietto
 
       - name: Run end-to-end tests
-        run: npm run test:e2e
+        run: bun run test:e2e
 
       - name: Upload failure artefacts
         if: failure()
@@ -176,24 +176,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm install @rollup/rollup-linux-x64-gnu --no-save
-      - run: npm run package:plugins
-      - run: npm run package:submissions
+      - run: bun install --frozen-lockfile
+      - run: bun run package:plugins
+      - run: bun run package:submissions
       - name: Rebuild, audit, compare release artifacts and lint Firefox
-        run: npm run check:submissions
-      - run: npx playwright install --with-deps chromium
+        run: bun run check:submissions
+      - run: bun run --cwd scripts playwright install --with-deps chromium
       - uses: browser-actions/setup-firefox@v1
         id: firefox
       - name: Install extensions and exercise capture in both browsers
         env:
           FIREFOX_BINARY: ${{ steps.firefox.outputs.firefox-path }}
-        run: npm run test:extensions
-      - run: npm run screenshots:thunderbird
+        run: bun run test:extensions
+      - run: bun run screenshots:thunderbird
       - uses: actions/upload-artifact@v4
         if: always()
         with:

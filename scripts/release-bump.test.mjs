@@ -60,15 +60,15 @@ describe('classifyChanges', () => {
 
   /**
    * REGRESSION (from PR #108 review): an earlier version of this function
-   * treated `package-lock.json` as web-only. But `npm ci` runs before the
-   * extension build, so a lockfile-only update (e.g. `npm audit fix`,
+   * treated `bun.lock` as web-only. But `bun install --frozen-lockfile` runs before the
+   * extension build, so a lockfile-only update (e.g. `bun update`,
    * transitive resolution refresh) can change bundled libs like
    * `webextension-polyfill`/`remotestoragejs` and produce a different
    * .zip/.xpi with the same manifest version. Stores reject that. We
    * conservatively treat any lockfile change as extension-affecting.
    */
   it('flags both extensions when only the lockfile changes', () => {
-    expect(classifyChanges(['package-lock.json'])).toEqual({
+    expect(classifyChanges(['bun.lock'])).toEqual({
       rsModuleChanged: false,
       lockfileChanged: true,
       extensionNeedsBump: true,
@@ -128,10 +128,10 @@ describe('classifyChanges', () => {
     });
   });
 
-  it('does not match nested lockfiles inside packages (only root package-lock.json counts)', () => {
+  it('does not match nested lockfiles inside packages (only root bun.lock counts)', () => {
     // Workspaces only ever produce one root lockfile, but defend against
     // future tools dropping nested lockfiles into a package.
-    expect(classifyChanges(['packages/web/package-lock.json'])).toEqual({
+    expect(classifyChanges(['packages/web/bun.lock'])).toEqual({
       rsModuleChanged: false,
       lockfileChanged: false,
       extensionNeedsBump: false,
@@ -257,15 +257,15 @@ describe('end-to-end policy (web-only release scenario)', () => {
   });
 
   /**
-   * REGRESSION: `npm audit fix` / `npm update` / a routine lockfile refresh
+   * REGRESSION: `bun update` / `bun add` / a routine lockfile refresh
    * can change bundled extension libs (caret-pinned webextension-polyfill,
    * remotestoragejs, rs-migrate) without touching any source file. The
-   * extension build runs after `npm ci`, so the resulting .zip/.xpi differs
+   * extension build runs after `bun install --frozen-lockfile`, so the resulting .zip/.xpi differs
    * from the previous release. Stores reject re-uploading a different
    * artifact under an existing version, so the bump must follow.
    */
   it('a lockfile-only diff produces a plan that bumps both extension manifests', () => {
-    const changedFiles = ['package-lock.json'];
+    const changedFiles = ['bun.lock'];
     const plan = planBumps('2.2.0', classifyChanges(changedFiles));
     const files = plan.map((p) => p.file);
 

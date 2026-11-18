@@ -93,7 +93,7 @@ flow. Review the store's privacy disclosures against this behavior before publis
 
 ## Screenshots and captions
 
-`npm run test:extensions` captures the real installed extension UI with fictional
+`bun run test:extensions` captures the real installed extension UI with fictional
 data in each browser at exactly 1280×800, under `dist/submissions/screenshots/`:
 
 | Screenshot | Caption |
@@ -117,6 +117,6 @@ Before submitting, use a test storage account to confirm **Set Up → Connect &
 Authorize**, toolbar access, and each of the three right-click actions in both
 browsers. Confirm the saved items in the web app with that account.
 
-`npm run screenshots:thunderbird` also generates the 440×280 Chromium promo
+`bun run screenshots:thunderbird` also generates the 440×280 Chromium promo
 `chromium-promo-440x280.png` from `docs/assets/inbox-rs.svg`. All PNGs are local
 or CI artifacts and must not be committed.

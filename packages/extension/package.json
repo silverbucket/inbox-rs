@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@inbox-rs/rs-module": "*",
+    "@inbox-rs/rs-module": "workspace:*",
     "webextension-polyfill": "^0.12.0"
   },
   "devDependencies": {
