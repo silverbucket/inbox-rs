@@ -341,6 +341,7 @@
   {/each}
 </nav>
 <div class="board" role="list" aria-label="{set.name} board" bind:this={boardEl} onscroll={onBoardScroll}>
+<div class="board-row">
   {#each set.columns as column (column.id)}
     {@const cards = byColumn.get(column.id) ?? []}
     {@const isOpen = expanded.has(column.id)}
@@ -616,6 +617,7 @@
   {/if}
 </div>
 </div>
+</div>
 
 {#if deleting}
   <DeleteColumnDialog {set} columnId={deleting} onclose={() => (deleting = null)} />
@@ -701,6 +703,43 @@
     }
   }
 
+  /* Phones lay the columns out in the board itself (above). */
+  .board-row {
+    display: contents;
+  }
+
+  /* On a wide screen the board scrolls inside itself, so the column headers
+     can stick to its top: at the bottom of a long column you still see which
+     column is which. It takes the height its host has left and never less
+     than a few cards' worth; below that the host scrolls as well. */
+  @media (min-width: 769px) {
+    .board-wrap {
+      flex: 1 1 auto;
+      /* No taller than the host, so in a short window the whole board
+         (headers and bottom card) still fits on screen at once; but always
+         room for a header and a card or two. */
+      min-height: min(18rem, max(100%, 9rem));
+    }
+
+    .board {
+      display: block;
+      flex: 1 1 0;
+      min-height: 0;
+      /* Focus scrolling keeps cards clear of the sticky headers, with
+         room for a column name that wraps to three lines. */
+      scroll-padding-top: calc(5rem + 3px);
+    }
+
+    /* The row, not the board, holds the columns: a scrolling flex container
+       would stretch them only to its own height, not to the longest one. */
+    .board-row {
+      display: flex;
+      gap: 0.85rem;
+      align-items: stretch;
+      min-height: 100%;
+    }
+  }
+
   .column {
     /* Share the width when the columns fit, so a five-column board fills a
        laptop screen instead of running off its edge; scroll once they
@@ -747,6 +786,29 @@
     align-items: center;
     gap: 0.45rem;
     min-height: 1.75rem;
+  }
+
+  /* Stuck to the top of the scrolling board (wide screens, see .board). */
+  @media (min-width: 769px) {
+    .col-head {
+      position: sticky;
+      top: 3px;
+      z-index: 2;
+      /* Reach over the column's padding, so cards pass under the whole
+         width; the shadow stands in for the column's coloured top edge. */
+      margin: -0.7rem -0.7rem -0.3rem;
+      padding: 0.7rem 0.7rem 0.3rem;
+      /* The base 1.75rem, plus this padding. */
+      min-height: 2.75rem;
+      border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
+      background:
+        linear-gradient(var(--surface-tint), var(--surface-tint)), var(--bg);
+      box-shadow: 0 -3px 0 var(--col);
+    }
+
+    .column.unsorted .col-head {
+      background: var(--bg);
+    }
   }
 
   .rename {

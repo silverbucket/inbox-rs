@@ -200,7 +200,7 @@
       <!-- Give the collection its own constrained scrollport. Keeping scroll
            off the flex panel avoids shrinking CollectionView to the viewport,
            where its desktop overflow clipping would hide the remaining cards. -->
-      <div class="focus-scroll">
+      <div class="focus-scroll" class:has-board={view === 'board' && !!set}>
         {#if view === 'board' && set}
           <div class="alt-view">
             <div class="board-head">
@@ -369,6 +369,20 @@
     flex-direction: column;
     gap: 0.8rem;
     padding-top: 0.5rem;
+  }
+
+  /* A board fills the height that is left and scrolls inside itself (see
+     BoardColumns), so its column headers stay put. */
+  @media (min-width: 769px) {
+    .focus-scroll.has-board {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .focus-scroll.has-board > .alt-view {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
   }
 
   .alt-title {
