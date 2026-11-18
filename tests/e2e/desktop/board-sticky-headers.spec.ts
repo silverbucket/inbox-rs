@@ -22,11 +22,20 @@ const columnNamed = (page: Page, name: string) =>
     has: page.getByRole('heading', { name, exact: true }),
   });
 
-/** The header is on screen and is what a pointer at its centre touches. */
+/**
+ * The whole header is on screen, unclipped, and is what a pointer at its
+ * centre touches.
+ */
 async function headerShowing(column: Locator): Promise<boolean> {
   return column.locator('.col-head').evaluate((head) => {
     const box = head.getBoundingClientRect();
     if (box.top < 0 || box.bottom > window.innerHeight) return false;
+    // Not clipped by any scroller it sits in (the board, the page around it).
+    for (let el = head.parentElement; el; el = el.parentElement) {
+      if (getComputedStyle(el).overflowY === 'visible') continue;
+      const port = el.getBoundingClientRect();
+      if (box.top < port.top - 1 || box.bottom > port.bottom + 1) return false;
+    }
     const at = document.elementFromPoint(
       box.left + box.width / 2,
       box.top + box.height / 2,
@@ -119,6 +128,18 @@ test('column headers stay in view at the bottom of a long column', async ({
   await bottom.scrollIntoViewIfNeeded();
   await expect(bottom).toBeInViewport({ ratio: 0.95 });
   expect(await headerShowing(unsorted), 'short window header').toBe(true);
+  await note.scrollIntoViewIfNeeded();
+  await expect(note).toBeInViewport({ ratio: 0.95 });
+
+  // Shorter still: the board shrinks to fit, so the headers and the bottom
+  // card are on screen together rather than one scrolling the other away.
+  await page.setViewportSize({ width: 1440, height: 300 });
+  await unsorted.evaluate((el) =>
+    el.closest('.board')?.scrollIntoView({ block: 'nearest' }),
+  );
+  await bottom.scrollIntoViewIfNeeded();
+  await expect(bottom).toBeInViewport({ ratio: 0.95 });
+  expect(await headerShowing(unsorted), 'tiny window header').toBe(true);
   await note.scrollIntoViewIfNeeded();
   await expect(note).toBeInViewport({ ratio: 0.95 });
   await page.setViewportSize({ width: 1440, height: 700 });

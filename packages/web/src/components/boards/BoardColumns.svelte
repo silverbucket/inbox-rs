@@ -715,13 +715,18 @@
   @media (min-width: 769px) {
     .board-wrap {
       flex: 1 1 auto;
-      min-height: 18rem;
+      /* No taller than the host, so in a short window the whole board
+         (headers and bottom card) still fits on screen at once; but always
+         room for a header and a card or two. */
+      min-height: min(18rem, max(100%, 9rem));
     }
 
     .board {
       display: block;
       flex: 1 1 0;
       min-height: 0;
+      /* Focus scrolling keeps cards clear of the sticky headers. */
+      scroll-padding-top: calc(2.75rem + 3px);
     }
 
     /* The row, not the board, holds the columns: a scrolling flex container
