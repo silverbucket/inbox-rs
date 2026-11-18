@@ -297,12 +297,17 @@
     const title = addTitle.trim();
     const columnId = addingTo;
     if (!title || !columnId || !addCollectionId) return;
+    // Clear now, not after the write: by then the next title may already be
+    // typed, and clearing late wiped it so its Enter added nothing (#364).
+    addTitle = '';
     try {
       await addToColumn(addCollectionId, set, columnId, title, addAsTodo);
-      addTitle = '';
     } catch (error) {
       console.error('Failed to add card', error);
       showToast('Couldn’t add that card');
+      // Give the title back to its own column's form, unless something new
+      // was typed meanwhile.
+      if (!addTitle && addingTo === columnId) addTitle = title;
     }
   }
 

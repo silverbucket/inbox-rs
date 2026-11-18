@@ -52,8 +52,7 @@ test('a card from the bottom of a long column drops into a short one beside it',
   const idea = columns.nth(1);
   await expect(idea).toBeVisible();
 
-  // Fill Unsorted well past the viewport. Let each add finish syncing first:
-  // back-to-back adds race on the collection document and can drop a card.
+  // Fill Unsorted well past the viewport.
   await unsorted.getByRole('button', { name: /Add/ }).click();
   const input = page.getByLabel(/New card in/);
   const total = 24;
@@ -61,7 +60,6 @@ test('a card from the bottom of a long column drops into a short one beside it',
     await input.fill(`Task ${i}`);
     await input.press('Enter');
     await expect(unsorted.locator('li.card')).toHaveCount(i);
-    await page.waitForLoadState('networkidle');
   }
   await input.press('Escape');
 
