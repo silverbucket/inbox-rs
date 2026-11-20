@@ -50,6 +50,40 @@ describe('MarkdownEditor markdown compatibility', () => {
     expect(roundTrip(markdown)).toBe(markdown);
   });
 
+  it('keeps the empty lines typed between two paragraphs', () => {
+    roundTrip('');
+    editor?.commands.insertContent('one');
+    editor?.commands.enter();
+    editor?.commands.enter();
+    editor?.commands.enter();
+    editor?.commands.insertContent('two');
+    const saved = (
+      editor?.storage as unknown as MarkdownStorage
+    ).markdown.getMarkdown();
+    const typed = editor?.getJSON();
+    editor?.destroy();
+
+    expect(saved).toBe('one\n\n&nbsp;\n\n&nbsp;\n\ntwo');
+    // Opening the saved text again shows the same two empty lines.
+    expect(roundTrip(saved)).toBe(saved);
+    expect(editor?.getJSON()).toEqual(typed);
+  });
+
+  it('saves no empty lines after the last text', () => {
+    roundTrip('');
+    editor?.commands.insertContent('one');
+    editor?.commands.enter();
+    editor?.commands.enter();
+
+    expect(
+      (editor?.storage as unknown as MarkdownStorage).markdown.getMarkdown(),
+    ).toBe('one');
+  });
+
+  it('leaves an empty list item as an empty list item', () => {
+    expect(roundTrip('- a\n- \n- b')).toBe('- a\n- \n- b');
+  });
+
   /** Paste plain text the way a browser does (Ctrl/Cmd+V). */
   function paste(text: string) {
     const event = new Event('paste', { bubbles: true, cancelable: true });
