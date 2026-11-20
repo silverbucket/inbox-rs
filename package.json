@@ -1,6 +1,6 @@
 {
   "name": "inbox-rs",
-  "version": "2.7.0",
+  "version": "2.7.1",
   "private": true,
   "license": "GPL-3.0-or-later",
   "packageManager": "bun@1.4.4",
