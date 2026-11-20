@@ -2,6 +2,7 @@ import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import StarterKit from '@tiptap/starter-kit';
 import { common, createLowlight } from 'lowlight';
 import { Markdown } from 'tiptap-markdown';
+import { BlankLineParagraph } from './tiptap-blank-lines';
 import { CodeBlockAutoIndent } from './tiptap-code-indent';
 import { ItemLink } from './tiptap-item-link';
 import { MarkdownLink } from './tiptap-link';
@@ -18,8 +19,11 @@ export function createMarkdownEditorExtensions({
       codeBlock: false,
       // Replaced by MarkdownLink below.
       link: false,
+      // Replaced by BlankLineParagraph below.
+      paragraph: false,
     }),
     MarkdownLink,
+    BlankLineParagraph,
     CodeBlockLowlight.configure({
       lowlight: createLowlight(common),
       enableTabIndentation: true,
